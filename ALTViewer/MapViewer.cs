@@ -61,7 +61,6 @@ namespace ALTViewer
         private bool exporting;
         private byte[] minimap = null!;
         private bool patch;
-        private List<Pen> pens = new();
         public MapViewer()
         {
             InitializeComponent();
@@ -87,41 +86,6 @@ namespace ALTViewer
             ToolTipHelper.EnableTooltips(this.Controls, tooltip, new Type[] { typeof(Label), typeof(ListBox) });
             ListLevels();
             fullScreen = new FullScreen(this);
-            // draw map border picture box
-            var bmp = new Bitmap(256, 256);
-            var g = Graphics.FromImage(bmp);
-            g.Clear(Color.DarkGreen);
-            Rectangle tileRect = new Rectangle(4, 4, 247, 247);
-            g.DrawRectangle(Pens.LightGreen, tileRect);
-            pictureBox2.Image = bmp;
-            // create pen colour list
-            for (int i = 0; i < 42; i++)
-            {
-                float hue = (360f / 42) * i; // evenly spaced hues
-                Color c = FromHsv(hue, 1f, 1f); // full saturation, full brightness
-                pens.Add(new Pen(c, 1));
-            }
-        }
-        public static Color FromHsv(float hue, float saturation, float value)
-        {
-            int hi = (int)Math.Floor(hue / 60) % 6;
-            float f = hue / 60 - (float)Math.Floor(hue / 60);
-
-            value *= 255;
-            int v = (int)value;
-            int p = (int)(value * (1 - saturation));
-            int q = (int)(value * (1 - f * saturation));
-            int t = (int)(value * (1 - (1 - f) * saturation));
-
-            return hi switch
-            {
-                0 => Color.FromArgb(255, v, t, p),
-                1 => Color.FromArgb(255, q, v, p),
-                2 => Color.FromArgb(255, p, v, t),
-                3 => Color.FromArgb(255, p, q, v),
-                4 => Color.FromArgb(255, t, p, v),
-                _ => Color.FromArgb(255, v, p, q),
-            };
         }
         // list all levels in the game
         public void ListLevels()
@@ -296,10 +260,15 @@ namespace ALTViewer
             textBox38.Text = collisionBlockCount.ToString();
             var bmp = new Bitmap(246, 246);
             var g = Graphics.FromImage(bmp);
-            g.Clear(Color.Black);
+            g.Clear(Color.FromArgb(0, 24, 0));
             int xCount = 0;
             int yCount = 0;
-            Pen pen = Pens.Gray;
+            // colour pens for different map elements
+            Pen background = new Pen(Color.FromArgb(0, 24, 0), 2f);
+            Pen walkable = new Pen(Color.FromArgb(32, 64, 32), 2f);
+            Pen doorways = new Pen(Color.FromArgb(16, 112, 16), 2f);
+            Pen walls = new Pen(Color.FromArgb(16, 40, 16), 2f);
+            Pen obstacle = new Pen(Color.FromArgb(72, 40, 16), 2f);
             for (int i = 0; i < collisionBlockCount; i++)
             {
                 long offset = br.BaseStream.Position + 20;  // offset for reference
@@ -336,45 +305,22 @@ namespace ALTViewer
                 // 13 - door or door open space?
                 // 14-41 - not used in level 1
                 //
-                // previous collision block based minimap
+                // collision block based minimap
                 if (unk2 != 255) // if this is not 255, unk3 and unk4 are guaranteed to be 0
                 {
-                    g.DrawRectangle(Pens.Gray, new Rectangle(xCount * 2, yCount * 2, 1, 1)); // * 2 to draw the map at twice the size for viewing
+                    g.DrawRectangle(walkable, new Rectangle(xCount * 2, yCount * 2, 1, 1)); // * 2 to draw the map at twice the size for viewing
                     //g.DrawRectangle(pens[unk2], new Rectangle(xCount * 2, yCount * 2, 1, 1)); // hot to cold colour ranges???
                 }
-                // previous noisy tests
-                // all first four bytes are 255 for non traversable spaces
-                /*if (unk3 == 255) // 255 is wall 0 is traversable
-                { g.DrawRectangle(Pens.Orange, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk4 == 0) // 255 is wall 0 is traversable
-                { g.DrawRectangle(Pens.Red, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }*/
-                //test.WriteLine($"{unk1}");
-                //unk6 is only 0 on the first level
-                //g.DrawRectangle(pens[unk2], new Rectangle(xCount * 2, yCount * 2, 1, 1));
-                //if (action != 0) { g.DrawRectangle(pens[action], new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                /*if (unk14 == 36) { g.DrawRectangle(Pens.Teal, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 40) { g.DrawRectangle(Pens.Tan, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 44) { g.DrawRectangle(Pens.SeaGreen, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 48) { g.DrawRectangle(Pens.Peru, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 52) { g.DrawRectangle(Pens.Maroon, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 56) { g.DrawRectangle(Pens.Lime, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 60) { g.DrawRectangle(Pens.LemonChiffon, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 64) { g.DrawRectangle(Pens.Khaki, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 67) { g.DrawRectangle(Pens.HotPink, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 68) { g.DrawRectangle(Pens.Violet, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 72) { g.DrawRectangle(Pens.FloralWhite, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 76) { g.DrawRectangle(Pens.DeepSkyBlue, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 80) { g.DrawRectangle(Pens.DarkMagenta, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 84) { g.DrawRectangle(Pens.Cyan, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 88) { g.DrawRectangle(Pens.Brown, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 92) { g.DrawRectangle(Pens.Purple, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 96) { g.DrawRectangle(Pens.Orange, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 99) { g.DrawRectangle(Pens.Blue, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 100) { g.DrawRectangle(Pens.Red, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 104) { g.DrawRectangle(Pens.Yellow, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }
-                if (unk14 == 112) { g.DrawRectangle(Pens.Green, new Rectangle(xCount * 2, yCount * 2, 1, 1)); }*/
+                if (ceilingHeight == 1 || ceilingHeight == 20)
+                {
+                    g.DrawRectangle(walls, new Rectangle(xCount * 2, yCount * 2, 1, 1));
+                }
+                if (ceilingHeight == 6)
+                {
+                    g.DrawRectangle(doorways, new Rectangle(xCount * 2, yCount * 2, 1, 1));
+                }
                 collisionBlocks.Add((unk1, unk2, unk3, unk4, unk6, unk7, ceilingFog, floorFog, ceilingHeight, floorHeight, unk13, unk14, lighting, action, offset));
-                // previous collision block based minimap
+                // collision block based minimap
                 xCount++;
                 if (xCount >= mapLength)
                 {
@@ -631,10 +577,7 @@ namespace ALTViewer
                 actionListB.Add((unk1, unk2, unk3, unk4, offset)); // add to action sequence B
             }
             minimap = br.ReadBytes(3584); // suspected minimap data
-
-
             // minimap rendering test
-
             var mmBmp = new Bitmap(64, 56, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
             for (int y = 0; y < 56; y++)
             {
@@ -647,10 +590,6 @@ namespace ALTViewer
                 }
             }
             pictureBox3.Image = new Bitmap(mmBmp, 256, 256); // 4x scale to roughly fit your 256 frame (leaves 32px for your border)
-            
-
-
-
             // unknownListA formula = unknownBlockA * 4 - (4 bytes per sequence)
             for (int i = 0; i < unknownBlockA; i++)
             {
