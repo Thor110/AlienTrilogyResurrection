@@ -29,13 +29,11 @@ Level Viewer
 - Not really a level "viewer" per-se, currently it is just a testing tool for parsing level data, it can also export the level geometry as OBJ files.
 - May or may not extend it to level viewer and editor functionality one day.
 - Need to implement an export feature for the location of level objects, enemies, crates, pickups, switches, doors etc
-- Currently ~4kb remains unparsed in each level file, I am not certain on what this data is yet but the tool provides more information such as the offset and exact number of bytes which have not yet been parsed.
 
 Patches
 
 - Multiple UVs across the games levels, lifts and doors need fixing.
 - The UVs for the Queens Egg Sack from the final level need fixing.
-- A trigger for a lift with an inaccessible secret needs fixing on L371LEV as noted by Bobblen. ( https://www.avpgalaxy.net/forum/index.php?topic=67544.0 )
 
 Unity
 
@@ -67,7 +65,7 @@ The road map for this project.
 	- Waveform preview for selected sound files.
 	- Link to the music directory, only available with the repack.
 	- Automatic backup of the original file by default.
-- [❌ 6 : Level Viewer](#level-viewer) ( 95% Complete )
+- [❌ 6 : Level Viewer](#level-viewer) ( 99% Complete )
 	- Map files detected and listed.
 	- Basic details parsed and listed.
 	- Export level geometry as OBJ files.
