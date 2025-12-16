@@ -40,6 +40,10 @@ Unity
 - Merge AlienTrilogyMapLoader.cs and ObjDataPuller.cs so that the MAP0 chunk of the level files is only parsed once.
 - Implement mesh and texture loading for the three model files.
 
+Current Unity version is hosted and being worked on by bambamalicious
+
+https://github.com/bambamalicious/AlienTrilogyUnity
+
 # Road Map
 
 The road map for this project.
