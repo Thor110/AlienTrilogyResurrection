@@ -413,13 +413,13 @@ These fixes are the same as on L900LEV
 Here is how the level was originally.
 
 <div align="center">
-  <img src="Images/L111LEV-texture-fixed.png" alt="L111LEV Original">
+  <img src="Images/L111LEV-texture.png" alt="L111LEV Patched">
 </div>
 
 Here it is with the fix I applied to the level.
 
 <div align="center">
-  <img src="Images/L111LEV-texture.png" alt="L111LEV Patched">
+  <img src="Images/L111LEV-texture-fixed.png" alt="L111LEV Original">
 </div>
 
 Currently this is only fixed when exporting the level model.
