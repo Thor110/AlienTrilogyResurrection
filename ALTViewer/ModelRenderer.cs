@@ -585,9 +585,8 @@ namespace ALTViewer
                 }
 
                 string nameAndNumber = $"{modelName}_{modelSections[m].Name}";
-                string objPath = outputPath + $"\\{nameAndNumber}.obj";
 
-                using var sw = new StreamWriter(objPath);
+                using var sw = new StreamWriter(outputPath + $"\\{nameAndNumber}.obj");
 
                 sw.WriteLine($"# OBJ exported from Alien Trilogy {nameAndNumber}");
 
@@ -743,8 +742,7 @@ namespace ALTViewer
             {
                 uvRects[i] = ParseBxRectangles(uvSections[i].Data);
             }
-            string objPath = outputPath + $"\\{levelName}.obj";
-            using var sw = new StreamWriter(objPath);
+            using var sw = new StreamWriter(outputPath + $"\\{levelName}.obj");
 
             using var mtlWriter = new StreamWriter(Path.Combine(outputPath, $"{levelName}.mtl"));
             sw.WriteLine($"# OBJ exported from Alien Trilogy {levelName}");
