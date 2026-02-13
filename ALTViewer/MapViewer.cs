@@ -14,6 +14,8 @@ namespace ALTViewer
         public string levelPath7 = "";
         public string[] levels = null!;
         private string outputPath = ""; // output path for exported files
+        private string caseName = "";
+        private string levelNumber = "";
         public List<string> missions = new List<string>
         {
             "1.1.1 Entrance", "1.1.2 Outer Complex", "1.1.3 Ammunition Dump 1", "1.2.2 Recreation Rooms", "1.3.1 Medical Laboratory",
@@ -74,16 +76,14 @@ namespace ALTViewer
             levelPath7 = gameDirectory + "SECT90";
             levels = new string[] { levelPath1, levelPath2, levelPath3, levelPath4, levelPath5, levelPath6, levelPath7 };
             // check if the game is patched
-            string patchDirectory = Utilities.CheckDirectory() + "SECT90\\L906LEV.MAP";
-            byte[] patched = File.ReadAllBytes(patchDirectory);
+            byte[] patched = File.ReadAllBytes(Utilities.CheckDirectory() + "SECT90\\L906LEV.MAP");
             using var ms = new MemoryStream(patched);
             using var read = new BinaryReader(ms);
             read.BaseStream.Seek(0x50BC8, SeekOrigin.Current);
             byte check = read.ReadByte();
             if (check != 0xFF) { patch = true; }
             // if it is more patches will be applied when exporting the levels
-            ToolTip tooltip = new ToolTip(); // no tooltips added yet
-            ToolTipHelper.EnableTooltips(this.Controls, tooltip, new Type[] { typeof(Label), typeof(ListBox) });
+            ToolTipHelper.EnableTooltips(this.Controls, new ToolTip(), new Type[] { typeof(Label), typeof(ListBox) });
             ListLevels();
             fullScreen = new FullScreen(this);
         }
@@ -99,17 +99,18 @@ namespace ALTViewer
         // list box selection changed
         private void listBox1_SelectedIndexChanged(object sender, EventArgs e)
         {
-            string selected = listBox1.SelectedItem!.ToString()!; // get selected item
-            if (selected == lastSelectedLevel) { return; } // do not reselect same file
-            lastSelectedLevel = selected; // store last selected file
+            caseName = listBox1.SelectedItem!.ToString()!; // get selected item
+            levelNumber = caseName.Substring(1, 3); // set level number for later use
+            if (caseName == lastSelectedLevel) { return; } // do not reselect same file
+            lastSelectedLevel = caseName; // store last selected file
             if (listBox1.SelectedIndex < missions.Count) { label1.Text = "Mission Name : " + missions[listBox1.SelectedIndex]; } // display level name
             else { label1.Text = "Mission Name : " + "Unknown"; }
             foreach (string level in levels) // determine level folder based on selected item
             {
-                if (File.Exists(Path.Combine(level, selected + ".MAP")))
+                if (File.Exists(Path.Combine(level, caseName + ".MAP")))
                 {
-                    selectedLevelFile = Path.Combine(level, selected + ".MAP"); // set selected level file path
-                    label2.Text = "File Name : " + selected + ".MAP";
+                    selectedLevelFile = Path.Combine(level, caseName + ".MAP"); // set selected level file path
+                    label2.Text = "File Name : " + caseName + ".MAP";
                     break; // exit after finding the first matching level
                 }
             }
@@ -198,46 +199,46 @@ namespace ALTViewer
             ushort enemyTypes = br.ReadUInt16();            // Enemy Types (bitmask)
                                                             // This is a bitmask that determines what enemy types are loaded into memory. Enemy Types : 1 - 15
                                                             // The game will crash if an enemy type is declared but not actually used
-            // Chapter 1 ( enemyTypes ) - 16/17/18/19 are likely not a part of the enemyTypes ( example : first two levels )
-            // L111LEV - 22 00 // 2 / 6
-            // L112LEV - 22 00 // 2 / 6 / 16
-            // L113LEV - 00 00 // null
-            // L122LEV - 22 04 // 2 / 6 / 11 / 16
-            // L131LEV - 26 04 // 2 / 6 / 11 / 3
-            // L114LEV - 00 00 // null
-            // L141LEV - 23 00 // 6 / 1 / 2
-            // L115LEV - 00 00 // null
-            // L154LEV - 23 10 // 6 / 1 / 2 / 13 / 16 / 17 / 19
-            // L155LEV - 0C 00 // 18 / 16 / 19
-            // L161LEV - A7 02 // 6 / 1 / 2 / 8 / 10 / 3
-            // L162LEV - 43 00 // 7 / 1 / 2
-            // Chapter 2 ( enemyTypes )
-            // L211LEV - 0E 08 // 4 / 12 / 2 / 3
-            // L212LEV - 0A 08 // 4 / 2 / 12
-            // L213LEV - 02 08 // 2 / 12
-            // L222LEV - 0B 08 // 1 / 2 / 12 / 4 / 17 / 19
-            // L242LEV - 00 00 // null
-            // L231LEV - 14 21 // 14 / 5 / 3 / 9
-            // L232LEV - 13 10 // 1 / 2 / 5 / 13 / 16 / 17
-            // L243LEV - 00 00 // null
-            // L262LEV - 17 02 // 5 / 1 / 2 / 10 / 3
-            // L263LEV - 43 00 // 7 / 1 / 2
-            // Chapter 3 ( enemyTypes )
-            // L311LEV - 10 20 // 5 / 14
-            // L321LEV - 02 00 // 2
-            // L331LEV - 12 21 // 5 / 14 / 2 / 9
-            // L322LEV - 08 00 // 4
-            // L351LEV - 24 12 // 6 / 13 / 10 / 3
-            // L352LEV - 00 00 // null
-            // L323LEV - 10 00 // 5
-            // L371LEV - 20 10 // 6 / 13
-            // L353LEV - 00 00 // null
-            // L324LEV - 22 00 // 2 / 6
-            // L381LEV - 23 00 // 6 / 1 / 2
-            // L325LEV - 36 00 // 3 / 5 / 2 / 6
-            // L391LEV - 43 00 // 7 / 1 / 2
-            // Multiplayer Levels ( enemyTypes )
-            // All = 00 10
+                                                            // Chapter 1 ( enemyTypes ) - 16/17/18/19 are likely not a part of the enemyTypes ( example : first two levels )
+                                                            // L111LEV - 22 00 // 2 / 6
+                                                            // L112LEV - 22 00 // 2 / 6 / 16
+                                                            // L113LEV - 00 00 // null
+                                                            // L122LEV - 22 04 // 2 / 6 / 11 / 16
+                                                            // L131LEV - 26 04 // 2 / 6 / 11 / 3
+                                                            // L114LEV - 00 00 // null
+                                                            // L141LEV - 23 00 // 6 / 1 / 2
+                                                            // L115LEV - 00 00 // null
+                                                            // L154LEV - 23 10 // 6 / 1 / 2 / 13 / 16 / 17 / 19
+                                                            // L155LEV - 0C 00 // 18 / 16 / 19
+                                                            // L161LEV - A7 02 // 6 / 1 / 2 / 8 / 10 / 3
+                                                            // L162LEV - 43 00 // 7 / 1 / 2
+                                                            // Chapter 2 ( enemyTypes )
+                                                            // L211LEV - 0E 08 // 4 / 12 / 2 / 3
+                                                            // L212LEV - 0A 08 // 4 / 2 / 12
+                                                            // L213LEV - 02 08 // 2 / 12
+                                                            // L222LEV - 0B 08 // 1 / 2 / 12 / 4 / 17 / 19
+                                                            // L242LEV - 00 00 // null
+                                                            // L231LEV - 14 21 // 14 / 5 / 3 / 9
+                                                            // L232LEV - 13 10 // 1 / 2 / 5 / 13 / 16 / 17
+                                                            // L243LEV - 00 00 // null
+                                                            // L262LEV - 17 02 // 5 / 1 / 2 / 10 / 3
+                                                            // L263LEV - 43 00 // 7 / 1 / 2
+                                                            // Chapter 3 ( enemyTypes )
+                                                            // L311LEV - 10 20 // 5 / 14
+                                                            // L321LEV - 02 00 // 2
+                                                            // L331LEV - 12 21 // 5 / 14 / 2 / 9
+                                                            // L322LEV - 08 00 // 4
+                                                            // L351LEV - 24 12 // 6 / 13 / 10 / 3
+                                                            // L352LEV - 00 00 // null
+                                                            // L323LEV - 10 00 // 5
+                                                            // L371LEV - 20 10 // 6 / 13
+                                                            // L353LEV - 00 00 // null
+                                                            // L324LEV - 22 00 // 2 / 6
+                                                            // L381LEV - 23 00 // 6 / 1 / 2
+                                                            // L325LEV - 36 00 // 3 / 5 / 2 / 6
+                                                            // L391LEV - 43 00 // 7 / 1 / 2
+                                                            // Multiplayer Levels ( enemyTypes )
+                                                            // All = 00 10
             ushort ventTypes = br.ReadUInt16();             // Vent Types (bitmask) Always loaded into memory
             // It seems this bitmask is not actually used by the game and might just be leftover metadata from the original editor.
             // 10 - Horizontal Steam Vent                           // 00000100
@@ -681,19 +682,7 @@ namespace ALTViewer
         {
             if (listBox1.SelectedIndex == -1) { MessageBox.Show("Please select a model to export."); return; }
             // determine level number and file directory based on selected item
-            string caseName = listBox1.SelectedItem!.ToString()!;
-            string levelNumber = caseName.Substring(1, 3);
-            string fileDirectory = levelNumber.Substring(0, 2) switch
-            {
-                "11" or "12" or "13" => levelPath1,
-                "14" or "15" or "16" => levelPath2,
-                "21" or "22" or "23" => levelPath3,
-                "24" or "26" => levelPath4,
-                "31" or "32" or "33" => levelPath5,
-                "35" or "36" or "37" or "38" or "39" => levelPath6,
-                "90" => levelPath7,
-                _ => throw new Exception("Unknown section selected!")
-            };
+            string fileDirectory = levelPath(levelNumber);
             // check if the file exists in the determined directory
             string textureDirectory = fileDirectory + "\\" + $"{levelNumber}GFX.B16";
             if (!File.Exists(textureDirectory))
@@ -701,11 +690,9 @@ namespace ALTViewer
                 MessageBox.Show($"Associated graphics file {caseName}.MAP does not exist!");
                 return;
             }
-            // determine the file directory for the selected map
-            fileDirectory = fileDirectory + $"\\{caseName}.MAP";
             // parse the BND sections for UVs and model data
             List<BndSection> uvSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(textureDirectory), "BX");
-            List<BndSection> levelSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(fileDirectory), "MAP0");
+            List<BndSection> levelSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(fileDirectory + $"\\{caseName}.MAP"), "MAP0");
             ModelRenderer.ExportLevel(caseName, uvSections, levelSections[0].Data, $"{levelNumber}GFX", outputPath, checkBox1.Checked, checkBox2.Checked, patch);
             if (!exporting)
             {
@@ -717,7 +704,6 @@ namespace ALTViewer
         private void button6_Click(object sender, EventArgs e)
         {
             exporting = true;
-            //listBox1.SelectedIndexChanged -= listBox1_SelectedIndexChanged!;
             int previouslySelectedIndex = listBox1.SelectedIndex; // store previously selected index
             for (int i = 0; i < listBox1.Items.Count; i++) // loop through all levels and export each map
             {
@@ -725,7 +711,6 @@ namespace ALTViewer
                 button5_Click(null!, null!);
             }
             if (previouslySelectedIndex != -1) { listBox1.SelectedIndex = previouslySelectedIndex; } // restore previously selected index
-            //listBox1.SelectedIndexChanged += listBox1_SelectedIndexChanged!;
             exporting = false;
             GenerateDebugTextures();
             MessageBox.Show($"Exported all levels with UVs!");
@@ -1082,7 +1067,6 @@ namespace ALTViewer
         // dump all minimaps from all levels
         private void button8_Click(object sender, EventArgs e)
         {
-            //listBox1.SelectedIndexChanged -= listBox1_SelectedIndexChanged!;
             int previouslySelectedIndex = listBox1.SelectedIndex; // store previously selected index
             exporting = true;
             for (int i = 0; i < listBox1.Items.Count; i++) // loop through all levels and export each map
@@ -1092,7 +1076,6 @@ namespace ALTViewer
             }
             if (previouslySelectedIndex != -1) { listBox1.SelectedIndex = previouslySelectedIndex; } // restore previously selected index
             exporting = false;
-            //listBox1.SelectedIndexChanged += listBox1_SelectedIndexChanged!;
             MessageBox.Show("All MiniMap data dumped.");
         }
         // door models
@@ -1111,20 +1094,7 @@ namespace ALTViewer
             int selectedIndex = listBox2.SelectedIndex;
             if (listBox1.SelectedIndex == -1) { MessageBox.Show("Please select a level first."); return; }
             if (selectedIndex == -1) { MessageBox.Show("Please select a door first."); return; }
-            string caseName = listBox1.SelectedItem!.ToString()!;
-            string levelNumber = caseName.Substring(1, 3);
-            string fileDirectory = levelNumber.Substring(0, 2) switch
-            {
-                "11" or "12" or "13" => levelPath1,
-                "14" or "15" or "16" => levelPath2,
-                "21" or "22" or "23" => levelPath3,
-                "24" or "26" => levelPath4,
-                "31" or "32" or "33" => levelPath5,
-                "35" or "36" or "37" or "38" or "39" => levelPath6,
-                "90" => levelPath7,
-                _ => throw new Exception("Unknown section selected!")
-            };
-            string textureDirectory = fileDirectory + "\\" + $"{levelNumber}GFX.B16";
+            string textureDirectory = levelPath(levelNumber) + "\\" + $"{levelNumber}GFX.B16";
             if (!File.Exists(textureDirectory))
             {
                 MessageBox.Show($"Associated graphics file {caseName}.MAP does not exist!");
@@ -1132,7 +1102,7 @@ namespace ALTViewer
             }
             // parse the BND sections for UVs and model data
             List<BndSection> uvSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(textureDirectory), "BX");
-            ModelRenderer.ExportDoorLift($"{listBox1.SelectedItem!.ToString()!}_DOOR{selectedIndex:D2}", uvSections, doorSections[selectedIndex].Data, $"{levelNumber}GFX", outputPath, checkBox1.Checked, checkBox2.Checked);
+            ModelRenderer.ExportDoorLift($"{caseName}_DOOR{selectedIndex:D2}", uvSections, doorSections[selectedIndex].Data, $"{levelNumber}GFX", outputPath, checkBox1.Checked, checkBox2.Checked);
             if (!exporting)
             {
                 if (!checkBox2.Checked) { GenerateDebugTextures(); } // Generate debug textures if not exporting unknowns
@@ -1165,20 +1135,7 @@ namespace ALTViewer
             if (listBox1.SelectedIndex == -1) { MessageBox.Show("Please select a level first."); return; }
             if (selectedIndex == -1) { MessageBox.Show("Please select a lift first."); return; }
             if (liftSections.Count == 0 && !exporting) { MessageBox.Show("No lift sections found for the selected level!"); return; }
-            string caseName = listBox1.SelectedItem!.ToString()!;
-            string levelNumber = caseName.Substring(1, 3);
-            string fileDirectory = levelNumber.Substring(0, 2) switch
-            {
-                "11" or "12" or "13" => levelPath1,
-                "14" or "15" or "16" => levelPath2,
-                "21" or "22" or "23" => levelPath3,
-                "24" or "26" => levelPath4,
-                "31" or "32" or "33" => levelPath5,
-                "35" or "36" or "37" or "38" or "39" => levelPath6,
-                "90" => levelPath7,
-                _ => throw new Exception("Unknown section selected!")
-            };
-            string textureDirectory = fileDirectory + "\\" + $"{levelNumber}GFX.B16";
+            string textureDirectory = levelPath(levelNumber) + "\\" + $"{levelNumber}GFX.B16";
             if (!File.Exists(textureDirectory))
             {
                 MessageBox.Show($"Associated graphics file {caseName}.MAP does not exist!");
@@ -1212,6 +1169,36 @@ namespace ALTViewer
             exporting = false;
             if (!checkBox2.Checked) { GenerateDebugTextures(true); } // Generate debug textures if not exporting unknowns
             MessageBox.Show("All lift models exported.");
+        }
+        // determine level path string to reduce code duplication from previous versions
+        private string levelPath(string levelNumber)
+        {
+            return levelNumber.Substring(0, 2) switch
+            {
+                "11" or "12" or "13" => levelPath1,
+                "14" or "15" or "16" => levelPath2,
+                "21" or "22" or "23" => levelPath3,
+                "24" or "26" => levelPath4,
+                "31" or "32" or "33" => levelPath5,
+                "35" or "36" or "37" or "38" or "39" => levelPath6,
+                "90" => levelPath7,
+                _ => throw new Exception("Unknown section selected!")
+            };
+        }
+        // wip obj level importer
+        private void button13_Click(object sender, EventArgs e)
+        {
+            if (listBox1.SelectedIndex == -1) { MessageBox.Show("Please select a level to import to."); return; }
+            using (OpenFileDialog openFileDialog = new OpenFileDialog())
+            {
+                openFileDialog.InitialDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                openFileDialog.Filter = "OBJ Models (*.obj)|*.obj|All Files (*.*)|*.*";
+                openFileDialog.FilterIndex = 1;
+                openFileDialog.RestoreDirectory = true;
+                openFileDialog.Title = "Select a Container (.obj) file";
+                if (openFileDialog.ShowDialog() != DialogResult.OK) { return; }
+                ModelImporter.importModel(openFileDialog.FileName);
+            }
         }
     }
 }

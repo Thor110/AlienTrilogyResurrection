@@ -134,6 +134,7 @@
             label31 = new Label();
             pictureBox3 = new PictureBox();
             label36 = new Label();
+            button13 = new Button();
             ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
             ((System.ComponentModel.ISupportInitialize)pictureBox2).BeginInit();
             ((System.ComponentModel.ISupportInitialize)pictureBox3).BeginInit();
@@ -621,7 +622,7 @@
             // 
             checkBox1.AccessibleDescription = "For exporting levels with all faces mapped to their in-game flags, for debugging.";
             checkBox1.AutoSize = true;
-            checkBox1.Location = new Point(221, 522);
+            checkBox1.Location = new Point(221, 493);
             checkBox1.Name = "checkBox1";
             checkBox1.Size = new Size(91, 19);
             checkBox1.TabIndex = 64;
@@ -633,7 +634,7 @@
             // 
             checkBox2.AccessibleDescription = "For exporting levels with all faces mapped to their in-game unknown bytes, for debugging.";
             checkBox2.AutoSize = true;
-            checkBox2.Location = new Point(221, 497);
+            checkBox2.Location = new Point(221, 464);
             checkBox2.Name = "checkBox2";
             checkBox2.Size = new Size(115, 19);
             checkBox2.TabIndex = 65;
@@ -1139,11 +1140,23 @@
             label36.TabIndex = 122;
             label36.Text = "MiniMap rendered from minimap byte array.";
             // 
+            // button13
+            // 
+            button13.AccessibleDescription = "Import the selected level from an OBJ file.";
+            button13.Location = new Point(221, 518);
+            button13.Name = "button13";
+            button13.Size = new Size(105, 23);
+            button13.TabIndex = 123;
+            button13.Text = "Import Model";
+            button13.UseVisualStyleBackColor = true;
+            button13.Click += button13_Click;
+            // 
             // MapViewer
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1743, 583);
+            Controls.Add(button13);
             Controls.Add(label36);
             Controls.Add(pictureBox3);
             Controls.Add(label31);
@@ -1366,5 +1379,6 @@
         private Label label31;
         private PictureBox pictureBox3;
         private Label label36;
+        private Button button13;
     }
 }
