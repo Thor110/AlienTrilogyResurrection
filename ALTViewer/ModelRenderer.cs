@@ -76,7 +76,7 @@ namespace ALTViewer
                 short x = br.ReadInt16();
                 short y = br.ReadInt16();
                 short z = br.ReadInt16();
-                br.ReadBytes(2);                        // unknown bytes
+                br.ReadInt16();                         // padding bytes always 00 00 in every level
                 vertices.Add((x, y, z));
             }
             List<(int A, int B, int C, int D, ushort TexIndex, byte Flags, byte Other)> quads = new();
@@ -97,8 +97,7 @@ namespace ALTViewer
             {
                 uvRects[i] = ParseBxRectangles(uvSections[i].Data);
             }
-            string objPath = outputPath + $"\\{levelName}.obj";
-            using var sw = new StreamWriter(objPath);
+            using var sw = new StreamWriter(outputPath + $"\\{levelName}.obj");
 
             using var mtlWriter = new StreamWriter(Path.Combine(outputPath, $"{levelName}.mtl"));
             sw.WriteLine($"# OBJ exported from Alien Trilogy {levelName}");
@@ -532,7 +531,31 @@ namespace ALTViewer
                     uvRects = ParseBxRectangles(uvSections[0].Data);
                 }
 
-                br.ReadBytes(12); // OBJ1 + unknown
+                br.ReadBytes(12);
+                // 4 header bytes = OBJ1
+                // 4 padding bytes, always 00 00 00 00
+                // 4 identifier bytes, possibly unused.
+                // OBJ3D.BND
+                // 00 00 00 00 = All Other Models Use This
+                // 80 40 5A 00 = Switch
+                // E4 40 5A 00 = Egg Husk
+                // OPTOBJ.BND  = Menu Models
+                // FC 56 5A 00 = Joystick
+                // 8C 47 5A 00 = Camera
+                // 5C 94 02 83 = Controller
+                // 98 66 5A 00 = Gravis Grip Controller?
+                // A4 59 5A 00 = Harddrive <-
+                // 90 59 5A 00 = Harddrive ->
+                // 4C 67 5A 00 = Camera X
+                // 34 66 5A 00 = Keyboard
+                // 88 67 5A 00 = Mouse
+                // 14 68 5A 00 = Computer
+                // 00 72 5A 00 = Networked Computers
+                // B0 67 5A 00 = Speaker Music From Disc
+                // 68 48 5A 00 = Speaker SFX
+                // 9C 67 5A 00 = Headphones
+                // PICKMOD.BND
+                // 00 00 00 00 = All Models Use This
 
                 int quadCount = br.ReadInt32();
                 int vertexCount = br.ReadInt32();
@@ -557,7 +580,7 @@ namespace ALTViewer
                     short x = br.ReadInt16();
                     short y = br.ReadInt16();
                     short z = br.ReadInt16();
-                    br.ReadUInt16();                    // padding
+                    br.ReadUInt16();                        // 127 = last vertex // 0 = vertex // 128 = first vertex ( I think )
                     vertices.Add((x, y, z));
                 }
 
@@ -679,7 +702,7 @@ namespace ALTViewer
                 byte y = br.ReadByte();
                 byte width = br.ReadByte();
                 byte height = br.ReadByte();
-                br.ReadBytes(2);                        // unknown bytes
+                br.ReadInt16();                         // texture identifier 00-04
                 rectangles.Add((x, y, width + 1, height + 1)); // +/- 1 and no +/- all have their own problems???...
             }
             return rectangles;

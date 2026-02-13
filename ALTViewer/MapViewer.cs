@@ -681,11 +681,9 @@ namespace ALTViewer
         private void button5_Click(object sender, EventArgs e)
         {
             if (listBox1.SelectedIndex == -1) { MessageBox.Show("Please select a model to export."); return; }
-            // determine level number and file directory based on selected item
-            string fileDirectory = levelPath(levelNumber);
-            // check if the file exists in the determined directory
-            string textureDirectory = fileDirectory + "\\" + $"{levelNumber}GFX.B16";
-            if (!File.Exists(textureDirectory))
+            string fileDirectory = levelPath(levelNumber); // determine file directory based on selected item level number
+            string textureDirectory = fileDirectory + "\\" + $"{levelNumber}GFX.B16"; // determine associated graphics file
+            if (!File.Exists(textureDirectory)) // check if the file exists in the determined directory
             {
                 MessageBox.Show($"Associated graphics file {caseName}.MAP does not exist!");
                 return;
@@ -1171,7 +1169,7 @@ namespace ALTViewer
             MessageBox.Show("All lift models exported.");
         }
         // determine level path string to reduce code duplication from previous versions
-        private string levelPath(string levelNumber)
+        public string levelPath(string levelNumber)
         {
             return levelNumber.Substring(0, 2) switch
             {
@@ -1191,13 +1189,12 @@ namespace ALTViewer
             if (listBox1.SelectedIndex == -1) { MessageBox.Show("Please select a level to import to."); return; }
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
             {
-                openFileDialog.InitialDirectory = AppDomain.CurrentDomain.BaseDirectory;
                 openFileDialog.Filter = "OBJ Models (*.obj)|*.obj|All Files (*.*)|*.*";
                 openFileDialog.FilterIndex = 1;
                 openFileDialog.RestoreDirectory = true;
                 openFileDialog.Title = "Select a Container (.obj) file";
                 if (openFileDialog.ShowDialog() != DialogResult.OK) { return; }
-                ModelImporter.importModel(openFileDialog.FileName);
+                ModelImporter.importModel(openFileDialog.FileName, levelNumber, levelPath(levelNumber));
             }
         }
     }
