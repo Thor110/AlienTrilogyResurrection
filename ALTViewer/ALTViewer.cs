@@ -35,6 +35,7 @@ namespace ALTViewer
         // patch changes
         private void button6_Click(object sender, EventArgs e)
         {
+            // TODO : remove patchDirectory variable and pass direct values
             // L906LEV.MAP
             List<Tuple<long, byte[]>> replacements = new List<Tuple<long, byte[]>>()
             {
