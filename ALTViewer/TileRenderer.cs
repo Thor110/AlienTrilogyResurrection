@@ -12,6 +12,23 @@ namespace ALTViewer
     }
     public static class TileRenderer
     {
+        // .BND / .B16 File Format Specifications (WIP)
+        // 4 bytes  = FORM
+        // 4 bytes  = Int24 File Length
+        // 8 bytes  = PSXTINFO
+        // 16 bytes = unknown header data
+        // 4 bytes  = Int32 Texture Length (always 65542)
+        // 2 bytes  = identifier TP/CL/BX etc
+        // TP       = Texture Pack
+        // CL       = Colour Luminosity
+        // BX       = Box Coordinates (UVs)
+        // 2 bytes  = texture index (accounted for in texture length, ie: 65540 + 2)
+        // CL + BX section, repeat.
+        // 
+        // Compressed Variant File Format Specifications (WIP)
+        // F0## = Frame Index
+        // 
+        // TODO : convert from scanning for section headers to byte perfect parsing
         // Parse BND file sections from a byte array
         public static List<BndSection> ParseBndFormSections(byte[] bnd, string section)
         {
