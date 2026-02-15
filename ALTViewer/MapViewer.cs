@@ -692,25 +692,25 @@ namespace ALTViewer
             List<BndSection> uvSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(textureDirectory), "BX");
             List<BndSection> levelSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(fileDirectory + $"\\{caseName}.MAP"), "MAP0");
             ModelRenderer.ExportLevel(caseName, uvSections, levelSections[0].Data, $"{levelNumber}GFX", outputPath, checkBox1.Checked, checkBox2.Checked, patch);
-            if (!exporting)
-            {
-                GenerateDebugTextures();
-                MessageBox.Show($"Exported {caseName} with UVs!");
-            }
+            GenerateDebugTextures();
+            MessageBox.Show($"Exported {caseName} with UVs!");
         }
         // export all maps as OBJ
         private void button6_Click(object sender, EventArgs e)
         {
-            exporting = true;
-            int previouslySelectedIndex = listBox1.SelectedIndex; // store previously selected index
-            for (int i = 0; i < listBox1.Items.Count; i++) // loop through all levels and export each map
+            foreach(var item in listBox1.Items)
             {
-                listBox1.SelectedIndex = i;
-                button5_Click(null!, null!);
+                caseName = item.ToString()!; // get selected item
+                levelNumber = caseName.Substring(1, 3); // set level number for later use
+                string fileDirectory = levelPath(levelNumber); // determine file directory based on selected item level number
+                // parse the BND sections for UVs and model data
+                List<BndSection> uvSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(fileDirectory + $"\\{levelNumber}GFX.B16"), "BX");
+                List<BndSection> levelSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(fileDirectory + $"\\{caseName}.MAP"), "MAP0");
+                ModelRenderer.ExportLevel(caseName, uvSections, levelSections[0].Data, $"{levelNumber}GFX", outputPath, checkBox1.Checked, checkBox2.Checked, patch);
+
             }
-            if (previouslySelectedIndex != -1) { listBox1.SelectedIndex = previouslySelectedIndex; } // restore previously selected index
-            exporting = false;
-            GenerateDebugTextures();
+            if (checkBox1.Checked) { ModelRenderer.GenerateFlagTextures(outputPath, caseName, false); } // Generate textures for known flags
+            else if (checkBox2.Checked) { ModelRenderer.GenerateUnknownTextures(outputPath, caseName); } // Generate textures for unknown flags
             MessageBox.Show($"Exported all levels with UVs!");
         }
         private void GenerateDebugTextures(bool lifts = false)
