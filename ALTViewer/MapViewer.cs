@@ -283,7 +283,38 @@ namespace ALTViewer
                 br.ReadByte();                      // only ever 0 across every level in the game       ( 1 possible value )
                 byte ceilingFog = br.ReadByte();    // a range of different values                      ( 43 possible values )
                 byte floorFog = br.ReadByte();      // a range of different values                      ( 40 possible values )
-                byte ceilingHeight = br.ReadByte(); // a range of different values                      ( 30 possible values )
+                byte ceilingHeight = br.ReadByte(); // a range of different values                      ( 30 possible values ) // attributes // Kaiser
+                /* // Kaiser
+                0 - None
+                1 - Block Player Only?
+                5 - Force Player To Walk Slow
+                6 - Doorway?
+                7 - Burn Damage
+                8 - Acid Pool
+                9 - Water Pool
+                10 - Instant Death (Pit death)
+                20 - Blocker
+                21 - Ramp (-z axis)
+                22 - Ramp (+x axis)
+                23 - Ramp (-x axis)
+                24 - Ramp (+z axis)
+                25 - Corner blocker (+x +z axis)
+                26 - Corner Blocker (-x +z axis)
+                27 - Corner Blocker (+x -z axis)
+                28 - Corner Blocker (-x -z axis)
+                45 - Stairs (-z axis)
+                46 - Stairs (+x axis)
+                47 - Stairs (-x axis)
+                48 - Stairs (+z axis)
+                49 - Ramp (-z axis)
+                50 - Ramp (+x axis)
+                51 - Ramp (-x axis)
+                52 - Ramp (+z axis)
+                53 - Slide Ramp (-z axis)
+                54 - Slide Ramp (+x axis)
+                55 - Slide Ramp (-x axis)
+                56 - Slide Ramp (+z axis)
+                */ // Kaiser
                 byte floorHeight = br.ReadByte();   // a range of different values                      ( 206 possible values )
                 byte unk13 = br.ReadByte();         // a range of different values                      ( 26 possible values )
                 byte unk14 = br.ReadByte();         // a range of different values                      ( 167 possible values )
