@@ -561,8 +561,8 @@ namespace ALTViewer
             for (int i = 0; i < 64; i++)
             {
                 long offset = br.BaseStream.Position + 20;
-                byte unk1 = br.ReadByte();
-                byte unk2 = br.ReadByte();
+                byte unk1 = br.ReadByte();          // possibly activation type // Kaiser
+                byte unk2 = br.ReadByte();          // commandStartIdx // Kaiser
                 byte unk3 = br.ReadByte();
                 br.ReadByte();                      // always 0 across all maps
                 actionListA.Add((unk1, unk2, unk3, offset)); // add to action sequence A
@@ -571,13 +571,39 @@ namespace ALTViewer
             for (int i = 0; i < 64; i++)
             {
                 long offset = br.BaseStream.Position + 20;
-                byte unk1 = br.ReadByte();
-                byte unk2 = br.ReadByte();
+                byte unk1 = br.ReadByte();          // type // Kaiser
+                byte unk2 = br.ReadByte();          // nextCommandIdx; // 255 terminates // Kaiser
                 byte unk3 = br.ReadByte();
-                byte unk4 = br.ReadByte();
+                byte unk4 = br.ReadByte();          // targetIndex; // depends on type // Kaiser
                 actionListB.Add((unk1, unk2, unk3, unk4, offset)); // add to action sequence B
             }
+            // types: // Kaiser
+            /*
+            0 - Toggle Light
+            1 - Unlock Door
+            2 - Spawn Pickup
+            3 - Spawn Monster
+            4 - Activate Object
+            5 - Lower Lift
+            6 - Open Door
+            7 - Activate Lift (not sure if this just enables the lift or also lowers?? I can't make it out)
+            8 - End Level
+            9 - Change texture
+            */ // Kaiser
             minimap = br.ReadBytes(3584); // suspected minimap data
+            // Kaiser : the light data is located where you believed contained the minimap data. The count/size is always 128 
+            /*struct light_s
+            {
+                byte offRGB[4];
+                byte onRGB[4];
+                byte unknown1[4];
+                byte unknown2[4];
+                uint16_t unknown3;
+                uint16_t unknown4;
+                uint16_t unknown5;
+                uint16_t unknown6;
+                uint32_t dwFlags;
+            };*/ // Kaiser
             // minimap rendering test
             var mmBmp = new Bitmap(64, 56, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
             for (int y = 0; y < 56; y++)
@@ -591,6 +617,7 @@ namespace ALTViewer
                 }
             }
             pictureBox3.Image = new Bitmap(mmBmp, 256, 256); // 4x scale to roughly fit your 256 frame (leaves 32px for your border)
+            // unknown blocks = tile animations // Kaiser
             // unknownListA formula = unknownBlockA * 4 - (4 bytes per sequence)
             for (int i = 0; i < unknownBlockA; i++)
             {

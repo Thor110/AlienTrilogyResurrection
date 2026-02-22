@@ -88,8 +88,8 @@ namespace ALTViewer
                 int d = br.ReadInt32();
                 ushort texIndex = br.ReadUInt16();
                 byte flags = br.ReadByte();
-                byte other = br.ReadByte();             // unknown byte
-                quads.Add((a, b, c, d, texIndex, flags, other));
+                byte light = br.ReadByte();             // light id x // Kaiser
+                quads.Add((a, b, c, d, texIndex, flags, light));
             }
             // Read UV rectangles BX00-BX04
             var uvRects = new List<(int X, int Y, int Width, int Height)>[5];
