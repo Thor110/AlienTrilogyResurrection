@@ -281,8 +281,10 @@ namespace ALTViewer
                 byte unk6 = br.ReadByte();          // only ever 0-21 across every level in the game    ( 22 possible values )
                 byte unk7 = br.ReadByte();          // only ever 0-95 across every level in the game    ( 96 possible values )
                 br.ReadByte();                      // only ever 0 across every level in the game       ( 1 possible value )
-                byte ceilingFog = br.ReadByte();    // a range of different values                      ( 43 possible values )
-                byte floorFog = br.ReadByte();      // a range of different values                      ( 40 possible values )
+                ushort visibility = br.ReadUInt16(); // Kaiser
+                //byte ceilingFog = br.ReadByte();    // a range of different values                      ( 43 possible values )
+                //byte floorFog = br.ReadByte();      // a range of different values                      ( 40 possible values )
+
                 byte ceilingHeight = br.ReadByte(); // a range of different values                      ( 30 possible values ) // attributes // Kaiser
                 /* // Kaiser
                 0 - None
