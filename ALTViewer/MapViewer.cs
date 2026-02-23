@@ -38,8 +38,9 @@ namespace ALTViewer
         private List<(int A, int B, int C, int D, ushort TexIndex)> quads = new();
 
         private List<(int Unk1, byte Unk2, byte Unk3, byte Unk4, byte Unk6, byte Unk7,
-            byte Unk9, byte Unk10, byte Unk11, byte Unk12, byte Unk13, byte Unk14, byte Unk15, byte Unk16,
+            ushort Visibility, byte Unk11, byte Unk12, byte Unk13, byte Unk14, byte Unk15, byte Unk16,
             long Offset)> collisionBlocks = new();
+
         private List<(byte X, byte Y, byte AlternateNode, byte NodeA, byte NodeB, byte NodeC, byte NodeD, long Offset)> paths = new(); // UNKNOWN
         private List<(byte Type, byte X, byte Y, byte Z,
             byte Rotation,
@@ -60,6 +61,9 @@ namespace ALTViewer
         private List<(byte Unk1, byte Unk2, byte Unk3, byte Unk4, long Offset)> actionListB = new();
         private List<(byte Unk1, byte Unk4, long Offset)> unknownListA = new();
         private List<(byte Unk1, byte Unk3, byte Unk4, long Offset)> unknownListB = new();
+        private List<(byte[] offRGB, byte[] onRGB, byte[] unknown1, byte[] unknown2,
+                ushort wCurrentTime, ushort wNumLoops, ushort wOnTime, ushort wOffTime,
+                byte type, byte state, ushort wFlags, long Offset)> lights = new();
         private bool exporting;
         private byte[] minimap = null!;
         private bool patch;
@@ -179,7 +183,8 @@ namespace ALTViewer
             textBox7.Text = playerStartY.ToString();        // display player start Y coordinate
             byte pathCount = br.ReadByte();                 // path count
             textBox21.Text = pathCount.ToString();          // display path count
-            br.ReadByte();                                  // UNKNOWN ( 128 on all levels )
+            byte lightCount = br.ReadByte();                // UNKNOWN ( 128 on all levels ) // Kaiser pointed out this section
+            // no text box yay
             ushort monsterCount = br.ReadUInt16();          // monster count
             textBox8.Text = monsterCount.ToString();        // display monster count
             ushort pickupCount = br.ReadUInt16();           // pickup count
@@ -353,7 +358,7 @@ namespace ALTViewer
                 {
                     g.DrawRectangle(doorways, new Rectangle(xCount * 2, yCount * 2, 1, 1));
                 }
-                collisionBlocks.Add((unk1, unk2, unk3, unk4, unk6, unk7, ceilingFog, floorFog, ceilingHeight, floorHeight, unk13, unk14, lighting, action, offset));
+                collisionBlocks.Add((unk1, unk2, unk3, unk4, unk6, unk7, visibility, ceilingHeight, floorHeight, unk13, unk14, lighting, action, offset));
                 // collision block based minimap
                 xCount++;
                 if (xCount >= mapLength)
@@ -623,7 +628,39 @@ namespace ALTViewer
             8 - End Level
             9 - Change texture
             */ // Kaiser
-            minimap = br.ReadBytes(3584); // suspected minimap data
+            for (int i = 0; i < lightCount; i++) // always 128
+            {
+                long offset = br.BaseStream.Position + 20;
+                byte[] offRGB = new byte[4];
+                offRGB[0] = br.ReadByte();
+                offRGB[1] = br.ReadByte();
+                offRGB[2] = br.ReadByte();
+                offRGB[3] = br.ReadByte();
+                byte[] onRGB = new byte[4];
+                onRGB[0] = br.ReadByte();
+                onRGB[1] = br.ReadByte();
+                onRGB[2] = br.ReadByte();
+                onRGB[3] = br.ReadByte();
+                byte[] unknown1 = new byte[4];
+                unknown1[0] = br.ReadByte();
+                unknown1[1] = br.ReadByte();
+                unknown1[2] = br.ReadByte();
+                unknown1[3] = br.ReadByte();
+                byte[] unknown2 = new byte[4];
+                unknown2[0] = br.ReadByte();
+                unknown2[1] = br.ReadByte();
+                unknown2[2] = br.ReadByte();
+                unknown2[3] = br.ReadByte();
+                ushort wCurrentTime = br.ReadUInt16(); // Used at runtime
+                ushort wNumLoops = br.ReadUInt16();
+                ushort wOnTime = br.ReadUInt16();
+                ushort wOffTime = br.ReadUInt16();
+                byte type = br.ReadByte();
+                byte state = br.ReadByte();
+                ushort wFlags = br.ReadUInt16();
+                lights.Add((offRGB, onRGB, unknown1, unknown2, wCurrentTime, wNumLoops, wOnTime, wOffTime, type, state, wFlags, offset));
+            }
+            //minimap = br.ReadBytes(3584); // suspected minimap data // loop 224 times // nope
             // Kaiser : the light data is located where you believed contained the minimap data. The count/size is always 128 
             /*struct light_s
             {
@@ -651,7 +688,7 @@ namespace ALTViewer
             256 - Freeze in current state (likely this flag is cleared by trigger events)
             */ // Kaiser
             // minimap rendering test
-            var mmBmp = new Bitmap(64, 56, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            /*var mmBmp = new Bitmap(64, 56, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
             for (int y = 0; y < 56; y++)
             {
                 for (int x = 0; x < 64; x++)
@@ -663,6 +700,7 @@ namespace ALTViewer
                 }
             }
             pictureBox3.Image = new Bitmap(mmBmp, 256, 256); // 4x scale to roughly fit your 256 frame (leaves 32px for your border)
+            */
             // unknown blocks = tile animations // Kaiser
             // unknownListA formula = unknownBlockA * 4 - (4 bytes per sequence)
             for (int i = 0; i < unknownBlockA; i++)
@@ -969,8 +1007,8 @@ namespace ALTViewer
             textBox18.Text = $"Unk6 : {collisionBlocks[index].Unk6}";
             textBox24.Text = $"Unk7 : {collisionBlocks[index].Unk7}";
             textBox25.Text = $"Unk8 : 0";
-            textBox26.Text = $"Unk9 : {collisionBlocks[index].Unk9}";
-            textBox27.Text = $"Unk10 : {collisionBlocks[index].Unk10}";
+            textBox26.Text = $"Visibility : {collisionBlocks[index].Visibility}";
+            textBox27.Text = $"";
             textBox28.Text = $"Unk11 : {collisionBlocks[index].Unk11}";
             textBox29.Text = $"Unk12 : {collisionBlocks[index].Unk12}";
             textBox30.Text = $"Unk13 : {collisionBlocks[index].Unk13}";
