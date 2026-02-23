@@ -631,12 +631,25 @@ namespace ALTViewer
                 byte onRGB[4];
                 byte unknown1[4];
                 byte unknown2[4];
-                uint16_t unknown3;
-                uint16_t unknown4;
-                uint16_t unknown5;
-                uint16_t unknown6;
-                uint32_t dwFlags;
+                uint16_t wCurrentTime; // Used at runtime
+                uint16_t wNumLoops;
+                uint16_t wOnTime;
+                uint16_t wOffTime;
+                byte type;
+                byte state;
+                uint16_t wFlags;
             };*/ // Kaiser
+            /* // Kaiser
+             * Type
+            1 - Switch between on and off for (x) amount of times (defined by wNumLoops). Time between states is affected by wOnTime and wOffTime
+            2 - Random flicker (ignores wOnTime/wOffTime/wNumLoops)
+            3 - Constantly switches between on and off states. Ignores wNumLoops, uses wOnTime and wOffTime
+            5 - Rapid flicker
+            */ // Kaiser
+            /* // Kaiser
+             * Flags
+            256 - Freeze in current state (likely this flag is cleared by trigger events)
+            */ // Kaiser
             // minimap rendering test
             var mmBmp = new Bitmap(64, 56, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
             for (int y = 0; y < 56; y++)
