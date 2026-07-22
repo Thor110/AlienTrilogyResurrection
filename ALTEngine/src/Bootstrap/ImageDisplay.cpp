@@ -1,4 +1,5 @@
 #include "ImageDisplay.h"
+#include "AppWindow.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -7,37 +8,19 @@ namespace ALTEngine::Bootstrap
 {
     bool ImageDisplay::Show(const std::vector<uint8_t>& rgba, int width, int height, uint32_t maxDurationMs)
     {
-        if (!SDL_Init(SDL_INIT_VIDEO))
+        AppWindow& app = AppWindow::Instance();
+        if (!app.EnsureCreated())
         {
-            SDL_Log("ImageDisplay: SDL_Init failed: %s", SDL_GetError());
             return false;
         }
-
-        SDL_Window* window = SDL_CreateWindow("ALTEngine", width, height, SDL_WINDOW_FULLSCREEN);
-        if (!window)
-        {
-            SDL_Log("ImageDisplay: SDL_CreateWindow failed: %s", SDL_GetError());
-            SDL_Quit();
-            return false;
-        }
-
-        SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
-        if (!renderer)
-        {
-            SDL_Log("ImageDisplay: SDL_CreateRenderer failed: %s", SDL_GetError());
-            SDL_DestroyWindow(window);
-            SDL_Quit();
-            return false;
-        }
-        SDL_SetRenderVSync(renderer, 1);
+        SDL_Window* window = app.Window();
+        SDL_Renderer* renderer = app.Renderer();
+        (void)window; // fullscreen render target - no direct window manipulation needed here
 
         SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, width, height);
         if (!texture)
         {
             SDL_Log("ImageDisplay: SDL_CreateTexture failed: %s", SDL_GetError());
-            SDL_DestroyRenderer(renderer);
-            SDL_DestroyWindow(window);
-            SDL_Quit();
             return false;
         }
         SDL_UpdateTexture(texture, nullptr, rgba.data(), width * 4);
@@ -74,9 +57,6 @@ namespace ALTEngine::Bootstrap
         }
 
         SDL_DestroyTexture(texture);
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
 
         return !closedByUser;
     }

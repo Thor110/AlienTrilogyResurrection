@@ -1,6 +1,8 @@
 #include "VideoPlayer.h"
+#include "Bootstrap/AppWindow.h"
 
 #include <SDL3/SDL.h>
+#include <algorithm>
 #include <vector>
 
 extern "C" {
@@ -104,26 +106,15 @@ namespace ALTEngine::Video
             return true; // couldn't play this one - skip it, don't abort the whole boot
         }
 
-        if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO))
+        ALTEngine::Bootstrap::AppWindow& app = ALTEngine::Bootstrap::AppWindow::Instance();
+        if (!app.EnsureCreated())
         {
-            SDL_Log("VideoPlayer: SDL_Init failed: %s", SDL_GetError());
             return false;
         }
+        SDL_Renderer* renderer = app.Renderer();
 
         int videoW = ctx.videoCodecCtx->width;
         int videoH = ctx.videoCodecCtx->height;
-
-        SDL_Window* window = SDL_CreateWindow("ALTEngine", videoW, videoH, SDL_WINDOW_FULLSCREEN);
-        SDL_Renderer* renderer = window ? SDL_CreateRenderer(window, nullptr) : nullptr;
-        if (!window || !renderer)
-        {
-            SDL_Log("VideoPlayer: could not create window/renderer: %s", SDL_GetError());
-            if (renderer) { SDL_DestroyRenderer(renderer); }
-            if (window) { SDL_DestroyWindow(window); }
-            SDL_Quit();
-            return false;
-        }
-        SDL_SetRenderVSync(renderer, 1);
 
         SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, videoW, videoH);
         SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
@@ -189,9 +180,17 @@ namespace ALTEngine::Video
                         }
 
                         SDL_UpdateTexture(texture, nullptr, rgbaBuffer.data(), videoW * 4);
+
+                        int windowW = 0, windowH = 0;
+                        SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+                        float scale = std::min(static_cast<float>(windowW) / videoW, static_cast<float>(windowH) / videoH);
+                        float destW = videoW * scale;
+                        float destH = videoH * scale;
+                        SDL_FRect dest{ (windowW - destW) / 2.0f, (windowH - destH) / 2.0f, destW, destH };
+
                         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
                         SDL_RenderClear(renderer);
-                        SDL_RenderTexture(renderer, texture, nullptr, nullptr);
+                        SDL_RenderTexture(renderer, texture, nullptr, &dest);
                         SDL_RenderPresent(renderer);
                     }
                 }
@@ -217,9 +216,6 @@ namespace ALTEngine::Video
         av_frame_free(&rgbaFrame);
         av_packet_free(&packet);
         SDL_DestroyTexture(texture);
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
 
         return !closedByUser;
     }

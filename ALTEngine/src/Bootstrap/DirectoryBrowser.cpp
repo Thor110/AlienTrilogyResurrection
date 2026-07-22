@@ -1,5 +1,6 @@
 #include "DirectoryBrowser.h"
 #include "Font8x8.h"
+#include "AppWindow.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -115,29 +116,12 @@ namespace ALTEngine::Bootstrap
         const std::string& panelTitle,
         const std::function<bool(const std::filesystem::path&)>& validate)
     {
-        if (!SDL_Init(SDL_INIT_VIDEO))
+        AppWindow& app = AppWindow::Instance();
+        if (!app.EnsureCreated())
         {
-            SDL_Log("SDL_Init failed: %s", SDL_GetError());
             return std::nullopt;
         }
-
-        SDL_Window* window = SDL_CreateWindow("ALTEngine", 1280, 720, SDL_WINDOW_FULLSCREEN);
-        if (!window)
-        {
-            SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
-            SDL_Quit();
-            return std::nullopt;
-        }
-
-        SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
-        if (!renderer)
-        {
-            SDL_Log("SDL_CreateRenderer failed: %s", SDL_GetError());
-            SDL_DestroyWindow(window);
-            SDL_Quit();
-            return std::nullopt;
-        }
-        SDL_SetRenderVSync(renderer, 1);
+        SDL_Renderer* renderer = app.Renderer();
 
         std::filesystem::path currentPath; // empty = drive list
         std::vector<Entry> entries = BuildEntries(currentPath);
@@ -352,10 +336,6 @@ namespace ALTEngine::Bootstrap
 
             SDL_RenderPresent(renderer);
         }
-
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
 
         return result;
     }

@@ -72,6 +72,7 @@ add_executable(ALTEngine
     src/Bootstrap/GameLocator.cpp
     src/Bootstrap/Config.cpp
     src/Bootstrap/ImageDisplay.cpp
+    src/Bootstrap/AppWindow.cpp
     src/Video/VideoPlayer.cpp
 )
 target_include_directories(ALTEngine PRIVATE src)

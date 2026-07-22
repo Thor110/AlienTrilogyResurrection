@@ -1,9 +1,11 @@
 #include <iostream>
 #include <optional>
 
+#include "Bootstrap/AppWindow.h"
 #include "Bootstrap/Config.h"
 #include "Bootstrap/GameLocator.h"
 #include "Bootstrap/ImageDisplay.h"
+#include "Bootstrap/Localization.h"
 #include "Bootstrap/PlatformPaths.h"
 #include "Formats/PatchLoader.h"
 #include "Formats/PatchRunner.h"
@@ -117,18 +119,20 @@ namespace
     }
 
     // Plays the four intro videos in the documented order (see
-    // data/BootSequence.json). A missing file is skipped, same philosophy
-    // as ShowLegalSplash - only an actual window-close aborts the boot.
+    // data/BootSequence.json), resolved for `language` via
+    // LocalizedBaseName. A missing file is skipped, same philosophy as
+    // ShowLegalSplash - only an actual window-close aborts the boot.
     // TODO: drive this list from BootSequence.json directly rather than
     // hardcoding it here, once there's a general boot-step runner.
-    bool PlayIntroVideos(const std::filesystem::path& cdDirectory)
+    bool PlayIntroVideos(const std::filesystem::path& cdDirectory, Language language)
     {
         std::filesystem::path aviDir = cdDirectory / "AVI";
-        const char* files[] = { "FOXDKAUD.AVI", "ALOGODUK.AVI", "PRBLOGO.AVI", "INTRO.AVI" };
+        const char* baseNames[] = { "FOXDKAUD", "ALOGODUK", "PRBLOGO", "INTRO" };
 
-        for (const char* file : files)
+        for (const char* baseName : baseNames)
         {
-            std::filesystem::path path = aviDir / file;
+            std::string localizedName = LocalizedBaseName(baseName, language);
+            std::filesystem::path path = aviDir / (localizedName + ".AVI");
             std::error_code ec;
             if (!std::filesystem::exists(path, ec))
             {
@@ -136,7 +140,7 @@ namespace
                 continue;
             }
 
-            std::cout << "Playing " << file << "...\n";
+            std::cout << "Playing " << localizedName << ".AVI...\n";
             if (!VideoPlayer::Play(path))
             {
                 return false; // window closed - abort boot
@@ -160,6 +164,7 @@ int main(int, char**)
     if (!result.success)
     {
         std::cout << "No install directory selected. Aborting.\n";
+        AppWindow::Instance().Shutdown();
         PauseBeforeExit();
         return 1;
     }
@@ -172,13 +177,19 @@ int main(int, char**)
     if (!ShowLegalSplash(cdDirectory))
     {
         std::cout << "Boot window closed. Aborting.\n";
+        AppWindow::Instance().Shutdown();
         PauseBeforeExit();
         return 1;
     }
 
-    if (!PlayIntroVideos(cdDirectory))
+    // No settings/persistence system yet - defaults to English until
+    // there's somewhere for a language choice to actually live.
+    Language language = Language::English;
+
+    if (!PlayIntroVideos(cdDirectory, language))
     {
         std::cout << "Boot window closed. Aborting.\n";
+        AppWindow::Instance().Shutdown();
         PauseBeforeExit();
         return 1;
     }
@@ -188,6 +199,7 @@ int main(int, char**)
     // background, per Edward's note; CD/GFX/CREDITS.TXT holds the
     // credits entries), then the actual menu.
 
+    AppWindow::Instance().Shutdown();
     PauseBeforeExit();
     return 0;
 }
