@@ -12,10 +12,9 @@ namespace ALTEngine::Bootstrap
         Spanish,
     };
 
-    // English has no prefix. French is confirmed ('F', e.g. INTRO.AVI ->
-    // FINTRO.AVI). Italian/Spanish are inferred as 'I'/'S' (matching
-    // Italiano/Español) - NOT yet confirmed against real files the way
-    // French is. Verify before relying on these two.
+    // English has no prefix. All four confirmed: French 'F' (INTRO.AVI ->
+    // FINTRO.AVI), and English/French/Italian/Spanish 'E'/'F'/'I'/'S' via
+    // the MISSION#.TXT files on disk.
     inline char LanguagePrefix(Language language)
     {
         switch (language)

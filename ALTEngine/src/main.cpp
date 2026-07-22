@@ -7,14 +7,17 @@
 #include "Bootstrap/ImageDisplay.h"
 #include "Bootstrap/Localization.h"
 #include "Bootstrap/PlatformPaths.h"
+#include "Bootstrap/RenderSettings.h"
 #include "Formats/PatchLoader.h"
 #include "Formats/PatchRunner.h"
 #include "Formats/SplashImageLoader.h"
+#include "Menu/MenuController.h"
 #include "Video/VideoPlayer.h"
 
 using namespace ALTEngine::Bootstrap;
 using namespace ALTEngine::Formats;
 using namespace ALTEngine::Video;
+using namespace ALTEngine::Menu;
 
 namespace
 {
@@ -109,7 +112,7 @@ namespace
         {
             SplashImage image = SplashImageLoader::Load(*bndPath, palPath, /*paletteTrimmed*/ false);
             std::cout << "Showing LEGAL splash (" << image.width << "x" << image.height << ")...\n";
-            return ImageDisplay::Show(image.rgba, image.width, image.height);
+            return ImageDisplay::Show(image.rgba, image.width, image.height, /*maxDurationMs*/ 5000);
         }
         catch (const std::exception& e)
         {
@@ -194,10 +197,20 @@ int main(int, char**)
         return 1;
     }
 
-    // NEXT: LOGOSGFX as the main menu background (image 0 of its 2
-    // images/4 frames - image 1 is the multiplayer/settings/credits
-    // background, per Edward's note; CD/GFX/CREDITS.TXT holds the
-    // credits entries), then the actual menu.
+    RenderSettings renderSettings(config);
+    MenuResult menuResult = MenuController::Run(cdDirectory, renderSettings, language);
+    if (menuResult.windowClosed)
+    {
+        std::cout << "Boot window closed. Aborting.\n";
+        AppWindow::Instance().Shutdown();
+        PauseBeforeExit();
+        return 1;
+    }
+    std::cout << "Menu selection: " << menuResult.action << "\n";
+
+    // NEXT: actually act on menuResult.action (Start Game / Multiplayer /
+    // Load Game), and the real 3D model renderer (SDL GPU API) to replace
+    // the menu's placeholder boxes.
 
     AppWindow::Instance().Shutdown();
     PauseBeforeExit();

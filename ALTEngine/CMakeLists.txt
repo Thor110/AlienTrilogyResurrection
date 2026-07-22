@@ -74,6 +74,9 @@ add_executable(ALTEngine
     src/Bootstrap/ImageDisplay.cpp
     src/Bootstrap/AppWindow.cpp
     src/Video/VideoPlayer.cpp
+    src/Menu/MenuTree.cpp
+    src/Menu/MenuNavigation.cpp
+    src/Menu/MenuController.cpp
 )
 target_include_directories(ALTEngine PRIVATE src)
 target_link_libraries(ALTEngine PRIVATE ALTFormats)
