@@ -36,10 +36,35 @@ target_link_libraries(ALTFormats PRIVATE nlohmann_json::nlohmann_json)
 
 find_package(SDL3 CONFIG REQUIRED)
 
+# FFmpeg (vcpkg's ffmpeg port ships pkg-config .pc files, not a CMake
+# package config like SDL3/nlohmann-json do - pkg-config is the standard
+# portable way to consume it either way, vcpkg or system-installed).
+#
+# LICENSING: only request vcpkg's *default* ffmpeg features. The "gpl"
+# and "nonfree" features are opt-in and OFF by default specifically
+# because enabling them changes FFmpeg's own license from LGPL v2.1+ to
+# GPL v2+ (or worse, for nonfree) - see third_party_licenses/ffmpeg/.
+# Don't add gpl-gated features (x264/x265/etc) without revisiting this.
+#
+# Also: prefer FFmpeg built/linked as shared libraries (vcpkg's default
+# x64-windows triplet already does this) rather than static - LGPL v2.1
+# permits static linking, but only if the user can still relink against a
+# modified FFmpeg, which is a real obligation to satisfy manually. Dynamic
+# linking (ship the .dll alongside the .exe) sidesteps that requirement
+# entirely and is simpler to stay compliant with. Don't switch to a
+# static triplet for this dependency without addressing that.
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+    libavcodec
+    libavformat
+    libavutil
+    libswscale
+)
+
 # ---------------------------------------------------------------------------
 # ALTEngine - the port executable. Currently: MU/TH/UR 9000 boot sequence
-# (locate game files), then apply patch routines. Engine/renderer proper
-# comes later.
+# (locate game files), patch routines, LEGAL splash, AVI intro playback.
+# Engine/renderer proper comes later.
 # ---------------------------------------------------------------------------
 add_executable(ALTEngine
     src/main.cpp
@@ -47,10 +72,12 @@ add_executable(ALTEngine
     src/Bootstrap/GameLocator.cpp
     src/Bootstrap/Config.cpp
     src/Bootstrap/ImageDisplay.cpp
+    src/Video/VideoPlayer.cpp
 )
 target_include_directories(ALTEngine PRIVATE src)
 target_link_libraries(ALTEngine PRIVATE ALTFormats)
 target_link_libraries(ALTEngine PRIVATE SDL3::SDL3)
+target_link_libraries(ALTEngine PRIVATE PkgConfig::FFMPEG)
 
 set_target_properties(ALTEngine PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:ALTEngine>"
@@ -75,12 +102,9 @@ add_custom_command(TARGET ALTEngine POST_BUILD
 # ---------------------------------------------------------------------------
 # Third-party licenses. Every dependency we link against gets its license
 # text committed under third_party_licenses/<name>/ and shipped alongside
-# the binary - required by (at minimum) SDL3's zlib license and
-# nlohmann-json's MIT license, and by anything else added later (FFmpeg
-# included - note FFmpeg's own license is LGPL or GPL depending on which
-# optional components are enabled at build time, which has real copyleft
-# implications for how it can be linked; sort that out explicitly before
-# picking a build config for it, don't default to whatever vcpkg installs).
+# the binary - required by SDL3's zlib license, nlohmann-json's MIT
+# license, and FFmpeg's LGPL v2.1+ (see the licensing note above the
+# pkg_check_modules call - default features only, dynamic linking).
 #
 # POST_BUILD covers ordinary F5 dev builds (VS2022 users mostly won't run
 # `cmake --install` day to day); install() covers actual packaging.
@@ -97,3 +121,6 @@ install(FILES "${CMAKE_SOURCE_DIR}/third_party_licenses/SDL3/LICENSE.txt"
         DESTINATION bin/licenses/SDL3)
 install(FILES "${CMAKE_SOURCE_DIR}/third_party_licenses/nlohmann-json/LICENSE.txt"
         DESTINATION bin/licenses/nlohmann-json)
+install(FILES "${CMAKE_SOURCE_DIR}/third_party_licenses/ffmpeg/LICENSE.txt"
+              "${CMAKE_SOURCE_DIR}/third_party_licenses/ffmpeg/LICENSE.md"
+        DESTINATION bin/licenses/ffmpeg)

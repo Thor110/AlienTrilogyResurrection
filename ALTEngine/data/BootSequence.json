@@ -1,12 +1,29 @@
 {
-    "_note": "Fixed startup sequence. 'type' distinguishes a static splash (GFX/ key, rendered like a level texture) from a video (AVI/ path, needs a video decoder - not yet chosen).",
+    "_note": "Fixed startup sequence. 'type' distinguishes a static splash (GFX/ key, rendered via SplashImageLoader) from a video (AVI/ path, played via VideoPlayer/FFmpeg).",
     "steps": [
         { "order": 1, "type": "image", "gfxKey": "LEGAL",    "path": "GFX/LEGAL" },
         { "order": 2, "type": "video", "path": "AVI/FOXDKAUD.AVI" },
         { "order": 3, "type": "video", "path": "AVI/ALOGODUK.AVI" },
         { "order": 4, "type": "video", "path": "AVI/PRBLOGO.AVI" },
         { "order": 5, "type": "video", "path": "AVI/INTRO.AVI" },
-        { "order": 6, "type": "image", "gfxKey": "LOGOSGFX", "path": "GFX/LOGOSGFX", "role": "main_menu_background" }
+        {
+            "order": 6,
+            "type": "image",
+            "gfxKey": "LOGOSGFX",
+            "path": "GFX/LOGOSGFX",
+            "imageIndex": 0,
+            "role": "main_menu_background",
+            "note": "LOGOSGFX contains 2 images across 4 TP frames, not 1 - see SplashImageLoader's imageIndex param. imageIndex 0 is this (main menu background); imageIndex 1 is the multiplayer/settings/credits background (see role 'secondary_menu_background' below). CD/GFX/CREDITS.TXT holds the credits text entries."
+        },
+        {
+            "order": 6,
+            "type": "image",
+            "gfxKey": "LOGOSGFX",
+            "path": "GFX/LOGOSGFX",
+            "imageIndex": 1,
+            "role": "secondary_menu_background",
+            "note": "Used for multiplayer, settings, and credits screens."
+        }
     ],
     "afterBoot": "Main menu, then chapter briefing backgrounds / level manifest (see LevelManifest.json)"
 }

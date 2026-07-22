@@ -8,9 +8,11 @@
 #include "Formats/PatchLoader.h"
 #include "Formats/PatchRunner.h"
 #include "Formats/SplashImageLoader.h"
+#include "Video/VideoPlayer.h"
 
 using namespace ALTEngine::Bootstrap;
 using namespace ALTEngine::Formats;
+using namespace ALTEngine::Video;
 
 namespace
 {
@@ -24,7 +26,7 @@ namespace
         std::cin.get();
     }
 
-    void RunPatches(const std::filesystem::path& gameDirectory)
+    void RunPatches(const std::filesystem::path& cdDirectory)
     {
         std::filesystem::path patchesJson = ExecutableDirectory() / "data" / "Patches.json";
 
@@ -40,7 +42,7 @@ namespace
         }
 
         std::cout << "Applying " << operations.size() << " patch operations...\n";
-        std::vector<PatchResult> results = PatchRunner::ApplyAll(gameDirectory, operations);
+        std::vector<PatchResult> results = PatchRunner::ApplyAll(cdDirectory, operations);
 
         size_t applied = 0, alreadyApplied = 0, failed = 0;
         for (const auto& result : results)
@@ -81,9 +83,8 @@ namespace
     }
 
     // Shows CD/GFX/LEGAL - the first thing in the documented boot order
-    // (data/BootSequence.json), after everything needed to find and patch
-    // the install is already done. Returns false only if the user closed
-    // the window outright (treated the same as DirectoryBrowser's abort).
+    // (data/BootSequence.json). Returns false only if the user closed the
+    // window outright (treated the same as DirectoryBrowser's abort).
     bool ShowLegalSplash(const std::filesystem::path& cdDirectory)
     {
         std::filesystem::path gfxDir = cdDirectory / "GFX";
@@ -114,6 +115,35 @@ namespace
             return true; // don't abort the whole boot over a missing splash
         }
     }
+
+    // Plays the four intro videos in the documented order (see
+    // data/BootSequence.json). A missing file is skipped, same philosophy
+    // as ShowLegalSplash - only an actual window-close aborts the boot.
+    // TODO: drive this list from BootSequence.json directly rather than
+    // hardcoding it here, once there's a general boot-step runner.
+    bool PlayIntroVideos(const std::filesystem::path& cdDirectory)
+    {
+        std::filesystem::path aviDir = cdDirectory / "AVI";
+        const char* files[] = { "FOXDKAUD.AVI", "ALOGODUK.AVI", "PRBLOGO.AVI", "INTRO.AVI" };
+
+        for (const char* file : files)
+        {
+            std::filesystem::path path = aviDir / file;
+            std::error_code ec;
+            if (!std::filesystem::exists(path, ec))
+            {
+                std::cout << "Could not find " << path.string() << " - skipping.\n";
+                continue;
+            }
+
+            std::cout << "Playing " << file << "...\n";
+            if (!VideoPlayer::Play(path))
+            {
+                return false; // window closed - abort boot
+            }
+        }
+        return true;
+    }
 }
 
 int main(int, char**)
@@ -139,14 +169,24 @@ int main(int, char**)
     std::filesystem::path cdDirectory = result.gameDirectory / "CD";
     RunPatches(cdDirectory);
 
-    // NEXT per data/BootSequence.json: AVI playback (FOXDKAUD, ALOGODUK,
-    // PRBLOGO, INTRO), then LOGOSGFX as the main menu background.
     if (!ShowLegalSplash(cdDirectory))
     {
         std::cout << "Boot window closed. Aborting.\n";
         PauseBeforeExit();
         return 1;
     }
+
+    if (!PlayIntroVideos(cdDirectory))
+    {
+        std::cout << "Boot window closed. Aborting.\n";
+        PauseBeforeExit();
+        return 1;
+    }
+
+    // NEXT: LOGOSGFX as the main menu background (image 0 of its 2
+    // images/4 frames - image 1 is the multiplayer/settings/credits
+    // background, per Edward's note; CD/GFX/CREDITS.TXT holds the
+    // credits entries), then the actual menu.
 
     PauseBeforeExit();
     return 0;
