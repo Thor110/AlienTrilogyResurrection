@@ -1,0 +1,350 @@
+{
+    "_note": "sectorFolder names for 'part 2' of each chapter (SECT12/SECT22/SECT32) are an inferred guess from the SECT<chapter><part> pattern - source notes gave 'SECT11' for every part of every chapter, which looks like a copy/paste slip. Verify against the actual disc before relying on this.",
+    "chapters": [
+        {
+            "chapter": 1,
+            "briefingBackground": {
+                "gfxKey": "COLONY",
+                "path": "GFX/COLONY"
+            },
+            "parts": [
+                {
+                    "part": 1,
+                    "sectorFolder": "SECT11",
+                    "levels": [
+                        {
+                            "code": "111",
+                            "mapFile": "L111LEV.MAP",
+                            "gfxFile": "111GFX.B16",
+                            "paletteFile": "PALS/LEV111.PAL"
+                        },
+                        {
+                            "code": "112",
+                            "mapFile": "L112LEV.MAP",
+                            "gfxFile": "112GFX.B16",
+                            "paletteFile": "PALS/LEV112.PAL"
+                        },
+                        {
+                            "code": "113",
+                            "mapFile": "L113LEV.MAP",
+                            "gfxFile": "113GFX.B16",
+                            "paletteFile": "PALS/LEV113.PAL"
+                        },
+                        {
+                            "code": "114",
+                            "mapFile": "L114LEV.MAP",
+                            "gfxFile": "114GFX.B16",
+                            "paletteFile": "PALS/LEV114.PAL"
+                        },
+                        {
+                            "code": "115",
+                            "mapFile": "L115LEV.MAP",
+                            "gfxFile": "115GFX.B16",
+                            "paletteFile": "PALS/LEV115.PAL"
+                        },
+                        {
+                            "code": "122",
+                            "mapFile": "L122LEV.MAP",
+                            "gfxFile": "122GFX.B16",
+                            "paletteFile": "PALS/LEV122.PAL"
+                        },
+                        {
+                            "code": "131",
+                            "mapFile": "L131LEV.MAP",
+                            "gfxFile": "131GFX.B16",
+                            "paletteFile": "PALS/LEV131.PAL"
+                        }
+                    ]
+                },
+                {
+                    "part": 2,
+                    "sectorFolder": "SECT12",
+                    "levels": [
+                        {
+                            "code": "141",
+                            "mapFile": "L141LEV.MAP",
+                            "gfxFile": "141GFX.B16",
+                            "paletteFile": "PALS/LEV141.PAL"
+                        },
+                        {
+                            "code": "154",
+                            "mapFile": "L154LEV.MAP",
+                            "gfxFile": "154GFX.B16",
+                            "paletteFile": "PALS/LEV154.PAL"
+                        },
+                        {
+                            "code": "155",
+                            "mapFile": "L155LEV.MAP",
+                            "gfxFile": "155GFX.B16",
+                            "paletteFile": "PALS/LEV155.PAL"
+                        },
+                        {
+                            "code": "161",
+                            "mapFile": "L161LEV.MAP",
+                            "gfxFile": "161GFX.B16",
+                            "paletteFile": "PALS/LEV161.PAL"
+                        },
+                        {
+                            "code": "162",
+                            "mapFile": "L162LEV.MAP",
+                            "gfxFile": "162GFX.B16",
+                            "paletteFile": "PALS/LEV162.PAL"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "chapter": 2,
+            "briefingBackground": {
+                "gfxKey": "PRISHOLD",
+                "path": "GFX/PRISHOLD"
+            },
+            "parts": [
+                {
+                    "part": 1,
+                    "sectorFolder": "SECT21",
+                    "levels": [
+                        {
+                            "code": "211",
+                            "mapFile": "L211LEV.MAP",
+                            "gfxFile": "211GFX.B16",
+                            "paletteFile": "PALS/LEV211.PAL"
+                        },
+                        {
+                            "code": "212",
+                            "mapFile": "L212LEV.MAP",
+                            "gfxFile": "212GFX.B16",
+                            "paletteFile": "PALS/LEV212.PAL"
+                        },
+                        {
+                            "code": "213",
+                            "mapFile": "L213LEV.MAP",
+                            "gfxFile": "213GFX.B16",
+                            "paletteFile": "PALS/LEV213.PAL"
+                        },
+                        {
+                            "code": "222",
+                            "mapFile": "L222LEV.MAP",
+                            "gfxFile": "222GFX.B16",
+                            "paletteFile": "PALS/LEV222.PAL"
+                        },
+                        {
+                            "code": "231",
+                            "mapFile": "L231LEV.MAP",
+                            "gfxFile": "231GFX.B16",
+                            "paletteFile": "PALS/LEV231.PAL"
+                        },
+                        {
+                            "code": "232",
+                            "mapFile": "L232LEV.MAP",
+                            "gfxFile": "232GFX.B16",
+                            "paletteFile": "PALS/LEV232.PAL"
+                        }
+                    ]
+                },
+                {
+                    "part": 2,
+                    "sectorFolder": "SECT22",
+                    "levels": [
+                        {
+                            "code": "242",
+                            "mapFile": "L242LEV.MAP",
+                            "gfxFile": "242GFX.B16",
+                            "paletteFile": "PALS/LEV242.PAL"
+                        },
+                        {
+                            "code": "243",
+                            "mapFile": "L243LEV.MAP",
+                            "gfxFile": "243GFX.B16",
+                            "paletteFile": "PALS/LEV243.PAL"
+                        },
+                        {
+                            "code": "262",
+                            "mapFile": "L262LEV.MAP",
+                            "gfxFile": "262GFX.B16",
+                            "paletteFile": "PALS/LEV262.PAL"
+                        },
+                        {
+                            "code": "263",
+                            "mapFile": "L263LEV.MAP",
+                            "gfxFile": "263GFX.B16",
+                            "paletteFile": "PALS/LEV263.PAL"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "chapter": 3,
+            "briefingBackground": {
+                "gfxKey": "BONESHIP",
+                "path": "GFX/BONESHIP"
+            },
+            "parts": [
+                {
+                    "part": 1,
+                    "sectorFolder": "SECT31",
+                    "levels": [
+                        {
+                            "code": "311",
+                            "mapFile": "L311LEV.MAP",
+                            "gfxFile": "311GFX.B16",
+                            "paletteFile": "PALS/LEV311.PAL"
+                        },
+                        {
+                            "code": "321",
+                            "mapFile": "L321LEV.MAP",
+                            "gfxFile": "321GFX.B16",
+                            "paletteFile": "PALS/LEV321.PAL"
+                        },
+                        {
+                            "code": "322",
+                            "mapFile": "L322LEV.MAP",
+                            "gfxFile": "322GFX.B16",
+                            "paletteFile": "PALS/LEV322.PAL"
+                        },
+                        {
+                            "code": "323",
+                            "mapFile": "L323LEV.MAP",
+                            "gfxFile": "323GFX.B16",
+                            "paletteFile": "PALS/LEV323.PAL"
+                        },
+                        {
+                            "code": "324",
+                            "mapFile": "L324LEV.MAP",
+                            "gfxFile": "324GFX.B16",
+                            "paletteFile": "PALS/LEV324.PAL"
+                        },
+                        {
+                            "code": "325",
+                            "mapFile": "L325LEV.MAP",
+                            "gfxFile": "325GFX.B16",
+                            "paletteFile": "PALS/LEV325.PAL"
+                        },
+                        {
+                            "code": "331",
+                            "mapFile": "L331LEV.MAP",
+                            "gfxFile": "331GFX.B16",
+                            "paletteFile": "PALS/LEV331.PAL"
+                        }
+                    ]
+                },
+                {
+                    "part": 2,
+                    "sectorFolder": "SECT32",
+                    "levels": [
+                        {
+                            "code": "351",
+                            "mapFile": "L351LEV.MAP",
+                            "gfxFile": "351GFX.B16",
+                            "paletteFile": "PALS/LEV351.PAL"
+                        },
+                        {
+                            "code": "352",
+                            "mapFile": "L352LEV.MAP",
+                            "gfxFile": "352GFX.B16",
+                            "paletteFile": "PALS/LEV352.PAL"
+                        },
+                        {
+                            "code": "353",
+                            "mapFile": "L353LEV.MAP",
+                            "gfxFile": "353GFX.B16",
+                            "paletteFile": "PALS/LEV353.PAL"
+                        },
+                        {
+                            "code": "361",
+                            "mapFile": "L361LEV.MAP",
+                            "gfxFile": "361GFX.B16",
+                            "paletteFile": "PALS/LEV361.PAL"
+                        },
+                        {
+                            "code": "371",
+                            "mapFile": "L371LEV.MAP",
+                            "gfxFile": "371GFX.B16",
+                            "paletteFile": "PALS/LEV371.PAL"
+                        },
+                        {
+                            "code": "381",
+                            "mapFile": "L381LEV.MAP",
+                            "gfxFile": "381GFX.B16",
+                            "paletteFile": "PALS/LEV381.PAL"
+                        },
+                        {
+                            "code": "391",
+                            "mapFile": "L391LEV.MAP",
+                            "gfxFile": "391GFX.B16",
+                            "paletteFile": "PALS/LEV391.PAL"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "multiplayer": {
+        "sectorFolder": "SECT90",
+        "levels": [
+            {
+                "code": "900",
+                "mapFile": "L900LEV.MAP",
+                "gfxFile": "900GFX.B16",
+                "paletteFile": "PALS/LEV900.PAL"
+            },
+            {
+                "code": "901",
+                "mapFile": "L901LEV.MAP",
+                "gfxFile": "901GFX.B16",
+                "paletteFile": "PALS/LEV901.PAL"
+            },
+            {
+                "code": "902",
+                "mapFile": "L902LEV.MAP",
+                "gfxFile": "902GFX.B16",
+                "paletteFile": "PALS/LEV902.PAL"
+            },
+            {
+                "code": "903",
+                "mapFile": "L903LEV.MAP",
+                "gfxFile": "903GFX.B16",
+                "paletteFile": "PALS/LEV903.PAL"
+            },
+            {
+                "code": "904",
+                "mapFile": "L904LEV.MAP",
+                "gfxFile": "904GFX.B16",
+                "paletteFile": "PALS/LEV904.PAL"
+            },
+            {
+                "code": "905",
+                "mapFile": "L905LEV.MAP",
+                "gfxFile": "905GFX.B16",
+                "paletteFile": "PALS/LEV905.PAL"
+            },
+            {
+                "code": "906",
+                "mapFile": "L906LEV.MAP",
+                "gfxFile": "906GFX.B16",
+                "paletteFile": "PALS/LEV906.PAL"
+            },
+            {
+                "code": "907",
+                "mapFile": "L907LEV.MAP",
+                "gfxFile": "907GFX.B16",
+                "paletteFile": "PALS/LEV907.PAL"
+            },
+            {
+                "code": "908",
+                "mapFile": "L908LEV.MAP",
+                "gfxFile": "908GFX.B16",
+                "paletteFile": "PALS/LEV908.PAL"
+            },
+            {
+                "code": "909",
+                "mapFile": "L909LEV.MAP",
+                "gfxFile": "909GFX.B16",
+                "paletteFile": "PALS/LEV909.PAL"
+            }
+        ],
+        "note": "list given as L900-L909 'etc' - extend as more codes are confirmed"
+    }
+}

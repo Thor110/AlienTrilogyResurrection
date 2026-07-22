@@ -44,6 +44,8 @@ Current Unity version is hosted and being worked on by bambamalicious
 
 https://github.com/bambamalicious/AlienTrilogyUnity
 
+I have abandoned the Unity version and chosen to work on a C++ source port.
+
 # Road Map
 
 The road map for this project.
