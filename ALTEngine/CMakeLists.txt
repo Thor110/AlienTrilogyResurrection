@@ -64,6 +64,7 @@ pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
     libavformat
     libavutil
     libswscale
+    libswresample
 )
 
 # ---------------------------------------------------------------------------
@@ -81,6 +82,7 @@ add_executable(ALTEngine
     src/Bootstrap/DiscLocator.cpp
     src/Bootstrap/InstallPipeline.cpp
     src/Video/VideoPlayer.cpp
+    src/Video/OverrideVideo.cpp
     src/Audio/SfxPlayer.cpp
     src/Audio/MusicPlayer.cpp
     src/Menu/MenuTree.cpp

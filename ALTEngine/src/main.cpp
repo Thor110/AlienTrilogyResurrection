@@ -13,6 +13,7 @@
 #include "Bootstrap/ResolutionSettings.h"
 #include "Formats/SplashImageLoader.h"
 #include "Menu/MenuController.h"
+#include "Video/OverrideVideo.h"
 #include "Video/VideoPlayer.h"
 
 using namespace ALTEngine::Bootstrap;
@@ -92,6 +93,16 @@ namespace
 
         for (const char* baseName : baseNames)
         {
+            if (auto overridePath = FindOverrideVideo(cdDirectory, baseName))
+            {
+                std::cout << "Playing override " << overridePath->string() << "...\n";
+                if (!VideoPlayer::Play(*overridePath))
+                {
+                    return false; // window closed - abort boot
+                }
+                continue;
+            }
+
             std::string localizedName = LocalizedBaseName(baseName, language);
             std::filesystem::path path = aviDir / (localizedName + ".AVI");
             std::error_code ec;

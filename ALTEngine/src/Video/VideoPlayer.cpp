@@ -9,6 +9,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
+#include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
 
@@ -22,12 +23,14 @@ namespace ALTEngine::Video
             AVCodecContext* videoCodecCtx = nullptr;
             AVCodecContext* audioCodecCtx = nullptr;
             SwsContext* swsCtx = nullptr;
+            SwrContext* swrCtx = nullptr;
             int videoStreamIndex = -1;
             int audioStreamIndex = -1;
 
             ~FFmpegContext()
             {
                 if (swsCtx) { sws_freeContext(swsCtx); }
+                if (swrCtx) { swr_free(&swrCtx); }
                 if (videoCodecCtx) { avcodec_free_context(&videoCodecCtx); }
                 if (audioCodecCtx) { avcodec_free_context(&audioCodecCtx); }
                 if (formatCtx) { avformat_close_input(&formatCtx); }
@@ -127,12 +130,37 @@ namespace ALTEngine::Video
         SDL_AudioStream* audioStream = nullptr;
         if (ctx.audioStreamIndex >= 0)
         {
-            SDL_AudioSpec srcSpec{};
-            srcSpec.format = (ctx.audioCodecCtx->sample_fmt == AV_SAMPLE_FMT_U8) ? SDL_AUDIO_U8 : SDL_AUDIO_S16;
-            srcSpec.channels = ctx.audioCodecCtx->ch_layout.nb_channels;
-            srcSpec.freq = ctx.audioCodecCtx->sample_rate;
-            audioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &srcSpec, nullptr, nullptr);
-            if (audioStream) { SDL_ResumeAudioStreamDevice(audioStream); }
+            // Don't guess the SDL stream format from the source codec -
+            // that only worked for the original game's araw (literally
+            // raw PCM) audio. Real codecs (AAC etc, needed for the
+            // upscaled movie replacements) commonly decode to planar
+            // float, not S16/U8, and planar formats split channels into
+            // separate buffers rather than interleaving them - reading
+            // frame->data[0] alone as if it were full interleaved audio
+            // (the old code's assumption) reads garbage past a single
+            // channel's worth of data. swresample converts whatever the
+            // decoder actually produces into one fixed, known format
+            // (interleaved S16) up front, so the rest of this function
+            // never needs to care what the source codec's native decode
+            // format is.
+            int ret = swr_alloc_set_opts2(&ctx.swrCtx,
+                &ctx.audioCodecCtx->ch_layout, AV_SAMPLE_FMT_S16, ctx.audioCodecCtx->sample_rate,
+                &ctx.audioCodecCtx->ch_layout, ctx.audioCodecCtx->sample_fmt, ctx.audioCodecCtx->sample_rate,
+                0, nullptr);
+            if (ret < 0 || !ctx.swrCtx || swr_init(ctx.swrCtx) < 0)
+            {
+                SDL_Log("VideoPlayer: swr_alloc_set_opts2/swr_init failed - playing without audio");
+                if (ctx.swrCtx) { swr_free(&ctx.swrCtx); }
+            }
+            else
+            {
+                SDL_AudioSpec srcSpec{};
+                srcSpec.format = SDL_AUDIO_S16;
+                srcSpec.channels = ctx.audioCodecCtx->ch_layout.nb_channels;
+                srcSpec.freq = ctx.audioCodecCtx->sample_rate;
+                audioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &srcSpec, nullptr, nullptr);
+                if (audioStream) { SDL_ResumeAudioStreamDevice(audioStream); }
+            }
         }
 
         AVPacket* packet = av_packet_alloc();
@@ -201,9 +229,20 @@ namespace ALTEngine::Video
                 {
                     while (avcodec_receive_frame(ctx.audioCodecCtx, frame) == 0)
                     {
-                        int bytesPerSample = av_get_bytes_per_sample(ctx.audioCodecCtx->sample_fmt);
-                        int dataSize = frame->nb_samples * frame->ch_layout.nb_channels * bytesPerSample;
-                        SDL_PutAudioStreamData(audioStream, frame->data[0], dataSize);
+                        // Worst case (no resampling, since in/out sample
+                        // rate match - this only converts format/layout)
+                        // output sample count equals input sample count.
+                        int maxOutSamples = frame->nb_samples;
+                        std::vector<uint8_t> converted(static_cast<size_t>(maxOutSamples) * frame->ch_layout.nb_channels * 2); // S16 = 2 bytes/sample
+                        uint8_t* outPtr = converted.data();
+
+                        int convertedSamples = swr_convert(ctx.swrCtx, &outPtr, maxOutSamples,
+                                                            const_cast<const uint8_t**>(frame->data), frame->nb_samples);
+                        if (convertedSamples > 0)
+                        {
+                            int dataSize = convertedSamples * frame->ch_layout.nb_channels * 2;
+                            SDL_PutAudioStreamData(audioStream, converted.data(), dataSize);
+                        }
                     }
                 }
             }

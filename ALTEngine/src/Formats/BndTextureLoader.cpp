@@ -1,5 +1,6 @@
 #include "BndTextureLoader.h"
 #include "BndParser.h"
+#include "OverrideImage.h"
 #include "RawImageRenderer.h"
 
 #include <algorithm>
@@ -34,6 +35,23 @@ namespace ALTEngine::Formats
         {
             return sectionName.size() > 2 ? sectionName.substr(2) : "";
         }
+
+        // Same convention as SplashImageLoader, just single-frame (no
+        // second _TP suffix, since level/menu textures here aren't
+        // split across two tiles the way LEGAL/LOGOSGFX/etc are):
+        // Override/{category}/{baseName}_TP{suffix}.png. `bndPath` is
+        // something like .../CD/SECT11/111GFX.B16 - category comes from
+        // its parent folder name (e.g. "SECT11"), Override root is
+        // CD/Override (confirmed against Edward's real install tree).
+        std::optional<OverrideImage> TryOverride(const std::filesystem::path& bndPath, const std::string& suffix)
+        {
+            std::string category = bndPath.parent_path().filename().string();
+            std::string baseName = bndPath.stem().string();
+            std::string key = category + "/" + baseName + "_TP" + suffix;
+
+            std::filesystem::path overrideRoot = bndPath.parent_path().parent_path() / "Override";
+            return TryLoadOverrideImage(overrideRoot, key);
+        }
     }
 
     BndTextureSet BndTextureLoader::Load(const std::filesystem::path& bndPath)
@@ -50,6 +68,18 @@ namespace ALTEngine::Formats
         for (const auto& tp : tpSections)
         {
             std::string suffix = Suffix(tp.name);
+
+            if (auto override = TryOverride(bndPath, suffix))
+            {
+                BndTexture texture;
+                texture.index = suffix;
+                texture.rgba = std::move(override->rgba);
+                texture.width = override->width;
+                texture.height = override->height;
+                result.textures.push_back(std::move(texture));
+                continue;
+            }
+
             auto clIt = std::find_if(clSections.begin(), clSections.end(),
                 [&](const BndSection& cl) { return Suffix(cl.name) == suffix; });
 
