@@ -1,0 +1,135 @@
+#include "ModelLoader.h"
+#include "BndParser.h"
+
+#include <cstring>
+#include <fstream>
+#include <stdexcept>
+
+namespace ALTEngine::Formats
+{
+    namespace
+    {
+        std::vector<uint8_t> ReadFile(const std::filesystem::path& path)
+        {
+            std::ifstream in(path, std::ios::binary | std::ios::ate);
+            if (!in.is_open())
+            {
+                throw std::runtime_error("ModelLoader: could not open " + path.string());
+            }
+            auto size = static_cast<size_t>(in.tellg());
+            in.seekg(0, std::ios::beg);
+            std::vector<uint8_t> data(size);
+            in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(size));
+            return data;
+        }
+
+        // Little-endian reads - ModelRenderer.cs uses BinaryReader, which
+        // is little-endian by default on .NET (matching x86/x64), and
+        // this data is PS1-originated (also little-endian).
+        int32_t ReadInt32LE(const std::vector<uint8_t>& data, size_t offset)
+        {
+            return static_cast<int32_t>(
+                static_cast<uint32_t>(data[offset]) |
+                (static_cast<uint32_t>(data[offset + 1]) << 8) |
+                (static_cast<uint32_t>(data[offset + 2]) << 16) |
+                (static_cast<uint32_t>(data[offset + 3]) << 24));
+        }
+
+        uint16_t ReadUInt16LE(const std::vector<uint8_t>& data, size_t offset)
+        {
+            return static_cast<uint16_t>(data[offset] | (data[offset + 1] << 8));
+        }
+
+        int16_t ReadInt16LE(const std::vector<uint8_t>& data, size_t offset)
+        {
+            return static_cast<int16_t>(ReadUInt16LE(data, offset));
+        }
+    }
+
+    std::vector<ModelMesh> ModelLoader::Load(const std::filesystem::path& bndPath)
+    {
+        std::vector<uint8_t> bnd = ReadFile(bndPath);
+        std::vector<BndSection> modelSections = BndParser::ParseFormSections(bnd, "M0");
+
+        std::vector<ModelMesh> meshes;
+        meshes.reserve(modelSections.size());
+
+        for (const auto& section : modelSections)
+        {
+            const std::vector<uint8_t>& data = section.data;
+            size_t pos = 0;
+
+            if (data.size() < 12)
+            {
+                throw std::runtime_error("ModelLoader: " + section.name + " too small for its 12-byte header in " + bndPath.string());
+            }
+
+            std::string tag(reinterpret_cast<const char*>(data.data()), 4);
+            if (tag != "OBJ1")
+            {
+                throw std::runtime_error("ModelLoader: " + section.name + " missing OBJ1 tag (found '" + tag + "') in " + bndPath.string());
+            }
+            pos += 4;
+
+            pos += 4; // padding, always zero per the format notes - not validated, just skipped
+
+            ModelMesh mesh;
+            mesh.sectionName = section.name;
+            std::memcpy(mesh.identifier.data(), data.data() + pos, 4);
+            pos += 4;
+
+            if (pos + 8 > data.size())
+            {
+                throw std::runtime_error("ModelLoader: " + section.name + " too small for quad/vertex counts in " + bndPath.string());
+            }
+            int32_t quadCount = ReadInt32LE(data, pos);
+            pos += 4;
+            int32_t vertexCount = ReadInt32LE(data, pos);
+            pos += 4;
+
+            if (quadCount < 0 || vertexCount < 0)
+            {
+                throw std::runtime_error("ModelLoader: " + section.name + " has a negative quad/vertex count in " + bndPath.string());
+            }
+
+            size_t quadsSize = static_cast<size_t>(quadCount) * 20;
+            size_t verticesSize = static_cast<size_t>(vertexCount) * 8;
+            if (pos + quadsSize + verticesSize > data.size())
+            {
+                throw std::runtime_error(
+                    "ModelLoader: " + section.name + " declares more quad/vertex data than it contains in " + bndPath.string());
+            }
+
+            mesh.quads.reserve(static_cast<size_t>(quadCount));
+            for (int32_t i = 0; i < quadCount; ++i)
+            {
+                ModelQuad q;
+                q.a = ReadInt32LE(data, pos + 0);
+                q.b = ReadInt32LE(data, pos + 4);
+                q.c = ReadInt32LE(data, pos + 8);
+                q.d = ReadInt32LE(data, pos + 12);
+                q.texIndex = ReadUInt16LE(data, pos + 16);
+                q.flags = data[pos + 18];
+                q.reserved = data[pos + 19];
+                mesh.quads.push_back(q);
+                pos += 20;
+            }
+
+            mesh.vertices.reserve(static_cast<size_t>(vertexCount));
+            for (int32_t i = 0; i < vertexCount; ++i)
+            {
+                ModelVertex v;
+                v.x = ReadInt16LE(data, pos + 0);
+                v.y = ReadInt16LE(data, pos + 2);
+                v.z = ReadInt16LE(data, pos + 4);
+                v.marker = ReadUInt16LE(data, pos + 6);
+                mesh.vertices.push_back(v);
+                pos += 8;
+            }
+
+            meshes.push_back(std::move(mesh));
+        }
+
+        return meshes;
+    }
+}

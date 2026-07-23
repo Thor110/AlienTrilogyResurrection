@@ -100,21 +100,38 @@ namespace ALTEngine::Formats::ModelIndices
     // OPTOBJ.BND - menu models (confirmed - mirrors MenuTree.cpp's
     // ModelIndex namespace exactly; that's the version with actual named
     // constants in active use, this is just the reference list)
+    //
+    // Bonus: ModelRenderer.cs's own header-byte comment independently
+    // lists these same 14 entries in the same order (cross-confirms the
+    // index ordering from a second source), and additionally gives the
+    // raw 4-byte identifier value for each - included below since it's
+    // a second, independent way to identify a model (by its actual
+    // header bytes, not just its section index/order).
+    //
+    // CONFIRMED against the real OPTOBJ.BND (Edward, 2026): all 14
+    // sections' identifier bytes match this list exactly, in exact
+    // section order (M000-M013 = index 0-13).
+    //
+    // Indices 2/3/13's real-world device names are the actual original
+    // button text (SpaceOrb 360, Gravis Grip/Gravis Pad, VFX-1) - the
+    // "Gamepad"/"Multitap"/"Headphones" labels below were Edward's
+    // visual-impression names from looking at the models, not the
+    // devices' actual identities.
     namespace OptObj
     {
-        // 0 - Joystick
-        // 1 - Camera
-        // 2 - Gamepad
-        // 3 - Multitap?
-        // 4 - Hard Drive Saving <-
-        // 5 - Hard Drive Loading ->
-        // 6 - Camera Crossed Out
-        // 7 - Keyboard
-        // 8 - Mouse
-        // 9 - Computer, Monitor and Keyboard
-        // 10 - Two Linked Computers, Monitors and Keyboards ( Multiplayer )
-        // 11 - Speaker ( Disc Music )
-        // 12 - Speaker ( Sound Effects )
-        // 13 - Headphones
+        // 0  - Joystick               (identifier FC 56 5A 00)
+        // 1  - Camera                 (identifier 8C 47 5A 00)
+        // 2  - Gamepad                (identifier 5C 94 02 83) - real device: SpaceOrb 360 (confirmed original button text)
+        // 3  - Multitap?              (identifier 98 66 5A 00) - real devices: Gravis Grip AND Gravis Pad (confirmed original button text) - both use this index
+        // 4  - Hard Drive Saving <-   (identifier A4 59 5A 00)
+        // 5  - Hard Drive Loading -> (identifier 90 59 5A 00)
+        // 6  - Camera Crossed Out     (identifier 4C 67 5A 00)
+        // 7  - Keyboard               (identifier 34 66 5A 00)
+        // 8  - Mouse                  (identifier 88 67 5A 00)
+        // 9  - Computer, Monitor and Keyboard (identifier 14 68 5A 00)
+        // 10 - Two Linked Computers, Monitors and Keyboards ( Multiplayer ) (identifier 00 72 5A 00)
+        // 11 - Speaker ( Disc Music ) (identifier B0 67 5A 00)
+        // 12 - Speaker ( Sound Effects ) (identifier 68 48 5A 00)
+        // 13 - Headphones             (identifier 9C 67 5A 00) - real device: VFX-1 (confirmed original button text) - VFX-1 was actually a VR headset
     }
 }

@@ -7,6 +7,7 @@
 #include "../Bootstrap/Font8x8.h"
 #include "../Bootstrap/ResolutionSettings.h"
 #include "../Formats/SplashImageLoader.h"
+#include "../Renderer/ModelRenderer.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -31,6 +32,7 @@ namespace ALTEngine::Menu
     using ALTEngine::Bootstrap::TextWidth;
     using ALTEngine::Formats::SplashImage;
     using ALTEngine::Formats::SplashImageLoader;
+    using ALTEngine::Renderer::ModelRenderer;
 
     namespace
     {
@@ -139,7 +141,8 @@ namespace ALTEngine::Menu
         }
 
         // Placeholder for the eventual real 3D model render - a labeled
-        // box showing the model index. See MenuNode.h.
+        // box showing the model index. See MenuNode.h. Used as a
+        // fallback by DrawModel below if GPU rendering isn't available.
         void DrawModelPlaceholder(SDL_Renderer* renderer, int modelIndex, int x, int y, int w, int h, int scale)
         {
             if (modelIndex < 0) { return; }
@@ -152,6 +155,75 @@ namespace ALTEngine::Menu
             int textX = x + (w - TextWidth(label, scale)) / 2;
             int textY = y + h / 2 - TextHeight(scale) / 2;
             DrawBitmapText(renderer, label, textX, textY, scale, COLOR_GREEN_DIM);
+        }
+
+        // Tracks whether ModelRenderer::Initialize() has been attempted
+        // and whether it actually succeeded - attempted only once; if it
+        // fails (no usable GPU, missing shaders, etc), every subsequent
+        // call falls back to the placeholder box rather than repeatedly
+        // retrying a doomed initialization every frame.
+        bool modelRendererInitAttempted = false;
+        bool modelRendererAvailable = false;
+
+        // Renders the real spinning 3D model via ModelRenderer, uploaded
+        // as a regular SDL_Texture and drawn the same way the splash
+        // background images are - see ModelRenderer.h's architecture
+        // note on why the GPU render goes through a CPU round-trip
+        // rather than direct GPU-texture interop with SDL_Renderer.
+        // Falls back to DrawModelPlaceholder if the GPU pipeline isn't
+        // available or this specific model fails to load - the menu
+        // stays fully usable either way.
+        void DrawModel(SDL_Renderer* renderer, const std::filesystem::path& cdDirectory, int modelIndex,
+                        int x, int y, int w, int h, int scale, float rotationAngle)
+        {
+            if (modelIndex < 0) { return; }
+
+            if (!modelRendererInitAttempted)
+            {
+                modelRendererInitAttempted = true;
+                modelRendererAvailable = ModelRenderer::Initialize();
+                if (!modelRendererAvailable)
+                {
+                    SDL_Log("Menu: ModelRenderer unavailable - using placeholder boxes instead of live 3D previews");
+                }
+            }
+
+            if (!modelRendererAvailable)
+            {
+                DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
+                return;
+            }
+
+            std::filesystem::path objBnd = cdDirectory / "GFX" / "OPTOBJ.BND";
+            std::filesystem::path gfxBnd = cdDirectory / "GFX" / "OPTGFX.BND";
+            if (!ModelRenderer::LoadModel(modelIndex, objBnd, gfxBnd))
+            {
+                DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
+                return;
+            }
+
+            int renderSize = std::min(w, h);
+            if (renderSize < 64) { renderSize = 64; }
+            std::vector<uint8_t> pixels = ModelRenderer::RenderToRgba(modelIndex, rotationAngle, renderSize, renderSize);
+            if (pixels.empty())
+            {
+                DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
+                return;
+            }
+
+            SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, renderSize, renderSize);
+            if (!texture)
+            {
+                DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
+                return;
+            }
+            SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND); // the render's clear color is transparent - let it composite over the menu background
+            SDL_UpdateTexture(texture, nullptr, pixels.data(), renderSize * 4);
+
+            SDL_FRect dest{ static_cast<float>(x + (w - renderSize) / 2), static_cast<float>(y + (h - renderSize) / 2),
+                            static_cast<float>(renderSize), static_cast<float>(renderSize) };
+            SDL_RenderTexture(renderer, texture, nullptr, &dest);
+            SDL_DestroyTexture(texture);
         }
 
         // Returns the column's width (fitted to its widest label + padding)
@@ -414,7 +486,8 @@ namespace ALTEngine::Menu
 
                 int modelIndex = EffectiveModelIndex(optionsRoot, optionsPath);
                 SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-                DrawModelPlaceholder(renderer, modelIndex, columnX, columnTop, windowW - columnX - scale * 8, 300, scale);
+                float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f; // 1 radian/sec - a slow, steady spin
+                DrawModel(renderer, cdDirectory, modelIndex, columnX, columnTop, windowW - columnX - scale * 8, 300, scale, rotationAngle);
 
                 DrawBitmapText(renderer, "PRESS ESC TO GO BACK", scale * 8, windowH - rowHeight * 2, scale, COLOR_GREEN);
                 DrawBitmapText(renderer, "PRESS ENTER TO SELECT", scale * 8, windowH - rowHeight, scale, COLOR_GREEN);
@@ -434,6 +507,7 @@ namespace ALTEngine::Menu
         }
 
         MusicPlayer::Stop();
+        if (modelRendererAvailable) { ModelRenderer::Shutdown(); }
 
         if (mainBg) { SDL_DestroyTexture(mainBg); }
         if (optionsBg) { SDL_DestroyTexture(optionsBg); }

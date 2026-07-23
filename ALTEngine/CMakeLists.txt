@@ -35,6 +35,8 @@ add_library(ALTFormats STATIC
     src/Formats/Installer.cpp
     src/Formats/CddaRipper.cpp
     src/Formats/OverrideImage.cpp
+    src/Formats/ModelLoader.cpp
+    src/Formats/RenderMesh.cpp
 )
 target_include_directories(ALTFormats PUBLIC src)
 target_link_libraries(ALTFormats PRIVATE nlohmann_json::nlohmann_json)
@@ -68,6 +70,54 @@ pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
 )
 
 # ---------------------------------------------------------------------------
+# Model renderer shaders (data/shaders/*.hlsl -> DXIL, via dxc). Canonical
+# source is HLSL; dxc ships with the Windows SDK (already required for
+# windows.h/CD-ROM IOCTLs elsewhere in this project), so no extra
+# toolchain install should be needed on a normal VS2022 setup.
+#
+# NOTE: this compilation step itself is untested - no dxc available in
+# the environment these shaders were originally authored/verified in.
+# The shaders were instead verified via an equivalent GLSL pair compiled
+# to SPIR-V (same SDL_GPU pipeline C++ code, different shader compiler) -
+# see ModelRenderer.cpp's comments. If dxc rejects this HLSL, that's a
+# real gap to fix, not a build-config issue.
+# ---------------------------------------------------------------------------
+if (WIN32)
+    find_program(DXC_EXECUTABLE dxc)
+    if (NOT DXC_EXECUTABLE)
+        file(GLOB _dxc_candidates "C:/Program Files (x86)/Windows Kits/10/bin/*/x64/dxc.exe")
+        if (_dxc_candidates)
+            list(SORT _dxc_candidates)
+            list(REVERSE _dxc_candidates) # newest SDK version first
+            list(GET _dxc_candidates 0 DXC_EXECUTABLE)
+        endif()
+    endif()
+
+    if (NOT DXC_EXECUTABLE)
+        message(WARNING "dxc.exe (DirectXShaderCompiler) not found - model rendering shaders won't be compiled. "
+                         "Install the Windows SDK (ships with VS2022's Desktop C++ workload) or add dxc to PATH.")
+    else()
+        message(STATUS "Using dxc: ${DXC_EXECUTABLE}")
+        set(SHADER_DIR "${CMAKE_SOURCE_DIR}/data/shaders")
+
+        add_custom_command(
+            OUTPUT "${SHADER_DIR}/model.vert.dxil"
+            COMMAND ${DXC_EXECUTABLE} -T vs_6_0 -E main -Fo "${SHADER_DIR}/model.vert.dxil" "${SHADER_DIR}/model.vert.hlsl"
+            DEPENDS "${SHADER_DIR}/model.vert.hlsl"
+            COMMENT "Compiling model.vert.hlsl -> DXIL"
+        )
+        add_custom_command(
+            OUTPUT "${SHADER_DIR}/model.frag.dxil"
+            COMMAND ${DXC_EXECUTABLE} -T ps_6_0 -E main -Fo "${SHADER_DIR}/model.frag.dxil" "${SHADER_DIR}/model.frag.hlsl"
+            DEPENDS "${SHADER_DIR}/model.frag.hlsl"
+            COMMENT "Compiling model.frag.hlsl -> DXIL"
+        )
+        add_custom_target(CompileModelShaders ALL
+            DEPENDS "${SHADER_DIR}/model.vert.dxil" "${SHADER_DIR}/model.frag.dxil")
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
 # ALTEngine - the port executable. Currently: MU/TH/UR 9000 boot sequence
 # (locate game files), patch routines, LEGAL splash, AVI intro playback.
 # Engine/renderer proper comes later.
@@ -88,11 +138,17 @@ add_executable(ALTEngine
     src/Menu/MenuTree.cpp
     src/Menu/MenuNavigation.cpp
     src/Menu/MenuController.cpp
+    src/Renderer/Mat4.h
+    src/Renderer/ModelRenderer.cpp
 )
 target_include_directories(ALTEngine PRIVATE src)
 target_link_libraries(ALTEngine PRIVATE ALTFormats)
 target_link_libraries(ALTEngine PRIVATE SDL3::SDL3)
 target_link_libraries(ALTEngine PRIVATE PkgConfig::FFMPEG)
+
+if (WIN32 AND DXC_EXECUTABLE)
+    add_dependencies(ALTEngine CompileModelShaders)
+endif()
 
 set_target_properties(ALTEngine PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:ALTEngine>"

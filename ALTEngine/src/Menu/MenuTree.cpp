@@ -6,20 +6,27 @@
 
 namespace ALTEngine::Menu
 {
-    // OPTOBJ.BND model indices - CONFIRMED (Edward's salvaged comments
-    // from prior work, 2026), not the guessed ordering this used to be.
-    // Interestingly, the guess (derived from ModelRenderer.cs's comment
-    // ordering) matched this exactly, index for index - kept as-is, just
-    // a couple of names corrected to match precisely (Controller ->
-    // Gamepad, GravisGrip -> Multitap, CameraX -> CameraCrossedOut).
+    // OPTOBJ.BND model indices - CONFIRMED against the real OPTOBJ.BND
+    // (Edward, 2026): all 14 sections' identifier bytes match this list
+    // exactly, in exact section order (M000-M013 = index 0-13). Also
+    // cross-confirmed independently by ModelRenderer.cs's own header-byte
+    // comment before that, and originally guessed correctly from that
+    // same comment's ordering before either confirmation existed.
+    //
+    // Real-world device names for indices 2/3/13 use the actual original
+    // button text (SpaceOrb 360, Gravis Grip/Gravis Pad, VFX-1) rather
+    // than the generic visual-impression names (Gamepad/Multitap/
+    // Headphones) Edward had initially used purely from looking at the
+    // models - see the per-constant comments below.
+    //
     // See Formats/ModelIndices.h for the full three-catalog reference
     // (OBJ3D/PICKMOD/OPTOBJ) salvaged alongside this.
     namespace ModelIndex
     {
         constexpr int Joystick = 0;
         constexpr int Camera = 1;
-        constexpr int Gamepad = 2;
-        constexpr int Multitap = 3; // "Multitap?" in the source comment - noted as uncertain there
+        constexpr int Gamepad = 2;  // real device: SpaceOrb 360 (confirmed original button text) - "Gamepad" was Edward's visual-impression label from looking at the model, not the actual device name
+        constexpr int Multitap = 3; // real devices: Gravis Grip AND Gravis Pad (confirmed original button text) - both use this index, since both look like a multitap; "Multitap" was likewise a visual impression, not necessarily the model's actual real-world identity
         constexpr int HarddriveLeft = 4;  // Hard Drive Saving <-
         constexpr int HarddriveRight = 5; // Hard Drive Loading ->
         constexpr int CameraCrossedOut = 6;
@@ -29,7 +36,7 @@ namespace ALTEngine::Menu
         constexpr int NetworkedComputers = 10; // Two Linked Computers, Monitors and Keyboards (Multiplayer)
         constexpr int SpeakerMusic = 11; // Speaker (Disc Music)
         constexpr int SpeakerSfx = 12;   // Speaker (Sound Effects)
-        constexpr int Headphones = 13;
+        constexpr int Headphones = 13;   // real device: VFX-1 (confirmed original button text) - "Headphones" was Edward's visual-impression label; VFX-1 was actually a VR headset
     }
 
     namespace
@@ -59,17 +66,15 @@ namespace ALTEngine::Menu
                 List("Keyboard", { Action("Redefine", ModelIndex::Keyboard) }),
                 List("Mouse", { Action("Redefine", ModelIndex::Mouse) }),
                 Action("Joystick", ModelIndex::Joystick),
-                // Model index deliberately left unset here - index 3 in
-                // the confirmed OPTOBJ list is "Multitap?" (uncertain
-                // even in the source comment), and a Multitap (a
-                // controller-port expander) isn't the same device as a
-                // Gravis Grip (a joystick) - no reason to assume they
-                // share a model just because both happened to be
-                // uncertain. Falls back to the inherited "Computer".
-                Action("Gravis Grip"),
-                Action("Gravis Pad"),   // no reference image confirming a distinct model
-                Action("SpaceOrb 360"), // no reference image confirming a distinct model
-                Action("VFX-1"),        // no reference image confirming a distinct model
+                // Gravis Grip and Gravis Pad both use Multitap (index 3) -
+                // Edward: both peripherals visually look like a multitap.
+                // Real hardware to test against is going to be genuinely
+                // hard to source either way, but the menu entries and
+                // model association are ready regardless.
+                Action("Gravis Grip", ModelIndex::Multitap),
+                Action("Gravis Pad", ModelIndex::Multitap),
+                Action("SpaceOrb 360", ModelIndex::Gamepad), // menu label differs from the OPTOBJ catalog's own generic name for this index
+                Action("VFX-1", ModelIndex::Headphones),     // ditto - VFX-1 was a VR headset, repurposing "Headphones"
             });
         }
 
