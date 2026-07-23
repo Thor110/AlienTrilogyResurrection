@@ -1,6 +1,7 @@
 #include "SplashImageLoader.h"
 #include "BndParser.h"
 #include "BxParser.h"
+#include "OverrideImage.h"
 #include "PaletteFile.h"
 #include "RawImageRenderer.h"
 #include "SplitFrameImage.h"
@@ -9,6 +10,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace ALTEngine::Formats
 {
@@ -16,6 +18,33 @@ namespace ALTEngine::Formats
     {
         constexpr int RAW_FRAME_SIZE = 256;
         constexpr int PADDING_INDEX = 0; // confirmed: never appears within real content
+
+        std::string ZeroPad2(int n)
+        {
+            std::string s = std::to_string(n);
+            return s.size() < 2 ? "0" + s : s;
+        }
+
+        // Override convention (OVERRIDE_GUIDE.txt): Override/{category}/
+        // {baseName}_TP{frameA}_TP{frameB}.png - one pre-assembled final
+        // image (e.g. 320x240 for LEGAL), not per-tile. `bndPath` is
+        // something like .../CD/GFX/LEGAL.BND - category comes from its
+        // parent folder name, and the Override root is derived by
+        // walking up from CD/ to the game root, so no extra parameter is
+        // needed at any call site.
+        std::optional<OverrideImage> TryOverride(const std::filesystem::path& bndPath, int frameA, int frameB)
+        {
+            std::string category = bndPath.parent_path().filename().string(); // e.g. "GFX"
+            std::string baseName = bndPath.stem().string();                    // e.g. "LEGAL"
+            std::string key = category + "/" + baseName + "_TP" + ZeroPad2(frameA) + "_TP" + ZeroPad2(frameB);
+
+            // .../CD/GFX/LEGAL.BND -> GFX -> CD, then CD/Override -
+            // Override lives inside CD (confirmed against Edward's real
+            // install tree: CD/Override/GFX/..., not GameRoot/Override/...).
+            std::filesystem::path overrideRoot = bndPath.parent_path().parent_path() / "Override";
+
+            return TryLoadOverrideImage(overrideRoot, key);
+        }
 
         std::vector<uint8_t> ReadFile(const std::filesystem::path& path)
         {
@@ -45,12 +74,21 @@ namespace ALTEngine::Formats
         bool paletteTrimmed,
         int imageIndex)
     {
+        int frameA = imageIndex * 2;
+        int frameB = imageIndex * 2 + 1;
+
+        if (auto override = TryOverride(bndPath, frameA, frameB))
+        {
+            SplashImage image;
+            image.rgba = std::move(override->rgba);
+            image.width = override->width;
+            image.height = override->height;
+            return image;
+        }
+
         std::vector<uint8_t> bnd = ReadFile(bndPath);
         std::vector<BndSection> tpSections = BndParser::ParseFormSections(bnd, "TP");
         std::vector<BndSection> bxSections = BndParser::ParseFormSections(bnd, "BX");
-
-        int frameA = imageIndex * 2;
-        int frameB = imageIndex * 2 + 1;
 
         if (static_cast<int>(tpSections.size()) <= frameB)
         {

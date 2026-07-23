@@ -6,34 +6,29 @@
 
 namespace ALTEngine::Menu
 {
-    // Provisional OPTOBJ model index assignment. NOT extracted from real
-    // data - we don't have OPTOBJ.BND to confirm actual on-disk section
-    // order against. Numbered in the order ModelRenderer.cs's comment
-    // block happens to list the known identifiers (Joystick, Camera,
-    // Controller, Gravis Grip Controller, Harddrive<-, Harddrive->,
-    // Camera X, Keyboard, Mouse, Computer, Networked Computers, Speaker
-    // Music, Speaker SFX, Headphones) - that ordering is an artifact of
-    // how the comment happened to be written, not a confirmed index.
-    //
-    // This IS the documentation of what each index means for override
-    // authors (Edward's plan: a text file in the Override folder at
-    // release, listing e.g. "OPTOBJ_09 = Computer"). Keep this list and
-    // that document in sync if either changes.
+    // OPTOBJ.BND model indices - CONFIRMED (Edward's salvaged comments
+    // from prior work, 2026), not the guessed ordering this used to be.
+    // Interestingly, the guess (derived from ModelRenderer.cs's comment
+    // ordering) matched this exactly, index for index - kept as-is, just
+    // a couple of names corrected to match precisely (Controller ->
+    // Gamepad, GravisGrip -> Multitap, CameraX -> CameraCrossedOut).
+    // See Formats/ModelIndices.h for the full three-catalog reference
+    // (OBJ3D/PICKMOD/OPTOBJ) salvaged alongside this.
     namespace ModelIndex
     {
         constexpr int Joystick = 0;
         constexpr int Camera = 1;
-        constexpr int Controller = 2;
-        constexpr int GravisGrip = 3;
-        constexpr int HarddriveLeft = 4;
-        constexpr int HarddriveRight = 5;
-        constexpr int CameraX = 6;
+        constexpr int Gamepad = 2;
+        constexpr int Multitap = 3; // "Multitap?" in the source comment - noted as uncertain there
+        constexpr int HarddriveLeft = 4;  // Hard Drive Saving <-
+        constexpr int HarddriveRight = 5; // Hard Drive Loading ->
+        constexpr int CameraCrossedOut = 6;
         constexpr int Keyboard = 7;
         constexpr int Mouse = 8;
-        constexpr int Computer = 9;
-        constexpr int NetworkedComputers = 10;
-        constexpr int SpeakerMusic = 11;
-        constexpr int SpeakerSfx = 12;
+        constexpr int Computer = 9; // Computer, Monitor and Keyboard
+        constexpr int NetworkedComputers = 10; // Two Linked Computers, Monitors and Keyboards (Multiplayer)
+        constexpr int SpeakerMusic = 11; // Speaker (Disc Music)
+        constexpr int SpeakerSfx = 12;   // Speaker (Sound Effects)
         constexpr int Headphones = 13;
     }
 
@@ -64,7 +59,14 @@ namespace ALTEngine::Menu
                 List("Keyboard", { Action("Redefine", ModelIndex::Keyboard) }),
                 List("Mouse", { Action("Redefine", ModelIndex::Mouse) }),
                 Action("Joystick", ModelIndex::Joystick),
-                Action("Gravis Grip", ModelIndex::GravisGrip),
+                // Model index deliberately left unset here - index 3 in
+                // the confirmed OPTOBJ list is "Multitap?" (uncertain
+                // even in the source comment), and a Multitap (a
+                // controller-port expander) isn't the same device as a
+                // Gravis Grip (a joystick) - no reason to assume they
+                // share a model just because both happened to be
+                // uncertain. Falls back to the inherited "Computer".
+                Action("Gravis Grip"),
                 Action("Gravis Pad"),   // no reference image confirming a distinct model
                 Action("SpaceOrb 360"), // no reference image confirming a distinct model
                 Action("VFX-1"),        // no reference image confirming a distinct model

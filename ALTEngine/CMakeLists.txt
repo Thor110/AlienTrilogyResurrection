@@ -20,6 +20,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 
 add_library(ALTFormats STATIC
     src/Formats/placeholder.cpp
+    src/Formats/ModelIndices.h
     src/Formats/BinaryUtility.cpp
     src/Formats/PatchLoader.cpp
     src/Formats/PatchRunner.cpp
@@ -33,6 +34,7 @@ add_library(ALTFormats STATIC
     src/Formats/DiscManifest.cpp
     src/Formats/Installer.cpp
     src/Formats/CddaRipper.cpp
+    src/Formats/OverrideImage.cpp
 )
 target_include_directories(ALTFormats PUBLIC src)
 target_link_libraries(ALTFormats PRIVATE nlohmann_json::nlohmann_json)
@@ -135,3 +137,5 @@ install(FILES "${CMAKE_SOURCE_DIR}/third_party_licenses/nlohmann-json/LICENSE.tx
 install(FILES "${CMAKE_SOURCE_DIR}/third_party_licenses/ffmpeg/LICENSE.txt"
               "${CMAKE_SOURCE_DIR}/third_party_licenses/ffmpeg/LICENSE.md"
         DESTINATION bin/licenses/ffmpeg)
+install(FILES "${CMAKE_SOURCE_DIR}/third_party_licenses/stb/LICENSE.txt"
+        DESTINATION bin/licenses/stb)
