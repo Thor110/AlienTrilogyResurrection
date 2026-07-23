@@ -80,6 +80,7 @@ add_executable(ALTEngine
     src/Bootstrap/InstallPipeline.cpp
     src/Video/VideoPlayer.cpp
     src/Audio/SfxPlayer.cpp
+    src/Audio/MusicPlayer.cpp
     src/Menu/MenuTree.cpp
     src/Menu/MenuNavigation.cpp
     src/Menu/MenuController.cpp

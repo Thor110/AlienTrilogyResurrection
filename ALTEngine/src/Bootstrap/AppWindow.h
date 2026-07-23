@@ -33,6 +33,15 @@ namespace ALTEngine::Bootstrap
         // nullptr if no window exists yet or the device couldn't open.
         SDL_AudioStream* SfxAudioStream();
 
+        // Lazily opens (or reopens, if `spec` differs from whatever's
+        // currently open) a persistent audio stream for music playback.
+        // Separate from SfxAudioStream since music format isn't fixed
+        // the way SFX is - ripped CDDA tracks are 16-bit/44100Hz/stereo,
+        // but this just uses whatever spec the caller determined from
+        // the actual loaded file (see MusicPlayer). Returns nullptr if
+        // no window exists yet or the device couldn't open.
+        SDL_AudioStream* MusicAudioStream(const SDL_AudioSpec& spec);
+
         // Finds the closest available fullscreen display mode to
         // (width, height) on the window's current display and applies
         // it. Returns false if no window exists yet or no matching mode
@@ -52,6 +61,8 @@ namespace ALTEngine::Bootstrap
         SDL_Window* window = nullptr;
         SDL_Renderer* renderer = nullptr;
         SDL_AudioStream* sfxStream = nullptr;
+        SDL_AudioStream* musicStream = nullptr;
+        SDL_AudioSpec musicSpec{};
         bool sdlInitialized = false;
     };
 }

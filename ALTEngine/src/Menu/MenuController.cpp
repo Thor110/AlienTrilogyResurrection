@@ -1,6 +1,7 @@
 #include "MenuController.h"
 #include "MenuTree.h"
 #include "MenuNavigation.h"
+#include "../Audio/MusicPlayer.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
@@ -16,6 +17,7 @@
 
 namespace ALTEngine::Menu
 {
+    using ALTEngine::Audio::MusicPlayer;
     using ALTEngine::Audio::SfxId;
     using ALTEngine::Audio::SfxPlayer;
     using ALTEngine::Bootstrap::AppWindow;
@@ -277,6 +279,13 @@ namespace ALTEngine::Menu
         MenuNode root = BuildMainMenuTree(resolutionLabels);
         const MenuNode& optionsRoot = root.children[3]; // "Options"
 
+        // track02.wav is confirmed as the main menu music (Edward).
+        // Plays continuously across the whole menu (Main Menu, Options,
+        // Credits) rather than stopping the moment you leave the Main
+        // Menu screen specifically - matches how menu music behaves in
+        // basically every game with a menu.
+        MusicPlayer::PlayLooped(cdDirectory / "MUSIC" / "track02.wav");
+
         enum class Screen { MainMenu, Options, Credits };
         Screen screen = Screen::MainMenu;
 
@@ -288,6 +297,7 @@ namespace ALTEngine::Menu
 
         while (running)
         {
+            MusicPlayer::Update();
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
@@ -422,6 +432,8 @@ namespace ALTEngine::Menu
 
             SDL_RenderPresent(renderer);
         }
+
+        MusicPlayer::Stop();
 
         if (mainBg) { SDL_DestroyTexture(mainBg); }
         if (optionsBg) { SDL_DestroyTexture(optionsBg); }
