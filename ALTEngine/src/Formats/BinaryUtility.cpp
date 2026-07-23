@@ -1,4 +1,5 @@
 #include "BinaryUtility.h"
+#include "RetryOpen.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -6,9 +7,28 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 
 namespace ALTEngine::Formats
 {
+    namespace
+    {
+        // Defensive, regardless of how the file got here (Installer
+        // already does this at copy-time, but patching shouldn't depend
+        // on that other code path having run) - disc-sourced files are
+        // inherently read-only media, and a plain copy can carry that
+        // attribute over to the destination. That's a permanent file
+        // attribute, not a transient lock - RetryOnTransientLock alone
+        // never fixes this case, hence clearing it explicitly first.
+        void ClearReadOnly(const std::filesystem::path& path)
+        {
+            std::error_code ec;
+            std::filesystem::permissions(path,
+                std::filesystem::perms::owner_write | std::filesystem::perms::group_write | std::filesystem::perms::others_write,
+                std::filesystem::perm_options::add, ec);
+        }
+    }
+
     uint8_t BinaryUtility::ReadByteAtOffset(const std::filesystem::path& path, uint64_t offset)
     {
         std::ifstream stream(path, std::ios::binary);
@@ -45,12 +65,19 @@ namespace ALTEngine::Formats
 
     void BinaryUtility::ReplaceByte(const std::filesystem::path& path, uint64_t offset, uint8_t value)
     {
-        std::fstream stream(path, std::ios::binary | std::ios::in | std::ios::out);
-        if (!stream.is_open())
+        ClearReadOnly(path);
+
+        std::fstream stream;
+        bool opened = RetryOnTransientLock([&]() {
+            stream.open(path, std::ios::binary | std::ios::in | std::ios::out);
+            return stream.is_open();
+        });
+        if (!opened)
         {
             throw std::runtime_error(
                 "BinaryUtility::ReplaceByte: could not open " + path.string() +
-                " (" + std::strerror(errno) + ")");
+                " (" + std::strerror(errno) + ") - already tried clearing the read-only attribute and "
+                "retrying briefly. Check antivirus real-time scanning or Program Files permissions.");
         }
         stream.seekp(static_cast<std::streamoff>(offset), std::ios::beg);
         char byte = static_cast<char>(value);
@@ -97,13 +124,20 @@ namespace ALTEngine::Formats
             std::copy(edit.bytes.begin(), edit.bytes.end(), data.begin() + static_cast<ptrdiff_t>(edit.offset));
         }
 
-        std::ofstream out(path, std::ios::binary | std::ios::trunc);
-        if (!out.is_open())
+        ClearReadOnly(path);
+
+        std::ofstream out;
+        bool opened = RetryOnTransientLock([&]() {
+            out.open(path, std::ios::binary | std::ios::trunc);
+            return out.is_open();
+        });
+        if (!opened)
         {
             throw std::runtime_error(
                 "BinaryUtility::ReplaceBytes: could not reopen " + path.string() +
-                " for writing (" + std::strerror(errno) + ") - if the game is installed under "
-                "Program Files, this almost always means the process needs to run elevated (as Administrator)");
+                " for writing (" + std::strerror(errno) + ") - already tried clearing the read-only "
+                "attribute and retrying briefly. Check antivirus real-time scanning, or Program Files "
+                "permissions (run elevated).");
         }
         out.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
     }

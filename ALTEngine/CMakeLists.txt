@@ -77,7 +77,9 @@ add_executable(ALTEngine
     src/Bootstrap/ImageDisplay.cpp
     src/Bootstrap/AppWindow.cpp
     src/Bootstrap/DiscLocator.cpp
+    src/Bootstrap/InstallPipeline.cpp
     src/Video/VideoPlayer.cpp
+    src/Audio/SfxPlayer.cpp
     src/Menu/MenuTree.cpp
     src/Menu/MenuNavigation.cpp
     src/Menu/MenuController.cpp

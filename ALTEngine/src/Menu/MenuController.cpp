@@ -1,6 +1,7 @@
 #include "MenuController.h"
 #include "MenuTree.h"
 #include "MenuNavigation.h"
+#include "../Audio/SfxPlayer.h"
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
 #include "../Bootstrap/ResolutionSettings.h"
@@ -15,6 +16,8 @@
 
 namespace ALTEngine::Menu
 {
+    using ALTEngine::Audio::SfxId;
+    using ALTEngine::Audio::SfxPlayer;
     using ALTEngine::Bootstrap::AppWindow;
     using ALTEngine::Bootstrap::Color;
     using ALTEngine::Bootstrap::DrawBitmapText;
@@ -296,10 +299,12 @@ namespace ALTEngine::Menu
                     case SDLK_UP:
                         if (screen == Screen::MainMenu) { MoveSelection(root, mainPath, -1); }
                         else if (screen == Screen::Options) { MoveSelection(optionsRoot, optionsPath, -1); }
+                        SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
                         break;
                     case SDLK_DOWN:
                         if (screen == Screen::MainMenu) { MoveSelection(root, mainPath, 1); }
                         else if (screen == Screen::Options) { MoveSelection(optionsRoot, optionsPath, 1); }
+                        SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
                         break;
                     case SDLK_RETURN:
                     case SDLK_KP_ENTER:
@@ -316,6 +321,7 @@ namespace ALTEngine::Menu
                                 result.action = chosen.label;
                                 running = false;
                             }
+                            SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         }
                         else if (screen == Screen::Options)
                         {
@@ -326,6 +332,7 @@ namespace ALTEngine::Menu
                             EnterResult r = Enter(optionsRoot, optionsPath);
                             if (r == EnterResult::EnteredCredits) { screen = Screen::Credits; }
                             else if (r == EnterResult::Toggled) { ApplyLeafAction(parentLabel, leafLabel, renderSettings, resolutionSettings, language); }
+                            if (r != EnterResult::NoOp) { SfxPlayer::Play(SfxId::MenuSelect, cdDirectory); }
                         }
                         break;
                     case SDLK_ESCAPE:
@@ -334,6 +341,12 @@ namespace ALTEngine::Menu
                         {
                             if (!Back(optionsPath)) { screen = Screen::MainMenu; }
                         }
+                        else if (screen == Screen::MainMenu)
+                        {
+                            result.action = "Exit";
+                            running = false;
+                        }
+                        SfxPlayer::Play(SfxId::MenuBack, cdDirectory);
                         break;
                     default:
                         break;

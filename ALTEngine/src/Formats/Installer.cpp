@@ -1,5 +1,6 @@
 #include "Installer.h"
 #include "../Bootstrap/FsUtil.h"
+#include "RetryOpen.h"
 
 #include <system_error>
 
@@ -7,6 +8,39 @@ namespace ALTEngine::Formats
 {
     namespace
     {
+        // Disc-sourced files (physical CD or a mounted image) are
+        // inherently read-only media, and copy_file on Windows can carry
+        // that read-only attribute over to the destination copy - a
+        // permanent file attribute, not a transient lock, so retrying
+        // the write later never helps. Clear it explicitly right after
+        // every copy.
+        void ClearReadOnly(const std::filesystem::path& path)
+        {
+            std::error_code ec;
+            std::filesystem::permissions(path,
+                std::filesystem::perms::owner_write | std::filesystem::perms::group_write | std::filesystem::perms::others_write,
+                std::filesystem::perm_options::add, ec);
+            // Deliberately not checked/reported - if this fails, the
+            // subsequent patch write attempt will surface a clear error
+            // anyway, and BinaryUtility does the same clear defensively
+            // before every write regardless.
+        }
+
+        // Same transient-lock risk as BinaryUtility's reopen-for-write -
+        // OneDrive/AV/Search indexer can briefly hold a file right after
+        // it's created, which copy_file can hit just as easily as a
+        // later reopen can.
+        bool CopyFileWithRetry(const std::filesystem::path& source, const std::filesystem::path& dest)
+        {
+            bool copied = RetryOnTransientLock([&]() {
+                std::error_code ec;
+                std::filesystem::copy_file(source, dest, std::filesystem::copy_options::overwrite_existing, ec);
+                return !ec;
+            });
+            if (copied) { ClearReadOnly(dest); }
+            return copied;
+        }
+
         bool CopyOneFile(const std::filesystem::path& sourceDir, const std::filesystem::path& destDir, const std::string& name)
         {
             auto sourcePath = ALTEngine::Bootstrap::FindEntryCaseInsensitive(sourceDir, name);
@@ -15,8 +49,7 @@ namespace ALTEngine::Formats
             std::error_code ec;
             std::filesystem::create_directories(destDir, ec);
 
-            std::filesystem::copy_file(*sourcePath, destDir / name, std::filesystem::copy_options::overwrite_existing, ec);
-            return !ec;
+            return CopyFileWithRetry(*sourcePath, destDir / name);
         }
     }
 
@@ -91,10 +124,8 @@ namespace ALTEngine::Formats
                     if (!entry.is_regular_file()) { continue; }
                     std::string filename = entry.path().filename().string();
 
-                    std::error_code copyEc;
-                    std::filesystem::copy_file(entry.path(), destFolder / filename,
-                                                std::filesystem::copy_options::overwrite_existing, copyEc);
-                    if (copyEc) { result.failedFiles.push_back(folderName + "/" + filename); }
+                    bool copied = CopyFileWithRetry(entry.path(), destFolder / filename);
+                    if (!copied) { result.failedFiles.push_back(folderName + "/" + filename); }
                     reportProgress(folderName + "/" + filename);
                 }
             }

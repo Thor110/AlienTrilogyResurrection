@@ -64,8 +64,29 @@ namespace ALTEngine::Bootstrap
         return true;
     }
 
+    SDL_AudioStream* AppWindow::SfxAudioStream()
+    {
+        if (sfxStream) { return sfxStream; }
+        if (!window) { return nullptr; }
+
+        SDL_AudioSpec spec{};
+        spec.format = SDL_AUDIO_U8;
+        spec.channels = 1;
+        spec.freq = 11025;
+
+        sfxStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
+        if (!sfxStream)
+        {
+            SDL_Log("AppWindow::SfxAudioStream: SDL_OpenAudioDeviceStream failed: %s", SDL_GetError());
+            return nullptr;
+        }
+        SDL_ResumeAudioStreamDevice(sfxStream);
+        return sfxStream;
+    }
+
     void AppWindow::Shutdown()
     {
+        if (sfxStream) { SDL_DestroyAudioStream(sfxStream); sfxStream = nullptr; }
         if (renderer) { SDL_DestroyRenderer(renderer); renderer = nullptr; }
         if (window) { SDL_DestroyWindow(window); window = nullptr; }
         if (sdlInitialized) { SDL_Quit(); sdlInitialized = false; }

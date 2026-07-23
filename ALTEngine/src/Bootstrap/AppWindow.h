@@ -25,6 +25,14 @@ namespace ALTEngine::Bootstrap
         SDL_Window* Window() const { return window; }
         SDL_Renderer* Renderer() const { return renderer; }
 
+        // Lazily opens a single persistent audio stream matching the
+        // game's SFX format (8-bit unsigned PCM, mono, 11025Hz - per
+        // SoundEffects.cs's CreateWavHeader defaults and ReplaceWAV's
+        // format validation), reused across every SfxPlayer::Play call
+        // rather than opening/closing a device per sound. Returns
+        // nullptr if no window exists yet or the device couldn't open.
+        SDL_AudioStream* SfxAudioStream();
+
         // Finds the closest available fullscreen display mode to
         // (width, height) on the window's current display and applies
         // it. Returns false if no window exists yet or no matching mode
@@ -43,6 +51,7 @@ namespace ALTEngine::Bootstrap
 
         SDL_Window* window = nullptr;
         SDL_Renderer* renderer = nullptr;
+        SDL_AudioStream* sfxStream = nullptr;
         bool sdlInitialized = false;
     };
 }
