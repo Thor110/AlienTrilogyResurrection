@@ -30,6 +30,7 @@ namespace ALTEngine::Menu
         constexpr Color COLOR_GREEN{ 51, 255, 102, 255 };
         constexpr Color COLOR_GREEN_DIM{ 24, 130, 52, 255 };
         constexpr Color COLOR_HIGHLIGHT_BG{ 0, 40, 15, 255 };
+        constexpr Color COLOR_WHITE{ 255, 255, 255, 255 };
 
         std::optional<std::filesystem::path> ResolveGfxFile(const std::filesystem::path& gfxDir, const std::string& baseName)
         {
@@ -111,9 +112,18 @@ namespace ALTEngine::Menu
             DrawBitmapText(renderer, label, textX, textY, scale, COLOR_GREEN_DIM);
         }
 
-        void DrawColumn(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int selectedIndex, bool isActiveColumn,
-                         int x, int y, int rowHeight, int scale)
+        // Returns the column's width (fitted to its widest label + padding)
+        // so callers can pack the next column tightly against it, matching
+        // the reference layout where each column's width follows its own
+        // content (the Redefine column is visibly narrower than the
+        // device list, which is narrower than the main Options list).
+        int DrawColumn(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int selectedIndex,
+                        int x, int y, int rowHeight, int scale)
         {
+            int width = 0;
+            for (const auto& item : items) { width = std::max(width, TextWidth(item.label, scale)); }
+            width += scale * 8; // padding
+
             for (size_t i = 0; i < items.size(); ++i)
             {
                 int rowY = y + static_cast<int>(i) * rowHeight;
@@ -122,16 +132,31 @@ namespace ALTEngine::Menu
 
                 if (isSelected)
                 {
+                    // Filled bar only - no border. The original UI marks
+                    // the highlighted item with a solid background and
+                    // brighter text, nothing else.
                     SDL_SetRenderDrawColor(renderer, COLOR_HIGHLIGHT_BG.r, COLOR_HIGHLIGHT_BG.g, COLOR_HIGHLIGHT_BG.b, 255);
-                    SDL_FRect bar{ static_cast<float>(x), static_cast<float>(rowY), 220.0f, static_cast<float>(rowHeight - 4) };
+                    SDL_FRect bar{ static_cast<float>(x), static_cast<float>(rowY), static_cast<float>(width), static_cast<float>(rowHeight - 4) };
                     SDL_RenderFillRect(renderer, &bar);
-                    if (isActiveColumn)
-                    {
-                        SDL_SetRenderDrawColor(renderer, COLOR_GREEN.r, COLOR_GREEN.g, COLOR_GREEN.b, 255);
-                        SDL_RenderRect(renderer, &bar);
-                    }
                 }
 
+                DrawBitmapText(renderer, items[i].label, x + scale * 4, rowY + (rowHeight - TextHeight(scale)) / 2, scale, textColor);
+            }
+
+            return width;
+        }
+
+        // Main menu specifically: no highlight box at all - just text,
+        // green by default, white when selected. Distinct from DrawColumn
+        // (used for Options, which keeps its filled-bar highlight).
+        void DrawMainMenuList(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int selectedIndex,
+                               int x, int y, int rowHeight, int scale)
+        {
+            for (size_t i = 0; i < items.size(); ++i)
+            {
+                int rowY = y + static_cast<int>(i) * rowHeight;
+                bool isSelected = (static_cast<int>(i) == selectedIndex);
+                Color textColor = isSelected ? COLOR_WHITE : COLOR_GREEN;
                 DrawBitmapText(renderer, items[i].label, x + scale * 4, rowY + (rowHeight - TextHeight(scale)) / 2, scale, textColor);
             }
         }
@@ -267,20 +292,25 @@ namespace ALTEngine::Menu
                 DrawBackground(renderer, mainBg, mainBgW, mainBgH);
                 int windowW = 0, windowH = 0;
                 SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-                DrawColumn(renderer, root.children, mainPath[0], true, windowW / 2 - 100, windowH * 2 / 3, rowHeight, scale);
+                DrawMainMenuList(renderer, root.children, mainPath[0], windowW / 2 - 100, windowH * 2 / 3, rowHeight, scale);
             }
             else if (screen == Screen::Options)
             {
                 DrawBackground(renderer, optionsBg, optionsBgW, optionsBgH);
 
-                int columnX = scale * 8;
+                int windowW = 0, windowH = 0;
+                SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+                std::string title = "OPTIONS";
+                DrawBitmapText(renderer, title, (windowW - TextWidth(title, scale)) / 2, scale * 6, scale, COLOR_GREEN);
+
+                int columnTop = scale * 20;
+                int columnX = scale * 6;
                 const MenuNode* node = &optionsRoot;
                 for (size_t depth = 0; depth <= optionsPath.size(); ++depth)
                 {
                     if (node->children.empty()) { break; }
 
                     int selectedHere = (depth < optionsPath.size()) ? optionsPath[depth] : 0;
-                    bool isActive = (depth == optionsPath.size() - 1);
                     bool isPreview = (depth == optionsPath.size());
 
                     const MenuNode& highlighted = node->children[static_cast<size_t>(std::clamp(
@@ -288,13 +318,13 @@ namespace ALTEngine::Menu
 
                     if (highlighted.kind == MenuNodeKind::Slider && isPreview)
                     {
-                        DrawSlider(renderer, "Music", 8, columnX, scale * 8, scale);
-                        DrawSlider(renderer, "SFX", 8, columnX, scale * 8 + rowHeight, scale);
+                        DrawSlider(renderer, "Music", 8, columnX, columnTop, scale);
+                        DrawSlider(renderer, "SFX", 8, columnX, columnTop + rowHeight, scale);
                         break;
                     }
 
-                    DrawColumn(renderer, node->children, selectedHere, isActive, columnX, scale * 8, rowHeight, scale);
-                    columnX += 220 + scale * 4;
+                    int columnWidth = DrawColumn(renderer, node->children, selectedHere, columnX, columnTop, rowHeight, scale);
+                    columnX += columnWidth; // packed tight against the next column, matching the reference
 
                     if (depth >= optionsPath.size()) { break; }
                     node = &node->children[static_cast<size_t>(optionsPath[depth])];
@@ -302,9 +332,8 @@ namespace ALTEngine::Menu
                 }
 
                 int modelIndex = EffectiveModelIndex(optionsRoot, optionsPath);
-                int windowW = 0, windowH = 0;
                 SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-                DrawModelPlaceholder(renderer, modelIndex, columnX, scale * 8, windowW - columnX - scale * 8, 300, scale);
+                DrawModelPlaceholder(renderer, modelIndex, columnX, columnTop, windowW - columnX - scale * 8, 300, scale);
 
                 DrawBitmapText(renderer, "PRESS ESC TO GO BACK", scale * 8, windowH - rowHeight * 2, scale, COLOR_GREEN);
                 DrawBitmapText(renderer, "PRESS ENTER TO SELECT", scale * 8, windowH - rowHeight, scale, COLOR_GREEN);

@@ -1,0 +1,204 @@
+{
+    "_source": "Parsed programmatically from disc-list-edited.txt (Edward, 2026-07-23), not hand-transcribed. Verified: 133/133 file entries match a raw grep count of the source file.",
+    "rootFiles": [
+        "README.TXT",
+        "TRILOGY.ICO"
+    ],
+    "folders": {
+        "AVI": {
+            "copyAll": true,
+            "files": []
+        },
+        "GFX": {
+            "copyAll": false,
+            "files": [
+                "BONESHIP.BND",
+                "COLONY.BND",
+                "CREDITS.TXT",
+                "EXPLGFX.B16",
+                "FLAME.B16",
+                "FONT1GFX.BND",
+                "LEGAL.BND",
+                "LOGOSGFX.BND",
+                "MM9.B16",
+                "OBJ3D.BND",
+                "OPTGFX.BND",
+                "OPTOBJ.BND",
+                "PICKGFX.BND",
+                "PICKMOD.BND",
+                "PRISHOLD.BND",
+                "PULSE.B16",
+                "SHOTGUN.B16",
+                "SMART.B16"
+            ]
+        },
+        "LANGUAGE": {
+            "copyAll": true,
+            "files": []
+        },
+        "NME": {
+            "copyAll": false,
+            "files": [
+                "BAMBI.B16",
+                "BURSTER.B16",
+                "COLONIST.B16",
+                "DOG.B16",
+                "DOGCEIL.B16",
+                "EGGS.B16",
+                "FINGERS.B16",
+                "GUARD.B16",
+                "HANDLER.B16",
+                "HUGGER.B16",
+                "QUEEN.B16",
+                "SOLDIER.B16",
+                "SYNTH.B16",
+                "WAR.B16",
+                "WARCEIL.B16"
+            ]
+        },
+        "PALS": {
+            "copyAll": false,
+            "files": [
+                "BONESHIP.PAL",
+                "COLONY.PAL",
+                "LEGAL.PAL",
+                "LOGOSGFX.PAL",
+                "NEWFONT.PAL",
+                "PANEL.PAL",
+                "PRISHOLD.PAL"
+            ]
+        },
+        "SECT11": {
+            "copyAll": false,
+            "files": [
+                "111GFX.B16",
+                "112GFX.B16",
+                "113GFX.B16",
+                "114GFX.B16",
+                "115GFX.B16",
+                "121GFX.B16",
+                "122GFX.B16",
+                "131GFX.B16",
+                "L111LEV.MAP",
+                "L112LEV.MAP",
+                "L113LEV.MAP",
+                "L114LEV.MAP",
+                "L115LEV.MAP",
+                "L122LEV.MAP",
+                "L131LEV.MAP"
+            ]
+        },
+        "SECT12": {
+            "copyAll": false,
+            "files": [
+                "141GFX.B16",
+                "154GFX.B16",
+                "155GFX.B16",
+                "161GFX.B16",
+                "162GFX.B16",
+                "L141LEV.MAP",
+                "L154LEV.MAP",
+                "L155LEV.MAP",
+                "L161LEV.MAP",
+                "L162LEV.MAP"
+            ]
+        },
+        "SECT21": {
+            "copyAll": false,
+            "files": [
+                "211GFX.B16",
+                "212GFX.B16",
+                "213GFX.B16",
+                "222GFX.B16",
+                "231GFX.B16",
+                "232GFX.B16",
+                "L211LEV.MAP",
+                "L212LEV.MAP",
+                "L213LEV.MAP",
+                "L222LEV.MAP",
+                "L231LEV.MAP",
+                "L232LEV.MAP"
+            ]
+        },
+        "SECT22": {
+            "copyAll": false,
+            "files": [
+                "242GFX.B16",
+                "243GFX.B16",
+                "262GFX.B16",
+                "263GFX.B16",
+                "L242LEV.MAP",
+                "L243LEV.MAP",
+                "L262LEV.MAP",
+                "L263LEV.MAP"
+            ]
+        },
+        "SECT31": {
+            "copyAll": false,
+            "files": [
+                "311GFX.B16",
+                "321GFX.B16",
+                "322GFX.B16",
+                "323GFX.B16",
+                "324GFX.B16",
+                "325GFX.B16",
+                "331GFX.B16",
+                "L311LEV.MAP",
+                "L321LEV.MAP",
+                "L322LEV.MAP",
+                "L323LEV.MAP",
+                "L324LEV.MAP",
+                "L325LEV.MAP",
+                "L331LEV.MAP"
+            ]
+        },
+        "SECT32": {
+            "copyAll": false,
+            "files": [
+                "351GFX.B16",
+                "352GFX.B16",
+                "353GFX.B16",
+                "361GFX.B16",
+                "371GFX.B16",
+                "381GFX.B16",
+                "391GFX.B16",
+                "L351LEV.MAP",
+                "L352LEV.MAP",
+                "L353LEV.MAP",
+                "L371LEV.MAP",
+                "L381LEV.MAP",
+                "L391LEV.MAP"
+            ]
+        },
+        "SECT90": {
+            "copyAll": false,
+            "files": [
+                "900GFX.B16",
+                "901GFX.B16",
+                "902GFX.B16",
+                "903GFX.B16",
+                "904GFX.B16",
+                "905GFX.B16",
+                "906GFX.B16",
+                "907GFX.B16",
+                "908GFX.B16",
+                "909GFX.B16",
+                "L900LEV.MAP",
+                "L901LEV.MAP",
+                "L902LEV.MAP",
+                "L903LEV.MAP",
+                "L904LEV.MAP",
+                "L905LEV.MAP",
+                "L906LEV.MAP",
+                "L907LEV.MAP",
+                "L908LEV.MAP",
+                "L909LEV.MAP"
+            ]
+        },
+        "SFX": {
+            "copyAll": true,
+            "files": []
+        }
+    },
+    "_note": "CDDA audio (tracks 2-17, the games music) is NOT part of this file manifest - those are Redbook audio tracks on the disc itself, ripped separately via CddaRipper, not files copied via this list. TRILOGY.ICO added to rootFiles deliberately (not in the original curated list) so a fresh disc-install still satisfies GameLocator::Validate, which checks for it alongside CD/GFX/LEGAL.BND - present on every release regardless of the executable name (which varies, e.g. WTRILOGY.EXE on German releases)."
+}

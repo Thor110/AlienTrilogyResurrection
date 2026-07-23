@@ -27,6 +27,11 @@ namespace ALTEngine::Bootstrap
 
         LocateResult Locate();
 
+        // Just the config/exe-directory checks, no manual browser fallback.
+        // Used by main.cpp to decide whether disc detection/install is
+        // worth attempting before falling back to Locate()'s full flow.
+        std::optional<std::filesystem::path> TryAutoLocate() const;
+
         bool Validate(const std::filesystem::path& directory) const;
 
     private:

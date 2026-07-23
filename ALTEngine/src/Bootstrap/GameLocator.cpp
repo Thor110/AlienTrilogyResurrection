@@ -1,22 +1,14 @@
 #include "GameLocator.h"
 #include "DirectoryBrowser.h"
 #include "PlatformPaths.h"
+#include "FsUtil.h"
 
-#include <algorithm>
-#include <cctype>
 #include <string>
 
 namespace ALTEngine::Bootstrap
 {
     namespace
     {
-        std::string ToLower(std::string s)
-        {
-            std::transform(s.begin(), s.end(), s.begin(),
-                            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            return s;
-        }
-
         constexpr const char* CONFIG_KEY_GAME_DIR = "GameDirectory";
     }
 
@@ -27,37 +19,34 @@ namespace ALTEngine::Bootstrap
 
     std::optional<std::filesystem::path> GameLocator::FindEntry(const std::filesystem::path& directory, const std::string& name) const
     {
-        std::error_code ec;
-        if (!std::filesystem::exists(directory, ec) || !std::filesystem::is_directory(directory, ec))
-        {
-            return std::nullopt;
-        }
-
-        std::string target = ToLower(name);
-        for (const auto& entry : std::filesystem::directory_iterator(directory, ec))
-        {
-            if (ToLower(entry.path().filename().string()) == target)
-            {
-                return entry.path();
-            }
-        }
-        return std::nullopt;
+        return FindEntryCaseInsensitive(directory, name);
     }
 
     bool GameLocator::HasEntry(const std::filesystem::path& directory, const std::string& name) const
     {
-        return FindEntry(directory, name).has_value();
+        return HasEntryCaseInsensitive(directory, name);
     }
 
     bool GameLocator::Validate(const std::filesystem::path& directory) const
     {
-        bool hasExecutable = HasEntry(directory, "TRILOGY.EXE") || HasEntry(directory, "RUN.EXE");
-        if (!hasExecutable) { return false; }
+        // TRILOGY.ICO is present on every release; the executable name
+        // isn't (e.g. the German release ships WTRILOGY.EXE, not
+        // TRILOGY.EXE) - so check the icon, not the exe.
+        if (!HasEntry(directory, "TRILOGY.ICO")) { return false; }
 
         auto cdDir = FindEntry(directory, "CD");
         if (!cdDir.has_value()) { return false; }
 
-        return HasEntry(*cdDir, "GFX");
+        auto gfxDir = FindEntry(*cdDir, "GFX");
+        if (!gfxDir.has_value()) { return false; }
+
+        // Specifically LEGAL.BND, not the .B16/.16 fallback other GFX
+        // lookups use - not every file has a compressed B16 counterpart
+        // (some do, lower quality matching the PS1/Saturn versions - e.g.
+        // enemy sprites - but that's inconsistent per-file, not something
+        // to rely on here), and LEGAL.BND specifically is confirmed
+        // present on every release.
+        return HasEntry(*gfxDir, "LEGAL.BND");
     }
 
     std::optional<std::filesystem::path> GameLocator::TryConfigPath() const
@@ -74,6 +63,13 @@ namespace ALTEngine::Bootstrap
     {
         std::filesystem::path here = ExecutableDirectory();
         if (Validate(here)) { return here; }
+        return std::nullopt;
+    }
+
+    std::optional<std::filesystem::path> GameLocator::TryAutoLocate() const
+    {
+        if (auto fromConfig = TryConfigPath()) { return fromConfig; }
+        if (auto fromExeDir = TryExecutableDirectory()) { return fromExeDir; }
         return std::nullopt;
     }
 

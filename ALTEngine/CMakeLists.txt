@@ -30,6 +30,9 @@ add_library(ALTFormats STATIC
     src/Formats/SplashImageLoader.cpp
     src/Formats/BxParser.cpp
     src/Formats/BndTextureLoader.cpp
+    src/Formats/DiscManifest.cpp
+    src/Formats/Installer.cpp
+    src/Formats/CddaRipper.cpp
 )
 target_include_directories(ALTFormats PUBLIC src)
 target_link_libraries(ALTFormats PRIVATE nlohmann_json::nlohmann_json)
@@ -73,6 +76,7 @@ add_executable(ALTEngine
     src/Bootstrap/Config.cpp
     src/Bootstrap/ImageDisplay.cpp
     src/Bootstrap/AppWindow.cpp
+    src/Bootstrap/DiscLocator.cpp
     src/Video/VideoPlayer.cpp
     src/Menu/MenuTree.cpp
     src/Menu/MenuNavigation.cpp

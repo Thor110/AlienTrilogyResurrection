@@ -3,11 +3,15 @@
 
 #include "Bootstrap/AppWindow.h"
 #include "Bootstrap/Config.h"
+#include "Bootstrap/DiscLocator.h"
 #include "Bootstrap/GameLocator.h"
 #include "Bootstrap/ImageDisplay.h"
 #include "Bootstrap/Localization.h"
 #include "Bootstrap/PlatformPaths.h"
 #include "Bootstrap/RenderSettings.h"
+#include "Formats/CddaRipper.h"
+#include "Formats/DiscManifest.h"
+#include "Formats/Installer.h"
 #include "Formats/PatchLoader.h"
 #include "Formats/PatchRunner.h"
 #include "Formats/SplashImageLoader.h"
@@ -151,6 +155,82 @@ namespace
         }
         return true;
     }
+
+    // Runs a fresh install from a located disc: copies the file manifest,
+    // then rips the 16 CDDA music tracks. File copying is well-tested;
+    // CDDA ripping (Windows raw CD-ROM IOCTLs) is NOT - see CddaRipper.h.
+    // A CDDA failure is logged but doesn't fail the whole install, since
+    // the game is playable without music, just quieter.
+    bool InstallFromDisc(const std::filesystem::path& discRoot, const std::filesystem::path& destination)
+    {
+        std::cout << "Installing from disc (" << discRoot.string() << ") to " << destination.string() << "...\n";
+
+        std::filesystem::path manifestPath = ExecutableDirectory() / "data" / "DiscFileManifest.json";
+        DiscManifest manifest;
+        try
+        {
+            manifest = DiscManifestLoader::Load(manifestPath);
+        }
+        catch (const std::exception& e)
+        {
+            std::cout << "Failed to load " << manifestPath.string() << ": " << e.what() << "\n";
+            return false;
+        }
+
+        InstallResult copyResult = Installer::CopyFiles(discRoot, destination, manifest,
+            [](const InstallProgress& p) {
+                if (p.filesCompleted % 25 == 0 || p.filesCompleted == p.filesTotal)
+                {
+                    std::cout << "  [" << p.filesCompleted << "/" << p.filesTotal << "] " << p.currentFile << "\n";
+                }
+            });
+
+        if (!copyResult.success)
+        {
+            std::cout << "Install incomplete - " << copyResult.failedFiles.size() << " file(s) failed:\n";
+            for (const auto& f : copyResult.failedFiles) { std::cout << "  " << f << "\n"; }
+            return false;
+        }
+        std::cout << "File copy complete.\n";
+
+        // CDDA rip - drive letter only (e.g. "D:"), not the trailing
+        // backslash discRoot carries.
+        std::string driveLetter = discRoot.string().substr(0, 2);
+        std::filesystem::path musicDir = destination / "CD" / "MUSIC";
+        std::error_code ec;
+        std::filesystem::create_directories(musicDir, ec);
+
+        try
+        {
+            std::vector<CddaTrack> tracks = CddaRipper::ReadToc(driveLetter);
+            int ripped = 0, failed = 0;
+            for (const auto& track : tracks)
+            {
+                if (!track.isAudio) { continue; } // track 1 is the data track
+                try
+                {
+                    char nameBuf[32];
+                    std::snprintf(nameBuf, sizeof(nameBuf), "track%02d.wav", track.trackNumber);
+                    std::cout << "  Ripping " << nameBuf << "...\n";
+                    CddaRipper::RipTrackToWav(driveLetter, track, musicDir / nameBuf);
+                    ++ripped;
+                }
+                catch (const std::exception& e)
+                {
+                    std::cout << "  Failed to rip track " << track.trackNumber << ": " << e.what() << "\n";
+                    ++failed;
+                }
+            }
+            std::cout << "CDDA rip: " << ripped << " tracks ripped, " << failed << " failed.\n";
+        }
+        catch (const std::exception& e)
+        {
+            std::cout << "CDDA rip failed entirely (TOC read): " << e.what() << "\n";
+            std::cout << "Continuing without music - this can be retried later.\n";
+        }
+
+        return true;
+    }
 }
 
 int main(int, char**)
@@ -162,6 +242,20 @@ int main(int, char**)
 
     GameLocator locator(config);
     std::cout << "Locating install directory...\n";
+
+    if (!locator.TryAutoLocate().has_value())
+    {
+        DiscLocateResult disc = DiscLocator::FindDisc();
+        if (disc.found)
+        {
+            std::filesystem::path destination = ExecutableDirectory() / "GameData";
+            std::cout << "Found disc at " << disc.discRoot.string() << "\n";
+            if (InstallFromDisc(disc.discRoot, destination))
+            {
+                config.Set("GameDirectory", destination.string());
+            }
+        }
+    }
 
     LocateResult result = locator.Locate();
     if (!result.success)
