@@ -1,5 +1,5 @@
 {
-    "_note": "sectorFolder names for 'part 2' of each chapter (SECT12/SECT22/SECT32) are an inferred guess from the SECT<chapter><part> pattern - source notes gave 'SECT11' for every part of every chapter, which looks like a copy/paste slip. Verify against the actual disc before relying on this.",
+    "_note": "sectorFolder names for 'part 2' of each chapter (SECT12/SECT22/SECT32) are an inferred guess from the SECT<chapter><part> pattern - source notes gave 'SECT11' for every part of every chapter, which looks like a copy/paste slip. Verify against the actual disc before relying on this. Level entries have no paletteFile field - level graphics (*GFX.B16) use embedded per-texture palettes (CL sections, see BndTextureLoader), not external .PAL files. The only real .PAL files on disc are the ones already listed in DiscFileManifest.json (BONESHIP/COLONY/LEGAL/LOGOSGFX/PRISHOLD/NEWFONT/PANEL) - no LEV*.PAL files exist.",
     "chapters": [
         {
             "chapter": 1,
@@ -15,44 +15,37 @@
                         {
                             "code": "111",
                             "mapFile": "L111LEV.MAP",
-                            "gfxFile": "111GFX.B16",
-                            "paletteFile": "PALS/LEV111.PAL"
+                            "gfxFile": "111GFX.B16"
                         },
                         {
                             "code": "112",
                             "mapFile": "L112LEV.MAP",
-                            "gfxFile": "112GFX.B16",
-                            "paletteFile": "PALS/LEV112.PAL"
+                            "gfxFile": "112GFX.B16"
                         },
                         {
                             "code": "113",
                             "mapFile": "L113LEV.MAP",
-                            "gfxFile": "113GFX.B16",
-                            "paletteFile": "PALS/LEV113.PAL"
+                            "gfxFile": "113GFX.B16"
                         },
                         {
                             "code": "114",
                             "mapFile": "L114LEV.MAP",
-                            "gfxFile": "114GFX.B16",
-                            "paletteFile": "PALS/LEV114.PAL"
+                            "gfxFile": "114GFX.B16"
                         },
                         {
                             "code": "115",
                             "mapFile": "L115LEV.MAP",
-                            "gfxFile": "115GFX.B16",
-                            "paletteFile": "PALS/LEV115.PAL"
+                            "gfxFile": "115GFX.B16"
                         },
                         {
                             "code": "122",
                             "mapFile": "L122LEV.MAP",
-                            "gfxFile": "122GFX.B16",
-                            "paletteFile": "PALS/LEV122.PAL"
+                            "gfxFile": "122GFX.B16"
                         },
                         {
                             "code": "131",
                             "mapFile": "L131LEV.MAP",
-                            "gfxFile": "131GFX.B16",
-                            "paletteFile": "PALS/LEV131.PAL"
+                            "gfxFile": "131GFX.B16"
                         }
                     ]
                 },
@@ -63,32 +56,27 @@
                         {
                             "code": "141",
                             "mapFile": "L141LEV.MAP",
-                            "gfxFile": "141GFX.B16",
-                            "paletteFile": "PALS/LEV141.PAL"
+                            "gfxFile": "141GFX.B16"
                         },
                         {
                             "code": "154",
                             "mapFile": "L154LEV.MAP",
-                            "gfxFile": "154GFX.B16",
-                            "paletteFile": "PALS/LEV154.PAL"
+                            "gfxFile": "154GFX.B16"
                         },
                         {
                             "code": "155",
                             "mapFile": "L155LEV.MAP",
-                            "gfxFile": "155GFX.B16",
-                            "paletteFile": "PALS/LEV155.PAL"
+                            "gfxFile": "155GFX.B16"
                         },
                         {
                             "code": "161",
                             "mapFile": "L161LEV.MAP",
-                            "gfxFile": "161GFX.B16",
-                            "paletteFile": "PALS/LEV161.PAL"
+                            "gfxFile": "161GFX.B16"
                         },
                         {
                             "code": "162",
                             "mapFile": "L162LEV.MAP",
-                            "gfxFile": "162GFX.B16",
-                            "paletteFile": "PALS/LEV162.PAL"
+                            "gfxFile": "162GFX.B16"
                         }
                     ]
                 }
@@ -108,38 +96,32 @@
                         {
                             "code": "211",
                             "mapFile": "L211LEV.MAP",
-                            "gfxFile": "211GFX.B16",
-                            "paletteFile": "PALS/LEV211.PAL"
+                            "gfxFile": "211GFX.B16"
                         },
                         {
                             "code": "212",
                             "mapFile": "L212LEV.MAP",
-                            "gfxFile": "212GFX.B16",
-                            "paletteFile": "PALS/LEV212.PAL"
+                            "gfxFile": "212GFX.B16"
                         },
                         {
                             "code": "213",
                             "mapFile": "L213LEV.MAP",
-                            "gfxFile": "213GFX.B16",
-                            "paletteFile": "PALS/LEV213.PAL"
+                            "gfxFile": "213GFX.B16"
                         },
                         {
                             "code": "222",
                             "mapFile": "L222LEV.MAP",
-                            "gfxFile": "222GFX.B16",
-                            "paletteFile": "PALS/LEV222.PAL"
+                            "gfxFile": "222GFX.B16"
                         },
                         {
                             "code": "231",
                             "mapFile": "L231LEV.MAP",
-                            "gfxFile": "231GFX.B16",
-                            "paletteFile": "PALS/LEV231.PAL"
+                            "gfxFile": "231GFX.B16"
                         },
                         {
                             "code": "232",
                             "mapFile": "L232LEV.MAP",
-                            "gfxFile": "232GFX.B16",
-                            "paletteFile": "PALS/LEV232.PAL"
+                            "gfxFile": "232GFX.B16"
                         }
                     ]
                 },
@@ -150,26 +132,22 @@
                         {
                             "code": "242",
                             "mapFile": "L242LEV.MAP",
-                            "gfxFile": "242GFX.B16",
-                            "paletteFile": "PALS/LEV242.PAL"
+                            "gfxFile": "242GFX.B16"
                         },
                         {
                             "code": "243",
                             "mapFile": "L243LEV.MAP",
-                            "gfxFile": "243GFX.B16",
-                            "paletteFile": "PALS/LEV243.PAL"
+                            "gfxFile": "243GFX.B16"
                         },
                         {
                             "code": "262",
                             "mapFile": "L262LEV.MAP",
-                            "gfxFile": "262GFX.B16",
-                            "paletteFile": "PALS/LEV262.PAL"
+                            "gfxFile": "262GFX.B16"
                         },
                         {
                             "code": "263",
                             "mapFile": "L263LEV.MAP",
-                            "gfxFile": "263GFX.B16",
-                            "paletteFile": "PALS/LEV263.PAL"
+                            "gfxFile": "263GFX.B16"
                         }
                     ]
                 }
@@ -189,44 +167,37 @@
                         {
                             "code": "311",
                             "mapFile": "L311LEV.MAP",
-                            "gfxFile": "311GFX.B16",
-                            "paletteFile": "PALS/LEV311.PAL"
+                            "gfxFile": "311GFX.B16"
                         },
                         {
                             "code": "321",
                             "mapFile": "L321LEV.MAP",
-                            "gfxFile": "321GFX.B16",
-                            "paletteFile": "PALS/LEV321.PAL"
+                            "gfxFile": "321GFX.B16"
                         },
                         {
                             "code": "322",
                             "mapFile": "L322LEV.MAP",
-                            "gfxFile": "322GFX.B16",
-                            "paletteFile": "PALS/LEV322.PAL"
+                            "gfxFile": "322GFX.B16"
                         },
                         {
                             "code": "323",
                             "mapFile": "L323LEV.MAP",
-                            "gfxFile": "323GFX.B16",
-                            "paletteFile": "PALS/LEV323.PAL"
+                            "gfxFile": "323GFX.B16"
                         },
                         {
                             "code": "324",
                             "mapFile": "L324LEV.MAP",
-                            "gfxFile": "324GFX.B16",
-                            "paletteFile": "PALS/LEV324.PAL"
+                            "gfxFile": "324GFX.B16"
                         },
                         {
                             "code": "325",
                             "mapFile": "L325LEV.MAP",
-                            "gfxFile": "325GFX.B16",
-                            "paletteFile": "PALS/LEV325.PAL"
+                            "gfxFile": "325GFX.B16"
                         },
                         {
                             "code": "331",
                             "mapFile": "L331LEV.MAP",
-                            "gfxFile": "331GFX.B16",
-                            "paletteFile": "PALS/LEV331.PAL"
+                            "gfxFile": "331GFX.B16"
                         }
                     ]
                 },
@@ -237,44 +208,37 @@
                         {
                             "code": "351",
                             "mapFile": "L351LEV.MAP",
-                            "gfxFile": "351GFX.B16",
-                            "paletteFile": "PALS/LEV351.PAL"
+                            "gfxFile": "351GFX.B16"
                         },
                         {
                             "code": "352",
                             "mapFile": "L352LEV.MAP",
-                            "gfxFile": "352GFX.B16",
-                            "paletteFile": "PALS/LEV352.PAL"
+                            "gfxFile": "352GFX.B16"
                         },
                         {
                             "code": "353",
                             "mapFile": "L353LEV.MAP",
-                            "gfxFile": "353GFX.B16",
-                            "paletteFile": "PALS/LEV353.PAL"
+                            "gfxFile": "353GFX.B16"
                         },
                         {
                             "code": "361",
                             "mapFile": "L361LEV.MAP",
-                            "gfxFile": "361GFX.B16",
-                            "paletteFile": "PALS/LEV361.PAL"
+                            "gfxFile": "361GFX.B16"
                         },
                         {
                             "code": "371",
                             "mapFile": "L371LEV.MAP",
-                            "gfxFile": "371GFX.B16",
-                            "paletteFile": "PALS/LEV371.PAL"
+                            "gfxFile": "371GFX.B16"
                         },
                         {
                             "code": "381",
                             "mapFile": "L381LEV.MAP",
-                            "gfxFile": "381GFX.B16",
-                            "paletteFile": "PALS/LEV381.PAL"
+                            "gfxFile": "381GFX.B16"
                         },
                         {
                             "code": "391",
                             "mapFile": "L391LEV.MAP",
-                            "gfxFile": "391GFX.B16",
-                            "paletteFile": "PALS/LEV391.PAL"
+                            "gfxFile": "391GFX.B16"
                         }
                     ]
                 }
@@ -287,62 +251,52 @@
             {
                 "code": "900",
                 "mapFile": "L900LEV.MAP",
-                "gfxFile": "900GFX.B16",
-                "paletteFile": "PALS/LEV900.PAL"
+                "gfxFile": "900GFX.B16"
             },
             {
                 "code": "901",
                 "mapFile": "L901LEV.MAP",
-                "gfxFile": "901GFX.B16",
-                "paletteFile": "PALS/LEV901.PAL"
+                "gfxFile": "901GFX.B16"
             },
             {
                 "code": "902",
                 "mapFile": "L902LEV.MAP",
-                "gfxFile": "902GFX.B16",
-                "paletteFile": "PALS/LEV902.PAL"
+                "gfxFile": "902GFX.B16"
             },
             {
                 "code": "903",
                 "mapFile": "L903LEV.MAP",
-                "gfxFile": "903GFX.B16",
-                "paletteFile": "PALS/LEV903.PAL"
+                "gfxFile": "903GFX.B16"
             },
             {
                 "code": "904",
                 "mapFile": "L904LEV.MAP",
-                "gfxFile": "904GFX.B16",
-                "paletteFile": "PALS/LEV904.PAL"
+                "gfxFile": "904GFX.B16"
             },
             {
                 "code": "905",
                 "mapFile": "L905LEV.MAP",
-                "gfxFile": "905GFX.B16",
-                "paletteFile": "PALS/LEV905.PAL"
+                "gfxFile": "905GFX.B16"
             },
             {
                 "code": "906",
                 "mapFile": "L906LEV.MAP",
-                "gfxFile": "906GFX.B16",
-                "paletteFile": "PALS/LEV906.PAL"
+                "gfxFile": "906GFX.B16"
             },
             {
                 "code": "907",
                 "mapFile": "L907LEV.MAP",
-                "gfxFile": "907GFX.B16",
-                "paletteFile": "PALS/LEV907.PAL"
+                "gfxFile": "907GFX.B16"
             },
             {
                 "code": "908",
                 "mapFile": "L908LEV.MAP",
-                "gfxFile": "908GFX.B16",
-                "paletteFile": "PALS/LEV908.PAL"
+                "gfxFile": "908GFX.B16"
             },
             {
                 "code": "909",
                 "mapFile": "L909LEV.MAP",
-                "gfxFile": "909GFX.B16",
-                "paletteFile": "PALS/LEV909.PAL"
+                "gfxFile": "909GFX.B16"
             }
         ],
         "note": "list given as L900-L909 'etc' - extend as more codes are confirmed"
