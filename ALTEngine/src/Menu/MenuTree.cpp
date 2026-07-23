@@ -63,8 +63,15 @@ namespace ALTEngine::Menu
         MenuNode Controls()
         {
             return List("Controls", {
-                List("Keyboard", { Action("Redefine", ModelIndex::Keyboard) }),
-                List("Mouse", { Action("Redefine", ModelIndex::Mouse) }),
+                // modelIndex on the List node itself (not the Redefine
+                // child) - EffectiveModelIndex takes the deepest SET
+                // index along the current path, so this shows the
+                // correct model the moment Keyboard/Mouse is highlighted,
+                // not only after pressing Enter into Redefine. Matches
+                // the reference images, where highlighting alone changes
+                // the background model (Edward, 2026).
+                List("Keyboard", { Action("Redefine") }, ModelIndex::Keyboard),
+                List("Mouse", { Action("Redefine") }, ModelIndex::Mouse),
                 Action("Joystick", ModelIndex::Joystick),
                 // Gravis Grip and Gravis Pad both use Multitap (index 3) -
                 // Edward: both peripherals visually look like a multitap.

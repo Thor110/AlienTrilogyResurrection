@@ -46,10 +46,17 @@ namespace ALTEngine::Formats
                 break;
             }
 
-            // ExportModel flips V at OBJ-write time ("1 - uv.Item2");
-            // doing it here instead since these ARE the final GPU-ready
-            // values, not intermediates something downstream will flip.
-            for (auto& uv : uvs) { uv.second = 1.0f - uv.second; }
+            // NOTE: ModelRenderer.cs applies a "1 - v" flip here, but
+            // only at OBJ-text-export time - every instance of it in the
+            // source is explicitly commented "Flip Y for OBJ", meaning
+            // it's a quirk of the .obj file format's V-axis convention,
+            // not a property of the "correct" UV values themselves.
+            // D3D/Vulkan/SDL_GPU already treat V=0 as the texture's top
+            // row, which is exactly what baseUvs already encodes
+            // (rect.y/TEX_SIZE = top of the rect in image space) - no
+            // flip needed here. Applying the OBJ-specific flip anyway
+            // was the bug behind the upside-down/scrambled texture
+            // mapping (Edward, 2026).
             return uvs;
         }
     }
