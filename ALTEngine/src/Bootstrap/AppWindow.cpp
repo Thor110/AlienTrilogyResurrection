@@ -42,6 +42,28 @@ namespace ALTEngine::Bootstrap
         return true;
     }
 
+    bool AppWindow::ApplyFullscreenResolution(int width, int height)
+    {
+        if (!window) { return false; }
+
+        SDL_DisplayID display = SDL_GetDisplayForWindow(window);
+        if (display == 0) { return false; }
+
+        SDL_DisplayMode closest{};
+        if (!SDL_GetClosestFullscreenDisplayMode(display, width, height, 0.0f, false, &closest))
+        {
+            SDL_Log("AppWindow::ApplyFullscreenResolution: no matching mode for %dx%d", width, height);
+            return false;
+        }
+
+        if (!SDL_SetWindowFullscreenMode(window, &closest))
+        {
+            SDL_Log("AppWindow::ApplyFullscreenResolution: SDL_SetWindowFullscreenMode failed: %s", SDL_GetError());
+            return false;
+        }
+        return true;
+    }
+
     void AppWindow::Shutdown()
     {
         if (renderer) { SDL_DestroyRenderer(renderer); renderer = nullptr; }

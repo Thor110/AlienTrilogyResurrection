@@ -5,6 +5,7 @@
 
 #include "../Bootstrap/Localization.h"
 #include "../Bootstrap/RenderSettings.h"
+#include "../Bootstrap/ResolutionSettings.h"
 
 namespace ALTEngine::Menu
 {
@@ -24,6 +25,7 @@ namespace ALTEngine::Menu
         static MenuResult Run(
             const std::filesystem::path& cdDirectory,
             ALTEngine::Bootstrap::RenderSettings& renderSettings,
+            ALTEngine::Bootstrap::ResolutionSettings& resolutionSettings,
             ALTEngine::Bootstrap::Language& language);
     };
 }

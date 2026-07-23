@@ -88,12 +88,19 @@ namespace ALTEngine::Menu
             });
         }
 
-        MenuNode RenderQuality()
+        MenuNode Graphics(const std::vector<std::string>& resolutionLabels)
         {
-            // New - not in the original game. Ties to RenderSettings.
-            return List("Render Quality", {
-                Action("Original"),
-                Action("Smoothed"),
+            // New - not in the original game. "Quality" ties to
+            // RenderSettings; "Resolution" ties to ResolutionSettings.
+            std::vector<MenuNode> resolutionChildren;
+            for (const auto& label : resolutionLabels) { resolutionChildren.push_back(Action(label)); }
+
+            return List("Graphics", {
+                List("Quality", {
+                    Action("Original"),
+                    Action("Smoothed"),
+                }),
+                List("Resolution", std::move(resolutionChildren)),
             });
         }
 
@@ -123,7 +130,7 @@ namespace ALTEngine::Menu
             return n;
         }
 
-        MenuNode Options()
+        MenuNode Options(const std::vector<std::string>& resolutionLabels)
         {
             // modelIndex Computer here is inherited by every child that
             // doesn't set its own - matches the reference images, where
@@ -134,20 +141,20 @@ namespace ALTEngine::Menu
                 Controls(),
                 Difficulty(),
                 CameraSway(),
-                RenderQuality(),
+                Graphics(resolutionLabels),
                 LanguageMenu(),
                 Credits(),
             }, ModelIndex::Computer);
         }
     }
 
-    MenuNode BuildMainMenuTree()
+    MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels)
     {
         return List("Main Menu", {
             Action("Start Game"),
             Action("Multiplayer"),
             Action("Load Game"),
-            Options(),
+            Options(resolutionLabels),
         });
     }
 }

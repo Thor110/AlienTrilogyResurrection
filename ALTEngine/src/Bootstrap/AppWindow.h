@@ -25,6 +25,13 @@ namespace ALTEngine::Bootstrap
         SDL_Window* Window() const { return window; }
         SDL_Renderer* Renderer() const { return renderer; }
 
+        // Finds the closest available fullscreen display mode to
+        // (width, height) on the window's current display and applies
+        // it. Returns false if no window exists yet or no matching mode
+        // was found. Safe to call repeatedly (e.g. every time the
+        // Resolution menu selection changes).
+        bool ApplyFullscreenResolution(int width, int height);
+
         // Call once, at actual program exit - not between boot stages.
         void Shutdown();
 

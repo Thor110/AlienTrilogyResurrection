@@ -9,6 +9,7 @@
 #include "Bootstrap/Localization.h"
 #include "Bootstrap/PlatformPaths.h"
 #include "Bootstrap/RenderSettings.h"
+#include "Bootstrap/ResolutionSettings.h"
 #include "Formats/CddaRipper.h"
 #include "Formats/DiscManifest.h"
 #include "Formats/Installer.h"
@@ -292,7 +293,8 @@ int main(int, char**)
     }
 
     RenderSettings renderSettings(config);
-    MenuResult menuResult = MenuController::Run(cdDirectory, renderSettings, language);
+    ResolutionSettings resolutionSettings(config);
+    MenuResult menuResult = MenuController::Run(cdDirectory, renderSettings, resolutionSettings, language);
     if (menuResult.windowClosed)
     {
         std::cout << "Boot window closed. Aborting.\n";

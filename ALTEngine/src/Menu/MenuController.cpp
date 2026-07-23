@@ -3,10 +3,12 @@
 #include "MenuNavigation.h"
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
+#include "../Bootstrap/ResolutionSettings.h"
 #include "../Formats/SplashImageLoader.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
+#include <cstdio>
 #include <optional>
 #include <string>
 #include <vector>
@@ -19,6 +21,7 @@ namespace ALTEngine::Menu
     using ALTEngine::Bootstrap::Language;
     using ALTEngine::Bootstrap::RenderFidelity;
     using ALTEngine::Bootstrap::RenderSettings;
+    using ALTEngine::Bootstrap::ResolutionSettings;
     using ALTEngine::Bootstrap::TextHeight;
     using ALTEngine::Bootstrap::TextWidth;
     using ALTEngine::Formats::SplashImage;
@@ -31,6 +34,40 @@ namespace ALTEngine::Menu
         constexpr Color COLOR_GREEN_DIM{ 24, 130, 52, 255 };
         constexpr Color COLOR_HIGHLIGHT_BG{ 0, 40, 15, 255 };
         constexpr Color COLOR_WHITE{ 255, 255, 255, 255 };
+
+        // Queries the real available fullscreen display modes for the
+        // window's current display, deduped by resolution (ignoring
+        // refresh rate - the Resolution menu picks a size, not a
+        // specific refresh rate) and sorted widest-first. Falls back to
+        // an empty list (Resolution submenu just has no options) if
+        // nothing could be queried, rather than failing the whole menu.
+        std::vector<std::string> QueryResolutionLabels(SDL_Window* window)
+        {
+            std::vector<std::string> labels;
+            if (!window) { return labels; }
+
+            SDL_DisplayID display = SDL_GetDisplayForWindow(window);
+            if (display == 0) { return labels; }
+
+            int count = 0;
+            SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(display, &count);
+            if (!modes) { return labels; }
+
+            std::vector<std::pair<int, int>> seen;
+            for (int i = 0; i < count; ++i)
+            {
+                int w = modes[i]->w, h = modes[i]->h;
+                if (std::find(seen.begin(), seen.end(), std::make_pair(w, h)) == seen.end())
+                {
+                    seen.push_back({ w, h });
+                }
+            }
+            SDL_free(modes);
+
+            std::sort(seen.begin(), seen.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+            for (const auto& [w, h] : seen) { labels.push_back(std::to_string(w) + "x" + std::to_string(h)); }
+            return labels;
+        }
 
         std::optional<std::filesystem::path> ResolveGfxFile(const std::filesystem::path& gfxDir, const std::string& baseName)
         {
@@ -176,16 +213,27 @@ namespace ALTEngine::Menu
         }
 
         // Applies the meaning of an Action leaf once "Toggled" - only
-        // Render Quality and Language actually have somewhere to persist
-        // to right now (RenderSettings/Language). Camera Sway/Difficulty
-        // selections are visually confirmed (highlighted) but not backed
-        // by a real setting yet - no gameplay system exists to apply them
-        // to.
-        void ApplyLeafAction(const std::string& parentLabel, const std::string& leafLabel, RenderSettings& renderSettings, Language& language)
+        // Quality, Resolution, and Language actually have somewhere to
+        // persist to right now. Camera Sway/Difficulty selections are
+        // visually confirmed (highlighted) but not backed by a real
+        // setting yet - no gameplay system exists to apply them to.
+        void ApplyLeafAction(const std::string& parentLabel, const std::string& leafLabel,
+                              RenderSettings& renderSettings, ResolutionSettings& resolutionSettings, Language& language)
         {
-            if (parentLabel == "Render Quality")
+            if (parentLabel == "Quality")
             {
                 renderSettings.Set(leafLabel == "Smoothed" ? RenderFidelity::Smoothed : RenderFidelity::Original);
+            }
+            else if (parentLabel == "Resolution")
+            {
+                int width = 0, height = 0;
+                if (std::sscanf(leafLabel.c_str(), "%dx%d", &width, &height) == 2 && width > 0 && height > 0)
+                {
+                    if (AppWindow::Instance().ApplyFullscreenResolution(width, height))
+                    {
+                        resolutionSettings.Set(width, height);
+                    }
+                }
             }
             else if (parentLabel == "Language")
             {
@@ -200,6 +248,7 @@ namespace ALTEngine::Menu
     MenuResult MenuController::Run(
         const std::filesystem::path& cdDirectory,
         RenderSettings& renderSettings,
+        ResolutionSettings& resolutionSettings,
         Language& language)
     {
         AppWindow& app = AppWindow::Instance();
@@ -209,11 +258,20 @@ namespace ALTEngine::Menu
         }
         SDL_Renderer* renderer = app.Renderer();
 
+        // Apply a previously-saved resolution, if any - otherwise leave
+        // the desktop's current mode alone.
+        if (auto saved = resolutionSettings.Get())
+        {
+            app.ApplyFullscreenResolution(saved->first, saved->second);
+        }
+
+        std::vector<std::string> resolutionLabels = QueryResolutionLabels(app.Window());
+
         int mainBgW = 0, mainBgH = 0, optionsBgW = 0, optionsBgH = 0;
         SDL_Texture* mainBg = LoadBackgroundTexture(cdDirectory, renderer, 0, mainBgW, mainBgH);
         SDL_Texture* optionsBg = LoadBackgroundTexture(cdDirectory, renderer, 1, optionsBgW, optionsBgH);
 
-        MenuNode root = BuildMainMenuTree();
+        MenuNode root = BuildMainMenuTree(resolutionLabels);
         const MenuNode& optionsRoot = root.children[3]; // "Options"
 
         enum class Screen { MainMenu, Options, Credits };
@@ -267,7 +325,7 @@ namespace ALTEngine::Menu
 
                             EnterResult r = Enter(optionsRoot, optionsPath);
                             if (r == EnterResult::EnteredCredits) { screen = Screen::Credits; }
-                            else if (r == EnterResult::Toggled) { ApplyLeafAction(parentLabel, leafLabel, renderSettings, language); }
+                            else if (r == EnterResult::Toggled) { ApplyLeafAction(parentLabel, leafLabel, renderSettings, resolutionSettings, language); }
                         }
                         break;
                     case SDLK_ESCAPE:
