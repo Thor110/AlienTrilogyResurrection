@@ -15,6 +15,8 @@
 #include "Menu/MenuController.h"
 #include "Screens/GameplayScreen.h"
 #include "Screens/MissionBriefingScreen.h"
+#include "Screens/MultiplayerScreens.h"
+#include "Screens/SaveSlotScreen.h"
 #include "Video/OverrideVideo.h"
 #include "Video/VideoPlayer.h"
 
@@ -186,43 +188,113 @@ int main(int, char**)
 
     RenderSettings renderSettings(config);
     ResolutionSettings resolutionSettings(config);
-    MenuResult menuResult = MenuController::Run(cdDirectory, renderSettings, resolutionSettings, language);
-    if (menuResult.windowClosed)
-    {
-        std::cout << "Boot window closed. Aborting.\n";
-        AppWindow::Instance().Shutdown();
-        PauseBeforeExit();
-        return 1;
-    }
-    std::cout << "Menu selection: " << menuResult.action << "\n";
 
-    if (menuResult.action == "Start Game")
+    while (true)
     {
-        // Hardcoded to the first level for now - no level-select flow
-        // exists (there never was one in the original game either -
-        // levels just progress, with save/load presumably selecting a
-        // level once that exists). Wire this up to real progression
-        // once there's somewhere for it to come from.
-        MissionBriefingResult briefingResult = MissionBriefingScreen::Run(cdDirectory, language, "1.1.1");
-        if (briefingResult.windowClosed)
+        MenuResult menuResult = MenuController::Run(cdDirectory, renderSettings, resolutionSettings, language);
+        if (menuResult.windowClosed)
         {
             std::cout << "Boot window closed. Aborting.\n";
             AppWindow::Instance().Shutdown();
             PauseBeforeExit();
             return 1;
         }
+        std::cout << "Menu selection: " << menuResult.action << "\n";
 
-        GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, "1.1.1");
-        if (gameplayResult.outcome == GameplayOutcome::WindowClosed)
+        if (menuResult.action == "Multiplayer")
         {
-            std::cout << "Boot window closed. Aborting.\n";
-            AppWindow::Instance().Shutdown();
-            PauseBeforeExit();
-            return 1;
-        }
-    }
+            MultiplayerSettings mpSettings;
+            bool inMultiplayerMenu = true;
+            bool windowClosed = false;
+            while (inMultiplayerMenu)
+            {
+                MultiplayerMainResult mainResult = MultiplayerMainScreen::Run(cdDirectory);
+                if (mainResult.windowClosed) { windowClosed = true; break; }
 
-    AppWindow::Instance().Shutdown();
-    PauseBeforeExit();
-    return 0;
+                switch (mainResult.choice)
+                {
+                case MultiplayerMainChoice::StartGame:
+                {
+                    MultiplayerStartResult r = MultiplayerStartScreen::Run(cdDirectory, mpSettings);
+                    if (r.windowClosed) { windowClosed = true; inMultiplayerMenu = false; }
+                    // r.startedGame has nowhere to hand off to yet - no
+                    // real networking exists. Falls back to the
+                    // multiplayer menu.
+                    break;
+                }
+                case MultiplayerMainChoice::JoinGame:
+                {
+                    MultiplayerSubResult r = MultiplayerJoinScreen::Run(cdDirectory);
+                    if (r.windowClosed) { windowClosed = true; inMultiplayerMenu = false; }
+                    break;
+                }
+                case MultiplayerMainChoice::Options:
+                {
+                    MultiplayerSubResult r = MultiplayerOptionsScreen::Run(cdDirectory, mpSettings);
+                    if (r.windowClosed) { windowClosed = true; inMultiplayerMenu = false; }
+                    break;
+                }
+                case MultiplayerMainChoice::Back:
+                default:
+                    inMultiplayerMenu = false;
+                    break;
+                }
+            }
+            if (windowClosed)
+            {
+                std::cout << "Boot window closed. Aborting.\n";
+                AppWindow::Instance().Shutdown();
+                PauseBeforeExit();
+                return 1;
+            }
+            continue; // Escape/Back - return to the main menu, not exit
+        }
+
+        if (menuResult.action == "Load Game")
+        {
+            SaveSlotResult loadResult = SaveSlotScreen::Run(cdDirectory, SaveSlotMode::Load, StubSaveSlots());
+            if (loadResult.windowClosed)
+            {
+                std::cout << "Boot window closed. Aborting.\n";
+                AppWindow::Instance().Shutdown();
+                PauseBeforeExit();
+                return 1;
+            }
+            // NEXT: actually load the chosen slot's save data and resume
+            // gameplay from it, once a real save system exists. For now,
+            // selecting a slot (or backing out) has nowhere to go but
+            // back to the main menu.
+            continue;
+        }
+
+        if (menuResult.action == "Start Game")
+        {
+            // Hardcoded to the first level for now - no level-select flow
+            // exists (there never was one in the original game either -
+            // levels just progress, with save/load presumably selecting a
+            // level once that exists). Wire this up to real progression
+            // once there's somewhere for it to come from.
+            MissionBriefingResult briefingResult = MissionBriefingScreen::Run(cdDirectory, language, "1.1.1");
+            if (briefingResult.windowClosed)
+            {
+                std::cout << "Boot window closed. Aborting.\n";
+                AppWindow::Instance().Shutdown();
+                PauseBeforeExit();
+                return 1;
+            }
+
+            GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, "1.1.1");
+            if (gameplayResult.outcome == GameplayOutcome::WindowClosed)
+            {
+                std::cout << "Boot window closed. Aborting.\n";
+                AppWindow::Instance().Shutdown();
+                PauseBeforeExit();
+                return 1;
+            }
+            continue; // Exit Game (from the pause menu) - return to the main menu
+        }
+
+        // Any other selection (e.g. Options, handled entirely within
+        // MenuController itself) - just re-show the main menu.
+    }
 }

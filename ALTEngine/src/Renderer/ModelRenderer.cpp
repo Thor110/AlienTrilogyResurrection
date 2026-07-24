@@ -42,6 +42,7 @@ namespace ALTEngine::Renderer
             SDL_GPUTexture* texture = nullptr;
             float centerX = 0, centerY = 0, centerZ = 0; // AABB center, for auto-framing the camera
             float radius = 1.0f;                          // AABB bounding-sphere radius
+            float baseRotationRadians = 0.0f;              // fixed per-model orientation offset - see LoadModel's doc comment
         };
 
         SDL_GPUDevice* device = nullptr;
@@ -226,7 +227,8 @@ namespace ALTEngine::Renderer
 
     bool ModelRenderer::LoadModel(const std::string& cacheKey, int meshNumber,
                                    const std::filesystem::path& objBndPath, const std::filesystem::path& gfxBndPath,
-                                   std::optional<std::array<uint8_t, 3>> transparentRgb)
+                                   std::optional<std::array<uint8_t, 3>> transparentRgb,
+                                   float baseRotationRadians)
     {
         if (!device) { return false; }
         if (loadedModels.count(cacheKey)) { return true; }
@@ -380,6 +382,7 @@ namespace ALTEngine::Renderer
         model.texture = texture;
         model.centerX = cx; model.centerY = cy; model.centerZ = cz;
         model.radius = radius;
+        model.baseRotationRadians = baseRotationRadians;
         loadedModels[cacheKey] = model;
 
         return true;
@@ -440,7 +443,7 @@ namespace ALTEngine::Renderer
         float distance = model.radius / std::sin(fovY / 2.0f) * 1.3f; // 1.3x = a little breathing room
         Mat4 proj = Mat4::Perspective(fovY, static_cast<float>(width) / static_cast<float>(height), 1.0f, distance * 4.0f + model.radius);
         Mat4 view = Mat4::LookAt(model.centerX, model.centerY, model.centerZ + distance, model.centerX, model.centerY, model.centerZ, 0, 1, 0);
-        Mat4 rotation = Mat4::RotationY(angleRadians);
+        Mat4 rotation = Mat4::RotationY(model.baseRotationRadians + angleRadians);
         Mat4 mvp = Mat4::Multiply(proj, Mat4::Multiply(view, rotation));
 
         SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);

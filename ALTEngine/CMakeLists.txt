@@ -146,6 +146,12 @@ add_executable(ALTEngine
     src/Screens/PauseMenuTree.cpp
     src/Screens/PauseMenuScreen.cpp
     src/Screens/GameplayScreen.cpp
+    src/Screens/MenuBackground.cpp
+    src/Screens/SaveSlotScreen.cpp
+    src/Screens/EndLevelPromptScreen.cpp
+    src/Screens/MissionAssessmentScreen.cpp
+    src/Screens/TextFieldEditor.cpp
+    src/Screens/MultiplayerScreens.cpp
     src/Renderer/Mat4.h
     src/Renderer/ModelRenderer.cpp
 )

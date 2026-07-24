@@ -54,10 +54,18 @@ namespace ALTEngine::Renderer
         // model, which use a colour key rather than the usual "black is
         // just opaque material colour" convention (Edward, 2026).
         //
+        // `baseRotationRadians` is a fixed per-model orientation offset,
+        // added to whatever spin angle RenderToRgba is called with each
+        // frame - some models (e.g. NetworkedComputers) are authored at
+        // a different natural resting angle than most, and need this to
+        // display correctly rather than always starting from the same
+        // default orientation (Edward, 2026).
+        //
         // Returns false if the model/texture couldn't be loaded.
         static bool LoadModel(const std::string& cacheKey, int meshNumber,
                                const std::filesystem::path& objBndPath, const std::filesystem::path& gfxBndPath,
-                               std::optional<std::array<uint8_t, 3>> transparentRgb = std::nullopt);
+                               std::optional<std::array<uint8_t, 3>> transparentRgb = std::nullopt,
+                               float baseRotationRadians = 0.0f);
 
         // Renders the model cached under `cacheKey` (must already be
         // loaded via LoadModel), rotated by `angleRadians` around Y,
