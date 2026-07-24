@@ -13,6 +13,7 @@
 #include "Bootstrap/ResolutionSettings.h"
 #include "Formats/SplashImageLoader.h"
 #include "Menu/MenuController.h"
+#include "Screens/MissionBriefingScreen.h"
 #include "Video/OverrideVideo.h"
 #include "Video/VideoPlayer.h"
 
@@ -20,6 +21,7 @@ using namespace ALTEngine::Bootstrap;
 using namespace ALTEngine::Formats;
 using namespace ALTEngine::Video;
 using namespace ALTEngine::Menu;
+using namespace ALTEngine::Screens;
 
 namespace
 {
@@ -193,9 +195,24 @@ int main(int, char**)
     }
     std::cout << "Menu selection: " << menuResult.action << "\n";
 
-    // NEXT: actually act on menuResult.action (Start Game / Multiplayer /
-    // Load Game), and the real 3D model renderer (SDL GPU API) to replace
-    // the menu's placeholder boxes.
+    if (menuResult.action == "Start Game")
+    {
+        // Hardcoded to the first level for now - no level-select flow
+        // exists yet. Wire this up to whichever level was actually
+        // chosen once one does.
+        MissionBriefingResult briefingResult = MissionBriefingScreen::Run(cdDirectory, language, "1.1.1");
+        if (briefingResult.windowClosed)
+        {
+            std::cout << "Boot window closed. Aborting.\n";
+            AppWindow::Instance().Shutdown();
+            PauseBeforeExit();
+            return 1;
+        }
+    }
+
+    // NEXT: actual gameplay - the briefing screen currently has nowhere
+    // to hand off to once it finishes, since there's no level to load or
+    // play yet.
 
     AppWindow::Instance().Shutdown();
     PauseBeforeExit();

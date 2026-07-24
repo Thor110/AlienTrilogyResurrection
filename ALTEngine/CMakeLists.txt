@@ -37,6 +37,9 @@ add_library(ALTFormats STATIC
     src/Formats/OverrideImage.cpp
     src/Formats/ModelLoader.cpp
     src/Formats/RenderMesh.cpp
+    src/Formats/LevelLoader.cpp
+    src/Formats/BinaryReadLE.h
+    src/Formats/MissionText.cpp
 )
 target_include_directories(ALTFormats PUBLIC src)
 target_link_libraries(ALTFormats PRIVATE nlohmann_json::nlohmann_json)
@@ -138,6 +141,7 @@ add_executable(ALTEngine
     src/Menu/MenuTree.cpp
     src/Menu/MenuNavigation.cpp
     src/Menu/MenuController.cpp
+    src/Screens/MissionBriefingScreen.cpp
     src/Renderer/Mat4.h
     src/Renderer/ModelRenderer.cpp
 )

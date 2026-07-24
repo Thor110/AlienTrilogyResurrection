@@ -1,4 +1,5 @@
 #include "ModelLoader.h"
+#include "BinaryReadLE.h"
 #include "BndParser.h"
 
 #include <cstring>
@@ -21,28 +22,6 @@ namespace ALTEngine::Formats
             std::vector<uint8_t> data(size);
             in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(size));
             return data;
-        }
-
-        // Little-endian reads - ModelRenderer.cs uses BinaryReader, which
-        // is little-endian by default on .NET (matching x86/x64), and
-        // this data is PS1-originated (also little-endian).
-        int32_t ReadInt32LE(const std::vector<uint8_t>& data, size_t offset)
-        {
-            return static_cast<int32_t>(
-                static_cast<uint32_t>(data[offset]) |
-                (static_cast<uint32_t>(data[offset + 1]) << 8) |
-                (static_cast<uint32_t>(data[offset + 2]) << 16) |
-                (static_cast<uint32_t>(data[offset + 3]) << 24));
-        }
-
-        uint16_t ReadUInt16LE(const std::vector<uint8_t>& data, size_t offset)
-        {
-            return static_cast<uint16_t>(data[offset] | (data[offset + 1] << 8));
-        }
-
-        int16_t ReadInt16LE(const std::vector<uint8_t>& data, size_t offset)
-        {
-            return static_cast<int16_t>(ReadUInt16LE(data, offset));
         }
     }
 

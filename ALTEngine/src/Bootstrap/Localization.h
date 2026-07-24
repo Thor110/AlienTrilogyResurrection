@@ -42,4 +42,22 @@ namespace ALTEngine::Bootstrap
         if (prefixed.size() > 8) { prefixed = prefixed.substr(0, 8); }
         return prefixed;
     }
+
+    // MISSION#.TXT uses a DIFFERENT convention from LocalizedBaseName
+    // above - confirmed against the real file (uploaded as
+    // "MISSIONE.TXT" for English): it's a SUFFIX, not a prefix, and
+    // English gets an explicit letter too (unlike the AVI convention,
+    // where English has none). "MISSION" (7 chars) + one letter = 8
+    // chars exactly, so this never needs truncation either.
+    inline std::string MissionTextFilename(Language language)
+    {
+        switch (language)
+        {
+        case Language::French:  return "MISSIONF";
+        case Language::Italian: return "MISSIONI";
+        case Language::Spanish: return "MISSIONS";
+        case Language::English:
+        default:                return "MISSIONE";
+        }
+    }
 }
