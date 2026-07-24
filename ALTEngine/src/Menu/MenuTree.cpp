@@ -97,8 +97,8 @@ namespace ALTEngine::Menu
         MenuNode CameraSway()
         {
             return List("Camera Sway", {
-                Action("Off"),
-                Action("On"),
+                Action("Off", ModelIndex::CameraCrossedOut),
+                Action("On", ModelIndex::Camera),
             });
         }
 
@@ -130,10 +130,17 @@ namespace ALTEngine::Menu
 
         MenuNode Volume()
         {
+            /*
             MenuNode n;
             n.label = "Volume";
             n.kind = MenuNodeKind::Slider;
             return n;
+            */ // TODO : Black is transparent on these textures. RGB 0/0/0 HSL 160/0/0
+            // only appears to be on these two models / textures.
+            return List("Volume", {
+                Action("Music", ModelIndex::SpeakerMusic),
+                Action("SFX", ModelIndex::SpeakerSfx),
+            });
         }
 
         MenuNode Credits()
