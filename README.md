@@ -106,6 +106,13 @@ The road map for this project.
 	- [Grade 33 Steel](#easter-egg-1)
 	- [End Times](#easter-egg-2)
 	- [Cheats](#easter-egg-3)
+- [❌ 9 : Source Port](#source-port) ( 25% Complete )
+	- Original CD detection and selective asset extraction
+	- Automated Redbook CD-DA audio ripping and pre-bundled playlist generation
+	- Native image and video override architecture
+	- Upgraded cutscene video playback pipeline (BSRGAN upscaled via local NCNN, batch-processed through FFmpeg)
+	- Integrated main menu audio, functional layout drafts, options configs, resolution detection  and selection.
+	- Graphics quality options smoothed and original rendering styles. (WIP)
 
 And possibly more to come.
 
@@ -567,3 +574,7 @@ This texture contains a reference to the cheat "RIPLEYDOESITWITHBIGGUNS" as well
 </div>
 
 909GFX_TP00 is the name of the texture when extracted by this toolkit.
+
+## Source Port
+
+Source port is currently a work in progress.
