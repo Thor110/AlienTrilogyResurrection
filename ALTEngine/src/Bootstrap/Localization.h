@@ -44,29 +44,35 @@ namespace ALTEngine::Bootstrap
         return prefixed;
     }
 
+    // MISSION#.TXT-style suffix letters - confirmed against real
+    // MISSIONE.TXT / MISSIONU.TXT, and now also needed for
+    // PNL0GFX#.16/PNL1GFX#.16 (Edward, 2026: "note there are U/E/F/I/S
+    // versions across different versions of the game"). Returns
+    // candidates in the order to try them - for English, US first
+    // (that's the release the English-file gap was actually confirmed
+    // against), then the other English variant.
+    inline std::vector<char> LanguageSuffixCandidates(Language language)
+    {
+        switch (language)
+        {
+        case Language::French:  return { 'F' };
+        case Language::Italian: return { 'I' };
+        case Language::Spanish: return { 'S' };
+        case Language::English:
+        default:                return { 'U', 'E' };
+        }
+    }
+
     // MISSION#.TXT uses a DIFFERENT convention from LocalizedBaseName
     // above - confirmed against a real file (uploaded as "MISSIONE.TXT"):
     // it's a SUFFIX, not a prefix, and English gets an explicit letter
     // too (unlike the AVI convention, where English has none). "MISSION"
     // (7 chars) + one letter = 8 chars exactly, so this never needs
     // truncation either.
-    //
-    // For English specifically, there are TWO real variants depending on
-    // the disc release: US copies ship MISSIONU.TXT, other English
-    // releases ship MISSIONE.TXT (confirmed - Edward's test disc was a
-    // US copy and only had MISSIONU.TXT, which silently produced an
-    // empty briefing since only MISSIONE.TXT was ever checked). Returns
-    // candidates in the order to try them - US first, since that's the
-    // release this was actually confirmed against.
     inline std::vector<std::string> MissionTextFilenameCandidates(Language language)
     {
-        switch (language)
-        {
-        case Language::French:  return { "MISSIONF" };
-        case Language::Italian: return { "MISSIONI" };
-        case Language::Spanish: return { "MISSIONS" };
-        case Language::English:
-        default:                return { "MISSIONU", "MISSIONE" };
-        }
+        std::vector<std::string> result;
+        for (char c : LanguageSuffixCandidates(language)) { result.push_back(std::string("MISSION") + c); }
+        return result;
     }
 }

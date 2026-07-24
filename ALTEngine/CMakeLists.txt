@@ -40,6 +40,7 @@ add_library(ALTFormats STATIC
     src/Formats/LevelLoader.cpp
     src/Formats/BinaryReadLE.h
     src/Formats/MissionText.cpp
+    src/Formats/Obj3DTexture.cpp
 )
 target_include_directories(ALTFormats PUBLIC src)
 target_link_libraries(ALTFormats PRIVATE nlohmann_json::nlohmann_json)
