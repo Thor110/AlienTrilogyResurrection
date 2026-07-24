@@ -72,7 +72,7 @@ namespace ALTEngine::Menu
                 // the background model (Edward, 2026).
                 List("Keyboard", { Action("Redefine") }, ModelIndex::Keyboard),
                 List("Mouse", { Action("Redefine") }, ModelIndex::Mouse),
-                Action("Joystick", ModelIndex::Joystick),
+                List("Joystick", { Action("Joystick") }, ModelIndex::Joystick),
                 // Gravis Grip and Gravis Pad both use Multitap (index 3) -
                 // Edward: both peripherals visually look like a multitap.
                 // Real hardware to test against is going to be genuinely
