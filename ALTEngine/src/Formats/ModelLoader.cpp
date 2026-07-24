@@ -2,6 +2,7 @@
 #include "BinaryReadLE.h"
 #include "BndParser.h"
 
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
@@ -110,5 +111,17 @@ namespace ALTEngine::Formats
         }
 
         return meshes;
+    }
+
+    const ModelMesh* ModelLoader::FindByNumber(const std::vector<ModelMesh>& meshes, int number)
+    {
+        char buf[8];
+        std::snprintf(buf, sizeof(buf), "M%03d", number);
+        std::string target(buf);
+        for (const auto& mesh : meshes)
+        {
+            if (mesh.sectionName == target) { return &mesh; }
+        }
+        return nullptr;
     }
 }

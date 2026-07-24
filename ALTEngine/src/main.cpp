@@ -13,6 +13,7 @@
 #include "Bootstrap/ResolutionSettings.h"
 #include "Formats/SplashImageLoader.h"
 #include "Menu/MenuController.h"
+#include "Screens/GameplayScreen.h"
 #include "Screens/MissionBriefingScreen.h"
 #include "Video/OverrideVideo.h"
 #include "Video/VideoPlayer.h"
@@ -198,8 +199,10 @@ int main(int, char**)
     if (menuResult.action == "Start Game")
     {
         // Hardcoded to the first level for now - no level-select flow
-        // exists yet. Wire this up to whichever level was actually
-        // chosen once one does.
+        // exists (there never was one in the original game either -
+        // levels just progress, with save/load presumably selecting a
+        // level once that exists). Wire this up to real progression
+        // once there's somewhere for it to come from.
         MissionBriefingResult briefingResult = MissionBriefingScreen::Run(cdDirectory, language, "1.1.1");
         if (briefingResult.windowClosed)
         {
@@ -208,11 +211,16 @@ int main(int, char**)
             PauseBeforeExit();
             return 1;
         }
-    }
 
-    // NEXT: actual gameplay - the briefing screen currently has nowhere
-    // to hand off to once it finishes, since there's no level to load or
-    // play yet.
+        GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, "1.1.1");
+        if (gameplayResult.outcome == GameplayOutcome::WindowClosed)
+        {
+            std::cout << "Boot window closed. Aborting.\n";
+            AppWindow::Instance().Shutdown();
+            PauseBeforeExit();
+            return 1;
+        }
+    }
 
     AppWindow::Instance().Shutdown();
     PauseBeforeExit();

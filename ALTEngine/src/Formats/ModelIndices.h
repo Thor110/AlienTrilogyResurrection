@@ -66,35 +66,51 @@ namespace ALTEngine::Formats::ModelIndices
     }
 
     // PICKMOD.BND - pickup models (weapons, ammo, items)
+    // PICKMOD.BND - pickup models. UNLIKE OptObj below, these indices
+    // are NOT confirmed against a real PICKMOD.BND file (we don't have
+    // one yet, unlike OPTOBJ.BND/OPTGFX.BND which were verified earlier)
+    // - this is the comments.txt ordering, used as-is, same starting
+    // point OptObj had before it got confirmed. Needs the same
+    // real-file verification pass once PICKMOD.BND/PICKGFX.BND are
+    // available.
+    //
+    // Ammo-type pairings (which ammo model goes with which weapon, for
+    // the pause menu's two-model weapon display) are a reasonable guess
+    // from the reference screenshots' silhouettes, not confirmed:
+    // Pistol->PistolClip (the screenshot actually shows a bar-shaped
+    // gauge, not a shell/clip silhouette - least confident pairing here),
+    // Shotgun->ShotgunShell (screenshot shows a red shell - good match),
+    // PulseRifle->PulseRifleClip, Flamethrower->FlamethrowerFuel,
+    // SmartGun->SmartGunAmmunition (all plausible silhouette matches,
+    // none confirmed).
     namespace PickMod
     {
-        // 0 - Pistol
-        // 1 - Shotgun
-        // 2 - Pulse Rifle
-        // 3 - Flamethrower
-        // 4 - Smart Gun
-        // 5 - Seismic Charge
-        // 6 - Battery
-        // 7 - Night Vision Goggles
-        // 8 - Pistol Clip
-        // 9 - Shotgun Shell
-        // 10 - Pulse Rifle Clip
-        // 11 - Pulse Rifle Grenade
-        // 12 - Flamethrower Fuel
-        // 13 - Smart Gun Ammunition
-        // 14 - ID Badge
-        // 15 - Auto Mapper
-        // 16 - Hypo Pack
-        // 17 - Acid Vest
-        // 18 - Body Suit
-        // 19 - Medi Kit
-        // 20 - Dermpatch
-        // 21 - Boots
-        // 22 - Adrenaline Burst
-        // 23 - Shoulder Lamp
-        // 24 - Shotgun Ammunition
-        // 25 - Pistol Shell
-        // public Mesh menuJoystick, menuCamera;
+        constexpr int Pistol = 0;
+        constexpr int Shotgun = 1;
+        constexpr int PulseRifle = 2;
+        constexpr int Flamethrower = 3;
+        constexpr int SmartGun = 4;
+        constexpr int SeismicCharge = 5;
+        constexpr int Battery = 6;
+        constexpr int NightVisionGoggles = 7;
+        constexpr int PistolClip = 8;
+        constexpr int ShotgunShell = 9;
+        constexpr int PulseRifleClip = 10;
+        constexpr int PulseRifleGrenade = 11;
+        constexpr int FlamethrowerFuel = 12;
+        constexpr int SmartGunAmmunition = 13;
+        constexpr int IdBadge = 14;
+        constexpr int AutoMapper = 15;
+        constexpr int HypoPack = 16;
+        constexpr int AcidVest = 17;
+        constexpr int BodySuit = 18;
+        constexpr int MediKit = 19;
+        constexpr int Dermpatch = 20;
+        constexpr int Boots = 21;
+        constexpr int AdrenalineBurst = 22;
+        constexpr int ShoulderLamp = 23;
+        constexpr int ShotgunAmmunition = 24;
+        constexpr int PistolShell = 25;
     }
 
     // OPTOBJ.BND - menu models (confirmed - mirrors MenuTree.cpp's

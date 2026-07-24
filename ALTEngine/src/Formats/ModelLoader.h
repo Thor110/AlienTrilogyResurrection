@@ -60,5 +60,14 @@ namespace ALTEngine::Formats
     {
     public:
         static std::vector<ModelMesh> Load(const std::filesystem::path& bndPath);
+
+        // Finds a mesh by its section NUMBER (e.g. 6 -> "M006"), not
+        // array position - needed because PICKMOD.BND's section naming
+        // has gaps (confirmed missing M005 and M024, still 26 sections
+        // total matching the documented 0-25 catalog range minus those
+        // two) - unlike OPTOBJ.BND, which was cleanly sequential and
+        // safe to index positionally. Returns nullptr if no section with
+        // that number exists.
+        static const ModelMesh* FindByNumber(const std::vector<ModelMesh>& meshes, int number);
     };
 }

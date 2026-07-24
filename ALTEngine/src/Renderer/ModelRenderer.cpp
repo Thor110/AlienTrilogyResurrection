@@ -48,7 +48,7 @@ namespace ALTEngine::Renderer
         SDL_GPUGraphicsPipeline* pipeline = nullptr;
         SDL_GPUSampler* sampler = nullptr;
         SDL_GPUTextureFormat depthFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
-        std::unordered_map<int, LoadedModel> loadedModels;
+        std::unordered_map<std::string, LoadedModel> loadedModels;
 
         // Offscreen render target cache - recreated only if the requested
         // size changes, since the menu is expected to call RenderToRgba
@@ -224,40 +224,74 @@ namespace ALTEngine::Renderer
         device = nullptr;
     }
 
-    bool ModelRenderer::LoadModel(int modelIndex, const std::filesystem::path& objBndPath, const std::filesystem::path& gfxBndPath)
+    bool ModelRenderer::LoadModel(const std::string& cacheKey, int meshNumber,
+                                   const std::filesystem::path& objBndPath, const std::filesystem::path& gfxBndPath,
+                                   std::optional<std::array<uint8_t, 3>> transparentRgb)
     {
         if (!device) { return false; }
-        if (loadedModels.count(modelIndex)) { return true; }
+        if (loadedModels.count(cacheKey)) { return true; }
 
         std::vector<ALTEngine::Formats::ModelMesh> meshes;
         BndTextureSet textureSet;
         try
         {
             meshes = ModelLoader::Load(objBndPath);
-            textureSet = BndTextureLoader::Load(gfxBndPath);
+            textureSet = BndTextureLoader::Load(gfxBndPath, transparentRgb);
         }
         catch (const std::exception& e)
         {
-            SDL_Log("ModelRenderer::LoadModel: %s", e.what());
+            SDL_Log("ModelRenderer::LoadModel(%s): %s", cacheKey.c_str(), e.what());
             return false;
         }
 
-        if (modelIndex < 0 || static_cast<size_t>(modelIndex) >= meshes.size() ||
-            static_cast<size_t>(modelIndex) >= textureSet.textures.size() ||
-            static_cast<size_t>(modelIndex) >= textureSet.uvSections.size())
+        const auto* mesh = ModelLoader::FindByNumber(meshes, meshNumber);
+        if (!mesh)
         {
-            SDL_Log("ModelRenderer::LoadModel: modelIndex %d out of range", modelIndex);
+            SDL_Log("ModelRenderer::LoadModel(%s): no section for mesh number %d in %s", cacheKey.c_str(), meshNumber, objBndPath.string().c_str());
             return false;
         }
 
-        RenderMesh renderMesh = BuildRenderMesh(meshes[static_cast<size_t>(modelIndex)], textureSet.uvSections[static_cast<size_t>(modelIndex)]);
+        // Auto-detected texture scheme: exactly one BX section means
+        // every model in this file shares that one texture+UV group
+        // (confirmed for PICKGFX.BND, used by both PICKMOD and OBJ3D) -
+        // otherwise each model uses the texture/BX section matching its
+        // own number (confirmed for OPTGFX.BND, one per OPTOBJ model).
+        const ALTEngine::Formats::BndTexture* tex = nullptr;
+        const std::vector<ALTEngine::Formats::BxRectangle>* uvRects = nullptr;
+
+        if (textureSet.uvSections.size() == 1 && !textureSet.textures.empty())
+        {
+            tex = &textureSet.textures[0];
+            uvRects = &textureSet.uvSections[0];
+        }
+        else
+        {
+            char buf[8];
+            std::snprintf(buf, sizeof(buf), "%02d", meshNumber);
+            std::string targetIndex(buf);
+            for (size_t i = 0; i < textureSet.textures.size() && i < textureSet.uvSections.size(); ++i)
+            {
+                if (textureSet.textures[i].index == targetIndex)
+                {
+                    tex = &textureSet.textures[i];
+                    uvRects = &textureSet.uvSections[i];
+                    break;
+                }
+            }
+        }
+
+        if (!tex || !uvRects)
+        {
+            SDL_Log("ModelRenderer::LoadModel(%s): no matching texture for mesh number %d in %s", cacheKey.c_str(), meshNumber, gfxBndPath.string().c_str());
+            return false;
+        }
+
+        RenderMesh renderMesh = BuildRenderMesh(*mesh, *uvRects);
         if (renderMesh.vertices.empty() || renderMesh.indices.empty())
         {
-            SDL_Log("ModelRenderer::LoadModel: model %d has no geometry", modelIndex);
+            SDL_Log("ModelRenderer::LoadModel(%s): model has no geometry", cacheKey.c_str());
             return false;
         }
-
-        const auto& tex = textureSet.textures[static_cast<size_t>(modelIndex)];
 
         // AABB -> bounding sphere, for auto-framing the camera without
         // needing to know the game's arbitrary coordinate scale ahead
@@ -277,7 +311,7 @@ namespace ALTEngine::Renderer
 
         size_t vbSize = renderMesh.vertices.size() * sizeof(float) * 5;
         size_t ibSize = renderMesh.indices.size() * sizeof(uint32_t);
-        size_t texSize = static_cast<size_t>(tex.width) * tex.height * 4;
+        size_t texSize = static_cast<size_t>(tex->width) * tex->height * 4;
 
         SDL_GPUBufferCreateInfo vbInfo{ SDL_GPU_BUFFERUSAGE_VERTEX, static_cast<Uint32>(vbSize) };
         SDL_GPUBuffer* vertexBuffer = SDL_CreateGPUBuffer(device, &vbInfo);
@@ -287,8 +321,8 @@ namespace ALTEngine::Renderer
         SDL_GPUTextureCreateInfo texInfo{};
         texInfo.type = SDL_GPU_TEXTURETYPE_2D;
         texInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-        texInfo.width = static_cast<Uint32>(tex.width);
-        texInfo.height = static_cast<Uint32>(tex.height);
+        texInfo.width = static_cast<Uint32>(tex->width);
+        texInfo.height = static_cast<Uint32>(tex->height);
         texInfo.layer_count_or_depth = 1;
         texInfo.num_levels = 1;
         texInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
@@ -311,7 +345,7 @@ namespace ALTEngine::Renderer
         uint8_t* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, transfer, false));
         std::memcpy(mapped, renderMesh.vertices.data(), vbSize);
         std::memcpy(mapped + vbSize, renderMesh.indices.data(), ibSize);
-        std::memcpy(mapped + vbSize + ibSize, tex.rgba.data(), texSize);
+        std::memcpy(mapped + vbSize + ibSize, tex->rgba.data(), texSize);
         SDL_UnmapGPUTransferBuffer(device, transfer);
 
         SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
@@ -330,8 +364,8 @@ namespace ALTEngine::Renderer
         texSrc.offset = static_cast<Uint32>(vbSize + ibSize);
         SDL_GPUTextureRegion texDst{};
         texDst.texture = texture;
-        texDst.w = static_cast<Uint32>(tex.width);
-        texDst.h = static_cast<Uint32>(tex.height);
+        texDst.w = static_cast<Uint32>(tex->width);
+        texDst.h = static_cast<Uint32>(tex->height);
         texDst.d = 1;
         SDL_UploadToGPUTexture(copyPass, &texSrc, &texDst, false);
 
@@ -346,15 +380,15 @@ namespace ALTEngine::Renderer
         model.texture = texture;
         model.centerX = cx; model.centerY = cy; model.centerZ = cz;
         model.radius = radius;
-        loadedModels[modelIndex] = model;
+        loadedModels[cacheKey] = model;
 
         return true;
     }
 
-    std::vector<uint8_t> ModelRenderer::RenderToRgba(int modelIndex, float angleRadians, int width, int height)
+    std::vector<uint8_t> ModelRenderer::RenderToRgba(const std::string& cacheKey, float angleRadians, int width, int height)
     {
         if (!device || !pipeline) { return {}; }
-        auto it = loadedModels.find(modelIndex);
+        auto it = loadedModels.find(cacheKey);
         if (it == loadedModels.end()) { return {}; }
         const LoadedModel& model = it->second;
 

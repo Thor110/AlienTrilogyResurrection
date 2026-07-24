@@ -1,7 +1,9 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -38,6 +40,11 @@ namespace ALTEngine::Formats
     class BndTextureLoader
     {
     public:
-        static BndTextureSet Load(const std::filesystem::path& bndPath);
+        // `transparentRgb`, if set, is applied to every texture decoded
+        // in this call (see RawImageRenderer::RenderRGBA) - opt-in per
+        // call rather than per-texture, since a caller only ever passes
+        // this when they already know the specific file needs it (e.g.
+        // OPTGFX.BND for the Music/SFX speaker and Multitap models).
+        static BndTextureSet Load(const std::filesystem::path& bndPath, std::optional<std::array<uint8_t, 3>> transparentRgb = std::nullopt);
     };
 }

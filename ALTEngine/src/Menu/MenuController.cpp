@@ -11,6 +11,7 @@
 
 #include <SDL3/SDL.h>
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <optional>
 #include <string>
@@ -196,7 +197,20 @@ namespace ALTEngine::Menu
 
             std::filesystem::path objBnd = cdDirectory / "GFX" / "OPTOBJ.BND";
             std::filesystem::path gfxBnd = cdDirectory / "GFX" / "OPTGFX.BND";
-            if (!ModelRenderer::LoadModel(modelIndex, objBnd, gfxBnd))
+            std::string cacheKey = "OPTOBJ:" + std::to_string(modelIndex);
+
+            // Multitap (3) and the Music/SFX speaker models (11/12) use a
+            // colour key (black) for transparency rather than most
+            // OPTOBJ models' "black is just opaque material colour"
+            // convention - see MenuTree.cpp's Volume() TODO and
+            // RawImageRenderer's transparentRgb parameter (Edward, 2026).
+            std::optional<std::array<uint8_t, 3>> transparentRgb;
+            if (modelIndex == ModelIndex::Multitap || modelIndex == ModelIndex::SpeakerMusic || modelIndex == ModelIndex::SpeakerSfx)
+            {
+                transparentRgb = std::array<uint8_t, 3>{ 0, 0, 0 };
+            }
+
+            if (!ModelRenderer::LoadModel(cacheKey, modelIndex, objBnd, gfxBnd, transparentRgb))
             {
                 DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
                 return;
@@ -204,7 +218,7 @@ namespace ALTEngine::Menu
 
             int renderSize = std::min(w, h);
             if (renderSize < 64) { renderSize = 64; }
-            std::vector<uint8_t> pixels = ModelRenderer::RenderToRgba(modelIndex, rotationAngle, renderSize, renderSize);
+            std::vector<uint8_t> pixels = ModelRenderer::RenderToRgba(cacheKey, rotationAngle, renderSize, renderSize);
             if (pixels.empty())
             {
                 DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);

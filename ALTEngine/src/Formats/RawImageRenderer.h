@@ -1,6 +1,8 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace ALTEngine::Formats
@@ -19,11 +21,20 @@ namespace ALTEngine::Formats
         // (which has a separate "magenta" mode for indexed-PNG export
         // tooling), this always produces real alpha - there's no
         // equivalent authoring-tool use case here.
+        //
+        // `transparentRgb`, if set, ALSO makes any pixel whose decoded
+        // RGB matches it transparent - checked by colour, not palette
+        // index, since the same colour can sit at a different index in
+        // different models' palettes. Needed for OPTGFX's Music/SFX
+        // speaker models and the Multitap model specifically, which use
+        // a colour key rather than most models' plain "black = opaque
+        // material" convention (Edward, 2026).
         static std::vector<uint8_t> RenderRGBA(
             const std::vector<uint8_t>& pixelData,
             const std::vector<uint8_t>& palette,
             int width, int height,
-            const std::vector<int>& transparentIndices = {});
+            const std::vector<int>& transparentIndices = {},
+            std::optional<std::array<uint8_t, 3>> transparentRgb = std::nullopt);
 
         // Converts an embedded 16-bit-per-colour BND palette (CL
         // sections) to the same 768-byte, 6-bit-per-channel (0-63) RGB

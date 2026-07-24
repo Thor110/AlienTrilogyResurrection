@@ -7,6 +7,7 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <optional>
+#include <stdexcept>
 
 namespace ALTEngine::Screens
 {
@@ -14,7 +15,7 @@ namespace ALTEngine::Screens
     using ALTEngine::Bootstrap::Color;
     using ALTEngine::Bootstrap::DrawBitmapText;
     using ALTEngine::Bootstrap::Language;
-    using ALTEngine::Bootstrap::MissionTextFilename;
+    using ALTEngine::Bootstrap::MissionTextFilenameCandidates;
     using ALTEngine::Bootstrap::TextHeight;
     using ALTEngine::Bootstrap::TextWidth;
     using ALTEngine::Formats::BriefingParagraph;
@@ -58,6 +59,20 @@ namespace ALTEngine::Screens
                 std::filesystem::path candidate = gfxDir / (baseName + ext);
                 std::error_code ec;
                 if (std::filesystem::exists(candidate, ec)) { return candidate; }
+            }
+            return std::nullopt;
+        }
+
+        // Tries each MissionTextFilenameCandidates() candidate in order -
+        // US discs ship MISSIONU.TXT, other English releases ship
+        // MISSIONE.TXT (see Localization.h).
+        std::optional<std::filesystem::path> ResolveMissionTextFile(const std::filesystem::path& languageDir, Language language)
+        {
+            for (const auto& candidate : MissionTextFilenameCandidates(language))
+            {
+                std::filesystem::path path = languageDir / (candidate + ".TXT");
+                std::error_code ec;
+                if (std::filesystem::exists(path, ec)) { return path; }
             }
             return std::nullopt;
         }
@@ -175,8 +190,12 @@ namespace ALTEngine::Screens
         const MissionBriefing* briefing = nullptr;
         try
         {
-            std::filesystem::path textPath = cdDirectory / "LANGUAGE" / (MissionTextFilename(language) + ".TXT");
-            allBriefings = MissionTextLoader::Load(textPath);
+            auto textPath = ResolveMissionTextFile(cdDirectory / "LANGUAGE", language);
+            if (!textPath.has_value())
+            {
+                throw std::runtime_error("no MISSION*.TXT candidate found in " + (cdDirectory / "LANGUAGE").string());
+            }
+            allBriefings = MissionTextLoader::Load(*textPath);
             for (const auto& b : allBriefings)
             {
                 if (b.levelCode == levelCode) { briefing = &b; break; }

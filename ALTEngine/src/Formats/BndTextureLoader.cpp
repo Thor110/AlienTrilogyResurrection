@@ -54,7 +54,7 @@ namespace ALTEngine::Formats
         }
     }
 
-    BndTextureSet BndTextureLoader::Load(const std::filesystem::path& bndPath)
+    BndTextureSet BndTextureLoader::Load(const std::filesystem::path& bndPath, std::optional<std::array<uint8_t, 3>> transparentRgb)
     {
         std::vector<uint8_t> bnd = ReadFile(bndPath);
 
@@ -103,7 +103,7 @@ namespace ALTEngine::Formats
 
             BndTexture texture;
             texture.index = suffix;
-            texture.rgba = RawImageRenderer::RenderRGBA(tp.data, palette, TEXTURE_SIZE, TEXTURE_SIZE);
+            texture.rgba = RawImageRenderer::RenderRGBA(tp.data, palette, TEXTURE_SIZE, TEXTURE_SIZE, {}, transparentRgb);
             texture.width = TEXTURE_SIZE;
             texture.height = TEXTURE_SIZE;
             result.textures.push_back(std::move(texture));

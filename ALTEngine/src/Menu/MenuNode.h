@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ALTEngine::Menu
@@ -34,6 +35,12 @@ namespace ALTEngine::Menu
         // etc) lives in documentation for override authors, not in code.
         int modelIndex = -1;
 
+        // A second model index, alongside modelIndex above - added for
+        // the pause menu, where weapons show TWO spinning models (the
+        // weapon itself + its ammo type), not one. -1 = no second model
+        // (the common case - most items only ever need modelIndex).
+        int secondaryModelIndex = -1;
+
         std::vector<MenuNode> children;
 
         // For Slider leaves: 0-10, matching the ~8/10 filled-bar look in
@@ -41,4 +48,34 @@ namespace ALTEngine::Menu
         // wired to actual audio.
         int sliderValue = 8;
     };
+
+    // Small builder helpers - originally local to MenuTree.cpp, factored
+    // out here once PauseMenuTree.cpp needed the exact same pattern.
+    inline MenuNode MakeAction(std::string label, int modelIndex = -1, int secondaryModelIndex = -1)
+    {
+        MenuNode n;
+        n.label = std::move(label);
+        n.kind = MenuNodeKind::Action;
+        n.modelIndex = modelIndex;
+        n.secondaryModelIndex = secondaryModelIndex;
+        return n;
+    }
+
+    inline MenuNode MakeList(std::string label, std::vector<MenuNode> children, int modelIndex = -1)
+    {
+        MenuNode n;
+        n.label = std::move(label);
+        n.kind = MenuNodeKind::List;
+        n.modelIndex = modelIndex;
+        n.children = std::move(children);
+        return n;
+    }
+
+    inline MenuNode MakeSlider(std::string label)
+    {
+        MenuNode n;
+        n.label = std::move(label);
+        n.kind = MenuNodeKind::Slider;
+        return n;
+    }
 }
