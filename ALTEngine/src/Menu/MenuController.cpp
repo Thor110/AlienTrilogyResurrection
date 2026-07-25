@@ -158,14 +158,6 @@ namespace ALTEngine::Menu
             DrawBitmapText(renderer, label, textX, textY, scale, COLOR_GREEN_DIM);
         }
 
-        // Tracks whether ModelRenderer::Initialize() has been attempted
-        // and whether it actually succeeded - attempted only once; if it
-        // fails (no usable GPU, missing shaders, etc), every subsequent
-        // call falls back to the placeholder box rather than repeatedly
-        // retrying a doomed initialization every frame.
-        bool modelRendererInitAttempted = false;
-        bool modelRendererAvailable = false;
-
         // Renders the real spinning 3D model via ModelRenderer, uploaded
         // as a regular SDL_Texture and drawn the same way the splash
         // background images are - see ModelRenderer.h's architecture
@@ -179,21 +171,17 @@ namespace ALTEngine::Menu
         {
             if (modelIndex < 0) { return; }
 
-            if (!modelRendererInitAttempted)
-			// Initialize() is idempotent (cheap no-op if already valid) -
+            // Initialize() is idempotent (cheap no-op if already valid) -
             // calling it fresh every time rather than caching "did I
             // already try" avoids exactly the bug this fixed: another
             // screen (GameplayScreen) can call Shutdown() between menu
             // visits, which a cached flag here would have no way to
             // know about (Edward, 2026 - "Options no longer displays
-            // models" after a gameplay session).														 						
+            // models" after a gameplay session).
+            bool modelRendererAvailable = ModelRenderer::Initialize();
+            if (!modelRendererAvailable)
             {
-                modelRendererInitAttempted = true;
-                modelRendererAvailable = ModelRenderer::Initialize();
-                if (!modelRendererAvailable)
-                {
-                    SDL_Log("Menu: ModelRenderer unavailable - using placeholder boxes instead of live 3D previews");
-                }
+                SDL_Log("Menu: ModelRenderer unavailable - using placeholder boxes instead of live 3D previews");
             }
 
             if (!modelRendererAvailable)
