@@ -45,12 +45,18 @@ namespace ALTEngine::Bootstrap
     }
 
     // MISSION#.TXT-style suffix letters - confirmed against real
-    // MISSIONE.TXT / MISSIONU.TXT, and now also needed for
-    // PNL0GFX#.16/PNL1GFX#.16 (Edward, 2026: "note there are U/E/F/I/S
-    // versions across different versions of the game"). Returns
-    // candidates in the order to try them - for English, US first
-    // (that's the release the English-file gap was actually confirmed
-    // against), then the other English variant.
+    // MISSIONE.TXT / MISSIONU.TXT, and also needed for PNL0GFX#.16/
+    // PNL1GFX#.16. The FULL set that actually exists on disc, confirmed
+    // directly from TRILOGY.EXE's embedded file table (Edward, 2026):
+    // E/J/U/G/I/S/F (English/Japanese/US/German/Italian/Spanish/French)
+    // - two more than "U/E/F/I/S" originally suggested. German and
+    // Japanese aren't first-class Language values in this engine yet
+    // (would touch the boot menu's language submenu and several other
+    // spots to add properly), so they're not listed as candidates below
+    // - if that support gets added later, this is where their letters
+    // ('G', 'J') go. Returns candidates in the order to try them - for
+    // English, US first (that's the release the English-file gap was
+    // actually confirmed against), then the other English variant.
     inline std::vector<char> LanguageSuffixCandidates(Language language)
     {
         switch (language)
