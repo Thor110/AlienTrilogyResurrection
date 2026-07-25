@@ -14,6 +14,20 @@ namespace ALTEngine::Menu
         Action,         // leaf - Enter performs an action, doesn't open a column
     };
 
+    // Which BND pair modelIndex refers to. Needed because MenuNode
+    // itself doesn't otherwise know which catalog its modelIndex was
+    // assigned from - normally implied by which tree the node lives in
+    // (the boot menu's Options tree is entirely OPTOBJ, the pause menu's
+    // tree is entirely PICKMOD), but the pause menu's new Save Game/
+    // Load Game entries need the Harddrive Left/Right OPTOBJ models
+    // specifically, breaking that "one tree, one catalog" assumption -
+    // Edward, 2026.
+    enum class ModelSource
+    {
+        PickMod, // the default - matches every existing PauseMenuTree entry
+        Optobj,
+    };
+
     struct MenuNode
     {
         std::string label;
@@ -35,6 +49,12 @@ namespace ALTEngine::Menu
         // etc) lives in documentation for override authors, not in code.
         int modelIndex = -1;
 
+        // See ModelSource's own comment above. Defaults to PickMod,
+        // matching every existing usage before this field existed - only
+        // the pause menu's Save Game/Load Game entries set this to
+        // Optobj.
+        ModelSource modelSource = ModelSource::PickMod;
+
         // A second model index, alongside modelIndex above - added for
         // the pause menu, where weapons show TWO spinning models (the
         // weapon itself + its ammo type), not one. -1 = no second model
@@ -51,13 +71,14 @@ namespace ALTEngine::Menu
 
     // Small builder helpers - originally local to MenuTree.cpp, factored
     // out here once PauseMenuTree.cpp needed the exact same pattern.
-    inline MenuNode MakeAction(std::string label, int modelIndex = -1, int secondaryModelIndex = -1)
+    inline MenuNode MakeAction(std::string label, int modelIndex = -1, int secondaryModelIndex = -1, ModelSource modelSource = ModelSource::PickMod)
     {
         MenuNode n;
         n.label = std::move(label);
         n.kind = MenuNodeKind::Action;
         n.modelIndex = modelIndex;
         n.secondaryModelIndex = secondaryModelIndex;
+        n.modelSource = modelSource;
         return n;
     }
 

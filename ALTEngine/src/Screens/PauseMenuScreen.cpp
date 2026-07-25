@@ -6,6 +6,7 @@
 #include "../Formats/MissionText.h"
 #include "../Menu/MenuNavigation.h"
 #include "../Renderer/ModelRenderer.h"
+#include "../Renderer/ModelPreview.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -118,56 +119,38 @@ namespace ALTEngine::Screens
         {
             if (modelIndex < 0) { return; }
 
-            // Initialize() is idempotent - see ModelRenderer.cpp's own
-            // comment on why this is called fresh every time rather than
-            // cached (Edward, 2026: models silently stopped rendering
-            // after a gameplay session, because a cached "already tried"
-            // flag here had no way to know GameplayScreen had since
-            // called Shutdown()).
-            bool modelRendererAvailable = ALTEngine::Renderer::ModelRenderer::Initialize();
-            if (!modelRendererAvailable)
-            {
-                SDL_Log("PauseMenuScreen: ModelRenderer unavailable - using placeholder boxes instead of live 3D previews");
-            }
+            ALTEngine::Renderer::ModelPreviewSource source;
+            source.objBndPath = cdDirectory / "GFX" / "PICKMOD.BND";
+            source.gfxBndPath = cdDirectory / "GFX" / "PICKGFX.BND";
+            source.cachePrefix = "PICKMOD";
+            source.modelIndex = modelIndex;
 
-            if (!modelRendererAvailable)
+            if (!ALTEngine::Renderer::DrawModelPreview(renderer, source, x, y, w, h, rotationAngle))
             {
                 DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
-                return;
             }
+        }
 
-            std::filesystem::path objBnd = cdDirectory / "GFX" / "PICKMOD.BND";
-            std::filesystem::path gfxBnd = cdDirectory / "GFX" / "PICKGFX.BND";
-            std::string cacheKey = "PICKMOD:" + std::to_string(modelIndex);
+        // Same as DrawPickModModel above, but for the pause menu's two
+        // OPTOBJ entries (Save Game/Load Game's Harddrive Left/Right
+        // models) - same PICKGFX/OPTGFX distinction SaveSlotScreen and
+        // MenuController's Options screen already draw from (Edward,
+        // 2026).
+        void DrawOptobjModel(SDL_Renderer* renderer, const std::filesystem::path& cdDirectory, int modelIndex,
+                              int x, int y, int w, int h, int scale, float rotationAngle)
+        {
+            if (modelIndex < 0) { return; }
 
-            if (!ALTEngine::Renderer::ModelRenderer::LoadModel(cacheKey, modelIndex, objBnd, gfxBnd))
+            ALTEngine::Renderer::ModelPreviewSource source;
+            source.objBndPath = cdDirectory / "GFX" / "OPTOBJ.BND";
+            source.gfxBndPath = cdDirectory / "GFX" / "OPTGFX.BND";
+            source.cachePrefix = "OPTOBJ";
+            source.modelIndex = modelIndex;
+
+            if (!ALTEngine::Renderer::DrawModelPreview(renderer, source, x, y, w, h, rotationAngle))
             {
                 DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
-                return;
             }
-
-            int renderSize = std::min(w, h);
-            if (renderSize < 64) { renderSize = 64; }
-            std::vector<uint8_t> pixels = ALTEngine::Renderer::ModelRenderer::RenderToRgba(cacheKey, rotationAngle, renderSize, renderSize);
-            if (pixels.empty())
-            {
-                DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
-                return;
-            }
-
-            SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, renderSize, renderSize);
-            if (!texture)
-            {
-                DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
-                return;
-            }
-            SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
-            SDL_UpdateTexture(texture, nullptr, pixels.data(), renderSize * 4);
-
-            SDL_FRect dest{ static_cast<float>(x + (w - renderSize) / 2), static_cast<float>(y + (h - renderSize) / 2),
-                            static_cast<float>(renderSize), static_cast<float>(renderSize) };
-            SDL_RenderTexture(renderer, texture, nullptr, &dest);
-            SDL_DestroyTexture(texture);
         }
 
         void DrawSlider(SDL_Renderer* renderer, const std::string& label, int value, int x, int y, int scale)
@@ -394,6 +377,15 @@ namespace ALTEngine::Screens
 
                 std::string statusText = weaponInfo->state->equipped ? "Selected" : "Not available";
                 DrawBitmapText(renderer, statusText, panelX, panelY + rowHeight * 2 + 340, scale, COLOR_STATUS);
+            }
+            else if (topLabel == "Save Game" || topLabel == "Load Game")
+            {
+                // Harddrive Left/Right - always available (no owned/
+                // not-owned concept the way equipment has), so no
+                // "Not available" fallback text here unlike the generic
+                // branch below.
+                const MenuNode& node = root.children[static_cast<size_t>(path[0])];
+                DrawOptobjModel(renderer, cdDirectory, node.modelIndex, panelX, panelY, 260, 200, scale, rotationAngle);
             }
             else // Auto Mapper / Shoulder Lamp / Batteries - single model, no ammo
             {

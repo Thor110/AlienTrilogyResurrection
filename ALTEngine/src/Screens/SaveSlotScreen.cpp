@@ -5,6 +5,7 @@
 #include "../Bootstrap/Font8x8.h"
 #include "../Menu/MenuTree.h" // for ModelIndex::HarddriveLeft/HarddriveRight
 #include "../Renderer/ModelRenderer.h"
+#include "../Renderer/ModelPreview.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -47,25 +48,14 @@ namespace ALTEngine::Screens
         int bgW = 0, bgH = 0;
         SDL_Texture* background = LoadMenuBackground(cdDirectory, renderer, 1, bgW, bgH);
 
-        // Initialize() is idempotent - calling it fresh every time rather
-        // than caching "did I already try" avoids a real bug (Edward,
-        // 2026): another screen (GameplayScreen) can call Shutdown()
-        // between menu visits, which a cached flag here would have no
-        // way to know about, silently breaking model rendering until
-        // restart.
-        bool modelRendererAvailable = ALTEngine::Renderer::ModelRenderer::Initialize();
-
         // HarddriveRight ("Hard Drive Loading ->") for Load, HarddriveLeft
         // ("Hard Drive Saving <-") for Save - both confirmed OPTOBJ
         // indices.
-        int modelIndex = (mode == SaveSlotMode::Load) ? ALTEngine::Menu::ModelIndex::HarddriveRight : ALTEngine::Menu::ModelIndex::HarddriveLeft;
-        std::string cacheKey = "OPTOBJ:" + std::to_string(modelIndex);
-        if (modelRendererAvailable)
-        {
-            std::filesystem::path objBnd = cdDirectory / "GFX" / "OPTOBJ.BND";
-            std::filesystem::path gfxBnd = cdDirectory / "GFX" / "OPTGFX.BND";
-            ALTEngine::Renderer::ModelRenderer::LoadModel(cacheKey, modelIndex, objBnd, gfxBnd);
-        }
+        ALTEngine::Renderer::ModelPreviewSource modelSource;
+        modelSource.objBndPath = cdDirectory / "GFX" / "OPTOBJ.BND";
+        modelSource.gfxBndPath = cdDirectory / "GFX" / "OPTGFX.BND";
+        modelSource.cachePrefix = "OPTOBJ";
+        modelSource.modelIndex = (mode == SaveSlotMode::Load) ? ALTEngine::Menu::ModelIndex::HarddriveRight : ALTEngine::Menu::ModelIndex::HarddriveLeft;
 
         int cursor = 0;
         SaveSlotResult result;
@@ -126,31 +116,8 @@ namespace ALTEngine::Screens
             // cursor position or any other dynamic value (Edward, 2026:
             // models should fill "the entire background or thereabouts",
             // and shouldn't jump around while navigating).
-            if (modelRendererAvailable)
-            {
-                float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f;
-                // Render directly at display size - LINEAR texture
-                // filtering (see ModelRenderer::Initialize's sampler
-                // comment) is the actual fix for the dithering-pattern
-                // complaint, not a render-small-then-upscale hack
-                // (Edward, 2026: "that just made it blurry, it didn't
-                // actually change the rendered result").
-                int renderSize = std::min(windowW, windowH);
-                std::vector<uint8_t> pixels = ALTEngine::Renderer::ModelRenderer::RenderToRgba(cacheKey, rotationAngle, renderSize, renderSize);
-                if (!pixels.empty())
-                {
-                    SDL_Texture* modelTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, renderSize, renderSize);
-                    if (modelTexture)
-                    {
-                        SDL_SetTextureBlendMode(modelTexture, SDL_BLENDMODE_BLEND);
-                        SDL_UpdateTexture(modelTexture, nullptr, pixels.data(), renderSize * 4);
-                        SDL_FRect dest{ static_cast<float>((windowW - renderSize) / 2), static_cast<float>((windowH - renderSize) / 2),
-                                        static_cast<float>(renderSize), static_cast<float>(renderSize) };
-                        SDL_RenderTexture(renderer, modelTexture, nullptr, &dest);
-                        SDL_DestroyTexture(modelTexture);
-                    }
-                }
-            }
+            float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f;
+            ALTEngine::Renderer::DrawModelPreview(renderer, modelSource, 0, 0, windowW, windowH, rotationAngle);
 
             std::string title = (mode == SaveSlotMode::Load) ? "Load Game" : "Save Game";
             DrawBitmapText(renderer, title, (windowW - TextWidth(title, scale)) / 2, margin, scale, COLOR_BRIGHT);

@@ -158,6 +158,7 @@ add_executable(ALTEngine
     src/Screens/MultiplayerScreens.cpp
     src/Renderer/Mat4.h
     src/Renderer/ModelRenderer.cpp
+    src/Renderer/ModelPreview.cpp
 )
 target_include_directories(ALTEngine PRIVATE src)
 target_link_libraries(ALTEngine PRIVATE ALTFormats)

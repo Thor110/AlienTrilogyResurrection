@@ -8,6 +8,7 @@
 #include "../Bootstrap/ResolutionSettings.h"
 #include "../Formats/SplashImageLoader.h"
 #include "../Renderer/ModelRenderer.h"
+#include "../Renderer/ModelPreview.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -158,89 +159,36 @@ namespace ALTEngine::Menu
             DrawBitmapText(renderer, label, textX, textY, scale, COLOR_GREEN_DIM);
         }
 
-        // Renders the real spinning 3D model via ModelRenderer, uploaded
-        // as a regular SDL_Texture and drawn the same way the splash
-        // background images are - see ModelRenderer.h's architecture
-        // note on why the GPU render goes through a CPU round-trip
-        // rather than direct GPU-texture interop with SDL_Renderer.
-        // Falls back to DrawModelPlaceholder if the GPU pipeline isn't
-        // available or this specific model fails to load - the menu
+        // Renders the real spinning 3D model via the shared
+        // DrawModelPreview helper (src/Renderer/ModelPreview.h) -
+        // falls back to DrawModelPlaceholder if the GPU pipeline isn't
+        // available or this specific model fails to load, so the menu
         // stays fully usable either way.
         void DrawModel(SDL_Renderer* renderer, const std::filesystem::path& cdDirectory, int modelIndex,
                         int x, int y, int w, int h, int scale, float rotationAngle)
         {
             if (modelIndex < 0) { return; }
 
-            // Initialize() is idempotent (cheap no-op if already valid) -
-            // calling it fresh every time rather than caching "did I
-            // already try" avoids exactly the bug this fixed: another
-            // screen (GameplayScreen) can call Shutdown() between menu
-            // visits, which a cached flag here would have no way to
-            // know about (Edward, 2026 - "Options no longer displays
-            // models" after a gameplay session).
-            bool modelRendererAvailable = ModelRenderer::Initialize();
-            if (!modelRendererAvailable)
-            {
-                SDL_Log("Menu: ModelRenderer unavailable - using placeholder boxes instead of live 3D previews");
-            }
-
-            if (!modelRendererAvailable)
-            {
-                DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
-                return;
-            }
-
-            std::filesystem::path objBnd = cdDirectory / "GFX" / "OPTOBJ.BND";
-            std::filesystem::path gfxBnd = cdDirectory / "GFX" / "OPTGFX.BND";
-            std::string cacheKey = "OPTOBJ:" + std::to_string(modelIndex);
+            ALTEngine::Renderer::ModelPreviewSource source;
+            source.objBndPath = cdDirectory / "GFX" / "OPTOBJ.BND";
+            source.gfxBndPath = cdDirectory / "GFX" / "OPTGFX.BND";
+            source.cachePrefix = "OPTOBJ";
+            source.modelIndex = modelIndex;
 
             // Multitap (3) and the Music/SFX speaker models (11/12) use a
             // colour key (black) for transparency rather than most
             // OPTOBJ models' "black is just opaque material colour"
             // convention - see MenuTree.cpp's Volume() TODO and
             // RawImageRenderer's transparentRgb parameter (Edward, 2026).
-            std::optional<std::array<uint8_t, 3>> transparentRgb;
             if (modelIndex == ModelIndex::Multitap || modelIndex == ModelIndex::SpeakerMusic || modelIndex == ModelIndex::SpeakerSfx)
             {
-                transparentRgb = std::array<uint8_t, 3>{ 0, 0, 0 };
+                source.transparentRgb = std::array<uint8_t, 3>{ 0, 0, 0 };
             }
 
-            if (!ModelRenderer::LoadModel(cacheKey, modelIndex, objBnd, gfxBnd, transparentRgb))
+            if (!ALTEngine::Renderer::DrawModelPreview(renderer, source, x, y, w, h, rotationAngle))
             {
                 DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
-                return;
             }
-
-            // Render directly at display size - LINEAR texture filtering
-            // (see ModelRenderer::Initialize's sampler comment) smooths
-            // the source texture sampling itself, which is where the
-            // dithering pattern actually needs blending. An earlier
-            // attempt at this rendered small and post-process-blurred
-            // the final 2D image instead - wrong layer, blurred
-            // geometry edges that didn't need it without fixing the
-            // actual texture sampling (Edward, 2026).
-            int renderSize = std::min(w, h);
-            if (renderSize < 64) { renderSize = 64; }
-            std::vector<uint8_t> pixels = ModelRenderer::RenderToRgba(cacheKey, rotationAngle, renderSize, renderSize);
-            if (pixels.empty())
-            {
-                DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
-                return;
-            }
-
-            SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, renderSize, renderSize);
-            if (!texture)
-            {
-                DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
-                return;
-            }
-            SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND); // the render's clear color is transparent - let it composite over the menu background
-            SDL_UpdateTexture(texture, nullptr, pixels.data(), renderSize * 4);
-
-            SDL_FRect dest{ static_cast<float>(x + (w - renderSize) / 2), static_cast<float>(y + (h - renderSize) / 2),
-                            static_cast<float>(renderSize), static_cast<float>(renderSize) };
-            SDL_RenderTexture(renderer, texture, nullptr, &dest);
-            SDL_DestroyTexture(texture);
         }
 
         // Returns the column's width (fitted to its widest label + padding)

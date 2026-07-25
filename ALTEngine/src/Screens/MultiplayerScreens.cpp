@@ -6,6 +6,7 @@
 #include "../Bootstrap/Font8x8.h"
 #include "../Menu/MenuTree.h" // for ModelIndex::NetworkedComputers
 #include "../Renderer/ModelRenderer.h"
+#include "../Renderer/ModelPreview.h"
 
 #include <SDL3/SDL.h>
 #include <array>
@@ -34,57 +35,28 @@ namespace ALTEngine::Screens
         // - adjust once it can actually be seen rendered.
         constexpr float NETWORKED_COMPUTERS_BASE_ROTATION = -0.6f;
 
-        // Initialize() is idempotent - calling it fresh every time rather
-        // than caching "did I already try" avoids a real bug (Edward,
-        // 2026): another screen (GameplayScreen) can call Shutdown()
-        // between menu visits, which a cached flag here would have no
-        // way to know about, silently breaking model rendering until
-        // restart.
-        bool EnsureModelRendererInit()
-        {
-            return ALTEngine::Renderer::ModelRenderer::Initialize();
-        }
-
         // Fills the screen (roughly) - fixed, not tied to cursor
         // position or any other dynamic value. Every multiplayer screen
         // wants the same full-background treatment, so this takes no
         // position/size parameters anymore - it just fills the current
         // render target (Edward, 2026: models should fill "the entire
         // background or thereabouts", and shouldn't jump around while
-        // navigating).
+        // navigating). Uses the shared DrawModelPreview helper
+        // (src/Renderer/ModelPreview.h), also used by MenuController's
+        // Options screen and SaveSlotScreen (Edward, 2026).
         void DrawNetworkedComputersModel(SDL_Renderer* renderer, const std::filesystem::path& cdDirectory)
         {
-            if (!EnsureModelRendererInit()) { return; }
-
-            int modelIndex = ALTEngine::Menu::ModelIndex::NetworkedComputers;
-            std::string cacheKey = "OPTOBJ:" + std::to_string(modelIndex);
-            std::filesystem::path objBnd = cdDirectory / "GFX" / "OPTOBJ.BND";
-            std::filesystem::path gfxBnd = cdDirectory / "GFX" / "OPTGFX.BND";
-            ALTEngine::Renderer::ModelRenderer::LoadModel(cacheKey, modelIndex, objBnd, gfxBnd, std::nullopt, NETWORKED_COMPUTERS_BASE_ROTATION);
+            ALTEngine::Renderer::ModelPreviewSource source;
+            source.objBndPath = cdDirectory / "GFX" / "OPTOBJ.BND";
+            source.gfxBndPath = cdDirectory / "GFX" / "OPTGFX.BND";
+            source.cachePrefix = "OPTOBJ";
+            source.modelIndex = ALTEngine::Menu::ModelIndex::NetworkedComputers;
+            source.baseRotationRadians = NETWORKED_COMPUTERS_BASE_ROTATION;
 
             int windowW = 0, windowH = 0;
             SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-
-            // Render directly at display size - LINEAR texture filtering
-            // (see ModelRenderer::Initialize's sampler comment) is the
-            // actual fix for the dithering-pattern complaint, not a
-            // render-small-then-upscale hack (Edward, 2026: "that just
-            // made it blurry, it didn't actually change the rendered
-            // result").
-            int size = std::min(windowW, windowH);
-
             float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f;
-            std::vector<uint8_t> pixels = ALTEngine::Renderer::ModelRenderer::RenderToRgba(cacheKey, rotationAngle, size, size);
-            if (pixels.empty()) { return; }
-
-            SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, size, size);
-            if (!texture) { return; }
-            SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
-            SDL_UpdateTexture(texture, nullptr, pixels.data(), size * 4);
-            SDL_FRect dest{ static_cast<float>((windowW - size) / 2), static_cast<float>((windowH - size) / 2),
-                            static_cast<float>(size), static_cast<float>(size) };
-            SDL_RenderTexture(renderer, texture, nullptr, &dest);
-            SDL_DestroyTexture(texture);
+            ALTEngine::Renderer::DrawModelPreview(renderer, source, 0, 0, windowW, windowH, rotationAngle);
         }
     }
 
