@@ -119,6 +119,56 @@ And thanks to Kaiser for information regarding animated textures and some other 
 
 Source port is currently a work in progress.
 
+MU/TH/UR Computer System Interface
+
+This is used to locate the disc or game installation, copy the necessary files, rip the music tracks, patch game files and is only shown on the first launch of the game.
+
+<div align="center">
+  <img src="Images/ALTEngine/muthur.png" alt="MU/TH/UR Computer System">
+</div>
+
+Legal Screen - Upscaled
+
+<div align="center">
+  <img src="Images/ALTEngine/legal.png" alt="Legal Screen">
+</div>
+
+Probe Logo Video - Upscaled
+
+<div align="center">
+  <img src="Images/ALTEngine/probe.png" alt="Probe Logo Video">
+</div>
+
+Main Menu - Upscaled Background
+
+<div align="center">
+  <img src="Images/ALTEngine/main-menu.png" alt="Main Menu">
+</div>
+
+Options Menu - Upscaled Background
+
+<div align="center">
+  <img src="Images/ALTEngine/options-menu.png" alt="Options Menu">
+</div>
+
+Multiplayer Menu - Upscaled Background
+
+<div align="center">
+  <img src="Images/ALTEngine/multiplayer-menu.png" alt="Multiplayer Menu">
+</div>
+
+Pause Menu
+
+<div align="center">
+  <img src="Images/ALTEngine/pause-menu.png" alt="Pause Menu">
+</div>
+
+Briefing Menu - Upscaled Background
+
+<div align="center">
+  <img src="Images/ALTEngine/briefing-menu.png" alt="Briefing Menu">
+</div>
+
 ## Alien Trilogy Viewer
 
 The main program window.
