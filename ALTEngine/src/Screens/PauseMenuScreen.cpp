@@ -108,11 +108,6 @@ namespace ALTEngine::Screens
             DrawBitmapText(renderer, label, textX, textY, scale, COLOR_DIM);
         }
 
-        // Tracks whether ModelRenderer::Initialize() has been attempted -
-        // same lazy-init-once pattern as MenuController's boot menu.
-        bool modelRendererInitAttempted = false;
-        bool modelRendererAvailable = false;
-
         // Renders a real PICKMOD model (via ModelRenderer, using the
         // shared PICKGFX texture scheme), falling back to
         // DrawModelPlaceholder if the GPU pipeline isn't available or
@@ -123,14 +118,16 @@ namespace ALTEngine::Screens
         {
             if (modelIndex < 0) { return; }
 
-            if (!modelRendererInitAttempted)
+            // Initialize() is idempotent - see ModelRenderer.cpp's own
+            // comment on why this is called fresh every time rather than
+            // cached (Edward, 2026: models silently stopped rendering
+            // after a gameplay session, because a cached "already tried"
+            // flag here had no way to know GameplayScreen had since
+            // called Shutdown()).
+            bool modelRendererAvailable = ALTEngine::Renderer::ModelRenderer::Initialize();
+            if (!modelRendererAvailable)
             {
-                modelRendererInitAttempted = true;
-                modelRendererAvailable = ALTEngine::Renderer::ModelRenderer::Initialize();
-                if (!modelRendererAvailable)
-                {
-                    SDL_Log("PauseMenuScreen: ModelRenderer unavailable - using placeholder boxes instead of live 3D previews");
-                }
+                SDL_Log("PauseMenuScreen: ModelRenderer unavailable - using placeholder boxes instead of live 3D previews");
             }
 
             if (!modelRendererAvailable)

@@ -23,9 +23,6 @@ namespace ALTEngine::Screens
     {
         constexpr Color COLOR_BRIGHT{ 51, 255, 102, 255 };
         constexpr Color COLOR_DIM{ 24, 130, 52, 255 };
-
-        bool modelRendererInitAttempted = false;
-        bool modelRendererAvailable = false;
     }
 
     std::array<SaveSlotInfo, 10> StubSaveSlots()
@@ -50,11 +47,13 @@ namespace ALTEngine::Screens
         int bgW = 0, bgH = 0;
         SDL_Texture* background = LoadMenuBackground(cdDirectory, renderer, 1, bgW, bgH);
 
-        if (!modelRendererInitAttempted)
-        {
-            modelRendererInitAttempted = true;
-            modelRendererAvailable = ALTEngine::Renderer::ModelRenderer::Initialize();
-        }
+        // Initialize() is idempotent - calling it fresh every time rather
+        // than caching "did I already try" avoids a real bug (Edward,
+        // 2026): another screen (GameplayScreen) can call Shutdown()
+        // between menu visits, which a cached flag here would have no
+        // way to know about, silently breaking model rendering until
+        // restart.
+        bool modelRendererAvailable = ALTEngine::Renderer::ModelRenderer::Initialize();
 
         // HarddriveRight ("Hard Drive Loading ->") for Load, HarddriveLeft
         // ("Hard Drive Saving <-") for Save - both confirmed OPTOBJ

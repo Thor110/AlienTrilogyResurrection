@@ -180,6 +180,13 @@ namespace ALTEngine::Menu
             if (modelIndex < 0) { return; }
 
             if (!modelRendererInitAttempted)
+			// Initialize() is idempotent (cheap no-op if already valid) -
+            // calling it fresh every time rather than caching "did I
+            // already try" avoids exactly the bug this fixed: another
+            // screen (GameplayScreen) can call Shutdown() between menu
+            // visits, which a cached flag here would have no way to
+            // know about (Edward, 2026 - "Options no longer displays
+            // models" after a gameplay session).														 						
             {
                 modelRendererInitAttempted = true;
                 modelRendererAvailable = ModelRenderer::Initialize();
@@ -532,7 +539,7 @@ namespace ALTEngine::Menu
         }
 
         MusicPlayer::Stop();
-        if (modelRendererAvailable) { ModelRenderer::Shutdown(); }
+        ModelRenderer::Shutdown();
 
         if (mainBg) { SDL_DestroyTexture(mainBg); }
         if (optionsBg) { SDL_DestroyTexture(optionsBg); }

@@ -27,9 +27,6 @@ namespace ALTEngine::Screens
         constexpr Color COLOR_DIM{ 24, 130, 52, 255 };
         constexpr Color COLOR_EDITING{ 235, 235, 235, 255 };
 
-        bool modelRendererInitAttempted = false;
-        bool modelRendererAvailable = false;
-
         // NetworkedComputers (OPTOBJ index 10) - Edward noted this model
         // (and others like it) rests at a different natural angle than
         // most. The exact value below is a visual guess from the
@@ -37,13 +34,15 @@ namespace ALTEngine::Screens
         // - adjust once it can actually be seen rendered.
         constexpr float NETWORKED_COMPUTERS_BASE_ROTATION = -0.6f;
 
-        void EnsureModelRendererInit()
+        // Initialize() is idempotent - calling it fresh every time rather
+        // than caching "did I already try" avoids a real bug (Edward,
+        // 2026): another screen (GameplayScreen) can call Shutdown()
+        // between menu visits, which a cached flag here would have no
+        // way to know about, silently breaking model rendering until
+        // restart.
+        bool EnsureModelRendererInit()
         {
-            if (!modelRendererInitAttempted)
-            {
-                modelRendererInitAttempted = true;
-                modelRendererAvailable = ALTEngine::Renderer::ModelRenderer::Initialize();
-            }
+            return ALTEngine::Renderer::ModelRenderer::Initialize();
         }
 
         // Fills the screen (roughly) - fixed, not tied to cursor
@@ -55,8 +54,7 @@ namespace ALTEngine::Screens
         // navigating).
         void DrawNetworkedComputersModel(SDL_Renderer* renderer, const std::filesystem::path& cdDirectory)
         {
-            EnsureModelRendererInit();
-            if (!modelRendererAvailable) { return; }
+            if (!EnsureModelRendererInit()) { return; }
 
             int modelIndex = ALTEngine::Menu::ModelIndex::NetworkedComputers;
             std::string cacheKey = "OPTOBJ:" + std::to_string(modelIndex);

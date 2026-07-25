@@ -35,16 +35,22 @@ namespace ALTEngine::Formats
             std::array<Uv, 4> uvs;
             switch (q.flags)
             {
-            case 2: // flip 180 - CORRECTED (Edward's AlienTrilogyMapLoader.cs, 2026): confirmed
-                    // this is the real mapping, not what was here before - flags 2/11
-                    // were swapped. The earlier "confirmed against all 14 OPTOBJ models"
-                    // tests only checked structural validity (in-bounds indices, no
-                    // exceptions), which can't distinguish "right pattern, wrong flag"
-                    // from actually correct - a real gap in that test's coverage.
-                uvs = { baseUvs[1], baseUvs[0], baseUvs[3], baseUvs[2] };
-                break;
-            case 11: // special triangle case - CORRECTED, see above
+            case 2: // special triangle order - REVERTED (Edward, 2026):
+                    // directly verified against his own toolkit's OBJ
+                    // export of OPTOBJ model 9 (152 verts/118 quads,
+                    // matched vertex-for-vertex and quad-for-quad). Every
+                    // flags==11 quad in that model (11 of them) matched
+                    // this pattern, not the "flip 180" pattern an earlier
+                    // session swapped this to based on a misreading of
+                    // AlienTrilogyMapLoader.cs - that swap was wrong, this
+                    // is the original, correct mapping.
                 uvs = { baseUvs[0], baseUvs[2], baseUvs[3], baseUvs[3] };
+                break;
+            case 11: // flip 180 - see above; this pattern is what the
+                     // 11 flags==11 quads in the reference model actually
+                     // need, confirmed via 1-V-flip-adjusted comparison
+                     // against the exported OBJ's own vt coordinates.
+                uvs = { baseUvs[1], baseUvs[0], baseUvs[3], baseUvs[2] };
                 break;
             default:
                 uvs = baseUvs;
@@ -120,16 +126,16 @@ namespace ALTEngine::Formats
 
             switch (q.flags)
             {
-            case 2: // flip 180 - CORRECTED (Edward's AlienTrilogyMapLoader.cs, 2026):
-                    // levels use the EXACT SAME flag mapping as models, confirmed
-                    // by BuildMapGeometry's switch(flags) - case 2 = flip180, case
-                    // 11 = special triangle. The "levels use 1/5/13 instead" claim
-                    // this replaced came from an earlier, less careful reading of
-                    // ModelRenderer.cs and was wrong - this is the actual bug
-                    // behind "many faces are flipped" (Edward, 2026).
-                return { baseUvs[1], baseUvs[0], baseUvs[3], baseUvs[2] };
-            case 11: // special triangle case
+            case 2: // special triangle order - REVERTED (Edward, 2026):
+                    // see ComputeQuadUvs above for the full explanation -
+                    // directly verified against a real OBJ export that
+                    // the earlier case2/11 swap was wrong. Levels share
+                    // this same convention as models (same EmitQuad code
+                    // path builds both), so this reverts alongside that
+                    // fix rather than staying out of sync with it.
                 return { baseUvs[0], baseUvs[2], baseUvs[3], baseUvs[3] };
+            case 11: // flip 180
+                return { baseUvs[1], baseUvs[0], baseUvs[3], baseUvs[2] };
             default:
                 return baseUvs;
             }

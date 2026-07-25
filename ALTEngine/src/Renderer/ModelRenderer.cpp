@@ -44,6 +44,7 @@ namespace ALTEngine::Renderer
             float centerX = 0, centerY = 0, centerZ = 0; // AABB center, for auto-framing the camera
             float radius = 1.0f;                          // AABB bounding-sphere radius
             float baseRotationRadians = 0.0f;              // fixed per-model orientation offset - see LoadModel's doc comment
+            bool useDoubleSided = false;                   // true for colour-key cutout models - see LoadModel's doc comment
         };
 
         struct LevelSubGroup
@@ -60,7 +61,8 @@ namespace ALTEngine::Renderer
         };
 
         SDL_GPUDevice* device = nullptr;
-        SDL_GPUGraphicsPipeline* pipeline = nullptr;
+        SDL_GPUGraphicsPipeline* pipeline = nullptr;           // cull_mode=BACK - correct for solid, opaque geometry
+        SDL_GPUGraphicsPipeline* doubleSidedPipeline = nullptr; // cull_mode=NONE - see LoadModel's doc comment on why colour-key cutout models need this
         SDL_GPUSampler* sampler = nullptr;
         SDL_GPUTextureFormat depthFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
         std::unordered_map<std::string, LoadedModel> loadedModels;
@@ -279,6 +281,17 @@ namespace ALTEngine::Renderer
 
     bool ModelRenderer::Initialize()
     {
+        // Idempotent - safe (and cheap) to call every time a screen
+        // needs a model, rather than each screen caching its own "did I
+        // already try" flag. Those per-screen flags are what caused
+        // "Options no longer displays models after a gameplay session" -
+        // GameplayScreen calls Shutdown() when it exits (correctly, see
+        // its own comment on why), but MenuController's own cached
+        // "already initialized" flag had no way to know that happened,
+        // so it never re-initialized and every subsequent LoadModel call
+        // silently failed against a null device (Edward, 2026).
+        if (device) { return true; }
+
         device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL, false, nullptr);
         if (!device)
         {
@@ -362,10 +375,27 @@ namespace ALTEngine::Renderer
         pipelineInfo.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
 
         pipeline = SDL_CreateGPUGraphicsPipeline(device, &pipelineInfo);
+
+        // Same pipeline, just cull_mode=NONE - needed for colour-key
+        // cutout models (the Music/SFX speakers, Multitap), which are
+        // thin/open shapes where the "inside" surface (a back-facing
+        // triangle from certain angles) legitimately needs to be visible
+        // through a cutout gap. With normal backface culling, that
+        // inside surface gets discarded entirely, making the cutout
+        // incorrectly show background instead of material (Edward,
+        // 2026: "we need transparent textures to be double sided so
+        // they are not transparent from the back"). Every OTHER model
+        // and level geometry is solid/opaque, where single-sided
+        // culling is correct (confirmed empirically - see the cull_mode
+        // comment above), so this is opt-in per model, not a global
+        // setting.
+        pipelineInfo.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+        doubleSidedPipeline = SDL_CreateGPUGraphicsPipeline(device, &pipelineInfo);
+
         SDL_ReleaseGPUShader(device, vertexShader);
         SDL_ReleaseGPUShader(device, fragmentShader);
 
-        if (!pipeline)
+        if (!pipeline || !doubleSidedPipeline)
         {
             SDL_Log("ModelRenderer::Initialize: SDL_CreateGPUGraphicsPipeline failed: %s", SDL_GetError());
             SDL_DestroyGPUDevice(device);
@@ -399,11 +429,30 @@ namespace ALTEngine::Renderer
         }
         loadedModels.clear();
 
+        // Same idea as loadedModels above - without this, a cached
+        // LoadedLevel's GPU handles go dangling the moment the device is
+        // destroyed below, but LoadLevel's "already loaded" cache check
+        // would still report success on a later re-entry, handing back
+        // garbage buffers. Same class of bug as the "Options no longer
+        // displays models" issue this Shutdown/Initialize idempotency
+        // fix addresses, just for levels instead.
+        for (auto& [index, level] : loadedLevels)
+        {
+            for (auto& group : level.groups)
+            {
+                if (group.vertexBuffer) { SDL_ReleaseGPUBuffer(device, group.vertexBuffer); }
+                if (group.indexBuffer) { SDL_ReleaseGPUBuffer(device, group.indexBuffer); }
+                if (group.texture) { SDL_ReleaseGPUTexture(device, group.texture); }
+            }
+        }
+        loadedLevels.clear();
+
         if (colorTarget) { SDL_ReleaseGPUTexture(device, colorTarget); colorTarget = nullptr; }
         if (depthTarget) { SDL_ReleaseGPUTexture(device, depthTarget); depthTarget = nullptr; }
         if (downloadBuffer) { SDL_ReleaseGPUTransferBuffer(device, downloadBuffer); downloadBuffer = nullptr; }
         if (sampler) { SDL_ReleaseGPUSampler(device, sampler); sampler = nullptr; }
         if (pipeline) { SDL_ReleaseGPUGraphicsPipeline(device, pipeline); pipeline = nullptr; }
+        if (doubleSidedPipeline) { SDL_ReleaseGPUGraphicsPipeline(device, doubleSidedPipeline); doubleSidedPipeline = nullptr; }
 
         SDL_DestroyGPUDevice(device);
         device = nullptr;
@@ -510,6 +559,7 @@ namespace ALTEngine::Renderer
         model.centerX = cx; model.centerY = cy; model.centerZ = cz;
         model.radius = radius;
         model.baseRotationRadians = baseRotationRadians;
+        model.useDoubleSided = transparentRgb.has_value();
         loadedModels[cacheKey] = model;
 
         return true;
@@ -552,7 +602,7 @@ namespace ALTEngine::Renderer
 
         SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(cmd, &colorInfo, 1, &depthInfo);
 
-        SDL_BindGPUGraphicsPipeline(renderPass, pipeline);
+        SDL_BindGPUGraphicsPipeline(renderPass, model.useDoubleSided ? doubleSidedPipeline : pipeline);
         SDL_GPUBufferBinding vbBinding{ model.vertexBuffer, 0 };
         SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
         SDL_GPUBufferBinding ibBinding{ model.indexBuffer, 0 };
