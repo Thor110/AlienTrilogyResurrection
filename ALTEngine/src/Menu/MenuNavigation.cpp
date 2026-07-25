@@ -40,10 +40,8 @@ namespace ALTEngine::Menu
         const MenuNode& parent = WalkPath(root, parentPath);
         if (parent.children.empty()) { return; }
 
-        int maxIndex = static_cast<int>(parent.children.size()) - 1;
-        int newIndex = path.back() + delta;
-        if (newIndex < 0) { newIndex = 0; }
-        if (newIndex > maxIndex) { newIndex = maxIndex; }
+        int count = static_cast<int>(parent.children.size());
+        int newIndex = (path.back() + delta + count) % count;
         path.back() = newIndex;
     }
 

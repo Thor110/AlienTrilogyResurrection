@@ -75,12 +75,12 @@ namespace ALTEngine::Menu
         MenuNode LanguageMenu()
         {
             return List("Language", {
-                Action("English"),      // English
-                Action("Français"),     // French
-                Action("Italiano"),     // Italian
-                Action("Español"),      // Spanish
-                Action("Deutsch"),      // German
-                Action("日本語"),        // Japanese
+                Action("English"),          // English
+                Action("Français"),         // French
+                Action("Italiano"),         // Italian
+                Action("Español"),          // Spanish
+                Action("Deutsch"),          // German
+                Action("Japanese 日本語"),   // Japanese
             });
         }
 
