@@ -42,6 +42,9 @@ add_library(ALTFormats STATIC
     src/Formats/MissionText.cpp
     src/Formats/Obj3DTexture.cpp
     src/Formats/LevelTransparency.cpp
+    src/Formats/SpriteFrameDecompressor.cpp
+    src/Formats/SpriteFrameDimensions.cpp
+    src/Formats/SpriteFrameLoader.cpp
 )
 target_include_directories(ALTFormats PUBLIC src)
 target_link_libraries(ALTFormats PRIVATE nlohmann_json::nlohmann_json)
