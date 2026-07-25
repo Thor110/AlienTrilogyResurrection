@@ -21,6 +21,8 @@ namespace ALTEngine::Screens
             MakeAction("Smart Gun", PM::SmartGun, PM::SmartGunAmmunition),
             MakeAction("Batteries", PM::Battery),
             MakeAction("Mission"), // no model - shows the mission brief text instead, see PauseMenuScreen
+            MakeAction("Save Game"),
+            MakeAction("Load Game"),
             MakeList("Options", {
                 MakeSlider("SFX Volume"),
                 MakeSlider("Music Volume"),
