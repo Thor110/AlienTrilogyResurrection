@@ -403,12 +403,40 @@ namespace ALTEngine::Renderer
             return false;
         }
 
-        // NEAREST filtering - matches the "Original" (PS1-authentic,
-        // pixelated) render fidelity, the current default (see
-        // RenderSettings) - not the "Smoothed" alternative.
+        // LINEAR (bilinear) filtering - Edward, 2026: a direct
+        // side-by-side comparison against a real screenshot of the
+        // original game showed smooth, non-blocky texture surfaces, not
+        // the blocky pixelation NEAREST filtering was assumed to
+        // authentically reproduce here. That assumption was wrong - this
+        // game's renderer (PS1 hardware supports optional bilinear
+        // texture filtering per-game, and evidently this one used it)
+        // smooths texture sampling at the source, which is the actual
+        // fix for the "dithering pattern" complaint: PS1 textures often
+        // use ordered dithering to fake more colours than the palette
+        // has, and that pattern is meant to blend into a gradient via
+        // filtering, not render as hard flat blocks. An earlier attempt
+        // at this (rendering small, then post-process blurring the
+        // whole final image via SDL_SCALEMODE_LINEAR at the 2D
+        // composite stage) was the wrong layer to fix it at - it
+        // blurred geometry edges/silhouettes that didn't need it
+        // without actually addressing the texture sampling itself
+        // (Edward: "that just made it blurry, it didn't actually change
+        // the rendered result").
         SDL_GPUSamplerCreateInfo samplerInfo{};
-        samplerInfo.min_filter = SDL_GPU_FILTER_NEAREST;
-        samplerInfo.mag_filter = SDL_GPU_FILTER_NEAREST;
+        samplerInfo.min_filter = SDL_GPU_FILTER_LINEAR;
+        samplerInfo.mag_filter = SDL_GPU_FILTER_LINEAR;
+        // LINEAR min/mag for actual bilinear texel smoothing (see the
+        // comment on why NEAREST was wrong for this game), but NEAREST
+        // mipmap mode - textures here only ever have a single mip level
+        // (num_levels=1, see UploadMeshWithTexture), so LINEAR mipmap
+        // mode was mismatched against that and produced a genuine
+        // artifact: Edward, 2026 found a regular, ~4px-period
+        // checkerboard pattern in the rendered CRT screen, in a region
+        // independently confirmed (by directly inspecting the source
+        // texture data) to be a single uniform palette index with zero
+        // internal variation. That's a sampler/mip-level mismatch
+        // artifact, not real dithering - NEAREST mipmap mode is correct
+        // here since there's only one level to sample from anyway.
         samplerInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
         samplerInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
         samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;

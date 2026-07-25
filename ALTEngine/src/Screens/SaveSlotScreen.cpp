@@ -129,6 +129,12 @@ namespace ALTEngine::Screens
             if (modelRendererAvailable)
             {
                 float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f;
+                // Render directly at display size - LINEAR texture
+                // filtering (see ModelRenderer::Initialize's sampler
+                // comment) is the actual fix for the dithering-pattern
+                // complaint, not a render-small-then-upscale hack
+                // (Edward, 2026: "that just made it blurry, it didn't
+                // actually change the rendered result").
                 int renderSize = std::min(windowW, windowH);
                 std::vector<uint8_t> pixels = ALTEngine::Renderer::ModelRenderer::RenderToRgba(cacheKey, rotationAngle, renderSize, renderSize);
                 if (!pixels.empty())

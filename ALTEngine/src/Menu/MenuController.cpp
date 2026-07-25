@@ -211,6 +211,14 @@ namespace ALTEngine::Menu
                 return;
             }
 
+            // Render directly at display size - LINEAR texture filtering
+            // (see ModelRenderer::Initialize's sampler comment) smooths
+            // the source texture sampling itself, which is where the
+            // dithering pattern actually needs blending. An earlier
+            // attempt at this rendered small and post-process-blurred
+            // the final 2D image instead - wrong layer, blurred
+            // geometry edges that didn't need it without fixing the
+            // actual texture sampling (Edward, 2026).
             int renderSize = std::min(w, h);
             if (renderSize < 64) { renderSize = 64; }
             std::vector<uint8_t> pixels = ModelRenderer::RenderToRgba(cacheKey, rotationAngle, renderSize, renderSize);

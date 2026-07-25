@@ -64,6 +64,13 @@ namespace ALTEngine::Screens
 
             int windowW = 0, windowH = 0;
             SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+
+            // Render directly at display size - LINEAR texture filtering
+            // (see ModelRenderer::Initialize's sampler comment) is the
+            // actual fix for the dithering-pattern complaint, not a
+            // render-small-then-upscale hack (Edward, 2026: "that just
+            // made it blurry, it didn't actually change the rendered
+            // result").
             int size = std::min(windowW, windowH);
 
             float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f;
