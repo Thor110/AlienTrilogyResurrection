@@ -278,14 +278,18 @@ namespace ALTEngine::Menu
         // green by default, white when selected. Distinct from DrawColumn
         // (used for Options, which keeps its filled-bar highlight).
         void DrawMainMenuList(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int selectedIndex,
-                               int x, int y, int rowHeight, int scale)
+            int windowW, int y, int rowHeight, int scale)
         {
             for (size_t i = 0; i < items.size(); ++i)
             {
                 int rowY = y + static_cast<int>(i) * rowHeight;
                 bool isSelected = (static_cast<int>(i) == selectedIndex);
                 Color textColor = isSelected ? COLOR_WHITE : COLOR_GREEN;
-                DrawBitmapText(renderer, items[i].label, x + scale * 4, rowY + (rowHeight - TextHeight(scale)) / 2, scale, textColor);
+
+                int textW = TextWidth(items[i].label, scale);
+                int textX = (windowW - textW) / 2;
+
+                DrawBitmapText(renderer, items[i].label, textX, rowY + (rowHeight - TextHeight(scale)) / 2, scale, textColor);
             }
         }
 
@@ -459,7 +463,7 @@ namespace ALTEngine::Menu
                 DrawBackground(renderer, mainBg, mainBgW, mainBgH);
                 int windowW = 0, windowH = 0;
                 SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-                DrawMainMenuList(renderer, root.children, mainPath[0], windowW / 2 - 100, windowH * 2 / 3, rowHeight, scale);
+                DrawMainMenuList(renderer, root.children, mainPath[0], windowW, windowH * 2 / 3, rowHeight, scale);
             }
             else if (screen == Screen::Options)
             {
@@ -467,6 +471,18 @@ namespace ALTEngine::Menu
 
                 int windowW = 0, windowH = 0;
                 SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+
+                // Model viewport fills the screen (roughly) and is drawn
+                // BEFORE the text columns, as a background layer - fixed
+                // position/size regardless of navigation depth. Previously
+                // this was a small box anchored to columnX (which grows
+                // as you navigate into nested menus), so the model itself
+                // visibly jumped around and resized every time the column
+                // count changed - Edward, 2026.
+                int modelIndex = EffectiveModelIndex(optionsRoot, optionsPath);
+                float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f; // 1 radian/sec - a slow, steady spin
+                DrawModel(renderer, cdDirectory, modelIndex, 0, 0, windowW, windowH, scale, rotationAngle);
+
                 std::string title = "OPTIONS";
                 DrawBitmapText(renderer, title, (windowW - TextWidth(title, scale)) / 2, scale * 6, scale, COLOR_GREEN);
 
@@ -497,11 +513,6 @@ namespace ALTEngine::Menu
                     node = &node->children[static_cast<size_t>(optionsPath[depth])];
                     if (node->kind != MenuNodeKind::List) { break; } // leaf - nothing further to preview as a column
                 }
-
-                int modelIndex = EffectiveModelIndex(optionsRoot, optionsPath);
-                SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-                float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f; // 1 radian/sec - a slow, steady spin
-                DrawModel(renderer, cdDirectory, modelIndex, columnX, columnTop, windowW - columnX - scale * 8, 300, scale, rotationAngle);
 
                 DrawBitmapText(renderer, "PRESS ESC TO GO BACK", scale * 8, windowH - rowHeight * 2, scale, COLOR_GREEN);
                 DrawBitmapText(renderer, "PRESS ENTER TO SELECT", scale * 8, windowH - rowHeight, scale, COLOR_GREEN);
