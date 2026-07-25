@@ -85,8 +85,10 @@ The road map for this project.
 	- [Patched an issue on L901LEV where player storage was located within the level boundaries.](#L901LEV-Multiplayer-Map-2-Fix-1)
 	- [Patched an issue on L900LEV where four crates had textures which were sideways.](#L900LEV-Multiplayer-Map-1-Fix-1)
 	- [Patched an issue on L900LEV where multiple texture flags were incorrectly set.](#L900LEV-Multiplayer-Map-1-Fix-2)
+	- [Patched an issue on L900LEV where a vertice in the first lift had the wrong Z coordinate.](#L900LEV-Multiplayer-Map-1-Fix-3)
 	- [Patched an issue on L111LEV where four crates had textures which were sideways.](#L111LEV-Fix-1)
 	- [Patched an issue on L111LEV where multiple texture flags were incorrectly set.](#L111LEV-Fix-2)
+	- [Patched an issue on L111LEV where a vertice in the first lift had the wrong Z coordinate.](#L111LEV-Fix-3)
 	- [Patched an issue on L141LEV where some crates had incorrect textures.](#L141LEV-Fix-1)
 	- [Patched an issue on L161LEV where one face had an incorrect texture.](#L161LEV-Fix-1)
 	- [Patched an issue on L161LEV where one face on a door had an incorrect texture.](#L161LEV-Fix-2)
@@ -458,6 +460,12 @@ Currently this is only fixed when exporting the level model.
 
 [These fixes are the same as on L111LEV](#L111LEV-Fix-2)
 
+## L900LEV Multiplayer Map 1 Fix 3
+
+Patch listed at Patch/new-fix.txt
+
+Not implemented in the toolkit yet
+
 ## L111LEV Fix 1
 
 These fixes are the same as on L900LEV
@@ -491,6 +499,12 @@ Here it is with the fix I applied to the level.
 <div align="center">
   <img src="Images/L111LEV-flags-patched.png" alt="L111LEV Patched">
 </div>
+
+## L111LEV Fix 3
+
+Patch listed at Patch/new-fix.txt
+
+Not implemented in the toolkit yet
 
 ## L141LEV Fix 1
 
