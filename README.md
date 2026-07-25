@@ -9,45 +9,42 @@ This project aims to create a modding toolkit and possibly more for Alien Trilog
 
 # To Do List
 
-Text Editor
-
-- UI text viewing .BIN files plaintext.
-- Editing and saving functionality.
-
-Model Viewer
-
-- M036 is an unused model and does not have a corresponding texture.
-- M039 is an unused model which is the same as the #41 the egg-husk.
-- M040 is the hibernation pod cover which does not have a texture, I believe this is likely coloured in code with a single colour.
-
-Graphics Viewer
-
-- Compressed images can not be replaced yet, until I implement a recompression algorithm that matches the original exactly.
-
-Level Viewer
-
-- Not really a level "viewer" per-se, currently it is just a testing tool for parsing level data, it can also export the level geometry as OBJ files.
-- May or may not extend it to level viewer and editor functionality one day.
-- Need to implement an export feature for the location of level objects, enemies, crates, pickups, switches, doors etc
-
-Patches
-
-- Multiple UVs across the games levels, lifts and doors need fixing.
-- The UVs for the Queens Egg Sack from the final level need fixing.
-
-Source Port
-
-- Gameplay Mechanics
-- Sounds & Music
-- Multiplayer
+- Source Port
+	- Gameplay Mechanics
+	- Sounds & Music
+	- Multiplayer
+- Text Editor
+	- UI text viewing .BIN files plaintext.
+	- Editing and saving functionality.
+- Model Viewer
+	- M036 is an unused model and does not have a corresponding texture.
+	- M039 is an unused model which is the same as the #41 the egg-husk.
+	- M040 is the hibernation pod cover which does not have a texture, I believe this is likely coloured in code with a single colour.
+- Graphics Viewer
+	- Compressed images can not be replaced yet, until I implement a recompression algorithm that matches the original exactly.
+- Level Viewer
+	- Not really a level "viewer" per-se, currently it is just a testing tool for parsing level data, it can also export the level geometry as OBJ files.
+	- May or may not extend it to level viewer and editor functionality one day.
+	- Need to implement an export feature for the location of level objects, enemies, crates, pickups, switches, doors etc
+- Patches
+	- Multiple UVs across the games levels, lifts and doors need fixing.
+	- The UVs for the Queens Egg Sack from the final level need fixing.
 
 # Road Map
 
 The road map for this project.
 
+- [❌ 0 : Source Port](#source-port) ( 25% Complete )
+	- Original CD detection and selective asset extraction
+	- Automated Redbook CD-DA audio ripping and pre-bundled playlist generation
+	- Native image and video override architecture
+	- Upgraded cutscene video playback pipeline (BSRGAN upscaled via local NCNN, batch-processed through FFmpeg)
+	- Integrated main menu audio, functional layout drafts, options configs, resolution detection  and selection.
+	- Graphics quality options smoothed and original rendering styles. (WIP)
 - [❌ 1 : Text Editor](#text-editor) ( 50% Complete )
 	- View text from the games missions and user interface.
 	- Editing and saving functions not implemented yet.
+	- Effectively a cancelled feature, the text is stored in .txt and .bin files as plain text. If you want to edit those, you don't need a toolkit for it.
 - [✅ 2 : Model Viewer](#model-viewer) ( 99% Complete )
 	- Can extract models from the three known model files.
 	- Does not currently extract the associated textures alongside them.
@@ -101,13 +98,6 @@ The road map for this project.
 	- [Grade 33 Steel](#easter-egg-1)
 	- [End Times](#easter-egg-2)
 	- [Cheats](#easter-egg-3)
-- [❌ 9 : Source Port](#source-port) ( 25% Complete )
-	- Original CD detection and selective asset extraction
-	- Automated Redbook CD-DA audio ripping and pre-bundled playlist generation
-	- Native image and video override architecture
-	- Upgraded cutscene video playback pipeline (BSRGAN upscaled via local NCNN, batch-processed through FFmpeg)
-	- Integrated main menu audio, functional layout drafts, options configs, resolution detection  and selection.
-	- Graphics quality options smoothed and original rendering styles. (WIP)
 
 And possibly more to come.
 
@@ -124,6 +114,10 @@ Also a big thanks to Lex Safanov for posting their source code for decompression
 A thanks to bambamalicious for discovering the fix for the inaccessible secret on L371LEV.
 
 And thanks to Kaiser for information regarding animated textures and some other previously unknown bytes.
+
+## Source Port
+
+Source port is currently a work in progress.
 
 ## Alien Trilogy Viewer
 
@@ -569,7 +563,3 @@ This texture contains a reference to the cheat "RIPLEYDOESITWITHBIGGUNS" as well
 </div>
 
 909GFX_TP00 is the name of the texture when extracted by this toolkit.
-
-## Source Port
-
-Source port is currently a work in progress.
