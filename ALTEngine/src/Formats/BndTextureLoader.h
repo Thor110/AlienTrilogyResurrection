@@ -45,6 +45,17 @@ namespace ALTEngine::Formats
         // call rather than per-texture, since a caller only ever passes
         // this when they already know the specific file needs it (e.g.
         // OPTGFX.BND for the Music/SFX speaker and Multitap models).
-        static BndTextureSet Load(const std::filesystem::path& bndPath, std::optional<std::array<uint8_t, 3>> transparentRgb = std::nullopt);
+        //
+        // `perTextureTransparentIndices`, if non-empty, gives PALETTE
+        // INDEX transparency per texture position (i.e. [i] applies to
+        // the i-th TP section decoded, matching group order) - needed
+        // for level textures, where transparency is index-based (not
+        // colour-based) and genuinely different per texture group and
+        // per level ID (confirmed against Edward's AlienTrilogyMapLoader.cs
+        // GetTransparencyValues, 2026). Out-of-range or empty entries
+        // mean "no index-based transparency for that texture".
+        static BndTextureSet Load(const std::filesystem::path& bndPath,
+                                   std::optional<std::array<uint8_t, 3>> transparentRgb = std::nullopt,
+                                   const std::vector<std::vector<int>>& perTextureTransparentIndices = {});
     };
 }

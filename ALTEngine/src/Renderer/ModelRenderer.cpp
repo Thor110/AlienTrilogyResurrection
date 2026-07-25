@@ -3,6 +3,7 @@
 #include "../Bootstrap/PlatformPaths.h"
 #include "../Formats/BndParser.h"
 #include "../Formats/BndTextureLoader.h"
+#include "../Formats/LevelTransparency.h"
 #include "../Formats/ModelLoader.h"
 #include "../Formats/RenderMesh.h"
 
@@ -45,11 +46,25 @@ namespace ALTEngine::Renderer
             float baseRotationRadians = 0.0f;              // fixed per-model orientation offset - see LoadModel's doc comment
         };
 
+        struct LevelSubGroup
+        {
+            SDL_GPUBuffer* vertexBuffer = nullptr;
+            SDL_GPUBuffer* indexBuffer = nullptr;
+            uint32_t indexCount = 0;
+            SDL_GPUTexture* texture = nullptr; // nullptr if this group is unused by the level (0 quads)
+        };
+
+        struct LoadedLevel
+        {
+            std::array<LevelSubGroup, 5> groups;
+        };
+
         SDL_GPUDevice* device = nullptr;
         SDL_GPUGraphicsPipeline* pipeline = nullptr;
         SDL_GPUSampler* sampler = nullptr;
         SDL_GPUTextureFormat depthFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
         std::unordered_map<std::string, LoadedModel> loadedModels;
+        std::unordered_map<std::string, LoadedLevel> loadedLevels;
 
         // Offscreen render target cache - recreated only if the requested
         // size changes, since the menu is expected to call RenderToRgba
@@ -100,6 +115,165 @@ namespace ALTEngine::Renderer
             info.num_uniform_buffers = numUniformBuffers;
 
             return SDL_CreateGPUShader(dev, &info);
+        }
+
+        // Uploads a CPU-side mesh + decoded texture to GPU buffers -
+        // shared by LoadModel and LoadLevel (each of a level's up to 5
+        // sub-groups needs the exact same vertex/index/texture upload
+        // sequence a single model does). Returns a zeroed LevelSubGroup
+        // (all nullptr) on failure - callers should check
+        // texture/vertexBuffer/indexBuffer before trusting the result.
+        LevelSubGroup UploadMeshWithTexture(const RenderMesh& renderMesh, const ALTEngine::Formats::BndTexture& tex)
+        {
+            LevelSubGroup group;
+            if (renderMesh.vertices.empty() || renderMesh.indices.empty()) { return group; }
+
+            size_t vbSize = renderMesh.vertices.size() * sizeof(float) * 5;
+            size_t ibSize = renderMesh.indices.size() * sizeof(uint32_t);
+            size_t texSize = static_cast<size_t>(tex.width) * tex.height * 4;
+
+            SDL_GPUBufferCreateInfo vbInfo{ SDL_GPU_BUFFERUSAGE_VERTEX, static_cast<Uint32>(vbSize) };
+            SDL_GPUBuffer* vertexBuffer = SDL_CreateGPUBuffer(device, &vbInfo);
+            SDL_GPUBufferCreateInfo ibInfo{ SDL_GPU_BUFFERUSAGE_INDEX, static_cast<Uint32>(ibSize) };
+            SDL_GPUBuffer* indexBuffer = SDL_CreateGPUBuffer(device, &ibInfo);
+
+            SDL_GPUTextureCreateInfo texInfo{};
+            texInfo.type = SDL_GPU_TEXTURETYPE_2D;
+            texInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+            texInfo.width = static_cast<Uint32>(tex.width);
+            texInfo.height = static_cast<Uint32>(tex.height);
+            texInfo.layer_count_or_depth = 1;
+            texInfo.num_levels = 1;
+            texInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+            SDL_GPUTexture* texture = SDL_CreateGPUTexture(device, &texInfo);
+
+            if (!vertexBuffer || !indexBuffer || !texture)
+            {
+                SDL_Log("UploadMeshWithTexture: buffer/texture creation failed: %s", SDL_GetError());
+                if (vertexBuffer) { SDL_ReleaseGPUBuffer(device, vertexBuffer); }
+                if (indexBuffer) { SDL_ReleaseGPUBuffer(device, indexBuffer); }
+                if (texture) { SDL_ReleaseGPUTexture(device, texture); }
+                return group;
+            }
+
+            SDL_GPUTransferBufferCreateInfo transferInfo{};
+            transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+            transferInfo.size = static_cast<Uint32>(vbSize + ibSize + texSize);
+            SDL_GPUTransferBuffer* transfer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
+
+            uint8_t* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, transfer, false));
+            std::memcpy(mapped, renderMesh.vertices.data(), vbSize);
+            std::memcpy(mapped + vbSize, renderMesh.indices.data(), ibSize);
+            std::memcpy(mapped + vbSize + ibSize, tex.rgba.data(), texSize);
+            SDL_UnmapGPUTransferBuffer(device, transfer);
+
+            SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
+            SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
+
+            SDL_GPUTransferBufferLocation vbSrc{ transfer, 0 };
+            SDL_GPUBufferRegion vbDst{ vertexBuffer, 0, static_cast<Uint32>(vbSize) };
+            SDL_UploadToGPUBuffer(copyPass, &vbSrc, &vbDst, false);
+
+            SDL_GPUTransferBufferLocation ibSrc{ transfer, static_cast<Uint32>(vbSize) };
+            SDL_GPUBufferRegion ibDst{ indexBuffer, 0, static_cast<Uint32>(ibSize) };
+            SDL_UploadToGPUBuffer(copyPass, &ibSrc, &ibDst, false);
+
+            SDL_GPUTextureTransferInfo texSrc{};
+            texSrc.transfer_buffer = transfer;
+            texSrc.offset = static_cast<Uint32>(vbSize + ibSize);
+            SDL_GPUTextureRegion texDst{};
+            texDst.texture = texture;
+            texDst.w = static_cast<Uint32>(tex.width);
+            texDst.h = static_cast<Uint32>(tex.height);
+            texDst.d = 1;
+            SDL_UploadToGPUTexture(copyPass, &texSrc, &texDst, false);
+
+            SDL_EndGPUCopyPass(copyPass);
+            SDL_SubmitGPUCommandBuffer(cmd);
+            SDL_ReleaseGPUTransferBuffer(device, transfer);
+
+            group.vertexBuffer = vertexBuffer;
+            group.indexBuffer = indexBuffer;
+            group.indexCount = static_cast<uint32_t>(renderMesh.indices.size());
+            group.texture = texture;
+            return group;
+        }
+
+        // Ensures colorTarget/depthTarget/downloadBuffer exist and match
+        // the requested size, recreating them if not - shared by
+        // RenderToRgba (small model previews) and RenderLevelToRgba
+        // (a full level view, typically much larger). Returns false
+        // (logs why) if creation fails.
+        bool EnsureRenderTarget(int width, int height)
+        {
+            if (width == targetWidth && height == targetHeight && colorTarget) { return true; }
+
+            if (colorTarget) { SDL_ReleaseGPUTexture(device, colorTarget); }
+            if (depthTarget) { SDL_ReleaseGPUTexture(device, depthTarget); }
+            if (downloadBuffer) { SDL_ReleaseGPUTransferBuffer(device, downloadBuffer); }
+
+            SDL_GPUTextureCreateInfo colorInfo{};
+            colorInfo.type = SDL_GPU_TEXTURETYPE_2D;
+            colorInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+            colorInfo.width = static_cast<Uint32>(width);
+            colorInfo.height = static_cast<Uint32>(height);
+            colorInfo.layer_count_or_depth = 1;
+            colorInfo.num_levels = 1;
+            colorInfo.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+            colorTarget = SDL_CreateGPUTexture(device, &colorInfo);
+
+            SDL_GPUTextureCreateInfo depthInfo{};
+            depthInfo.type = SDL_GPU_TEXTURETYPE_2D;
+            depthInfo.format = depthFormat;
+            depthInfo.width = static_cast<Uint32>(width);
+            depthInfo.height = static_cast<Uint32>(height);
+            depthInfo.layer_count_or_depth = 1;
+            depthInfo.num_levels = 1;
+            depthInfo.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+            depthTarget = SDL_CreateGPUTexture(device, &depthInfo);
+
+            SDL_GPUTransferBufferCreateInfo dlInfo{};
+            dlInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+            dlInfo.size = static_cast<Uint32>(width * height * 4);
+            downloadBuffer = SDL_CreateGPUTransferBuffer(device, &dlInfo);
+
+            targetWidth = width;
+            targetHeight = height;
+
+            if (!colorTarget || !depthTarget || !downloadBuffer)
+            {
+                SDL_Log("EnsureRenderTarget: render target creation failed: %s", SDL_GetError());
+                return false;
+            }
+            return true;
+        }
+
+        // Downloads colorTarget (after a completed render pass in `cmd`)
+        // to CPU as tightly-packed RGBA8 bytes - shared final step of
+        // both RenderToRgba and RenderLevelToRgba.
+        std::vector<uint8_t> DownloadColorTarget(SDL_GPUCommandBuffer* cmd, int width, int height)
+        {
+            SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
+            SDL_GPUTextureRegion srcRegion{};
+            srcRegion.texture = colorTarget;
+            srcRegion.w = static_cast<Uint32>(width);
+            srcRegion.h = static_cast<Uint32>(height);
+            srcRegion.d = 1;
+            SDL_GPUTextureTransferInfo dlDst{};
+            dlDst.transfer_buffer = downloadBuffer;
+            dlDst.offset = 0;
+            SDL_DownloadFromGPUTexture(copyPass, &srcRegion, &dlDst);
+            SDL_EndGPUCopyPass(copyPass);
+
+            SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+            SDL_WaitForGPUFences(device, true, &fence, 1);
+            SDL_ReleaseGPUFence(device, fence);
+
+            void* mapped = SDL_MapGPUTransferBuffer(device, downloadBuffer, false);
+            std::vector<uint8_t> result(static_cast<size_t>(width) * height * 4);
+            std::memcpy(result.data(), mapped, result.size());
+            SDL_UnmapGPUTransferBuffer(device, downloadBuffer);
+            return result;
         }
     }
 
@@ -311,75 +485,18 @@ namespace ALTEngine::Renderer
         float radius = std::sqrt(dx * dx + dy * dy + dz * dz) / 2.0f;
         if (radius < 1.0f) { radius = 1.0f; }
 
-        size_t vbSize = renderMesh.vertices.size() * sizeof(float) * 5;
-        size_t ibSize = renderMesh.indices.size() * sizeof(uint32_t);
-        size_t texSize = static_cast<size_t>(tex->width) * tex->height * 4;
-
-        SDL_GPUBufferCreateInfo vbInfo{ SDL_GPU_BUFFERUSAGE_VERTEX, static_cast<Uint32>(vbSize) };
-        SDL_GPUBuffer* vertexBuffer = SDL_CreateGPUBuffer(device, &vbInfo);
-        SDL_GPUBufferCreateInfo ibInfo{ SDL_GPU_BUFFERUSAGE_INDEX, static_cast<Uint32>(ibSize) };
-        SDL_GPUBuffer* indexBuffer = SDL_CreateGPUBuffer(device, &ibInfo);
-
-        SDL_GPUTextureCreateInfo texInfo{};
-        texInfo.type = SDL_GPU_TEXTURETYPE_2D;
-        texInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-        texInfo.width = static_cast<Uint32>(tex->width);
-        texInfo.height = static_cast<Uint32>(tex->height);
-        texInfo.layer_count_or_depth = 1;
-        texInfo.num_levels = 1;
-        texInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-        SDL_GPUTexture* texture = SDL_CreateGPUTexture(device, &texInfo);
-
-        if (!vertexBuffer || !indexBuffer || !texture)
+        LevelSubGroup uploaded = UploadMeshWithTexture(renderMesh, *tex);
+        if (!uploaded.vertexBuffer || !uploaded.indexBuffer || !uploaded.texture)
         {
-            SDL_Log("ModelRenderer::LoadModel: buffer/texture creation failed: %s", SDL_GetError());
-            if (vertexBuffer) { SDL_ReleaseGPUBuffer(device, vertexBuffer); }
-            if (indexBuffer) { SDL_ReleaseGPUBuffer(device, indexBuffer); }
-            if (texture) { SDL_ReleaseGPUTexture(device, texture); }
+            SDL_Log("ModelRenderer::LoadModel(%s): upload failed", cacheKey.c_str());
             return false;
         }
 
-        SDL_GPUTransferBufferCreateInfo transferInfo{};
-        transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-        transferInfo.size = static_cast<Uint32>(vbSize + ibSize + texSize);
-        SDL_GPUTransferBuffer* transfer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
-
-        uint8_t* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, transfer, false));
-        std::memcpy(mapped, renderMesh.vertices.data(), vbSize);
-        std::memcpy(mapped + vbSize, renderMesh.indices.data(), ibSize);
-        std::memcpy(mapped + vbSize + ibSize, tex->rgba.data(), texSize);
-        SDL_UnmapGPUTransferBuffer(device, transfer);
-
-        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
-        SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
-
-        SDL_GPUTransferBufferLocation vbSrc{ transfer, 0 };
-        SDL_GPUBufferRegion vbDst{ vertexBuffer, 0, static_cast<Uint32>(vbSize) };
-        SDL_UploadToGPUBuffer(copyPass, &vbSrc, &vbDst, false);
-
-        SDL_GPUTransferBufferLocation ibSrc{ transfer, static_cast<Uint32>(vbSize) };
-        SDL_GPUBufferRegion ibDst{ indexBuffer, 0, static_cast<Uint32>(ibSize) };
-        SDL_UploadToGPUBuffer(copyPass, &ibSrc, &ibDst, false);
-
-        SDL_GPUTextureTransferInfo texSrc{};
-        texSrc.transfer_buffer = transfer;
-        texSrc.offset = static_cast<Uint32>(vbSize + ibSize);
-        SDL_GPUTextureRegion texDst{};
-        texDst.texture = texture;
-        texDst.w = static_cast<Uint32>(tex->width);
-        texDst.h = static_cast<Uint32>(tex->height);
-        texDst.d = 1;
-        SDL_UploadToGPUTexture(copyPass, &texSrc, &texDst, false);
-
-        SDL_EndGPUCopyPass(copyPass);
-        SDL_SubmitGPUCommandBuffer(cmd);
-        SDL_ReleaseGPUTransferBuffer(device, transfer);
-
         LoadedModel model;
-        model.vertexBuffer = vertexBuffer;
-        model.indexBuffer = indexBuffer;
-        model.indexCount = static_cast<uint32_t>(renderMesh.indices.size());
-        model.texture = texture;
+        model.vertexBuffer = uploaded.vertexBuffer;
+        model.indexBuffer = uploaded.indexBuffer;
+        model.indexCount = uploaded.indexCount;
+        model.texture = uploaded.texture;
         model.centerX = cx; model.centerY = cy; model.centerZ = cz;
         model.radius = radius;
         model.baseRotationRadians = baseRotationRadians;
@@ -395,46 +512,7 @@ namespace ALTEngine::Renderer
         if (it == loadedModels.end()) { return {}; }
         const LoadedModel& model = it->second;
 
-        if (width != targetWidth || height != targetHeight || !colorTarget)
-        {
-            if (colorTarget) { SDL_ReleaseGPUTexture(device, colorTarget); }
-            if (depthTarget) { SDL_ReleaseGPUTexture(device, depthTarget); }
-            if (downloadBuffer) { SDL_ReleaseGPUTransferBuffer(device, downloadBuffer); }
-
-            SDL_GPUTextureCreateInfo colorInfo{};
-            colorInfo.type = SDL_GPU_TEXTURETYPE_2D;
-            colorInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-            colorInfo.width = static_cast<Uint32>(width);
-            colorInfo.height = static_cast<Uint32>(height);
-            colorInfo.layer_count_or_depth = 1;
-            colorInfo.num_levels = 1;
-            colorInfo.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
-            colorTarget = SDL_CreateGPUTexture(device, &colorInfo);
-
-            SDL_GPUTextureCreateInfo depthInfo{};
-            depthInfo.type = SDL_GPU_TEXTURETYPE_2D;
-            depthInfo.format = depthFormat;
-            depthInfo.width = static_cast<Uint32>(width);
-            depthInfo.height = static_cast<Uint32>(height);
-            depthInfo.layer_count_or_depth = 1;
-            depthInfo.num_levels = 1;
-            depthInfo.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
-            depthTarget = SDL_CreateGPUTexture(device, &depthInfo);
-
-            SDL_GPUTransferBufferCreateInfo dlInfo{};
-            dlInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
-            dlInfo.size = static_cast<Uint32>(width * height * 4);
-            downloadBuffer = SDL_CreateGPUTransferBuffer(device, &dlInfo);
-
-            targetWidth = width;
-            targetHeight = height;
-
-            if (!colorTarget || !depthTarget || !downloadBuffer)
-            {
-                SDL_Log("ModelRenderer::RenderToRgba: render target creation failed: %s", SDL_GetError());
-                return {};
-            }
-        }
+        if (!EnsureRenderTarget(width, height)) { return {}; }
 
         // Auto-framed camera: distance chosen so the model's bounding
         // sphere comfortably fits the vertical FOV, looking at its
@@ -476,27 +554,136 @@ namespace ALTEngine::Renderer
 
         SDL_EndGPURenderPass(renderPass);
 
-        SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
-        SDL_GPUTextureRegion srcRegion{};
-        srcRegion.texture = colorTarget;
-        srcRegion.w = static_cast<Uint32>(width);
-        srcRegion.h = static_cast<Uint32>(height);
-        srcRegion.d = 1;
-        SDL_GPUTextureTransferInfo dlDst{};
-        dlDst.transfer_buffer = downloadBuffer;
-        dlDst.offset = 0;
-        SDL_DownloadFromGPUTexture(copyPass, &srcRegion, &dlDst);
-        SDL_EndGPUCopyPass(copyPass);
+        return DownloadColorTarget(cmd, width, height);
+    }
 
-        SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
-        SDL_WaitForGPUFences(device, true, &fence, 1);
-        SDL_ReleaseGPUFence(device, fence);
+    bool ModelRenderer::LoadLevel(const std::string& cacheKey, const std::filesystem::path& mapPath, const std::filesystem::path& gfxPath)
+    {
+        if (!device) { return false; }
+        if (loadedLevels.count(cacheKey)) { return true; }
 
-        void* mapped = SDL_MapGPUTransferBuffer(device, downloadBuffer, false);
-        std::vector<uint8_t> result(static_cast<size_t>(width) * height * 4);
-        std::memcpy(result.data(), mapped, result.size());
-        SDL_UnmapGPUTransferBuffer(device, downloadBuffer);
+        // Level ID (e.g. 111 for "1.1.1") - extracted from the GFX
+        // filename's leading digits (e.g. "111GFX.B16" -> 111), needed
+        // for the per-level, per-texture-group transparency lookup
+        // below (confirmed index-based and level-specific, not a
+        // universal rule - see LevelTransparency.h).
+        std::string gfxStem = gfxPath.stem().string();
+        std::string levelIdDigits;
+        for (char c : gfxStem) { if (c >= '0' && c <= '9') { levelIdDigits += c; } else { break; } }
+        int levelId = levelIdDigits.empty() ? -1 : std::stoi(levelIdDigits);
 
-        return result;
+        std::vector<std::vector<int>> perGroupTransparency;
+        for (int g = 0; g < 5; ++g) { perGroupTransparency.push_back(ALTEngine::Formats::GetLevelTransparencyIndices(levelId, g)); }
+
+        ALTEngine::Formats::LevelGeometry level;
+        BndTextureSet textureSet;
+        try
+        {
+            level = ALTEngine::Formats::LevelLoader::Load(mapPath);
+            textureSet = BndTextureLoader::Load(gfxPath, std::nullopt, perGroupTransparency);
+        }
+        catch (const std::exception& e)
+        {
+            SDL_Log("ModelRenderer::LoadLevel(%s): %s", cacheKey.c_str(), e.what());
+            return false;
+        }
+
+        if (textureSet.textures.size() != 5 || textureSet.uvSections.size() != 5)
+        {
+            SDL_Log("ModelRenderer::LoadLevel(%s): expected 5 texture groups in %s, got %zu",
+                    cacheKey.c_str(), gfxPath.string().c_str(), textureSet.textures.size());
+            return false;
+        }
+
+        std::array<std::vector<ALTEngine::Formats::BxRectangle>, 5> uvGroups;
+        for (size_t i = 0; i < 5; ++i) { uvGroups[i] = textureSet.uvSections[i]; }
+
+        auto perGroupMeshes = ALTEngine::Formats::BuildLevelRenderMeshPerGroup(level, uvGroups);
+
+        LoadedLevel loadedLevel;
+        bool anyGroupUsed = false;
+        for (size_t i = 0; i < 5; ++i)
+        {
+            if (perGroupMeshes[i].vertices.empty()) { continue; } // this texture group isn't used by this level
+            loadedLevel.groups[i] = UploadMeshWithTexture(perGroupMeshes[i], textureSet.textures[i]);
+            if (loadedLevel.groups[i].vertexBuffer) { anyGroupUsed = true; }
+        }
+
+        if (!anyGroupUsed)
+        {
+            SDL_Log("ModelRenderer::LoadLevel(%s): level has no renderable geometry", cacheKey.c_str());
+            return false;
+        }
+
+        loadedLevels[cacheKey] = loadedLevel;
+        return true;
+    }
+
+    std::vector<uint8_t> ModelRenderer::RenderLevelToRgba(const std::string& cacheKey, const FpsCamera& camera, int width, int height)
+    {
+        if (!device || !pipeline) { return {}; }
+        auto it = loadedLevels.find(cacheKey);
+        if (it == loadedLevels.end()) { return {}; }
+        const LoadedLevel& level = it->second;
+
+        if (!EnsureRenderTarget(width, height)) { return {}; }
+
+        // Real explorable FPS camera - NOT auto-framed like the model
+        // previews. Forward vector convention: yaw=0 looks down -Z,
+        // positive yaw turns toward +X (standard right-handed FPS
+        // convention) - this needs to stay consistent with whatever
+        // movement code drives `camera`, but doesn't need to match
+        // RenderToRgba's unrelated RotationY-based model-spin convention.
+        float forwardX = std::sin(camera.yaw) * std::cos(camera.pitch);
+        float forwardY = std::sin(camera.pitch);
+        float forwardZ = -std::cos(camera.yaw) * std::cos(camera.pitch);
+
+        Mat4 view = Mat4::LookAt(camera.x, camera.y, camera.z,
+                                  camera.x + forwardX, camera.y + forwardY, camera.z + forwardZ,
+                                  0, 1, 0);
+        // Near/far chosen generously for the level's own coordinate
+        // scale - confirmed real L111LEV.MAP vertex coordinates span up
+        // to roughly +-27000 units, so this comfortably covers that with
+        // margin rather than being tuned to an assumed "normal" scene
+        // size.
+        Mat4 proj = Mat4::Perspective(camera.fovYRadians, static_cast<float>(width) / static_cast<float>(height), 20.0f, 60000.0f);
+        Mat4 vp = Mat4::Multiply(proj, view);
+
+        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
+
+        SDL_GPUColorTargetInfo colorInfo{};
+        colorInfo.texture = colorTarget;
+        colorInfo.clear_color = SDL_FColor{ 0.0f, 0.0f, 0.0f, 1.0f }; // opaque black - a full level view, not composited over anything
+        colorInfo.load_op = SDL_GPU_LOADOP_CLEAR;
+        colorInfo.store_op = SDL_GPU_STOREOP_STORE;
+
+        SDL_GPUDepthStencilTargetInfo depthInfo{};
+        depthInfo.texture = depthTarget;
+        depthInfo.clear_depth = 1.0f;
+        depthInfo.load_op = SDL_GPU_LOADOP_CLEAR;
+        depthInfo.store_op = SDL_GPU_STOREOP_DONT_CARE;
+        depthInfo.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
+        depthInfo.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+
+        SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(cmd, &colorInfo, 1, &depthInfo);
+        SDL_BindGPUGraphicsPipeline(renderPass, pipeline);
+
+        for (const auto& group : level.groups)
+        {
+            if (!group.vertexBuffer || group.indexCount == 0) { continue; } // unused texture group for this level
+
+            SDL_GPUBufferBinding vbBinding{ group.vertexBuffer, 0 };
+            SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
+            SDL_GPUBufferBinding ibBinding{ group.indexBuffer, 0 };
+            SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+            SDL_GPUTextureSamplerBinding texBinding{ group.texture, sampler };
+            SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
+            SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
+            SDL_DrawGPUIndexedPrimitives(renderPass, group.indexCount, 1, 0, 0, 0);
+        }
+
+        SDL_EndGPURenderPass(renderPass);
+
+        return DownloadColorTarget(cmd, width, height);
     }
 }

@@ -127,6 +127,127 @@ namespace ALTEngine::Formats
             result.quads.push_back(q);
         }
 
+        // Entity lists - all confirmed against AlienTrilogyMapLoader.cs's
+        // BuildMapGeometry, including its own per-list byte-size
+        // "formula" comments (see each struct's doc comment in the
+        // header for the specific evidence).
+        auto needBytes = [&](size_t n, const char* what) {
+            if (pos + n > data.size())
+            {
+                throw std::runtime_error("LevelLoader: not enough data for " + std::string(what) + " in " + mapPath.string());
+            }
+        };
+
+        size_t collisionCount = static_cast<size_t>(h.mapLength) * h.mapWidth;
+        needBytes(collisionCount * 16, "collision grid");
+        result.collisionGrid.reserve(collisionCount);
+        for (size_t i = 0; i < collisionCount; ++i)
+        {
+            CollisionNode n;
+            n.unknown1 = data[pos + 0]; n.unknown2 = data[pos + 1]; n.unknown3 = data[pos + 2]; n.unknown4 = data[pos + 3];
+            n.unknown5 = data[pos + 4]; n.unknown6 = data[pos + 5]; n.unknown7 = data[pos + 6]; n.unknown8 = data[pos + 7];
+            n.ceilingFog = data[pos + 8]; n.floorFog = data[pos + 9]; n.ceilingHeight = data[pos + 10]; n.floorHeight = data[pos + 11];
+            n.unknown13 = data[pos + 12]; n.unknown14 = data[pos + 13]; n.lighting = data[pos + 14]; n.scriptAction = data[pos + 15];
+            pos += 16;
+            result.collisionGrid.push_back(n);
+        }
+
+        needBytes(static_cast<size_t>(h.pathCount) * 8, "path nodes");
+        result.pathNodes.reserve(h.pathCount);
+        for (uint8_t i = 0; i < h.pathCount; ++i)
+        {
+            PathNode n;
+            n.x = data[pos + 0]; n.y = data[pos + 1]; n.unused = data[pos + 2]; n.nodeState = data[pos + 3];
+            n.nodeA = data[pos + 4]; n.nodeB = data[pos + 5]; n.nodeC = data[pos + 6]; n.nodeD = data[pos + 7];
+            pos += 8;
+            result.pathNodes.push_back(n);
+        }
+
+        needBytes(static_cast<size_t>(h.monsterCount) * 20, "monsters");
+        result.monsters.reserve(h.monsterCount);
+        for (uint16_t i = 0; i < h.monsterCount; ++i)
+        {
+            Monster m;
+            m.type = data[pos + 0]; m.x = data[pos + 1]; m.y = data[pos + 2]; m.z = data[pos + 3]; m.rotation = data[pos + 4];
+            m.health = data[pos + 5]; m.drop = data[pos + 6]; m.unknown2 = data[pos + 7]; m.difficulty = data[pos + 8];
+            m.unknown4 = data[pos + 9]; m.unknown5 = data[pos + 10]; m.unknown6 = data[pos + 11]; m.unknown7 = data[pos + 12];
+            m.unknown8 = data[pos + 13]; m.speed = data[pos + 14]; m.unknown9 = data[pos + 15]; m.unknown10 = data[pos + 16];
+            m.unknown11 = data[pos + 17]; m.unknown12 = data[pos + 18]; m.unknown13 = data[pos + 19];
+            pos += 20;
+            result.monsters.push_back(m);
+        }
+
+        needBytes(static_cast<size_t>(h.pickupCount) * 8, "pickups");
+        result.pickups.reserve(h.pickupCount);
+        for (uint16_t i = 0; i < h.pickupCount; ++i)
+        {
+            Pickup p;
+            p.x = data[pos + 0]; p.y = data[pos + 1]; p.type = data[pos + 2]; p.amount = data[pos + 3];
+            p.multiplier = data[pos + 4]; p.unknown1 = data[pos + 5]; p.z = data[pos + 6]; p.unknown2 = data[pos + 7];
+            pos += 8;
+            result.pickups.push_back(p);
+        }
+
+        needBytes(static_cast<size_t>(h.objectCount) * 16, "crates");
+        result.crates.reserve(h.objectCount);
+        for (uint16_t i = 0; i < h.objectCount; ++i)
+        {
+            Crate c;
+            c.x = data[pos + 0]; c.y = data[pos + 1]; c.type = data[pos + 2]; c.drop = data[pos + 3];
+            c.unknown1 = data[pos + 4]; c.unknown2 = data[pos + 5]; c.drop1 = data[pos + 6]; c.drop2 = data[pos + 7];
+            c.unknown3 = data[pos + 8]; c.unknown4 = data[pos + 9]; c.unknown5 = data[pos + 10]; c.unknown6 = data[pos + 11];
+            c.unknown7 = data[pos + 12]; c.unknown8 = data[pos + 13]; c.rotation = data[pos + 14]; c.unknown10 = data[pos + 15];
+            pos += 16;
+            result.crates.push_back(c);
+        }
+
+        needBytes(static_cast<size_t>(h.doorCount) * 8, "doors");
+        result.doors.reserve(h.doorCount);
+        for (uint16_t i = 0; i < h.doorCount; ++i)
+        {
+            Door d;
+            d.x = data[pos + 0]; d.y = data[pos + 1]; d.unknown = data[pos + 2]; d.time = data[pos + 3];
+            d.lockState = data[pos + 4]; d.unknown2 = data[pos + 5]; d.rotation = data[pos + 6]; d.modelIndex = data[pos + 7];
+            pos += 8;
+            result.doors.push_back(d);
+        }
+
+        needBytes(static_cast<size_t>(h.liftCount) * 16, "lifts");
+        result.lifts.reserve(h.liftCount);
+        for (uint16_t i = 0; i < h.liftCount; ++i)
+        {
+            Lift l;
+            l.x = data[pos + 0]; l.y = data[pos + 1]; l.z = data[pos + 2]; l.unknown1 = data[pos + 3];
+            l.unknown2 = data[pos + 4]; l.unknown3 = data[pos + 5]; l.unknown4 = data[pos + 6]; l.unknown5 = data[pos + 7];
+            l.unknown6 = data[pos + 8]; l.unknown7 = data[pos + 9]; l.unknown8 = data[pos + 10]; l.unknown9 = data[pos + 11];
+            l.unknown10 = data[pos + 12]; l.unknown11 = data[pos + 13]; l.unknown12 = data[pos + 14]; l.unknown13 = data[pos + 15];
+            pos += 16;
+            result.lifts.push_back(l);
+        }
+
+        // Always exactly 64 slots read, but only ones with actionType
+        // != 0 are kept - matches AlienTrilogyMapLoader.cs's own filter.
+        needBytes(64 * 4, "action groups");
+        for (int i = 0; i < 64; ++i)
+        {
+            ActionGroup a;
+            a.actionType = data[pos + 0]; a.logicStep = data[pos + 1]; a.byte3 = data[pos + 2]; a.byte4 = data[pos + 3];
+            pos += 4;
+            if (a.actionType != 0) { result.actions.push_back(a); }
+        }
+
+        // Always exactly 64 entries, all kept (no filtering, unlike
+        // ActionGroup above).
+        needBytes(64 * 4, "logic groups");
+        result.logics.reserve(64);
+        for (int i = 0; i < 64; ++i)
+        {
+            LogicGroup l;
+            l.action = data[pos + 0]; l.nextStep = data[pos + 1]; l.modifier = data[pos + 2]; l.objectIndex = data[pos + 3];
+            pos += 4;
+            result.logics.push_back(l);
+        }
+
         return result;
     }
 }

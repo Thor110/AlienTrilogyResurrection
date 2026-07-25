@@ -9,6 +9,18 @@
 
 namespace ALTEngine::Renderer
 {
+    // A free-roaming FPS-style camera - genuinely different from the
+    // model previews' auto-framed, bounding-sphere-based camera. Levels
+    // need an actual explorable viewpoint (position + look direction),
+    // not a fixed orbit around a single small object.
+    struct FpsCamera
+    {
+        float x = 0, y = 0, z = 0;
+        float yaw = 0;   // radians, rotation around Y (turning left/right)
+        float pitch = 0; // radians, looking up/down
+        float fovYRadians = 1.221f; // ~70 degrees, standard FPS default
+    };
+
     // Renders OPTOBJ/PICKMOD/OBJ3D models via SDL_GPU. Architecture
     // note: the rest of the menu is drawn with the existing SDL_Renderer
     // 2D API, which doesn't directly share resources with SDL_GPU -
@@ -73,5 +85,34 @@ namespace ALTEngine::Renderer
         // result as tightly-packed RGBA8 bytes (width*height*4), or an
         // empty vector on failure.
         static std::vector<uint8_t> RenderToRgba(const std::string& cacheKey, float angleRadians, int width, int height);
+
+        // Loads and GPU-uploads an entire level's static geometry,
+        // cached under `cacheKey`. Unlike LoadModel (one texture, one
+        // draw call), a level can use up to 5 different textures - see
+        // Formats/RenderMesh.h's BuildLevelRenderMeshPerGroup - so this
+        // internally creates up to 5 vertex/index/texture sets, one per
+        // BX group actually used by the level.
+        //
+        // `mapPath` is the level's .MAP file; `gfxPath` is its paired
+        // {name}GFX.B16 texture file (both confirmed real-data formats -
+        // see LevelLoader.h/RenderMesh.h).
+        //
+        // UNTESTED beyond CPU-side data preparation (LevelLoader/
+        // BuildLevelRenderMeshPerGroup are both confirmed against real
+        // data) - the actual GPU upload/render path for a FULL LEVEL
+        // (tens of thousands of triangles, up to 5 textures, real-time
+        // FPS camera) hasn't been exercised the way the small model
+        // previews have. Verify on real hardware before trusting this
+        // the way ModelRenderer's model path is trusted.
+        static bool LoadLevel(const std::string& cacheKey, const std::filesystem::path& mapPath, const std::filesystem::path& gfxPath);
+
+        // Renders the level cached under `cacheKey` from `camera`'s
+        // viewpoint. Unlike RenderToRgba's auto-framed single-model
+        // camera, this uses a real explorable FPS camera and a fixed
+        // FOV/near/far appropriate to the level's own coordinate scale
+        // (near/far chosen generously since level geometry spans tens of
+        // thousands of units, confirmed from real L111LEV.MAP vertex
+        // ranges).
+        static std::vector<uint8_t> RenderLevelToRgba(const std::string& cacheKey, const FpsCamera& camera, int width, int height);
     };
 }

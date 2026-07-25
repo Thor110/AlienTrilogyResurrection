@@ -35,11 +35,16 @@ namespace ALTEngine::Formats
             std::array<Uv, 4> uvs;
             switch (q.flags)
             {
-            case 2: // triangle special order (ExportModel's mapping - NOT the same as levels, see ComputeLevelQuadUvs)
-                uvs = { baseUvs[0], baseUvs[2], baseUvs[3], baseUvs[3] };
-                break;
-            case 11: // flip 180 (ExportModel's mapping)
+            case 2: // flip 180 - CORRECTED (Edward's AlienTrilogyMapLoader.cs, 2026): confirmed
+                    // this is the real mapping, not what was here before - flags 2/11
+                    // were swapped. The earlier "confirmed against all 14 OPTOBJ models"
+                    // tests only checked structural validity (in-bounds indices, no
+                    // exceptions), which can't distinguish "right pattern, wrong flag"
+                    // from actually correct - a real gap in that test's coverage.
                 uvs = { baseUvs[1], baseUvs[0], baseUvs[3], baseUvs[2] };
+                break;
+            case 11: // special triangle case - CORRECTED, see above
+                uvs = { baseUvs[0], baseUvs[2], baseUvs[3], baseUvs[3] };
                 break;
             default:
                 uvs = baseUvs;
@@ -60,27 +65,43 @@ namespace ALTEngine::Formats
             return uvs;
         }
 
-        // Level geometry's UV resolution - genuinely different from
-        // ComputeQuadUvs above, confirmed by reading ExportLevel in full:
-        //   - texIndex is a GLOBAL index across all 5 BX00-BX04 groups
-        //     concatenated, resolved via cumulative offset (subtract each
-        //     group's rect count until the index fits within a group).
-        //   - flags 1/5/13 mean triangle-special (not flags==2, which is
-        //     what ExportModel uses) - flags==2 means flip-180 for levels
-        //     instead (ExportModel uses flags==11 for that).
+        // Resolves a level quad's global texIndex to (which of the 5 BX
+        // groups, the rect within it) - shared by ComputeLevelQuadUvs and
+        // the per-group mesh builder. Returns groupIndex=-1, rect=nullptr
+        // if texIndex doesn't fall within any group (the confirmed
+        // out-of-range fallback case).
+        struct ResolvedLevelTexture { int groupIndex = -1; const BxRectangle* rect = nullptr; };
+
+        ResolvedLevelTexture ResolveLevelTexture(uint16_t texIndex, const std::array<std::vector<BxRectangle>, 5>& uvGroups)
+        {
+            int localIndex = texIndex;
+            for (size_t g = 0; g < uvGroups.size(); ++g)
+            {
+                if (static_cast<size_t>(localIndex) < uvGroups[g].size())
+                {
+                    return { static_cast<int>(g), &uvGroups[g][static_cast<size_t>(localIndex)] };
+                }
+                localIndex -= static_cast<int>(uvGroups[g].size());
+            }
+            return {};
+        }
+
+        // Level geometry's UV resolution - the texIndex resolution is
+        // genuinely different from ComputeQuadUvs above (a level's
+        // texIndex is a GLOBAL index across all 5 BX00-BX04 groups
+        // concatenated, resolved via cumulative offset - subtract each
+        // group's rect count until the index fits within a group), but
+        // the FLAGS mapping is NOT different - confirmed against
+        // AlienTrilogyMapLoader.cs's BuildMapGeometry (Edward, 2026):
+        // levels use the identical flags==2/flags==11 mapping models do.
+        // An earlier version of this function used a different mapping
+        // (flags 1/5/13 special, flags==2 flip) based on a less careful
+        // reading of ModelRenderer.cs - that was wrong, and was the bug
+        // behind "many faces are flipped".
         std::array<Uv, 4> ComputeLevelQuadUvs(const ModelQuad& q, const std::array<std::vector<BxRectangle>, 5>& uvGroups)
         {
-            int localIndex = q.texIndex;
-            const BxRectangle* rect = nullptr;
-            for (const auto& group : uvGroups)
-            {
-                if (static_cast<size_t>(localIndex) < group.size())
-                {
-                    rect = &group[static_cast<size_t>(localIndex)];
-                    break;
-                }
-                localIndex -= static_cast<int>(group.size());
-            }
+            ResolvedLevelTexture resolved = ResolveLevelTexture(q.texIndex, uvGroups);
+            const BxRectangle* rect = resolved.rect;
 
             if (!rect)
             {
@@ -99,12 +120,16 @@ namespace ALTEngine::Formats
 
             switch (q.flags)
             {
-            case 1:
-            case 5:
-            case 13:
-                return { baseUvs[0], baseUvs[2], baseUvs[3], baseUvs[3] }; // triangle special order
-            case 2:
-                return { baseUvs[1], baseUvs[0], baseUvs[3], baseUvs[2] }; // flip 180
+            case 2: // flip 180 - CORRECTED (Edward's AlienTrilogyMapLoader.cs, 2026):
+                    // levels use the EXACT SAME flag mapping as models, confirmed
+                    // by BuildMapGeometry's switch(flags) - case 2 = flip180, case
+                    // 11 = special triangle. The "levels use 1/5/13 instead" claim
+                    // this replaced came from an earlier, less careful reading of
+                    // ModelRenderer.cs and was wrong - this is the actual bug
+                    // behind "many faces are flipped" (Edward, 2026).
+                return { baseUvs[1], baseUvs[0], baseUvs[3], baseUvs[2] };
+            case 11: // special triangle case
+                return { baseUvs[0], baseUvs[2], baseUvs[3], baseUvs[3] };
             default:
                 return baseUvs;
             }
@@ -178,6 +203,19 @@ namespace ALTEngine::Formats
         for (const auto& q : level.quads)
         {
             EmitQuad(result, level.vertices, q, ComputeLevelQuadUvs(q, uvGroups));
+        }
+        return result;
+    }
+
+    std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level, const std::array<std::vector<BxRectangle>, 5>& uvGroups)
+    {
+        std::array<RenderMesh, 5> result;
+
+        for (const auto& q : level.quads)
+        {
+            ResolvedLevelTexture resolved = ResolveLevelTexture(q.texIndex, uvGroups);
+            int group = (resolved.groupIndex >= 0) ? resolved.groupIndex : 0; // fallback case -> group 0, see header comment
+            EmitQuad(result[static_cast<size_t>(group)], level.vertices, q, ComputeLevelQuadUvs(q, uvGroups));
         }
         return result;
     }

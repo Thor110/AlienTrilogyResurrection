@@ -54,7 +54,8 @@ namespace ALTEngine::Formats
         }
     }
 
-    BndTextureSet BndTextureLoader::Load(const std::filesystem::path& bndPath, std::optional<std::array<uint8_t, 3>> transparentRgb)
+    BndTextureSet BndTextureLoader::Load(const std::filesystem::path& bndPath, std::optional<std::array<uint8_t, 3>> transparentRgb,
+                                          const std::vector<std::vector<int>>& perTextureTransparentIndices)
     {
         std::vector<uint8_t> bnd = ReadFile(bndPath);
 
@@ -65,8 +66,9 @@ namespace ALTEngine::Formats
         BndTextureSet result;
         result.textures.reserve(tpSections.size());
 
-        for (const auto& tp : tpSections)
+        for (size_t texPosition = 0; texPosition < tpSections.size(); ++texPosition)
         {
+            const auto& tp = tpSections[texPosition];
             std::string suffix = Suffix(tp.name);
 
             if (auto override = TryOverride(bndPath, suffix))
@@ -103,7 +105,10 @@ namespace ALTEngine::Formats
 
             BndTexture texture;
             texture.index = suffix;
-            texture.rgba = RawImageRenderer::RenderRGBA(tp.data, palette, TEXTURE_SIZE, TEXTURE_SIZE, {}, transparentRgb);
+            const std::vector<int> emptyIndices;
+            const std::vector<int>& indicesForThisTexture =
+                (texPosition < perTextureTransparentIndices.size()) ? perTextureTransparentIndices[texPosition] : emptyIndices;
+            texture.rgba = RawImageRenderer::RenderRGBA(tp.data, palette, TEXTURE_SIZE, TEXTURE_SIZE, indicesForThisTexture, transparentRgb);
             texture.width = TEXTURE_SIZE;
             texture.height = TEXTURE_SIZE;
             result.textures.push_back(std::move(texture));
