@@ -40,8 +40,7 @@ namespace ALTEngine::Formats
     std::optional<SpriteFrameInfo> SpriteFrameLoader::LoadFrame(
         const std::filesystem::path& b16Path,
         const std::string& spriteName,
-        int section, int frame,
-        const std::vector<uint8_t>& palette)
+        int section, int frame)
     {
         std::string category = b16Path.parent_path().filename().string();
         std::filesystem::path overrideRoot = b16Path.parent_path().parent_path() / "Override";
@@ -65,6 +64,17 @@ namespace ALTEngine::Formats
         }
 
         std::vector<uint8_t> fileData = ReadFile(b16Path);
+
+        // Embedded palette - a single trailing "C000" section (512
+        // bytes, no sub-header), shared by every F0## section in the
+        // file - confirmed against two real files (EGGS.B16, MM9.B16).
+        std::vector<BndSection> paletteSections = BndParser::ParseFormSections(fileData, "C0");
+        if (paletteSections.empty())
+        {
+            throw std::runtime_error("SpriteFrameLoader: no embedded C000 palette in " + b16Path.string());
+        }
+        std::vector<uint8_t> palette = RawImageRenderer::Convert16BitPaletteToRGB(paletteSections[0].data);
+
         char sectionName[8];
         std::snprintf(sectionName, sizeof(sectionName), "F%03d", section);
         std::vector<BndSection> sections = BndParser::ParseFormSections(fileData, sectionName);
@@ -86,7 +96,9 @@ namespace ALTEngine::Formats
         // enemy/weapon sprites specifically (Edward's own
         // DetectDimensions.cs TransparencyValues lists every enemy and
         // weapon filename with a plain {0} rule), unlike level textures'
-        // more complex per-level-ID/per-group table.
+        // more complex per-level-ID/per-group table. Also independently
+        // consistent with what's actually in the embedded palette here:
+        // C000's own color 0 decodes to black in both real files checked.
         SpriteFrameInfo info;
         info.rgba = RawImageRenderer::RenderRGBA(pixelData, palette, width, height, { 0 });
         info.width = width;
