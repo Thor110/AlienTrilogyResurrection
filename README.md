@@ -35,16 +35,11 @@ Patches
 - Multiple UVs across the games levels, lifts and doors need fixing.
 - The UVs for the Queens Egg Sack from the final level need fixing.
 
-Unity
+Source Port
 
-- Merge AlienTrilogyMapLoader.cs and ObjDataPuller.cs so that the MAP0 chunk of the level files is only parsed once.
-- Implement mesh and texture loading for the three model files.
-
-Current Unity version is hosted and being worked on by bambamalicious
-
-https://github.com/bambamalicious/AlienTrilogyUnity
-
-I have abandoned the Unity version and chosen to work on a C++ source port.
+- Gameplay Mechanics
+- Sounds & Music
+- Multiplayer
 
 # Road Map
 
@@ -397,7 +392,7 @@ This shows where four enemy types are spawned within the level, in other levels 
 
 The four highlighted objects show where player movement was previously blocked.
 
-I believe these enemy types are placeholders for the players. Image taken within our Unity based toolkit.
+I believe these enemy types are placeholders for the players. Image taken within an abandoned unity toolkit based off of my code.
 
 <div align="center">
   <img src="Images/L901LEV-spawns.png" alt="L901LEV Original">
