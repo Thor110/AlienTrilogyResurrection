@@ -201,6 +201,17 @@ int main(int, char**)
         }
         std::cout << "Menu selection: " << menuResult.action << "\n";
 
+        if (menuResult.action == "Exit")
+        {
+            // Escape at the main menu root - previously fell through
+            // unrecognized here, so the loop just called
+            // MenuController::Run() again, which explains both observed
+            // symptoms exactly: never actually quit, and restarted the
+            // music (MusicPlayer::PlayLooped runs again at the top of
+            // Run()).
+            break;
+        }
+
         if (menuResult.action == "Multiplayer")
         {
             MultiplayerSettings mpSettings;
@@ -297,4 +308,8 @@ int main(int, char**)
         // Any other selection (e.g. Options, handled entirely within
         // MenuController itself) - just re-show the main menu.
     }
+
+    AppWindow::Instance().Shutdown();
+    PauseBeforeExit();
+    return 0;
 }
