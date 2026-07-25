@@ -7,6 +7,7 @@
 #include "../Renderer/ModelRenderer.h"
 
 #include <SDL3/SDL.h>
+#include <algorithm>
 
 namespace ALTEngine::Screens
 {
@@ -118,9 +119,35 @@ namespace ALTEngine::Screens
             int rowHeight = TextHeight(scale) + scale * 4;
             int margin = scale * 8;
 
-            std::string title = (mode == SaveSlotMode::Load) ? "Load Game" : "Save Game";
             int windowW = 0, windowH = 0;
             SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+
+            // Model viewport fills the screen, drawn as a background
+            // layer before any text - fixed position/size, not tied to
+            // cursor position or any other dynamic value (Edward, 2026:
+            // models should fill "the entire background or thereabouts",
+            // and shouldn't jump around while navigating).
+            if (modelRendererAvailable)
+            {
+                float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f;
+                int renderSize = std::min(windowW, windowH);
+                std::vector<uint8_t> pixels = ALTEngine::Renderer::ModelRenderer::RenderToRgba(cacheKey, rotationAngle, renderSize, renderSize);
+                if (!pixels.empty())
+                {
+                    SDL_Texture* modelTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, renderSize, renderSize);
+                    if (modelTexture)
+                    {
+                        SDL_SetTextureBlendMode(modelTexture, SDL_BLENDMODE_BLEND);
+                        SDL_UpdateTexture(modelTexture, nullptr, pixels.data(), renderSize * 4);
+                        SDL_FRect dest{ static_cast<float>((windowW - renderSize) / 2), static_cast<float>((windowH - renderSize) / 2),
+                                        static_cast<float>(renderSize), static_cast<float>(renderSize) };
+                        SDL_RenderTexture(renderer, modelTexture, nullptr, &dest);
+                        SDL_DestroyTexture(modelTexture);
+                    }
+                }
+            }
+
+            std::string title = (mode == SaveSlotMode::Load) ? "Load Game" : "Save Game";
             DrawBitmapText(renderer, title, (windowW - TextWidth(title, scale)) / 2, margin, scale, COLOR_BRIGHT);
 
             for (int i = 0; i < 10; ++i)
@@ -128,24 +155,6 @@ namespace ALTEngine::Screens
                 std::string line = std::to_string(i + 1) + ": " + (slots[static_cast<size_t>(i)].used ? slots[static_cast<size_t>(i)].name : "-UNUSED-");
                 Color color = (i == cursor) ? COLOR_BRIGHT : COLOR_DIM;
                 DrawBitmapText(renderer, line, margin, margin + rowHeight * 3 + i * rowHeight, scale, color);
-            }
-
-            if (modelRendererAvailable)
-            {
-                float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f;
-                std::vector<uint8_t> pixels = ALTEngine::Renderer::ModelRenderer::RenderToRgba(cacheKey, rotationAngle, 256, 256);
-                if (!pixels.empty())
-                {
-                    SDL_Texture* modelTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, 256, 256);
-                    if (modelTexture)
-                    {
-                        SDL_SetTextureBlendMode(modelTexture, SDL_BLENDMODE_BLEND);
-                        SDL_UpdateTexture(modelTexture, nullptr, pixels.data(), 256 * 4);
-                        SDL_FRect dest{ static_cast<float>(windowW - 380), static_cast<float>(margin + rowHeight * 2), 256.0f, 256.0f };
-                        SDL_RenderTexture(renderer, modelTexture, nullptr, &dest);
-                        SDL_DestroyTexture(modelTexture);
-                    }
-                }
             }
 
             SDL_RenderPresent(renderer);

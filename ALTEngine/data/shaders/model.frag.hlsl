@@ -15,5 +15,18 @@ struct Input
 
 float4 main(Input input) : SV_Target0
 {
-    return ModelTexture.Sample(ModelSampler, input.UV);
+    float4 color = ModelTexture.Sample(ModelSampler, input.UV);
+
+    // Discard (skip BOTH colour and depth writes) for fully-transparent
+    // texels, rather than letting them through with alpha=0 - without
+    // this, a transparent cutout pixel still writes its depth, which
+    // incorrectly occludes whatever's behind it (other parts of the
+    // SAME model, for the colour-key cutout models like the speakers/
+    // Multitap) even though the pixel itself is invisible. Confirmed
+    // bug (Edward, 2026): "the transparency goes through to the
+    // background, but covers the model behind it with the background
+    // as it spins around" - exactly this symptom.
+    clip(color.a - 0.5);
+
+    return color;
 }

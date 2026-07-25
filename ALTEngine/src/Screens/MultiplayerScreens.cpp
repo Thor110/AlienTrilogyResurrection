@@ -46,7 +46,14 @@ namespace ALTEngine::Screens
             }
         }
 
-        void DrawNetworkedComputersModel(SDL_Renderer* renderer, const std::filesystem::path& cdDirectory, int x, int y, int size)
+        // Fills the screen (roughly) - fixed, not tied to cursor
+        // position or any other dynamic value. Every multiplayer screen
+        // wants the same full-background treatment, so this takes no
+        // position/size parameters anymore - it just fills the current
+        // render target (Edward, 2026: models should fill "the entire
+        // background or thereabouts", and shouldn't jump around while
+        // navigating).
+        void DrawNetworkedComputersModel(SDL_Renderer* renderer, const std::filesystem::path& cdDirectory)
         {
             EnsureModelRendererInit();
             if (!modelRendererAvailable) { return; }
@@ -57,6 +64,10 @@ namespace ALTEngine::Screens
             std::filesystem::path gfxBnd = cdDirectory / "GFX" / "OPTGFX.BND";
             ALTEngine::Renderer::ModelRenderer::LoadModel(cacheKey, modelIndex, objBnd, gfxBnd, std::nullopt, NETWORKED_COMPUTERS_BASE_ROTATION);
 
+            int windowW = 0, windowH = 0;
+            SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+            int size = std::min(windowW, windowH);
+
             float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f;
             std::vector<uint8_t> pixels = ALTEngine::Renderer::ModelRenderer::RenderToRgba(cacheKey, rotationAngle, size, size);
             if (pixels.empty()) { return; }
@@ -65,7 +76,8 @@ namespace ALTEngine::Screens
             if (!texture) { return; }
             SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
             SDL_UpdateTexture(texture, nullptr, pixels.data(), size * 4);
-            SDL_FRect dest{ static_cast<float>(x), static_cast<float>(y), static_cast<float>(size), static_cast<float>(size) };
+            SDL_FRect dest{ static_cast<float>((windowW - size) / 2), static_cast<float>((windowH - size) / 2),
+                            static_cast<float>(size), static_cast<float>(size) };
             SDL_RenderTexture(renderer, texture, nullptr, &dest);
             SDL_DestroyTexture(texture);
         }
@@ -129,7 +141,7 @@ namespace ALTEngine::Screens
             int windowW = 0, windowH = 0;
             SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
 
-            DrawNetworkedComputersModel(renderer, cdDirectory, (windowW - 220) / 2, windowH / 2 - 280, 220);
+            DrawNetworkedComputersModel(renderer, cdDirectory);
 
             int startY = windowH / 2 - lineHeight / 2;
             for (int i = 0; i < 3; ++i)
@@ -211,6 +223,7 @@ namespace ALTEngine::Screens
             if (!running) { break; }
 
             DrawMenuBackground(renderer, background, bgW, bgH);
+            DrawNetworkedComputersModel(renderer, cdDirectory);
             int scale = 3;
             int lineHeight = TextHeight(scale) + scale * 4;
             int margin = scale * 8;
@@ -232,8 +245,6 @@ namespace ALTEngine::Screens
                 Color color = (cursor == row) ? (editor.IsEditing() ? COLOR_EDITING : COLOR_CURSOR) : COLOR_DIM;
                 DrawBitmapText(renderer, label + value, margin, rowY + lineHeight * (i + 2), scale, color);
             }
-
-            DrawNetworkedComputersModel(renderer, cdDirectory, windowW - 340, windowH - 300, 260);
 
             SDL_RenderPresent(renderer);
         }
@@ -309,6 +320,7 @@ namespace ALTEngine::Screens
             if (!running) { break; }
 
             DrawMenuBackground(renderer, background, bgW, bgH);
+            DrawNetworkedComputersModel(renderer, cdDirectory);
             int scale = 3;
             int lineHeight = TextHeight(scale) + scale * 6;
             int margin = scale * 8;
@@ -330,8 +342,6 @@ namespace ALTEngine::Screens
 
             DrawBitmapText(renderer, "Minimum game length: " + std::to_string(settings.minGameLength), margin, rowY + lineHeight * 3, scale,
                             (cursor == 3) ? COLOR_CURSOR : COLOR_DIM);
-
-            DrawNetworkedComputersModel(renderer, cdDirectory, windowW - 320, margin, 240);
 
             SDL_RenderPresent(renderer);
         }
@@ -367,6 +377,7 @@ namespace ALTEngine::Screens
             if (!running) { break; }
 
             DrawMenuBackground(renderer, background, bgW, bgH);
+            DrawNetworkedComputersModel(renderer, cdDirectory);
             int scale = 3;
             int lineHeight = TextHeight(scale) + scale * 6;
             int margin = scale * 8;
@@ -383,8 +394,6 @@ namespace ALTEngine::Screens
                 std::string line = std::to_string(i + 1) + ":";
                 DrawBitmapText(renderer, line, margin, margin + lineHeight * 3 + i * lineHeight, scale, COLOR_DIM);
             }
-
-            DrawNetworkedComputersModel(renderer, cdDirectory, windowW - 340, windowH / 2 - 130, 260);
 
             SDL_RenderPresent(renderer);
         }

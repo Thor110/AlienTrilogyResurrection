@@ -341,13 +341,23 @@ namespace ALTEngine::Renderer
         pipelineInfo.depth_stencil_state.enable_depth_test = true;
         pipelineInfo.depth_stencil_state.enable_depth_write = true;
         pipelineInfo.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
-        // NONE rather than BACK - the winding direction of the quads'
-        // vertex order (A,B,C,D) hasn't been confirmed against the
-        // original renderer, and getting that wrong with backface
-        // culling on would silently show an empty/black result, which
-        // is a much worse failure mode than just not culling for now.
-        // Revisit once basic correctness is confirmed on real hardware.
-        pipelineInfo.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+        // BACK culling, front_face=CCW - empirically confirmed (Edward,
+        // 2026): rendered the speaker model (thin, open cone geometry -
+        // a good test case unlike mostly-closed shapes like Keyboard,
+        // where culling barely changes anything either way) with
+        // CULLMODE_NONE, FRONTFACE_CCW+BACK, and FRONTFACE_CW+BACK.
+        // CCW+BACK came back virtually pixel-identical to no culling at
+        // all (same bounding box, 1-pixel rounding difference) - meaning
+        // it only ever discards genuinely-hidden back faces. CW+BACK
+        // incorrectly discarded ~half the visible surface (bounding box
+        // shrank by roughly half, 16771 pixels of real geometry went
+        // missing). This was the root cause behind "the backside of the
+        // speaker and much of the computer is misaligned" - both faces
+        // rendering simultaneously with no culling, fighting via depth,
+        // looked like misaligned UVs but was actually a missing-culling
+        // problem. Same pipeline renders levels too, so this should
+        // address the level texture misalignment as well.
+        pipelineInfo.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK;
         pipelineInfo.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
         pipelineInfo.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
 
