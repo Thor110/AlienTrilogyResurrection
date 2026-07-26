@@ -1,8 +1,7 @@
 {
     "_source": "Parsed programmatically from disc-list-edited.txt (Edward, 2026-07-23), not hand-transcribed. Verified: 133/133 file entries match a raw grep count of the source file.",
     "rootFiles": [
-        "README.TXT",
-        "TRILOGY.ICO"
+        "README.TXT"
     ],
     "folders": {
         "AVI": {
@@ -530,5 +529,5 @@
             ]
         }
     },
-    "_note": "CDDA audio (tracks 2-17, the games music) is NOT part of this file manifest - those are Redbook audio tracks on the disc itself, ripped separately via CddaRipper, not files copied via this list. TRILOGY.ICO added to rootFiles deliberately (not in the original curated list) so a fresh disc-install still satisfies GameLocator::Validate, which checks for it alongside CD/GFX/LEGAL.BND - present on every release regardless of the executable name (which varies, e.g. WTRILOGY.EXE on German releases). 121GFX.B16 removed from SECT11 (unused, per Edward - confirmed elsewhere on his end). SFX folder switched from copyAll to an explicit file list (Edward, 2026) - excludes unnecessary text files that told the original engine what SFX to load per level (irrelevant to our own engine), and a stray 3-byte file named \"E\" (bytes 0D 0A 1A)."
+    "_note": "CDDA audio (tracks 2-17, the games music) is NOT part of this file manifest - those are Redbook audio tracks on the disc itself, ripped separately via CddaRipper, not files copied via this list. TRILOGY.ICO removed from rootFiles (Edward, 2026) - the original disc icon is low quality (8-bit); the executable now embeds a higher-quality icon directly at build time instead (see CMakeLists.txt WIN32 icon block), so GameLocator::Validate no longer checks for TRILOGY.ICO in the install directory, relying on CD/GFX/LEGAL.BND alone (already confirmed present on every release regardless of executable name, e.g. WTRILOGY.EXE on German releases). DiscLocator own disc-detection check is unaffected - the original disc still has the file, this only changes what gets copied during install. 121GFX.B16 removed from SECT11 (unused, per Edward - confirmed elsewhere on his end). SFX folder switched from copyAll to an explicit file list (Edward, 2026) - excludes unnecessary text files that told the original engine what SFX to load per level (irrelevant to our own engine), and a stray 3-byte file named \"E\" (bytes 0D 0A 1A)."
 }

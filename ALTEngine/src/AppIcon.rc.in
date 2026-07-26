@@ -1,0 +1,7 @@
+// Embeds the executable's icon. Generated from AppIcon.rc.in by
+// CMakeLists.txt's configure_file() call - @ALTENGINE_ICON_PATH@ gets
+// substituted with the actual icon path at configure time, so this
+// works regardless of the resource compiler's current working
+// directory (an absolute path baked in here, rather than a relative
+// one that would depend on where rc.exe/windres happens to run from).
+IDI_ICON1 ICON "@ALTENGINE_ICON_PATH@"

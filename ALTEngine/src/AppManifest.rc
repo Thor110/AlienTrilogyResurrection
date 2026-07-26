@@ -1,0 +1,5 @@
+// Embeds app.manifest as the executable's own application manifest.
+// 1 = CREATEPROCESS_MANIFEST_RESOURCE_ID, 24 = RT_MANIFEST - the
+// standard resource ID/type pair Windows looks for automatically at
+// process creation, without needing #include <windows.h> here.
+1 24 "app.manifest"

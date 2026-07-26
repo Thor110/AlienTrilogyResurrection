@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <!--
+    asInvoker: run with whatever privilege level launched the process,
+    same as any normal (non-installer) application - no UAC elevation
+    prompt on launch.
+
+    Without ANY manifest at all, Windows applies "installer detection
+    heuristics" to unmanifested executables - if it looks like an
+    installer (by name, or by writing to a protected directory like
+    Program Files), Windows silently virtualizes file/registry writes
+    and/or shows the UAC shield and prompts for elevation on every
+    launch, not just the first. Any explicit manifest, even this
+    minimal one, disables that heuristic entirely (Edward, 2026 -
+    matches the same asInvoker fix used for WoWRevived's UAC
+    virtualization issue).
+
+    This intentionally does NOT request elevation for the first-run
+    install step either - if the user picks an install location that
+    genuinely needs elevated permissions to write to, that's Windows'
+    own file-system permission system to surface, not something this
+    manifest tries to special-case.
+  -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+</assembly>

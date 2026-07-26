@@ -125,11 +125,51 @@ if (WIN32)
 endif()
 
 # ---------------------------------------------------------------------------
+# Executable icon. TRILOGY.ICO used to be copied from the disc during
+# install and picked up via GameLocator/DiscLocator's own marker-file
+# checks (see those files) - the disc's own copy is low quality (8-bit).
+# Edward has a higher-quality one (made from the egg sprites) in his
+# ALTViewer toolkit, kept as a sibling folder next to ALTEngine rather
+# than inside this repo. Embedded directly into the executable at build
+# time instead of shipped as a loose file (Edward, 2026).
+# ---------------------------------------------------------------------------
+set(ALTENGINE_ICON_RC "")
+if (WIN32)
+    set(ALTENGINE_ICON_PATH "${CMAKE_SOURCE_DIR}/../ALTViewer/TRILOGY.ICO")
+    if (EXISTS "${ALTENGINE_ICON_PATH}")
+        configure_file("${CMAKE_SOURCE_DIR}/src/AppIcon.rc.in" "${CMAKE_BINARY_DIR}/AppIcon.rc" @ONLY)
+        set(ALTENGINE_ICON_RC "${CMAKE_BINARY_DIR}/AppIcon.rc")
+        message(STATUS "Using icon: ${ALTENGINE_ICON_PATH}")
+    else()
+        message(WARNING "TRILOGY.ICO not found at ${ALTENGINE_ICON_PATH} - executable will have no icon. "
+                         "Expected as a sibling ALTViewer folder next to ALTEngine.")
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# Application manifest - requests asInvoker execution level so Windows
+# doesn't apply its "installer detection heuristics" to an unmanifested
+# executable (silent UAC elevation prompts / file-write virtualization
+# on every launch, not just the first). Edward, 2026: same asInvoker fix
+# already used for WoWRevived's UAC virtualization issue. Unlike the
+# icon block above, this is unconditional on Windows - both files live
+# together in src/ (app.manifest is a fixed, versioned part of the
+# repo, not sourced from an external toolkit path), so there's nothing
+# to conditionally check for existing.
+# ---------------------------------------------------------------------------
+set(ALTENGINE_MANIFEST_RC "")
+if (WIN32)
+    set(ALTENGINE_MANIFEST_RC "${CMAKE_SOURCE_DIR}/src/AppManifest.rc")
+endif()
+
+# ---------------------------------------------------------------------------
 # ALTEngine - the port executable. Currently: MU/TH/UR 9000 boot sequence
 # (locate game files), patch routines, LEGAL splash, AVI intro playback.
 # Engine/renderer proper comes later.
 # ---------------------------------------------------------------------------
 add_executable(ALTEngine
+    ${ALTENGINE_ICON_RC}
+    ${ALTENGINE_MANIFEST_RC}
     src/main.cpp
     src/Bootstrap/DirectoryBrowser.cpp
     src/Bootstrap/GameLocator.cpp
@@ -159,6 +199,17 @@ add_executable(ALTEngine
     src/Renderer/ModelRenderer.cpp
     src/Renderer/ModelPreview.cpp
 )
+
+# MSVC's linker auto-generates and embeds its own default manifest
+# (also at resource ID 1) unless told not to - collides with our own
+# AppManifest.rc, which embeds app.manifest at that same ID, causing
+# "duplicate resource. type:MANIFEST, name:1" (CVT1100) and a link
+# failure (LNK1123) (Edward, 2026). MinGW/windres builds don't have
+# this auto-generation behaviour, so this is MSVC-specific.
+if (MSVC)
+    target_link_options(ALTEngine PRIVATE "/MANIFEST:NO")
+endif()
+
 target_include_directories(ALTEngine PRIVATE src)
 target_link_libraries(ALTEngine PRIVATE ALTFormats)
 target_link_libraries(ALTEngine PRIVATE SDL3::SDL3)

@@ -29,11 +29,6 @@ namespace ALTEngine::Bootstrap
 
     bool GameLocator::Validate(const std::filesystem::path& directory) const
     {
-        // TRILOGY.ICO is present on every release; the executable name
-        // isn't (e.g. the German release ships WTRILOGY.EXE, not
-        // TRILOGY.EXE) - so check the icon, not the exe.
-        if (!HasEntry(directory, "TRILOGY.ICO")) { return false; }
-
         auto cdDir = FindEntry(directory, "CD");
         if (!cdDir.has_value()) { return false; }
 
@@ -45,7 +40,17 @@ namespace ALTEngine::Bootstrap
         // (some do, lower quality matching the PS1/Saturn versions - e.g.
         // enemy sprites - but that's inconsistent per-file, not something
         // to rely on here), and LEGAL.BND specifically is confirmed
-        // present on every release.
+        // present on every release regardless of executable name (e.g.
+        // the German release ships WTRILOGY.EXE, not TRILOGY.EXE).
+        //
+        // Used to also check for TRILOGY.ICO at the install root, since
+        // it was another release-independent marker - removed (Edward,
+        // 2026) once TRILOGY.ICO stopped being copied during install
+        // (the low-quality disc icon was replaced by a higher-quality
+        // one embedded directly into the executable at build time
+        // instead), which would otherwise fail validation for every
+        // fresh install going forward. LEGAL.BND alone was already
+        // sufficient on its own.
         return HasEntry(*gfxDir, "LEGAL.BND");
     }
 
