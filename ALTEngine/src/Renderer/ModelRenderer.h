@@ -89,7 +89,30 @@ namespace ALTEngine::Renderer
         // should keep working with placeholder boxes if this fails, not
         // crash the whole program over a missing GPU feature.
         static bool Initialize();
+
+        // Full teardown - device, both pipelines, sampler, the shared
+        // render target, and every cached model AND level. Only meant
+        // for true application exit (main.cpp), not screen transitions -
+        // see UnloadLevels() for that instead. Edward, 2026: this used
+        // to also get called when leaving the menu (transitioning into
+        // gameplay) and when leaving gameplay, which meant the small,
+        // cheap-to-keep OPTOBJ/PICKMOD/OBJ3D model cache got destroyed
+        // as collateral damage every time - forcing a full reload from
+        // scratch (including the ~80x-slower-than-warm first render
+        // cost) on the next screen that needed any of them, even though
+        // model data is small and worth keeping resident for the whole
+        // app lifetime, unlike level geometry.
         static void Shutdown();
+
+        // Frees only the currently-loaded levels' GPU resources (vertex/
+        // index buffers, textures) - NOT the model cache, NOT the
+        // device/pipelines. This is what GameplayScreen should call when
+        // leaving a level: level geometry is the actual large, level-
+        // specific thing worth freeing (tens of thousands of triangles,
+        // up to 5 textures), unlike the small OPTOBJ/PICKMOD/OBJ3D model
+        // cache, which is cheap to keep around and expensive to reload
+        // (Edward, 2026).
+        static void UnloadLevels();
 
         // Loads and GPU-uploads a model, cached under `cacheKey` (repeated
         // calls with the same key are cheap) - callers should use a

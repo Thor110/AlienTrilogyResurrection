@@ -25,8 +25,26 @@ namespace ALTEngine::Renderer
         }
 
         ModelCacheKey cacheKey = source.CacheKey();
-        if (!ModelRenderer::LoadModel(cacheKey, source.modelIndex, source.objBndPath, source.gfxBndPath,
-                                       source.transparentRgb, source.baseRotationRadians))
+
+        // Timed specifically to catch the "preload queue hasn't reached
+        // this model yet" case - LoadModel is a cheap no-op if already
+        // cached (see its own loadedModels.count check), so this only
+        // fires when real work happens here, synchronously, on this
+        // exact frame. Edward, 2026: reported lag entering Options and
+        // switching models even with the incremental preload queue
+        // running - logging real per-call cost here rather than
+        // guessing further at what's expensive on the actual hardware.
+        Uint64 loadStart = SDL_GetTicks();
+        bool loaded = ModelRenderer::LoadModel(cacheKey, source.modelIndex, source.objBndPath, source.gfxBndPath,
+                                                source.transparentRgb, source.baseRotationRadians);
+        Uint64 loadMs = SDL_GetTicks() - loadStart;
+        if (loadMs > 16) // one 60fps frame - anything under this is noise
+        {
+            SDL_Log("DrawModelPreview: synchronous LoadModel for %s took %llums (queue hadn't reached it yet)",
+                    (source.catalog == ModelCatalog::Optobj ? "OPTOBJ" : source.catalog == ModelCatalog::Pickmod ? "PICKMOD" : "OBJ3D"),
+                    static_cast<unsigned long long>(loadMs));
+        }
+        if (!loaded)
         {
             return false;
         }

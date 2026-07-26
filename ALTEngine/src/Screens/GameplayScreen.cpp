@@ -230,7 +230,7 @@ namespace ALTEngine::Screens
             SDL_RenderPresent(renderer);
         }
 
-        ModelRenderer::Shutdown();
+        ModelRenderer::UnloadLevels();
         return result;
     }
 }

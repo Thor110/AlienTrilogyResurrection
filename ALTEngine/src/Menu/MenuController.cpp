@@ -306,37 +306,31 @@ namespace ALTEngine::Menu
         MenuNode root = BuildMainMenuTree(resolutionLabels);
         const MenuNode& optionsRoot = root.children[3]; // "Options"
 
-        // track02.wav is confirmed as the main menu music (Edward).
-        // Plays continuously across the whole menu (Main Menu, Options,
-        // Credits) rather than stopping the moment you leave the Main
-        // Menu screen specifically - matches how menu music behaves in
-        // basically every game with a menu.
-        MusicPlayer::PlayLooped(cdDirectory / "MUSIC" / "track02.wav");
-
-        // Incremental model preload queue - one model loaded per frame
-        // from inside the loop below, rather than a dedicated blocking
-        // step before the menu appears. Edward, 2026: even a batched
-        // GPU upload (ModelRenderer::PreloadBatch) still left a
-        // multi-second hang at boot, since GPU resource creation itself
-        // (CreateGPUBuffer/CreateGPUTexture, one call per model,
-        // ~40 calls for OPTOBJ alone) can't be batched into fewer
-        // driver calls the way the upload/transfer step can - each
-        // needs its own unique handle. Riding this along on frames that
-        // are already happening (this loop runs regardless) means
-        // there's no separate point where the window can appear to
-        // hang - worst case, a menu item visited before its model has
-        // reached the front of the queue briefly shows the existing
-        // placeholder box instead of the live 3D preview, which is
-        // already a fully supported, graceful path (DrawModelPlaceholder)
-        // rather than new behaviour.
+        // OPTOBJ preload queue - built here, drained in a blocking
+        // loading phase below (not incrementally inside the main menu
+        // loop). Edward, 2026: "don't pop up the main menu screen
+        // unless it is loaded, that way the lingering black screen from
+        // skipping naturally covers it" - and separately, this closes a
+        // real gap: incremental loading inside the main loop meant a
+        // fast player could reach "Start Game" before OPTOBJ finished
+        // loading, and since the model cache now persists across screen
+        // transitions (see ModelRenderer::Shutdown's own doc comment -
+        // no longer destroyed when leaving the menu), the ONLY place
+        // OPTOBJ is guaranteed to finish loading is here, before the
+        // menu becomes interactive at all.
         //
-        // OPTOBJ only - PICKMOD (pause menu weapons) and OBJ3D (level
-        // objects) don't belong here at all. Edward, 2026: "we don't
-        // need PICKMOD.BND to load until we are loading into a level...
-        // We should be able to hide loading both of them just fine
-        // behind the briefing screens loading text" - see
-        // MissionBriefingScreen, which preloads both via
-        // PreloadGameplayModels.
+        // Initialize() MUST be called before any of this - without it,
+        // device is still null, so every LoadModel/RenderToRgba call
+        // below silently returns false/empty immediately (see their own
+        // "if (!device) return" early-outs). This was a real bug: the
+        // whole blocking phase "completed" in a single frame having
+        // preloaded nothing at all, which is exactly why it looked like
+        // it "changed nothing" - Initialize() was still only ever
+        // getting called for the first time inside DrawModelPreview,
+        // i.e. on the user's actual first visit to Options, which is
+        // where the full cold-start cost was still landing.
+        ALTEngine::Renderer::ModelRenderer::Initialize();
+
         std::vector<ALTEngine::Renderer::PreloadRequest> modelPreloadQueue;
         for (int i = 0; i < 14; i++)
         {
@@ -345,6 +339,96 @@ namespace ALTEngine::Menu
                                            source.transparentRgb, source.baseRotationRadians });
         }
         size_t modelPreloadNext = 0;
+        bool modelPreloadWarmedUp = false;
+
+        // Blocking loading phase - same event-pump-and-present-every-
+        // iteration approach already proven not to trigger Windows'
+        // "not responding" cursor (see main.cpp's boot sequence), just
+        // applied here instead of at boot. Presents a plain black frame
+        // each iteration - deliberately no loading text or indicator,
+        // matching "the lingering black screen from skipping naturally
+        // covers it" (Edward, 2026).
+        {
+            bool loadingWindowClosed = false;
+            while (!modelPreloadWarmedUp)
+            {
+                SDL_Event loadEvent;
+                while (SDL_PollEvent(&loadEvent))
+                {
+                    if (loadEvent.type == SDL_EVENT_QUIT) { loadingWindowClosed = true; }
+                }
+                if (loadingWindowClosed) { break; }
+
+                // Time-budgeted rather than a fixed count per frame -
+                // self-adjusts to whatever the actual per-model cost is
+                // on the machine it's running on, rather than a guessed
+                // fixed number, while still never blocking longer than
+                // the budget at a stretch.
+                constexpr Uint64 PRELOAD_FRAME_BUDGET_MS = 6;
+                Uint64 preloadFrameStart = SDL_GetTicks();
+                while (modelPreloadNext < modelPreloadQueue.size() &&
+                       (SDL_GetTicks() - preloadFrameStart) < PRELOAD_FRAME_BUDGET_MS)
+                {
+                    const auto& req = modelPreloadQueue[modelPreloadNext++];
+                    ALTEngine::Renderer::ModelRenderer::LoadModel(req.cacheKey, req.meshNumber, req.objBndPath, req.gfxBndPath,
+                                                                   req.transparentRgb, req.baseRotationRadians);
+                }
+
+                // One-time GPU warm-up, right after the model-data
+                // preload queue finishes. Edward, 2026: model data being
+                // preloaded (vertex/index/texture buffers uploaded)
+                // turned out not to be the whole story - DrawModel only
+                // ever gets called from the Options branch, never the
+                // main menu, so the render target (EnsureRenderTarget)
+                // and the normal render pipeline had never actually
+                // been exercised by a real draw call before the user's
+                // first visit to Options - and Multitap/SpeakerMusic/
+                // SpeakerSfx use a SEPARATE doubleSidedPipeline object
+                // that's equally never been used in a real draw before
+                // the user first switches to one of those specific
+                // models (e.g. Volume). GPU drivers often lazily compile
+                // a pipeline's actual GPU-side shader code on its first
+                // real draw call, not at creation time - confirmed ~80x
+                // slower on the very first RenderToRgba call vs the
+                // second, even on software rendering. Two throwaway
+                // calls here (one per pipeline, discarding the result)
+                // forces that cost to happen now, before the menu is
+                // interactive, rather than on the user's first encounter
+                // with either path.
+                if (modelPreloadNext >= modelPreloadQueue.size() && !modelPreloadWarmedUp)
+                {
+                    int warmupW = 0, warmupH = 0;
+                    SDL_GetRenderOutputSize(renderer, &warmupW, &warmupH);
+                    int warmupSize = std::min(warmupW, warmupH);
+                    if (warmupSize < 64) { warmupSize = 64; }
+                    ALTEngine::Renderer::ModelRenderer::RenderToRgba({ ALTEngine::Renderer::ModelCatalog::Optobj, 0 }, 0.0f, warmupSize, warmupSize);
+                    ALTEngine::Renderer::ModelRenderer::RenderToRgba({ ALTEngine::Renderer::ModelCatalog::Optobj, ModelIndex::Multitap }, 0.0f, warmupSize, warmupSize);
+                    modelPreloadWarmedUp = true;
+                }
+
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                SDL_RenderClear(renderer);
+                SDL_RenderPresent(renderer);
+            }
+
+            if (loadingWindowClosed)
+            {
+                if (mainBg) { SDL_DestroyTexture(mainBg); }
+                if (optionsBg) { SDL_DestroyTexture(optionsBg); }
+                return { true, "" };
+            }
+        }
+
+        // track02.wav is confirmed as the main menu music (Edward).
+        // Plays continuously across the whole menu (Main Menu, Options,
+        // Credits) rather than stopping the moment you leave the Main
+        // Menu screen specifically - matches how menu music behaves in
+        // basically every game with a menu. Started here, after the
+        // loading phase above, rather than before it - Edward, 2026:
+        // "the music starts playing before the main menu appears" was
+        // jarring, hearing menu music over a black loading screen for
+        // several seconds before anything shows.
+        MusicPlayer::PlayLooped(cdDirectory / "MUSIC" / "track02.wav");
 
         enum class Screen { MainMenu, Options, Credits };
         Screen screen = Screen::MainMenu;
@@ -358,13 +442,6 @@ namespace ALTEngine::Menu
         while (running)
         {
             MusicPlayer::Update();
-
-            if (modelPreloadNext < modelPreloadQueue.size())
-            {
-                const auto& req = modelPreloadQueue[modelPreloadNext++];
-                ALTEngine::Renderer::ModelRenderer::LoadModel(req.cacheKey, req.meshNumber, req.objBndPath, req.gfxBndPath,
-                                                               req.transparentRgb, req.baseRotationRadians);
-            }
 
             SDL_Event event;
             while (SDL_PollEvent(&event))
@@ -510,7 +587,6 @@ namespace ALTEngine::Menu
         }
 
         MusicPlayer::Stop();
-        ModelRenderer::Shutdown();
 
         if (mainBg) { SDL_DestroyTexture(mainBg); }
         if (optionsBg) { SDL_DestroyTexture(optionsBg); }

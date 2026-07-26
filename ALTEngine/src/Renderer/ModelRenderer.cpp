@@ -23,7 +23,9 @@ namespace ALTEngine::Renderer
         // want something printable.
         std::string DescribeCacheKey(ModelCacheKey key)
         {
-            const char* catalogName = (key.catalog == ModelCatalog::Optobj) ? "OPTOBJ" : "PICKMOD";
+            const char* catalogName = (key.catalog == ModelCatalog::Optobj) ? "OPTOBJ"
+                                     : (key.catalog == ModelCatalog::Pickmod) ? "PICKMOD"
+                                     : "OBJ3D";
             return std::string(catalogName) + ":" + std::to_string(key.modelIndex);
         }
 
@@ -454,6 +456,22 @@ namespace ALTEngine::Renderer
         return sampler != nullptr;
     }
 
+    void ModelRenderer::UnloadLevels()
+    {
+        if (!device) { return; }
+
+        for (auto& [index, level] : loadedLevels)
+        {
+            for (auto& group : level.groups)
+            {
+                if (group.vertexBuffer) { SDL_ReleaseGPUBuffer(device, group.vertexBuffer); }
+                if (group.indexBuffer) { SDL_ReleaseGPUBuffer(device, group.indexBuffer); }
+                if (group.texture) { SDL_ReleaseGPUTexture(device, group.texture); }
+            }
+        }
+        loadedLevels.clear();
+    }
+
     void ModelRenderer::Shutdown()
     {
         if (!device) { return; }
@@ -473,16 +491,7 @@ namespace ALTEngine::Renderer
         // garbage buffers. Same class of bug as the "Options no longer
         // displays models" issue this Shutdown/Initialize idempotency
         // fix addresses, just for levels instead.
-        for (auto& [index, level] : loadedLevels)
-        {
-            for (auto& group : level.groups)
-            {
-                if (group.vertexBuffer) { SDL_ReleaseGPUBuffer(device, group.vertexBuffer); }
-                if (group.indexBuffer) { SDL_ReleaseGPUBuffer(device, group.indexBuffer); }
-                if (group.texture) { SDL_ReleaseGPUTexture(device, group.texture); }
-            }
-        }
-        loadedLevels.clear();
+        UnloadLevels();
 
         if (colorTarget) { SDL_ReleaseGPUTexture(device, colorTarget); colorTarget = nullptr; }
         if (depthTarget) { SDL_ReleaseGPUTexture(device, depthTarget); depthTarget = nullptr; }

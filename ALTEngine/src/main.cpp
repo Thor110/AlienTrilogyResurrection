@@ -157,6 +157,7 @@ int main(int, char**)
     if (!result.success)
     {
         std::cout << "No install directory selected. Aborting.\n";
+        ALTEngine::Renderer::ModelRenderer::Shutdown();
         AppWindow::Instance().Shutdown();
         PauseBeforeExit();
         return 1;
@@ -171,6 +172,7 @@ int main(int, char**)
     if (!ShowLegalSplash(cdDirectory))
     {
         std::cout << "Boot window closed. Aborting.\n";
+        ALTEngine::Renderer::ModelRenderer::Shutdown();
         AppWindow::Instance().Shutdown();
         PauseBeforeExit();
         return 1;
@@ -183,6 +185,7 @@ int main(int, char**)
     if (!PlayIntroVideos(cdDirectory, language))
     {
         std::cout << "Boot window closed. Aborting.\n";
+        ALTEngine::Renderer::ModelRenderer::Shutdown();
         AppWindow::Instance().Shutdown();
         PauseBeforeExit();
         return 1;
@@ -197,6 +200,7 @@ int main(int, char**)
         if (menuResult.windowClosed)
         {
             std::cout << "Boot window closed. Aborting.\n";
+            ALTEngine::Renderer::ModelRenderer::Shutdown();
             AppWindow::Instance().Shutdown();
             PauseBeforeExit();
             return 1;
@@ -256,6 +260,7 @@ int main(int, char**)
             if (windowClosed)
             {
                 std::cout << "Boot window closed. Aborting.\n";
+                ALTEngine::Renderer::ModelRenderer::Shutdown();
                 AppWindow::Instance().Shutdown();
                 PauseBeforeExit();
                 return 1;
@@ -269,6 +274,7 @@ int main(int, char**)
             if (loadResult.windowClosed)
             {
                 std::cout << "Boot window closed. Aborting.\n";
+                ALTEngine::Renderer::ModelRenderer::Shutdown();
                 AppWindow::Instance().Shutdown();
                 PauseBeforeExit();
                 return 1;
@@ -291,6 +297,7 @@ int main(int, char**)
             if (briefingResult.windowClosed)
             {
                 std::cout << "Boot window closed. Aborting.\n";
+                ALTEngine::Renderer::ModelRenderer::Shutdown();
                 AppWindow::Instance().Shutdown();
                 PauseBeforeExit();
                 return 1;
@@ -300,6 +307,7 @@ int main(int, char**)
             if (gameplayResult.outcome == GameplayOutcome::WindowClosed)
             {
                 std::cout << "Boot window closed. Aborting.\n";
+                ALTEngine::Renderer::ModelRenderer::Shutdown();
                 AppWindow::Instance().Shutdown();
                 PauseBeforeExit();
                 return 1;
@@ -311,6 +319,7 @@ int main(int, char**)
         // MenuController itself) - just re-show the main menu.
     }
 
+    ALTEngine::Renderer::ModelRenderer::Shutdown();
     AppWindow::Instance().Shutdown();
     PauseBeforeExit();
     return 0;

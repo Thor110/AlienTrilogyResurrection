@@ -219,17 +219,16 @@ namespace ALTEngine::Screens
         // Incremental PICKMOD+OBJ3D preload queue - one model loaded per
         // frame from inside the loop below, riding along on the
         // "Loading data" window this screen already has, same proven
-        // pattern as MenuController::Run's own OPTOBJ preload queue
-        // (Edward, 2026: "we don't need PICKMOD.BND to load until we
-        // are loading into a level... We should be able to hide loading
-        // both of them just fine behind the briefing screens loading
-        // text"). Kept incremental rather than one blocking
-        // PreloadGameplayModels call for the same reason the boot
-        // sequence needed it: GPU resource creation (one
-        // CreateGPUBuffer/CreateGPUTexture call per model, ~68 models
-        // here) can still cost enough on real hardware to risk the same
-        // "not responding" cursor a single batched-but-blocking call
-        // showed at boot, even after upload batching.
+        // pattern as MenuController::Run's own OPTOBJ preload queue.
+        // Edward, 2026: "we don't need PICKMOD.BND to load until we are
+        // loading into a level... hide loading both of them behind the
+        // briefing screen's loading text." OPTOBJ isn't preloaded here -
+        // it's guaranteed loaded and warm before the main menu even
+        // becomes interactive (see MenuController::Run's own blocking
+        // loading phase), and the model cache now persists across
+        // screen transitions (ModelRenderer::Shutdown is no longer
+        // called when leaving the menu), so loading it a second time
+        // here would just be redundant work.
         std::vector<ALTEngine::Renderer::PreloadRequest> modelPreloadQueue;
         for (int i = 0; i <= 27; i++) // PICKMOD: 28 slots, gaps at 5/24 fail gracefully
         {
@@ -244,6 +243,7 @@ namespace ALTEngine::Screens
                                            source.transparentRgb, source.baseRotationRadians });
         }
         size_t modelPreloadNext = 0;
+        bool modelPreloadWarmedUp = false;
         ALTEngine::Renderer::ModelRenderer::Initialize();
 
         MissionBriefingResult result;
@@ -252,11 +252,47 @@ namespace ALTEngine::Screens
 
         while (running)
         {
-            if (modelPreloadNext < modelPreloadQueue.size())
+            // Time-budgeted rather than a fixed count per frame - same
+            // reasoning as MenuController::Run's OPTOBJ queue, more
+            // pressing here given this queue is ~68 models (PICKMOD+
+            // OBJ3D) rather than 14. loadingDone already requires the
+            // full queue to be drained (see below), so this only
+            // affects how quickly it gets there and how much per-frame
+            // work is spent doing so - not correctness.
+            constexpr Uint64 PRELOAD_FRAME_BUDGET_MS = 6;
+            Uint64 preloadFrameStart = SDL_GetTicks();
+            while (modelPreloadNext < modelPreloadQueue.size() &&
+                   (SDL_GetTicks() - preloadFrameStart) < PRELOAD_FRAME_BUDGET_MS)
             {
                 const auto& req = modelPreloadQueue[modelPreloadNext++];
                 ALTEngine::Renderer::ModelRenderer::LoadModel(req.cacheKey, req.meshNumber, req.objBndPath, req.gfxBndPath,
                                                                req.transparentRgb, req.baseRotationRadians);
+            }
+
+            // One-time GPU warm-up for PICKMOD's normal render pipeline -
+            // Edward, 2026: this screen never actually calls RenderToRgba
+            // (it's text+background only), so without this, the pause
+            // menu's first weapon model shown during actual gameplay
+            // would be the true first-ever real draw call for THIS
+            // catalog, hitting the same cold-start cost (confirmed ~80x
+            // slower on the very first RenderToRgba call vs the second,
+            // even on software rendering) the OPTOBJ warm-up in
+            // MenuController::Run already addresses for that catalog -
+            // not repeated here since the render target/pipeline objects
+            // now persist across screen transitions (ModelRenderer::
+            // Shutdown is no longer called on menu exit), so OPTOBJ's own
+            // warm-up already covers both pipeline objects. Only the
+            // normal pipeline needed here - PICKMOD models don't use the
+            // colour-key doubleSidedPipeline (that's OPTOBJ-specific, see
+            // ModelPreviewSource::ForOptobj).
+            if (!modelPreloadWarmedUp && modelPreloadNext >= modelPreloadQueue.size())
+            {
+                int warmupW = 0, warmupH = 0;
+                SDL_GetRenderOutputSize(renderer, &warmupW, &warmupH);
+                int warmupSize = std::min(warmupW, warmupH);
+                if (warmupSize < 64) { warmupSize = 64; }
+                ALTEngine::Renderer::ModelRenderer::RenderToRgba({ ALTEngine::Renderer::ModelCatalog::Pickmod, 0 }, 0.0f, warmupSize, warmupSize);
+                modelPreloadWarmedUp = true;
             }
 
             SDL_Event event;
