@@ -9,6 +9,7 @@
 #include "../Renderer/ModelPreview.h"
 
 #include <SDL3/SDL.h>
+#include <algorithm>
 #include <array>
 #include <cmath>
 
@@ -27,6 +28,35 @@ namespace ALTEngine::Screens
         constexpr Color COLOR_CURSOR{ 51, 255, 102, 255 };
         constexpr Color COLOR_DIM{ 24, 130, 52, 255 };
         constexpr Color COLOR_EDITING{ 235, 235, 235, 255 };
+        constexpr Color COLOR_WHITE{ 255, 255, 255, 255 }; // matches the main menu's own selected-item white exactly
+
+        Color LerpColor(Color a, Color b, float t)
+        {
+            t = std::clamp(t, 0.0f, 1.0f);
+            return Color{
+                static_cast<Uint8>(a.r + (b.r - a.r) * t),
+                static_cast<Uint8>(a.g + (b.g - a.g) * t),
+                static_cast<Uint8>(a.b + (b.b - a.b) * t),
+                255
+            };
+        }
+
+        // Same ~1.7s "breathing" pulse as the other menu screens (Edward,
+        // 2026: "same frequency pulse as the boxed items").
+        float PulsePhase()
+        {
+            return static_cast<float>((std::sin(static_cast<double>(SDL_GetTicks()) / 400.0) + 1.0) / 2.0);
+        }
+
+        // The selected-but-not-editing text color for these menus -
+        // pulses between green and white rather than a static light
+        // green (Edward, 2026: "currently the multiplayer menus have a
+        // light green, it should be white like the main menu and the
+        // pulsing should go between the green and the white").
+        Color SelectedTextColor()
+        {
+            return LerpColor(COLOR_CURSOR, COLOR_WHITE, PulsePhase());
+        }
 
         // NetworkedComputers (OPTOBJ index 10) - Edward noted this model
         // (and others like it) rests at a different natural angle than
@@ -119,7 +149,7 @@ namespace ALTEngine::Screens
             int startY = windowH / 2 - lineHeight / 2;
             for (int i = 0; i < 3; ++i)
             {
-                Color color = (i == cursor) ? COLOR_CURSOR : COLOR_DIM;
+                Color color = (i == cursor) ? SelectedTextColor() : COLOR_DIM;
                 int textX = (windowW - TextWidth(ITEMS[static_cast<size_t>(i)], scale)) / 2;
                 DrawBitmapText(renderer, ITEMS[static_cast<size_t>(i)], textX, startY + i * lineHeight, scale, color);
             }
@@ -208,14 +238,14 @@ namespace ALTEngine::Screens
 
             int rowY = margin + lineHeight * 3;
             std::string nameLine = "YOUR NAME: " + (cursor == 0 && editor.IsEditing() ? editor.Value() : settings.playerName);
-            DrawBitmapText(renderer, nameLine, margin, rowY, scale, (cursor == 0) ? (editor.IsEditing() ? COLOR_EDITING : COLOR_CURSOR) : COLOR_DIM);
+            DrawBitmapText(renderer, nameLine, margin, rowY, scale, (cursor == 0) ? (editor.IsEditing() ? COLOR_EDITING : SelectedTextColor()) : COLOR_DIM);
 
             for (int i = 0; i < 8; ++i)
             {
                 int row = i + 1;
                 std::string label = "F" + std::to_string(i + 2) + " Message: ";
                 std::string value = (cursor == row && editor.IsEditing()) ? editor.Value() : settings.messages[static_cast<size_t>(i)];
-                Color color = (cursor == row) ? (editor.IsEditing() ? COLOR_EDITING : COLOR_CURSOR) : COLOR_DIM;
+                Color color = (cursor == row) ? (editor.IsEditing() ? COLOR_EDITING : SelectedTextColor()) : COLOR_DIM;
                 DrawBitmapText(renderer, label + value, margin, rowY + lineHeight * (i + 2), scale, color);
             }
 
@@ -304,17 +334,17 @@ namespace ALTEngine::Screens
             DrawBitmapText(renderer, title, (windowW - TextWidth(title, scale)) / 2, margin, scale, COLOR_CURSOR);
 
             int rowY = margin + lineHeight * 4;
-            DrawBitmapText(renderer, "Start Game", margin, rowY, scale, (cursor == 0) ? COLOR_CURSOR : COLOR_DIM);
+            DrawBitmapText(renderer, "Start Game", margin, rowY, scale, (cursor == 0) ? SelectedTextColor() : COLOR_DIM);
 
             std::string gameNameValue = (cursor == 1 && editor.IsEditing()) ? editor.Value() : settings.gameName;
             DrawBitmapText(renderer, "Name Of Game: " + gameNameValue, margin, rowY + lineHeight, scale,
-                            (cursor == 1) ? (editor.IsEditing() ? COLOR_EDITING : COLOR_CURSOR) : COLOR_DIM);
+                            (cursor == 1) ? (editor.IsEditing() ? COLOR_EDITING : SelectedTextColor()) : COLOR_DIM);
 
             DrawBitmapText(renderer, "Start at level (1-10): " + std::to_string(settings.startLevel), margin, rowY + lineHeight * 2, scale,
-                            (cursor == 2) ? COLOR_CURSOR : COLOR_DIM);
+                            (cursor == 2) ? SelectedTextColor() : COLOR_DIM);
 
             DrawBitmapText(renderer, "Minimum game length: " + std::to_string(settings.minGameLength), margin, rowY + lineHeight * 3, scale,
-                            (cursor == 3) ? COLOR_CURSOR : COLOR_DIM);
+                            (cursor == 3) ? SelectedTextColor() : COLOR_DIM);
 
             SDL_RenderPresent(renderer);
         }

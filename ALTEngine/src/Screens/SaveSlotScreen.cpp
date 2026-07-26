@@ -36,7 +36,8 @@ namespace ALTEngine::Screens
     SaveSlotResult SaveSlotScreen::Run(
         const std::filesystem::path& cdDirectory,
         SaveSlotMode mode,
-        const std::array<SaveSlotInfo, 10>& slots)
+        const std::array<SaveSlotInfo, 10>& slots,
+        bool showBackground)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
@@ -46,7 +47,7 @@ namespace ALTEngine::Screens
         SDL_Renderer* renderer = app.Renderer();
 
         int bgW = 0, bgH = 0;
-        SDL_Texture* background = LoadMenuBackground(cdDirectory, renderer, 1, bgW, bgH);
+        SDL_Texture* background = showBackground ? LoadMenuBackground(cdDirectory, renderer, 1, bgW, bgH) : nullptr;
 
         // HarddriveRight ("Hard Drive Loading ->") for Load, HarddriveLeft
         // ("Hard Drive Saving <-") for Save - both confirmed OPTOBJ

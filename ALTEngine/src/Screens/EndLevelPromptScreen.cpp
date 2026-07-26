@@ -6,7 +6,9 @@
 #include "../Bootstrap/Font8x8.h"
 
 #include <SDL3/SDL.h>
+#include <algorithm>
 #include <array>
+#include <cmath>
 
 namespace ALTEngine::Screens
 {
@@ -22,7 +24,33 @@ namespace ALTEngine::Screens
     {
         constexpr Color COLOR_CURSOR{ 51, 255, 102, 255 };
         constexpr Color COLOR_DIM{ 24, 130, 52, 255 };
+        constexpr Color COLOR_WHITE{ 255, 255, 255, 255 }; // matches the main menu's own selected-item white exactly
         constexpr std::array<const char*, 3> ITEMS{ "Continue game", "Save Game", "Quit Game" };
+
+        Color LerpColor(Color a, Color b, float t)
+        {
+            t = std::clamp(t, 0.0f, 1.0f);
+            return Color{
+                static_cast<Uint8>(a.r + (b.r - a.r) * t),
+                static_cast<Uint8>(a.g + (b.g - a.g) * t),
+                static_cast<Uint8>(a.b + (b.b - a.b) * t),
+                255
+            };
+        }
+
+        // Same ~1.7s "breathing" pulse as the other menu screens (Edward,
+        // 2026: "same frequency pulse as the boxed items").
+        float PulsePhase()
+        {
+            return static_cast<float>((std::sin(static_cast<double>(SDL_GetTicks()) / 400.0) + 1.0) / 2.0);
+        }
+
+        // Pulses between green and white rather than a static light
+        // green (Edward, 2026).
+        Color SelectedTextColor()
+        {
+            return LerpColor(COLOR_CURSOR, COLOR_WHITE, PulsePhase());
+        }
     }
 
     EndLevelPromptResult EndLevelPromptScreen::Run(const std::filesystem::path& cdDirectory)
@@ -88,7 +116,7 @@ namespace ALTEngine::Screens
 
             for (int i = 0; i < 3; ++i)
             {
-                Color color = (i == cursor) ? COLOR_CURSOR : COLOR_DIM;
+                Color color = (i == cursor) ? SelectedTextColor() : COLOR_DIM;
                 int textX = (windowW - TextWidth(ITEMS[static_cast<size_t>(i)], scale)) / 2;
                 DrawBitmapText(renderer, ITEMS[static_cast<size_t>(i)], textX, startY + i * lineHeight, scale, color);
             }

@@ -1,5 +1,6 @@
 #include "PauseMenuScreen.h"
 #include "PauseMenuTree.h"
+#include "SaveSlotScreen.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
@@ -312,6 +313,27 @@ namespace ALTEngine::Screens
                 {
                     result.outcome = PauseMenuOutcome::ExitGame;
                     running = false;
+                }
+                else if (r == EnterResult::Toggled && (deepest.label == "Save Game" || deepest.label == "Load Game"))
+                {
+                    // Same SaveSlotScreen::Run the main menu's own "Load
+                    // Game" already uses - fully self-contained, no
+                    // dependency on this loop's own state, so it already
+                    // has no menu background behind it, matching the
+                    // main-menu path. Just returns control back here
+                    // afterward, resuming this same pause menu loop
+                    // (still on Save Game/Load Game) rather than jumping
+                    // to the main menu or exiting gameplay.
+                    SaveSlotMode mode = (deepest.label == "Save Game") ? SaveSlotMode::Save : SaveSlotMode::Load;
+                    SaveSlotResult slotResult = SaveSlotScreen::Run(cdDirectory, mode, StubSaveSlots(), false);
+                    if (slotResult.windowClosed)
+                    {
+                        result.outcome = PauseMenuOutcome::WindowClosed;
+                        running = false;
+                    }
+                    // NEXT: actually save/load real data once a real save
+                    // system exists - same TODO as main.cpp's own Load
+                    // Game handling.
                 }
                 if (r != EnterResult::NoOp) { SfxPlayer::Play(SfxId::MenuSelect, cdDirectory); }
             };

@@ -39,12 +39,22 @@ namespace ALTEngine::Screens
     // HarddriveLeft/"Saving <-" for Save, both confirmed OPTOBJ indices)
     // - matches the reference screenshots, which are otherwise identical
     // in structure.
+    //
+    // showBackground controls whether the LOGOSGFX generic-menu
+    // background (imageIndex 1) is loaded and drawn - true (the
+    // default) matches the main menu's own "Load Game" path, which
+    // already shows this background. Pass false for the pause menu's
+    // own Save Game/Load Game entries (Edward, 2026: "As the pause
+    // menu is a black background, I feel we should match that so as to
+    // not be so jarring") - just clears to black instead, same as
+    // every other black-background screen already does.
     class SaveSlotScreen
     {
     public:
         static SaveSlotResult Run(
             const std::filesystem::path& cdDirectory,
             SaveSlotMode mode,
-            const std::array<SaveSlotInfo, 10>& slots);
+            const std::array<SaveSlotInfo, 10>& slots,
+            bool showBackground = true);
     };
 }

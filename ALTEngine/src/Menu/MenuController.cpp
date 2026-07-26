@@ -267,11 +267,12 @@ namespace ALTEngine::Menu
         void DrawMainMenuList(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int selectedIndex,
             int windowW, int y, int rowHeight, int scale)
         {
+            float pulse = PulsePhase();
             for (size_t i = 0; i < items.size(); ++i)
             {
                 int rowY = y + static_cast<int>(i) * rowHeight;
                 bool isSelected = (static_cast<int>(i) == selectedIndex);
-                Color textColor = isSelected ? COLOR_WHITE : COLOR_GREEN;
+                Color textColor = isSelected ? LerpColor(COLOR_GREEN, COLOR_WHITE, pulse) : COLOR_GREEN;
 
                 int textW = TextWidth(items[i].label, scale);
                 int textX = (windowW - textW) / 2;
