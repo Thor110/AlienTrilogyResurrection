@@ -3,6 +3,7 @@
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/MissionText.h"
 #include "../Formats/SplashImageLoader.h"
+#include "../Renderer/ModelPreview.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -215,12 +216,49 @@ namespace ALTEngine::Screens
         int totalChars = TotalCharCount(shown);
         Uint64 startTicks = SDL_GetTicks();
 
+        // Incremental PICKMOD+OBJ3D preload queue - one model loaded per
+        // frame from inside the loop below, riding along on the
+        // "Loading data" window this screen already has, same proven
+        // pattern as MenuController::Run's own OPTOBJ preload queue
+        // (Edward, 2026: "we don't need PICKMOD.BND to load until we
+        // are loading into a level... We should be able to hide loading
+        // both of them just fine behind the briefing screens loading
+        // text"). Kept incremental rather than one blocking
+        // PreloadGameplayModels call for the same reason the boot
+        // sequence needed it: GPU resource creation (one
+        // CreateGPUBuffer/CreateGPUTexture call per model, ~68 models
+        // here) can still cost enough on real hardware to risk the same
+        // "not responding" cursor a single batched-but-blocking call
+        // showed at boot, even after upload batching.
+        std::vector<ALTEngine::Renderer::PreloadRequest> modelPreloadQueue;
+        for (int i = 0; i <= 27; i++) // PICKMOD: 28 slots, gaps at 5/24 fail gracefully
+        {
+            auto source = ALTEngine::Renderer::ModelPreviewSource::ForPickmod(cdDirectory, i);
+            modelPreloadQueue.push_back({ source.CacheKey(), i, source.objBndPath, source.gfxBndPath,
+                                           source.transparentRgb, source.baseRotationRadians });
+        }
+        for (int i = 0; i <= 41; i++) // OBJ3D: 42 slots, no known gaps
+        {
+            auto source = ALTEngine::Renderer::ModelPreviewSource::ForObj3D(cdDirectory, i, language);
+            modelPreloadQueue.push_back({ source.CacheKey(), i, source.objBndPath, source.gfxBndPath,
+                                           source.transparentRgb, source.baseRotationRadians });
+        }
+        size_t modelPreloadNext = 0;
+        ALTEngine::Renderer::ModelRenderer::Initialize();
+
         MissionBriefingResult result;
         bool running = true;
         bool textFullyRevealed = false;
 
         while (running)
         {
+            if (modelPreloadNext < modelPreloadQueue.size())
+            {
+                const auto& req = modelPreloadQueue[modelPreloadNext++];
+                ALTEngine::Renderer::ModelRenderer::LoadModel(req.cacheKey, req.meshNumber, req.objBndPath, req.gfxBndPath,
+                                                               req.transparentRgb, req.baseRotationRadians);
+            }
+
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
@@ -228,7 +266,7 @@ namespace ALTEngine::Screens
                 else if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
                 {
                     Uint64 elapsed = SDL_GetTicks() - startTicks;
-                    bool loadingDone = elapsed >= static_cast<Uint64>(LOADING_MS);
+                    bool loadingDone = elapsed >= static_cast<Uint64>(LOADING_MS) && modelPreloadNext >= modelPreloadQueue.size();
 
                     if (!textFullyRevealed)
                     {
@@ -245,7 +283,7 @@ namespace ALTEngine::Screens
             if (!running) { break; }
 
             Uint64 elapsed = SDL_GetTicks() - startTicks;
-            bool loadingDone = elapsed >= static_cast<Uint64>(LOADING_MS);
+            bool loadingDone = elapsed >= static_cast<Uint64>(LOADING_MS) && modelPreloadNext >= modelPreloadQueue.size();
 
             int revealedChars = textFullyRevealed ? totalChars : static_cast<int>(elapsed / MS_PER_CHAR);
             if (revealedChars >= totalChars) { revealedChars = totalChars; textFullyRevealed = true; }

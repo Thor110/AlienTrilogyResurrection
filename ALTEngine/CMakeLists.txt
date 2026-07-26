@@ -19,7 +19,6 @@ endif()
 find_package(nlohmann_json CONFIG REQUIRED)
 
 add_library(ALTFormats STATIC
-    src/Formats/placeholder.cpp
     src/Formats/ModelIndices.h
     src/Formats/BinaryUtility.cpp
     src/Formats/PatchLoader.cpp

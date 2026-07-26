@@ -319,7 +319,7 @@ namespace ALTEngine::Menu
         // GPU upload (ModelRenderer::PreloadBatch) still left a
         // multi-second hang at boot, since GPU resource creation itself
         // (CreateGPUBuffer/CreateGPUTexture, one call per model,
-        // ~120 calls for the full catalog) can't be batched into fewer
+        // ~40 calls for OPTOBJ alone) can't be batched into fewer
         // driver calls the way the upload/transfer step can - each
         // needs its own unique handle. Riding this along on frames that
         // are already happening (this loop runs regardless) means
@@ -329,16 +329,18 @@ namespace ALTEngine::Menu
         // placeholder box instead of the live 3D preview, which is
         // already a fully supported, graceful path (DrawModelPlaceholder)
         // rather than new behaviour.
+        //
+        // OPTOBJ only - PICKMOD (pause menu weapons) and OBJ3D (level
+        // objects) don't belong here at all. Edward, 2026: "we don't
+        // need PICKMOD.BND to load until we are loading into a level...
+        // We should be able to hide loading both of them just fine
+        // behind the briefing screens loading text" - see
+        // MissionBriefingScreen, which preloads both via
+        // PreloadGameplayModels.
         std::vector<ALTEngine::Renderer::PreloadRequest> modelPreloadQueue;
         for (int i = 0; i < 14; i++)
         {
             auto source = ALTEngine::Renderer::ModelPreviewSource::ForOptobj(cdDirectory, i);
-            modelPreloadQueue.push_back({ source.CacheKey(), i, source.objBndPath, source.gfxBndPath,
-                                           source.transparentRgb, source.baseRotationRadians });
-        }
-        for (int i = 0; i < 26; i++)
-        {
-            auto source = ALTEngine::Renderer::ModelPreviewSource::ForPickmod(cdDirectory, i);
             modelPreloadQueue.push_back({ source.CacheKey(), i, source.objBndPath, source.gfxBndPath,
                                            source.transparentRgb, source.baseRotationRadians });
         }

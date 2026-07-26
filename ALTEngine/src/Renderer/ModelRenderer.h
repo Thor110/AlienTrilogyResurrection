@@ -33,14 +33,18 @@ namespace ALTEngine::Renderer
     // for reliability given this is one small menu preview, not
     // gameplay-critical performance.
     // Which model catalog a ModelCacheKey refers to - OPTOBJ (menu
-    // items like the harddrives/computer/etc) and PICKMOD (pause menu
-    // weapons/equipment) are separate BND files with their own,
+    // items like the harddrives/computer/etc), PICKMOD (pause menu
+    // weapons/equipment), and OBJ3D (level objects - crates, barrels,
+    // switches, and other destructible/interactable world objects, per
+    // Edward 2026 - NOT doors/lifts, which live entirely within the
+    // .MAP format itself) are three separate BND files with their own,
     // independently-numbered index ranges, so the same modelIndex means
     // a different model depending on which catalog it's from.
     enum class ModelCatalog : int32_t
     {
         Optobj,
         Pickmod,
+        Obj3d,
     };
 
     // A cheap-to-copy/hash/compare model cache key - replaces what used

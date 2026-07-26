@@ -56,11 +56,11 @@ namespace ALTEngine::Renderer
         return true;
     }
 
-    void PreloadAllModels(const std::filesystem::path& cdDirectory)
+    void PreloadOptobjModels(const std::filesystem::path& cdDirectory)
     {
         if (!ModelRenderer::Initialize())
         {
-            SDL_Log("PreloadAllModels: ModelRenderer unavailable, skipping preload");
+            SDL_Log("PreloadOptobjModels: ModelRenderer unavailable, skipping preload");
             return;
         }
 
@@ -75,14 +75,37 @@ namespace ALTEngine::Renderer
                                   source.transparentRgb, source.baseRotationRadians });
         }
 
-        // PICKMOD: confirmed gaps at 5 and 24 (see ModelLoader.h) -
+        ModelRenderer::PreloadBatch(requests);
+    }
+
+    void PreloadGameplayModels(const std::filesystem::path& cdDirectory, ALTEngine::Bootstrap::Language language)
+    {
+        if (!ModelRenderer::Initialize())
+        {
+            SDL_Log("PreloadGameplayModels: ModelRenderer unavailable, skipping preload");
+            return;
+        }
+
+        std::vector<PreloadRequest> requests;
+
+        // PICKMOD: 0-27 (28 slots), confirmed gaps at 5 and 24, 26
+        // actually present (Edward, 2026 - corrected from an earlier,
+        // wrong 0-25 range that silently missed 26/27 entirely).
         // PreloadBatch already skips a missing section number gracefully
         // (logs, moves on) rather than failing the whole batch, so this
-        // just tries the full documented 0-25 range without needing to
-        // special-case the gaps itself.
-        for (int i = 0; i < 26; i++)
+        // just tries the full 0-27 range without needing to special-
+        // case the gaps itself.
+        for (int i = 0; i <= 27; i++)
         {
             ModelPreviewSource source = ModelPreviewSource::ForPickmod(cdDirectory, i);
+            requests.push_back({ source.CacheKey(), i, source.objBndPath, source.gfxBndPath,
+                                  source.transparentRgb, source.baseRotationRadians });
+        }
+
+        // OBJ3D: 0-41 (42 slots, no known gaps - Edward, 2026).
+        for (int i = 0; i <= 41; i++)
+        {
+            ModelPreviewSource source = ModelPreviewSource::ForObj3D(cdDirectory, i, language);
             requests.push_back({ source.CacheKey(), i, source.objBndPath, source.gfxBndPath,
                                   source.transparentRgb, source.baseRotationRadians });
         }

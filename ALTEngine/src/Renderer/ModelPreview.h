@@ -1,6 +1,8 @@
 #pragma once
 
 #include "ModelRenderer.h"
+#include "../Bootstrap/Localization.h"
+#include "../Formats/Obj3DTexture.h"
 
 #include <array>
 #include <filesystem>
@@ -77,6 +79,27 @@ namespace ALTEngine::Renderer
             source.modelIndex = modelIndex;
             return source;
         }
+
+        // OBJ3D.BND (level objects - crates, barrels, switches, and
+        // other destructible/interactable world objects, per Edward
+        // 2026) doesn't share one fixed texture file the way OPTOBJ/
+        // PICKMOD do - which of PNL0GFX/PNL1GFX/PICKGFX applies depends
+        // on the mesh number itself (see Obj3DTexture.h's own doc
+        // comment for the exact ranges), and the PNL*GFX files are
+        // further language-suffixed. gfxBndPath is left empty if
+        // ResolveObj3DTextureFile can't find the right file - LoadModel
+        // already fails gracefully on a missing/unreadable path, same
+        // as every other model-loading failure mode in this codebase.
+        static ModelPreviewSource ForObj3D(const std::filesystem::path& cdDirectory, int modelIndex,
+                                            ALTEngine::Bootstrap::Language language)
+        {
+            ModelPreviewSource source;
+            source.objBndPath = cdDirectory / "GFX" / "OBJ3D.BND";
+            source.gfxBndPath = ALTEngine::Formats::ResolveObj3DTextureFile(cdDirectory, modelIndex, language).value_or(std::filesystem::path{});
+            source.catalog = ModelCatalog::Obj3d;
+            source.modelIndex = modelIndex;
+            return source;
+        }
     };
 
     // Renders a spinning model preview into the (x,y,w,h) destination
@@ -96,23 +119,29 @@ namespace ALTEngine::Renderer
     bool DrawModelPreview(SDL_Renderer* renderer, const ModelPreviewSource& source,
                           int x, int y, int w, int h, float rotationAngle);
 
-    // Warms ModelRenderer's cache for every OPTOBJ model (0-13, the full
-    // catalog) and every PICKMOD model (0-25, skipping the confirmed
-    // gaps at 5/24 - LoadModel already fails gracefully for those rather
-    // than crashing, so this doesn't need to special-case them).
-    //
-    // Safe to call even if ModelRenderer::Initialize() hasn't run yet
-    // (calls it itself) or if the GPU pipeline is unavailable (each
-    // LoadModel call just fails and moves on, same as any other
-    // placeholder-fallback path in this codebase).
-    // NOTE: this blocks for the full duration (roughly 1-1.5s for the
-    // full catalog, even after PreloadBatch's GPU-upload batching -
+    // Warms ModelRenderer's cache for the full OPTOBJ catalog (0-13, no
+    // known gaps). This is the one used for the menu/options screen -
+    // see MenuController::Run's own incremental, one-model-per-frame
+    // preload queue for how it's actually invoked at boot, which this
+    // function itself isn't (this blocks for the full duration, roughly
+    // a few hundred ms even after PreloadBatch's GPU-upload batching -
     // resource creation itself, one CreateGPUBuffer/CreateGPUTexture
-    // call per model, can't be batched the same way) - not used for
-    // boot preloading (see MenuController::Run's own incremental,
-    // one-model-per-frame preload queue instead, which never blocks the
-    // window for more than a single frame at a stretch). Kept here as a
+    // call per model, can't be batched the same way). Kept here as a
     // simple, synchronous option for anywhere else that might want to
-    // force a full preload without needing that.
-    void PreloadAllModels(const std::filesystem::path& cdDirectory);
+    // force a full OPTOBJ preload without needing the incremental
+    // version.
+    void PreloadOptobjModels(const std::filesystem::path& cdDirectory);
+
+    // Warms ModelRenderer's cache for PICKMOD (0-27, gaps at 5/24 -
+    // Edward, 2026, corrected from an earlier wrong 0-25 range) and
+    // OBJ3D (0-41, no known gaps) - the two catalogs gameplay itself
+    // needs (pause-menu weapons and level objects respectively) but the
+    // main menu doesn't. Edward, 2026: "we don't need PICKMOD.BND to
+    // load until we are loading into a level" - meant to be called from
+    // MissionBriefingScreen's loading phase, not at boot, since that's
+    // the natural point where the player is looking at a loading
+    // screen right before a level starts (whether starting fresh or,
+    // once save/load exists, resuming) rather than the main menu, which
+    // never needs either catalog.
+    void PreloadGameplayModels(const std::filesystem::path& cdDirectory, ALTEngine::Bootstrap::Language language);
 }
