@@ -261,6 +261,30 @@ namespace ALTEngine::Bootstrap
         SDL_RenderGeometry(renderer, nullptr, vertices.data(), static_cast<int>(vertices.size()), indices.data(), static_cast<int>(indices.size()));
     }
 
+    // Linearly interpolates between two colours by t (0-1, clamped) -
+    // shared by every screen's pulsing-selection highlight (was
+    // duplicated identically across MenuController.cpp,
+    // PauseMenuScreen.cpp, MultiplayerScreens.cpp, and
+    // EndLevelPromptScreen.cpp before being centralized here).
+    inline Color LerpColor(Color a, Color b, float t)
+    {
+        t = std::clamp(t, 0.0f, 1.0f);
+        return Color{
+            static_cast<Uint8>(a.r + (b.r - a.r) * t),
+            static_cast<Uint8>(a.g + (b.g - a.g) * t),
+            static_cast<Uint8>(a.b + (b.b - a.b) * t),
+            255
+        };
+    }
+
+    // 0-1 "breathing" oscillation, ~1.7s per full cycle - the shared
+    // pulse rate for every menu's selected-item highlight (boxed or
+    // text-only). Same centralization note as LerpColor above.
+    inline float PulsePhase()
+    {
+        return static_cast<float>((std::sin(static_cast<double>(SDL_GetTicks()) / 400.0) + 1.0) / 2.0);
+    }
+
     inline int TextWidth(const std::string& text, int scale)
     {
         const int advance = 8 * scale + scale;

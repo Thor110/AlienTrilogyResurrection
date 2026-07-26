@@ -21,6 +21,8 @@ namespace ALTEngine::Screens
     using ALTEngine::Bootstrap::Color;
     using ALTEngine::Bootstrap::ComputeMenuScale;
     using ALTEngine::Bootstrap::DrawBitmapText;
+    using ALTEngine::Bootstrap::LerpColor;
+    using ALTEngine::Bootstrap::PulsePhase;
     using ALTEngine::Bootstrap::TextHeight;
     using ALTEngine::Bootstrap::TextWidth;
 
@@ -30,24 +32,6 @@ namespace ALTEngine::Screens
         constexpr Color COLOR_DIM{ 24, 130, 52, 255 };
         constexpr Color COLOR_EDITING{ 235, 235, 235, 255 };
         constexpr Color COLOR_WHITE{ 255, 255, 255, 255 }; // matches the main menu's own selected-item white exactly
-
-        Color LerpColor(Color a, Color b, float t)
-        {
-            t = std::clamp(t, 0.0f, 1.0f);
-            return Color{
-                static_cast<Uint8>(a.r + (b.r - a.r) * t),
-                static_cast<Uint8>(a.g + (b.g - a.g) * t),
-                static_cast<Uint8>(a.b + (b.b - a.b) * t),
-                255
-            };
-        }
-
-        // Same ~1.7s "breathing" pulse as the other menu screens (Edward,
-        // 2026: "same frequency pulse as the boxed items").
-        float PulsePhase()
-        {
-            return static_cast<float>((std::sin(static_cast<double>(SDL_GetTicks()) / 400.0) + 1.0) / 2.0);
-        }
 
         // The selected-but-not-editing text color for these menus -
         // pulses between green and white rather than a static light

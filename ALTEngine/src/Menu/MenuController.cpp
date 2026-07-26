@@ -31,8 +31,11 @@ namespace ALTEngine::Menu
     using ALTEngine::Bootstrap::Difficulty;
     using ALTEngine::Bootstrap::DifficultySettings;
     using ALTEngine::Bootstrap::DrawBitmapText;
+    using ALTEngine::Bootstrap::DrawRoundedRect;
     using ALTEngine::Bootstrap::Language;
     using ALTEngine::Bootstrap::LanguageSettings;
+    using ALTEngine::Bootstrap::LerpColor;
+    using ALTEngine::Bootstrap::PulsePhase;
     using ALTEngine::Bootstrap::RenderFidelity;
     using ALTEngine::Bootstrap::RenderSettings;
     using ALTEngine::Bootstrap::ResolutionSettings;
@@ -51,26 +54,6 @@ namespace ALTEngine::Menu
         constexpr Color COLOR_HIGHLIGHT_BG_LIGHT{ 20, 130, 60, 255 }; // light green - pulse target for the current cursor row
         constexpr Color COLOR_DISABLED_TEXT{ 12, 65, 26, 255 };       // dark green text for disabled items (Controls hardware not yet tested) - darker than COLOR_GREEN_DIM, stays this dark even when the cursor is on it
         constexpr Color COLOR_WHITE{ 255, 255, 255, 255 };
-
-        Color LerpColor(Color a, Color b, float t)
-        {
-            t = std::clamp(t, 0.0f, 1.0f);
-            return Color{
-                static_cast<Uint8>(a.r + (b.r - a.r) * t),
-                static_cast<Uint8>(a.g + (b.g - a.g) * t),
-                static_cast<Uint8>(a.b + (b.b - a.b) * t),
-                255
-            };
-        }
-
-        // 0-1 "breathing" oscillation, ~1.7s per full cycle - Edward,
-        // 2026: "a pulsing highlight that flickers periodically between
-        // the dark green and light green box highlights for the
-        // currently selected item."
-        float PulsePhase()
-        {
-            return static_cast<float>((std::sin(static_cast<double>(SDL_GetTicks()) / 400.0) + 1.0) / 2.0);
-        }
 
         // Queries the real available fullscreen display modes for the
         // window's current display, deduped by resolution (ignoring
@@ -279,20 +262,6 @@ namespace ALTEngine::Menu
                 int textX = (windowW - textW) / 2;
 
                 DrawBitmapText(renderer, items[i].label, textX, rowY + (rowHeight - TextHeight(scale)) / 2, scale, textColor);
-            }
-        }
-
-        void DrawSlider(SDL_Renderer* renderer, const std::string& label, int value, int x, int y, int scale)
-        {
-            DrawBitmapText(renderer, label, x, y, scale, COLOR_GREEN);
-            int barX = x + TextWidth(label, scale) + scale * 12;
-            int cellSize = scale * 4;
-            for (int i = 0; i < 10; ++i)
-            {
-                Color c = (i < value) ? COLOR_GREEN : COLOR_GREEN_DIM;
-                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 255);
-                SDL_FRect cell{ static_cast<float>(barX + i * (cellSize + scale)), static_cast<float>(y), static_cast<float>(cellSize), static_cast<float>(cellSize) };
-                SDL_RenderFillRect(renderer, &cell);
             }
         }
 
@@ -698,16 +667,6 @@ namespace ALTEngine::Menu
                         // yet.
                         selectedHere = node->isSettingsList ? node->initialSelectedChild : -1;
                         pulseHere = false;
-                    }
-
-                    const MenuNode& highlighted = node->children[static_cast<size_t>(std::clamp(
-                        selectedHere, 0, static_cast<int>(node->children.size()) - 1))];
-
-                    if (highlighted.kind == MenuNodeKind::Slider && isPreview)
-                    {
-                        DrawSlider(renderer, "Music", 8, columnX, columnTop, scale);
-                        DrawSlider(renderer, "SFX", 8, columnX, columnTop + rowHeight, scale);
-                        break;
                     }
 
                     int columnWidth = DrawColumn(renderer, node->children, selectedHere, pulseHere, columnX, columnTop, rowHeight, scale);

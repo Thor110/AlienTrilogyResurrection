@@ -21,6 +21,8 @@ namespace ALTEngine::Screens
     using ALTEngine::Audio::SfxPlayer;
     using ALTEngine::Bootstrap::AppWindow;
     using ALTEngine::Bootstrap::ComputeMenuScale;
+    using ALTEngine::Bootstrap::LerpColor;
+    using ALTEngine::Bootstrap::PulsePhase;
     using ALTEngine::Bootstrap::Color;
     using ALTEngine::Bootstrap::DrawBitmapText;
     using ALTEngine::Bootstrap::Language;
@@ -46,24 +48,6 @@ namespace ALTEngine::Screens
         constexpr Color COLOR_HIGHLIGHT_BG{ 0, 40, 15, 255 };         // very dark green - every row's default box now (Edward, 2026), not just the cursor's
         constexpr Color COLOR_HIGHLIGHT_BG_LIGHT{ 20, 130, 60, 255 }; // light green - pulse target for the cursor's row
         constexpr Color COLOR_STATUS{ 51, 255, 102, 255 };   // "Selected" / "Not available" / etc
-
-        Color LerpColor(Color a, Color b, float t)
-        {
-            t = std::clamp(t, 0.0f, 1.0f);
-            return Color{
-                static_cast<Uint8>(a.r + (b.r - a.r) * t),
-                static_cast<Uint8>(a.g + (b.g - a.g) * t),
-                static_cast<Uint8>(a.b + (b.b - a.b) * t),
-                255
-            };
-        }
-
-        // Same ~1.7s "breathing" pulse as MenuController.cpp's own
-        // options screen (Edward, 2026).
-        float PulsePhase()
-        {
-            return static_cast<float>((std::sin(static_cast<double>(SDL_GetTicks()) / 400.0) + 1.0) / 2.0);
-        }
 
         struct WeaponInfo
         {

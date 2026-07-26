@@ -23,8 +23,9 @@ namespace ALTEngine::Menu
     int EffectiveModelIndex(const MenuNode& root, const std::vector<int>& path);
 
     // Moves the selection at the deepest level of `path` up/down within
-    // its parent's children, clamped (no wraparound). No-op if `path` is
-    // empty.
+    // its parent's children, wrapping around at either end (moving up
+    // from the first item goes to the last, and vice versa). No-op if
+    // `path` is empty.
     void MoveSelection(const MenuNode& root, std::vector<int>& path, int delta);
 
     enum class EnterResult
