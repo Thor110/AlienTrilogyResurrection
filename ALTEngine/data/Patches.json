@@ -21975,6 +21975,32 @@
           ]
         }
       ]
+    },
+    {
+      "target": "SECT11/L111LEV.MAP",
+      "note": "L111LEV.MAP - misplaced vertex coordinate (lift) - manually located by Edward, 2026",
+      "edits": [
+        {
+          "offset": "0x14EFC",
+          "bytes": [
+            "0xFE",
+            "0x5C"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L900LEV.MAP",
+      "note": "L900LEV.MAP - misplaced vertex coordinate (lift), same bug as L111LEV.MAP at the identical offset - Edward, 2026",
+      "edits": [
+        {
+          "offset": "0x14EFC",
+          "bytes": [
+            "0xFE",
+            "0x5C"
+          ]
+        }
+      ]
     }
   ]
 }
