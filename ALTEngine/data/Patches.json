@@ -21981,10 +21981,10 @@
       "note": "L111LEV.MAP - misplaced vertex coordinate (lift) - manually located by Edward, 2026",
       "edits": [
         {
-          "offset": "0x14EFC",
+          "offset": "0x14EFA",
           "bytes": [
-            "0xFE",
-            "0x5C"
+            "0x00",
+            "0x00"
           ]
         }
       ]
@@ -21994,10 +21994,10 @@
       "note": "L900LEV.MAP - misplaced vertex coordinate (lift), same bug as L111LEV.MAP at the identical offset - Edward, 2026",
       "edits": [
         {
-          "offset": "0x14EFC",
+          "offset": "0x14EFA",
           "bytes": [
-            "0xFE",
-            "0x5C"
+            "0x00",
+            "0x00"
           ]
         }
       ]
