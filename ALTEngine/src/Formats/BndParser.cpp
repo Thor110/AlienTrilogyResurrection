@@ -1,7 +1,9 @@
 #include "BndParser.h"
 
+#include <fstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 namespace ALTEngine::Formats
@@ -32,7 +34,7 @@ namespace ALTEngine::Formats
         }
     }
 
-    std::vector<BndSection> BndParser::ParseFormSections(const std::vector<uint8_t>& bnd, const std::string& sectionPrefix)
+    std::vector<BndSection> BndParser::ParseAllFormSections(const std::vector<uint8_t>& bnd)
     {
         std::vector<BndSection> sections;
 
@@ -59,20 +61,76 @@ namespace ALTEngine::Formats
                 break;
             }
 
-            if (chunkName.rfind(sectionPrefix, 0) == 0) // starts with
-            {
-                BndSection section;
-                section.name = chunkName;
-                section.data.assign(bnd.begin() + static_cast<ptrdiff_t>(pos),
-                                     bnd.begin() + static_cast<ptrdiff_t>(pos) + chunkSize);
-                sections.push_back(std::move(section));
-            }
+            BndSection section;
+            section.name = chunkName;
+            section.data.assign(bnd.begin() + static_cast<ptrdiff_t>(pos),
+                                 bnd.begin() + static_cast<ptrdiff_t>(pos) + chunkSize);
+            sections.push_back(std::move(section));
 
             pos += static_cast<size_t>(chunkSize);
             if (chunkSize % 2 != 0) { pos += 1; } // IFF padding to 2-byte alignment
         }
 
         return sections;
+    }
+
+    std::vector<BndSection> BndParser::ParseFormSections(const std::vector<uint8_t>& bnd, const std::string& sectionPrefix)
+    {
+        // Single sequential pass (ParseAllFormSections), then filter in
+        // memory - avoids re-scanning the file for every prefix a
+        // caller wants (Edward, 2026: prefer callers use
+        // ParseAllFormSections/LoadCached directly and filter themselves
+        // when they need more than one prefix from the same file, e.g.
+        // BndTextureLoader needing "TP"/"CL"/"BX" all at once).
+        std::vector<BndSection> all = ParseAllFormSections(bnd);
+        std::vector<BndSection> filtered;
+        for (auto& section : all)
+        {
+            if (section.name.rfind(sectionPrefix, 0) == 0) // starts with
+            {
+                filtered.push_back(std::move(section));
+            }
+        }
+        return filtered;
+    }
+
+    namespace
+    {
+        std::vector<uint8_t> ReadFileBytes(const std::filesystem::path& path)
+        {
+            std::ifstream in(path, std::ios::binary | std::ios::ate);
+            if (!in.is_open())
+            {
+                throw std::runtime_error("BndParser: could not open " + path.string());
+            }
+            auto size = static_cast<size_t>(in.tellg());
+            in.seekg(0);
+            std::vector<uint8_t> data(size);
+            in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(size));
+            return data;
+        }
+    }
+
+    const std::vector<BndSection>& BndParser::LoadCached(const std::filesystem::path& path)
+    {
+        // Keyed by the canonical absolute path string so the same file
+        // reached via different relative paths still shares one cache
+        // entry. This cache only ever grows (a handful of BND/B16 files
+        // total per game, all small enough to keep resident) - no
+        // eviction needed.
+        static std::unordered_map<std::string, std::vector<BndSection>> cache;
+
+        std::string key = std::filesystem::absolute(path).lexically_normal().string();
+        auto it = cache.find(key);
+        if (it != cache.end())
+        {
+            return it->second;
+        }
+
+        std::vector<uint8_t> bytes = ReadFileBytes(path);
+        std::vector<BndSection> sections = ParseAllFormSections(bytes);
+        auto [inserted, _] = cache.emplace(std::move(key), std::move(sections));
+        return inserted->second;
     }
 
     int64_t BndParser::FindFormSectionOffset(const std::vector<uint8_t>& bnd, int index)
