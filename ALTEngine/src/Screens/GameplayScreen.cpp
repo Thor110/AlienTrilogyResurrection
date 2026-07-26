@@ -15,6 +15,7 @@ namespace ALTEngine::Screens
 {
     using ALTEngine::Bootstrap::AppWindow;
     using ALTEngine::Bootstrap::Color;
+    using ALTEngine::Bootstrap::ComputeMenuScale;
     using ALTEngine::Bootstrap::DrawBitmapText;
     using ALTEngine::Renderer::FpsCamera;
     using ALTEngine::Renderer::ModelRenderer;
@@ -224,7 +225,8 @@ namespace ALTEngine::Screens
             {
                 SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
                 SDL_RenderClear(renderer);
-                DrawBitmapText(renderer, "(level failed to load - see console)", 24, 24, 2, Color{ 220, 40, 40, 255 });
+                int scale = ComputeMenuScale(renderer);
+                DrawBitmapText(renderer, "(level failed to load - see console)", scale * 8, scale * 8, scale, Color{ 220, 40, 40, 255 });
             }
 
             SDL_RenderPresent(renderer);

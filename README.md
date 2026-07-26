@@ -46,6 +46,7 @@ The road map for this project.
 	- Upgraded cutscene video playback pipeline (BSRGAN upscaled via local NCNN, batch-processed through FFmpeg)
 	- Integrated main menu audio, functional layout drafts, options configs, resolution detection  and selection.
 	- Graphics quality options smoothed and original rendering styles. (WIP)
+	- Resolution scaling.
 - [❌ 1 : Text Editor](#text-editor) ( 50% Complete )
 	- View text from the games missions and user interface.
 	- Editing and saving functions not implemented yet.
@@ -174,6 +175,12 @@ Briefing Menu - Upscaled Background
 
 <div align="center">
   <img src="Images/ALTEngine/briefing-menu.png" alt="Briefing Menu">
+</div>
+
+Resolution Scaling
+
+<div align="center">
+  <img src="Images/ALTEngine/resolution-scaling.png" alt="Resolution Scaling">
 </div>
 
 ## Alien Trilogy Viewer

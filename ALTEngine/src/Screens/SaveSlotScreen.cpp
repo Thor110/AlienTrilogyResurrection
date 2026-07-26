@@ -16,6 +16,7 @@ namespace ALTEngine::Screens
     using ALTEngine::Audio::SfxPlayer;
     using ALTEngine::Bootstrap::AppWindow;
     using ALTEngine::Bootstrap::Color;
+    using ALTEngine::Bootstrap::ComputeMenuScale;
     using ALTEngine::Bootstrap::DrawBitmapText;
     using ALTEngine::Bootstrap::TextHeight;
     using ALTEngine::Bootstrap::TextWidth;
@@ -102,7 +103,7 @@ namespace ALTEngine::Screens
 
             DrawMenuBackground(renderer, background, bgW, bgH);
 
-            int scale = 3;
+            int scale = ComputeMenuScale(renderer);
             int rowHeight = TextHeight(scale) + scale * 4;
             int margin = scale * 8;
 

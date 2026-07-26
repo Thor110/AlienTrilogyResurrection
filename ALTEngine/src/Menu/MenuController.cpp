@@ -27,6 +27,7 @@ namespace ALTEngine::Menu
     using ALTEngine::Bootstrap::AppWindow;
     using ALTEngine::Bootstrap::CameraSwaySettings;
     using ALTEngine::Bootstrap::Color;
+    using ALTEngine::Bootstrap::ComputeMenuScale;
     using ALTEngine::Bootstrap::Difficulty;
     using ALTEngine::Bootstrap::DifficultySettings;
     using ALTEngine::Bootstrap::DrawBitmapText;
@@ -638,7 +639,7 @@ namespace ALTEngine::Menu
             }
             if (!running) { break; }
 
-            int scale = 3;
+            int scale = ComputeMenuScale(renderer);
             int rowHeight = TextHeight(scale) + scale * 6;
 
             if (screen == Screen::MainMenu)

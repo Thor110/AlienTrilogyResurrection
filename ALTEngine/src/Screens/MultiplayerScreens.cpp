@@ -19,6 +19,7 @@ namespace ALTEngine::Screens
     using ALTEngine::Audio::SfxPlayer;
     using ALTEngine::Bootstrap::AppWindow;
     using ALTEngine::Bootstrap::Color;
+    using ALTEngine::Bootstrap::ComputeMenuScale;
     using ALTEngine::Bootstrap::DrawBitmapText;
     using ALTEngine::Bootstrap::TextHeight;
     using ALTEngine::Bootstrap::TextWidth;
@@ -139,7 +140,7 @@ namespace ALTEngine::Screens
             if (!running) { break; }
 
             DrawMenuBackground(renderer, background, bgW, bgH);
-            int scale = 3;
+            int scale = ComputeMenuScale(renderer);
             int lineHeight = TextHeight(scale) + scale * 6;
             int windowW = 0, windowH = 0;
             SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
@@ -227,7 +228,7 @@ namespace ALTEngine::Screens
 
             DrawMenuBackground(renderer, background, bgW, bgH);
             DrawNetworkedComputersModel(renderer, cdDirectory);
-            int scale = 3;
+            int scale = ComputeMenuScale(renderer);
             int lineHeight = TextHeight(scale) + scale * 4;
             int margin = scale * 8;
             int windowW = 0, windowH = 0;
@@ -324,7 +325,7 @@ namespace ALTEngine::Screens
 
             DrawMenuBackground(renderer, background, bgW, bgH);
             DrawNetworkedComputersModel(renderer, cdDirectory);
-            int scale = 3;
+            int scale = ComputeMenuScale(renderer);
             int lineHeight = TextHeight(scale) + scale * 6;
             int margin = scale * 8;
             int windowW = 0, windowH = 0;
@@ -381,7 +382,7 @@ namespace ALTEngine::Screens
 
             DrawMenuBackground(renderer, background, bgW, bgH);
             DrawNetworkedComputersModel(renderer, cdDirectory);
-            int scale = 3;
+            int scale = ComputeMenuScale(renderer);
             int lineHeight = TextHeight(scale) + scale * 6;
             int margin = scale * 8;
             int windowW = 0, windowH = 0;

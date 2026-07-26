@@ -20,6 +20,7 @@ namespace ALTEngine::Screens
     using ALTEngine::Audio::SfxId;
     using ALTEngine::Audio::SfxPlayer;
     using ALTEngine::Bootstrap::AppWindow;
+    using ALTEngine::Bootstrap::ComputeMenuScale;
     using ALTEngine::Bootstrap::Color;
     using ALTEngine::Bootstrap::DrawBitmapText;
     using ALTEngine::Bootstrap::Language;
@@ -410,7 +411,7 @@ namespace ALTEngine::Screens
 
             float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f; // 1 radian/sec, same slow spin as the boot menu
 
-            int scale = 3;
+            int scale = ComputeMenuScale(renderer);
             int rowHeight = TextHeight(scale) + scale * 6;
             int margin = scale * 8;
 

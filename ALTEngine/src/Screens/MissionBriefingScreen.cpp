@@ -14,6 +14,7 @@ namespace ALTEngine::Screens
 {
     using ALTEngine::Bootstrap::AppWindow;
     using ALTEngine::Bootstrap::Color;
+    using ALTEngine::Bootstrap::ComputeMenuScale;
     using ALTEngine::Bootstrap::DrawBitmapText;
     using ALTEngine::Bootstrap::Language;
     using ALTEngine::Bootstrap::MissionTextFilenameCandidates;
@@ -326,7 +327,7 @@ namespace ALTEngine::Screens
 
             DrawBackground(renderer, background, bgW, bgH);
 
-            int scale = 3;
+            int scale = ComputeMenuScale(renderer);
             int lineHeight = TextHeight(scale) + scale * 4;
             int margin = scale * 8;
 

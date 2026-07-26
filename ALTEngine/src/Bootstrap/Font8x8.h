@@ -177,6 +177,37 @@ namespace ALTEngine::Bootstrap
         }
     }
 
+    // Derives an integer menu scale from the actual current render
+    // output size, relative to the 1920x1080 reference resolution where
+    // scale=3 was tuned and tested (Edward, 2026 - "I have been testing
+    // at 1920x1080"). Kept as an integer, not fractional - DrawChar
+    // draws each font pixel as a solid scale*scale block, so a
+    // fractional scale would blur/distort the bitmap font rather than
+    // just resize it cleanly.
+    //
+    // Uses the SMALLER of the width/height ratios (not just one
+    // dimension) so non-16:9 resolutions (ultrawide, 4:3, etc) still
+    // fit within the frame in both dimensions rather than overflowing -
+    // the same "fit" principle DrawMenuBackground already uses for
+    // scaling the background image itself. Clamped to a minimum of 1 so
+    // extremely small windows never round down to an invisible 0.
+    inline int ComputeMenuScale(SDL_Renderer* renderer)
+    {
+        int windowW = 0, windowH = 0;
+        SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+        if (windowW <= 0 || windowH <= 0) { return 3; } // fallback if the query somehow fails
+
+        constexpr float REFERENCE_W = 1920.0f;
+        constexpr float REFERENCE_H = 1080.0f;
+        constexpr int REFERENCE_SCALE = 3;
+
+        float widthRatio = static_cast<float>(windowW) / REFERENCE_W;
+        float heightRatio = static_cast<float>(windowH) / REFERENCE_H;
+        float scaleF = static_cast<float>(REFERENCE_SCALE) * std::min(widthRatio, heightRatio);
+
+        return std::max(1, static_cast<int>(std::round(scaleF)));
+    }
+
     // Filled rounded rectangle - SDL's render API has no native rounded-
     // rect fill, so this builds one as a triangle fan (from the rect's
     // centroid) around a perimeter of four small corner arcs joined by
