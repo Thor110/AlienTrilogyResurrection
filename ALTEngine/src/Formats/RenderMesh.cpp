@@ -33,23 +33,22 @@ namespace ALTEngine::Formats
             std::array<Uv, 4> baseUvs = { Uv{x0, y1}, Uv{x1, y1}, Uv{x1, y0}, Uv{x0, y0} }; // A, B, C, D
 
             std::array<Uv, 4> uvs;
+            // Matches ExportModel's own switch exactly (Edward's
+            // ModelRenderer.cs, 2026) - models use case 2/130 for
+            // special-triangle and case 11/139 for flip-180. This is a
+            // genuinely different mapping from levels (see
+            // ComputeLevelQuadUvs below) - confirmed directly from the
+            // authoritative source, not inferred from a bit-mask that
+            // happened to produce the same result for 128/130 by
+            // coincidence.
             switch (q.flags)
             {
-            case 2: // special triangle order - REVERTED (Edward, 2026):
-                    // directly verified against his own toolkit's OBJ
-                    // export of OPTOBJ model 9 (152 verts/118 quads,
-                    // matched vertex-for-vertex and quad-for-quad). Every
-                    // flags==11 quad in that model (11 of them) matched
-                    // this pattern, not the "flip 180" pattern an earlier
-                    // session swapped this to based on a misreading of
-                    // AlienTrilogyMapLoader.cs - that swap was wrong, this
-                    // is the original, correct mapping.
+            case 2:
+            case 130:
                 uvs = { baseUvs[0], baseUvs[2], baseUvs[3], baseUvs[3] };
                 break;
-            case 11: // flip 180 - see above; this pattern is what the
-                     // 11 flags==11 quads in the reference model actually
-                     // need, confirmed via 1-V-flip-adjusted comparison
-                     // against the exported OBJ's own vt coordinates.
+            case 11:
+            case 139:
                 uvs = { baseUvs[1], baseUvs[0], baseUvs[3], baseUvs[2] };
                 break;
             default:
@@ -124,17 +123,25 @@ namespace ALTEngine::Formats
 
             std::array<Uv, 4> baseUvs = { Uv{x0, y1}, Uv{x1, y1}, Uv{x1, y0}, Uv{x0, y0} }; // A, B, C, D
 
+            // Levels have their own independent switch (not shared code
+            // with models). Directly verified against real ground-truth
+            // data (Edward's own OBJ export of L111LEV, compared
+            // quad-by-quad by matching vertex positions): flags 1/5/13
+            // need the special-triangle pattern and flags 2 needs
+            // flip-180, matching ModelRenderer.cs's ExportLevel exactly.
+            // An earlier revert to AlienTrilogyMapLoader.cs's scheme
+            // (case 2/11) was wrong for this level - that scheme doesn't
+            // handle flags==1 at all, and 285 of 285 flags==1 quads in
+            // L111LEV came back wrong under it (falling through to
+            // unmodified default UVs). Every other flags value in that
+            // level (0, 2, 3, 4, 8) already matched correctly either way.
             switch (q.flags)
             {
-            case 2: // special triangle order - REVERTED (Edward, 2026):
-                    // see ComputeQuadUvs above for the full explanation -
-                    // directly verified against a real OBJ export that
-                    // the earlier case2/11 swap was wrong. Levels share
-                    // this same convention as models (same EmitQuad code
-                    // path builds both), so this reverts alongside that
-                    // fix rather than staying out of sync with it.
+            case 1:
+            case 5:
+            case 13:
                 return { baseUvs[0], baseUvs[2], baseUvs[3], baseUvs[3] };
-            case 11: // flip 180
+            case 2:
                 return { baseUvs[1], baseUvs[0], baseUvs[3], baseUvs[2] };
             default:
                 return baseUvs;
@@ -145,11 +152,33 @@ namespace ALTEngine::Formats
         // model and level geometry, only the UV computation differs.
         void EmitQuad(RenderMesh& result, const std::vector<ModelVertex>& vertices, const ModelQuad& q, const std::array<Uv, 4>& uvs)
         {
-            auto emitVertex = [&](int32_t vertexIndex, Uv uv) -> uint32_t {
-                if (vertexIndex < 0 || static_cast<size_t>(vertexIndex) >= vertices.size())
+            auto inBounds = [&](int32_t vertexIndex) {
+                return vertexIndex >= 0 && static_cast<size_t>(vertexIndex) < vertices.size();
+            };
+
+            // Any of a/b/c/d out of range (not just d==-1, the intentional
+            // triangle marker) is handled the same way
+            // AlienTrilogyMapLoader.cs's own "issueFound" does: fall back
+            // to a degenerate triangle (d=a) with the special-triangle UV
+            // pattern, rather than throwing - confirmed directly from the
+            // authoritative source (Edward, 2026). This is a genuinely
+            // different situation from the normal d==-1 case (an
+            // intentional triangle marker, not an error).
+            int32_t a = q.a, b = q.b, c = q.c, d = q.d;
+            bool isTriangle = (d == -1);
+            std::array<Uv, 4> effectiveUvs = uvs;
+            if (!inBounds(a) || !inBounds(b) || !inBounds(c) || (!isTriangle && !inBounds(d)))
+            {
+                d = a;
+                isTriangle = false; // still emits as a (degenerate) quad, matching the reference
+                effectiveUvs = { uvs[0], uvs[2], uvs[3], uvs[3] };
+                if (!inBounds(a) || !inBounds(b) || !inBounds(c))
                 {
-                    throw std::runtime_error("EmitQuad: vertex index " + std::to_string(vertexIndex) + " out of range");
+                    return; // a/b/c themselves invalid - nothing sane to emit at all
                 }
+            }
+
+            auto emitVertex = [&](int32_t vertexIndex, Uv uv) -> uint32_t {
                 const ModelVertex& v = vertices[static_cast<size_t>(vertexIndex)];
                 result.vertices.push_back({
                     static_cast<float>(v.x), static_cast<float>(v.y), static_cast<float>(v.z),
@@ -158,10 +187,9 @@ namespace ALTEngine::Formats
                 return static_cast<uint32_t>(result.vertices.size() - 1);
             };
 
-            bool isTriangle = (q.d == -1);
-            uint32_t ia = emitVertex(q.a, uvs[0]);
-            uint32_t ib = emitVertex(q.b, uvs[1]);
-            uint32_t ic = emitVertex(q.c, uvs[2]);
+            uint32_t ia = emitVertex(a, effectiveUvs[0]);
+            uint32_t ib = emitVertex(b, effectiveUvs[1]);
+            uint32_t ic = emitVertex(c, effectiveUvs[2]);
 
             if (isTriangle)
             {
@@ -171,7 +199,7 @@ namespace ALTEngine::Formats
             }
             else
             {
-                uint32_t id = emitVertex(q.d, uvs[3]);
+                uint32_t id = emitVertex(d, effectiveUvs[3]);
                 // Fan triangulation (A,B,C) + (A,C,D) - the one thing
                 // here with no OBJ-format precedent to follow exactly,
                 // since OBJ keeps quads as quads. Standard split, but
