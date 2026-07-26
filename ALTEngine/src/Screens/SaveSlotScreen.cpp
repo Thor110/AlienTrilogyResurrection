@@ -53,7 +53,7 @@ namespace ALTEngine::Screens
         // indices.
         ALTEngine::Renderer::ModelPreviewSource modelSource;
         modelSource.objBndPath = cdDirectory / "GFX" / "OPTOBJ.BND";
-        modelSource.gfxBndPath = cdDirectory / "GFX" / "OPTGFX.BND";
+        modelSource.gfxBndPath = cdDirectory / "GFX" / "OPTGFX.B16";
         modelSource.cachePrefix = "OPTOBJ";
         modelSource.modelIndex = (mode == SaveSlotMode::Load) ? ALTEngine::Menu::ModelIndex::HarddriveRight : ALTEngine::Menu::ModelIndex::HarddriveLeft;
 

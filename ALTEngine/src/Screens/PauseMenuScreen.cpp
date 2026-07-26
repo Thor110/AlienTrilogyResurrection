@@ -143,7 +143,7 @@ namespace ALTEngine::Screens
 
             ALTEngine::Renderer::ModelPreviewSource source;
             source.objBndPath = cdDirectory / "GFX" / "OPTOBJ.BND";
-            source.gfxBndPath = cdDirectory / "GFX" / "OPTGFX.BND";
+            source.gfxBndPath = cdDirectory / "GFX" / "OPTGFX.B16";
             source.cachePrefix = "OPTOBJ";
             source.modelIndex = modelIndex;
 
