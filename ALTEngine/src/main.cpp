@@ -5,6 +5,7 @@
 #include "Bootstrap/Config.h"
 #include "Bootstrap/DiscLocator.h"
 #include "Bootstrap/GameLocator.h"
+#include "Bootstrap/GameplaySettings.h"
 #include "Bootstrap/ImageDisplay.h"
 #include "Bootstrap/InstallPipeline.h"
 #include "Bootstrap/Localization.h"
@@ -178,9 +179,12 @@ int main(int, char**)
         return 1;
     }
 
-    // No settings/persistence system yet - defaults to English until
-    // there's somewhere for a language choice to actually live.
-    Language language = Language::English;
+    // Language now actually persists (Edward, 2026) - LanguageSettings
+    // needs `config`, which already exists by this point, so it's
+    // constructed here rather than alongside renderSettings/
+    // resolutionSettings below.
+    LanguageSettings languageSettings(config);
+    Language language = languageSettings.Get();
 
     if (!PlayIntroVideos(cdDirectory, language))
     {
@@ -193,10 +197,13 @@ int main(int, char**)
 
     RenderSettings renderSettings(config);
     ResolutionSettings resolutionSettings(config);
+    DifficultySettings difficultySettings(config);
+    CameraSwaySettings cameraSwaySettings(config);
 
     while (true)
     {
-        MenuResult menuResult = MenuController::Run(cdDirectory, renderSettings, resolutionSettings, language);
+        MenuResult menuResult = MenuController::Run(cdDirectory, renderSettings, resolutionSettings, difficultySettings,
+                                                      cameraSwaySettings, languageSettings, language);
         if (menuResult.windowClosed)
         {
             std::cout << "Boot window closed. Aborting.\n";

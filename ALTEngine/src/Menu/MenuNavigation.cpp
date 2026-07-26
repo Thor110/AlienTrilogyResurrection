@@ -19,6 +19,20 @@ namespace ALTEngine::Menu
         return *current;
     }
 
+    MenuNode& WalkPath(MenuNode& root, const std::vector<int>& path)
+    {
+        MenuNode* current = &root;
+        for (int index : path)
+        {
+            if (index < 0 || static_cast<size_t>(index) >= current->children.size())
+            {
+                throw std::out_of_range("WalkPath: index out of range");
+            }
+            current = &current->children[static_cast<size_t>(index)];
+        }
+        return *current;
+    }
+
     int EffectiveModelIndex(const MenuNode& root, const std::vector<int>& path)
     {
         int index = root.modelIndex;
@@ -54,7 +68,9 @@ namespace ALTEngine::Menu
         case MenuNodeKind::List:
             if (!deepest.children.empty())
             {
-                path.push_back(0);
+                int start = deepest.initialSelectedChild;
+                if (start < 0 || static_cast<size_t>(start) >= deepest.children.size()) { start = 0; }
+                path.push_back(start);
                 return EnterResult::Descended;
             }
             return EnterResult::NoOp;

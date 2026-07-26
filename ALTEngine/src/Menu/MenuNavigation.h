@@ -13,6 +13,12 @@ namespace ALTEngine::Menu
     // callers only produce paths via MoveSelection/Enter/Back below).
     const MenuNode& WalkPath(const MenuNode& root, const std::vector<int>& path);
 
+    // Mutable overload - used to update a settings list's
+    // initialSelectedChild after the user picks a new value, so a later
+    // preview or re-entry reflects what was actually just picked rather
+    // than a stale boot-time snapshot (Edward, 2026).
+    MenuNode& WalkPath(MenuNode& root, const std::vector<int>& path);
+
     // The deepest set modelIndex along `path` from `root`, else -1.
     int EffectiveModelIndex(const MenuNode& root, const std::vector<int>& path);
 

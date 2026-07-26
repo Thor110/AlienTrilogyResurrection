@@ -4,6 +4,9 @@
 #include <vector>
 
 #include "MenuNode.h"
+#include "../Bootstrap/GameplaySettings.h"
+#include "../Bootstrap/Localization.h"
+#include "../Bootstrap/RenderSettings.h"
 
 namespace ALTEngine::Menu
 {
@@ -45,6 +48,20 @@ namespace ALTEngine::Menu
         constexpr int Headphones = 13;   // real device: VFX-1 (confirmed original button text) - "Headphones" was Edward's visual-impression label; VFX-1 was actually a VR headset
     }
 
+    // Current values of every persisted setting the Options tree needs,
+    // so BuildMainMenuTree can compute each settings list's
+    // initialSelectedChild (which child should be highlighted the first
+    // time that list is entered) - matching what's actually saved,
+    // rather than always defaulting to the first option (Edward, 2026).
+    struct MenuSettingsSnapshot
+    {
+        ALTEngine::Bootstrap::RenderFidelity quality = ALTEngine::Bootstrap::RenderFidelity::Original;
+        std::string resolutionLabel; // e.g. "1920x1080" - matches one of resolutionLabels, or empty if none match
+        ALTEngine::Bootstrap::Difficulty difficulty = ALTEngine::Bootstrap::Difficulty::AcidReign;
+        bool cameraSwayOn = true;
+        ALTEngine::Bootstrap::Language language = ALTEngine::Bootstrap::Language::English;
+    };
+
     // Builds the root menu tree: Main Menu (Start Game / Multiplayer /
     // Load Game / Options) with the full Options subtree (Volume,
     // Controls, Difficulty, Camera Sway, Graphics, Language, Credits)
@@ -58,6 +75,10 @@ namespace ALTEngine::Menu
     // real display modes and passes them in. Pass an empty vector (the
     // default) for testing - Resolution will just have no options.
     //
+    // `settings` is the current value of every persisted setting - see
+    // MenuSettingsSnapshot above. Pass the default-constructed snapshot
+    // (as before) for testing without real settings.
+    //
     // Model indices are provisional (see MenuTree.cpp's ModelIndex
     // namespace) - not resolved OPTOBJ section indices, since we don't
     // have OPTOBJ.BND to confirm real indices against. Sub-items not
@@ -66,5 +87,5 @@ namespace ALTEngine::Menu
     // structurally present but their modelIndex is left unset (-1, falls
     // back to "Computer") since there's no reference image confirming
     // what they'd actually show.
-    MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels = {});
+    MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels = {}, const MenuSettingsSnapshot& settings = {});
 }

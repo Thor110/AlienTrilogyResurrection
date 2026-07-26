@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string>
 
+#include "../Bootstrap/GameplaySettings.h"
 #include "../Bootstrap/Localization.h"
 #include "../Bootstrap/RenderSettings.h"
 #include "../Bootstrap/ResolutionSettings.h"
@@ -26,6 +27,9 @@ namespace ALTEngine::Menu
             const std::filesystem::path& cdDirectory,
             ALTEngine::Bootstrap::RenderSettings& renderSettings,
             ALTEngine::Bootstrap::ResolutionSettings& resolutionSettings,
+            ALTEngine::Bootstrap::DifficultySettings& difficultySettings,
+            ALTEngine::Bootstrap::CameraSwaySettings& cameraSwaySettings,
+            ALTEngine::Bootstrap::LanguageSettings& languageSettings,
             ALTEngine::Bootstrap::Language& language);
     };
 }

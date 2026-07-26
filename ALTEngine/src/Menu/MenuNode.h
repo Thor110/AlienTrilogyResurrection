@@ -63,6 +63,35 @@ namespace ALTEngine::Menu
 
         std::vector<MenuNode> children;
 
+        // Which child index Enter() should select when first descending
+        // into this list - defaults to 0 (the old, always-reset-to-first
+        // behaviour). Settings lists (Difficulty, Camera Sway, Language,
+        // Quality, Resolution) set this to whichever child matches the
+        // currently saved value, computed when the tree is built, so
+        // re-entering a list shows what's actually selected rather than
+        // always jumping back to the first option (Edward, 2026).
+        int initialSelectedChild = 0;
+
+        // True only for lists whose initialSelectedChild represents a
+        // real, persisted "current value" (Difficulty, Camera Sway,
+        // Language, Quality, Resolution) - as opposed to pure navigation
+        // lists (Volume, Controls) where index 0 is just "the first
+        // item", not a meaningful selection. Controls whether the
+        // one-ahead preview column (shown while hovering a List, before
+        // Entering it) draws any highlight at all - Edward, 2026:
+        // "Volume's list shouldn't have a highlight until entered as
+        // neither Music or SFX are 'active' or selected."
+        bool isSettingsList = false;
+
+        // False for hardware Options hasn't been tested against yet
+        // (Controls' Joystick/Gravis Grip/Gravis Pad/SpaceOrb 360/VFX-1) -
+        // renders with a dark green background and dark green text
+        // regardless of cursor position, and doesn't pulse even when
+        // the cursor is on it (Edward, 2026: "we can leave them like
+        // that for now as I have no idea when I can hook up or test
+        // that hardware").
+        bool enabled = true;
+
         // For Slider leaves: 0-10, matching the ~8/10 filled-bar look in
         // the reference images. Purely cosmetic placeholder for now - not
         // wired to actual audio.

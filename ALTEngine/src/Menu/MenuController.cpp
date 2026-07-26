@@ -13,6 +13,7 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <optional>
 #include <string>
@@ -24,9 +25,13 @@ namespace ALTEngine::Menu
     using ALTEngine::Audio::SfxId;
     using ALTEngine::Audio::SfxPlayer;
     using ALTEngine::Bootstrap::AppWindow;
+    using ALTEngine::Bootstrap::CameraSwaySettings;
     using ALTEngine::Bootstrap::Color;
+    using ALTEngine::Bootstrap::Difficulty;
+    using ALTEngine::Bootstrap::DifficultySettings;
     using ALTEngine::Bootstrap::DrawBitmapText;
     using ALTEngine::Bootstrap::Language;
+    using ALTEngine::Bootstrap::LanguageSettings;
     using ALTEngine::Bootstrap::RenderFidelity;
     using ALTEngine::Bootstrap::RenderSettings;
     using ALTEngine::Bootstrap::ResolutionSettings;
@@ -41,8 +46,30 @@ namespace ALTEngine::Menu
         constexpr Color COLOR_BG{ 0, 0, 0, 255 };
         constexpr Color COLOR_GREEN{ 51, 255, 102, 255 };
         constexpr Color COLOR_GREEN_DIM{ 24, 130, 52, 255 };
-        constexpr Color COLOR_HIGHLIGHT_BG{ 0, 40, 15, 255 };
+        constexpr Color COLOR_HIGHLIGHT_BG{ 0, 40, 15, 255 };        // very dark green - every row's default box now (Edward, 2026), not just the selected one
+        constexpr Color COLOR_HIGHLIGHT_BG_LIGHT{ 20, 130, 60, 255 }; // light green - pulse target for the current cursor row
+        constexpr Color COLOR_DISABLED_TEXT{ 12, 65, 26, 255 };       // dark green text for disabled items (Controls hardware not yet tested) - darker than COLOR_GREEN_DIM, stays this dark even when the cursor is on it
         constexpr Color COLOR_WHITE{ 255, 255, 255, 255 };
+
+        Color LerpColor(Color a, Color b, float t)
+        {
+            t = std::clamp(t, 0.0f, 1.0f);
+            return Color{
+                static_cast<Uint8>(a.r + (b.r - a.r) * t),
+                static_cast<Uint8>(a.g + (b.g - a.g) * t),
+                static_cast<Uint8>(a.b + (b.b - a.b) * t),
+                255
+            };
+        }
+
+        // 0-1 "breathing" oscillation, ~1.7s per full cycle - Edward,
+        // 2026: "a pulsing highlight that flickers periodically between
+        // the dark green and light green box highlights for the
+        // currently selected item."
+        float PulsePhase()
+        {
+            return static_cast<float>((std::sin(static_cast<double>(SDL_GetTicks()) / 400.0) + 1.0) / 2.0);
+        }
 
         // Queries the real available fullscreen display modes for the
         // window's current display, deduped by resolution (ignoring
@@ -182,28 +209,51 @@ namespace ALTEngine::Menu
         // the reference layout where each column's width follows its own
         // content (the Redefine column is visibly narrower than the
         // device list, which is narrower than the main Options list).
-        int DrawColumn(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int selectedIndex,
+        //
+        // selectedIndex = -1 means no highlight at all - used for the
+        // one-ahead preview column on pure navigation lists (Volume,
+        // Controls), where no child represents a real "current value"
+        // to indicate (Edward, 2026: "Volume's list shouldn't have a
+        // highlight until entered as neither Music or SFX are 'active'
+        // or selected"). pulseSelected controls whether the selected
+        // row's box animates between dark/light green (true - the real
+        // cursor column) or stays a static light green (false - a
+        // settings-list preview column showing its current value one
+        // column ahead of actually entering it).
+        int DrawColumn(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int selectedIndex, bool pulseSelected,
                         int x, int y, int rowHeight, int scale)
         {
             int width = 0;
             for (const auto& item : items) { width = std::max(width, TextWidth(item.label, scale)); }
             width += scale * 8; // padding
 
+            float pulse = pulseSelected ? PulsePhase() : 1.0f;
+
             for (size_t i = 0; i < items.size(); ++i)
             {
                 int rowY = y + static_cast<int>(i) * rowHeight;
                 bool isSelected = (static_cast<int>(i) == selectedIndex);
-                Color textColor = isSelected ? COLOR_GREEN : COLOR_GREEN_DIM;
+                bool enabled = items[i].enabled;
 
-                if (isSelected)
+                // Every row gets a box now (Edward, 2026: "a disabled
+                // version of the current highlight around all options
+                // and pause menu items") - very dark green by default,
+                // brighter (and pulsing, for the real cursor) only for
+                // the selected row, and only if that item is enabled.
+                Color boxColor = COLOR_HIGHLIGHT_BG;
+                Color textColor = enabled ? COLOR_GREEN_DIM : COLOR_DISABLED_TEXT;
+
+                if (isSelected && enabled)
                 {
-                    // Filled bar only - no border. The original UI marks
-                    // the highlighted item with a solid background and
-                    // brighter text, nothing else.
-                    SDL_SetRenderDrawColor(renderer, COLOR_HIGHLIGHT_BG.r, COLOR_HIGHLIGHT_BG.g, COLOR_HIGHLIGHT_BG.b, 255);
-                    SDL_FRect bar{ static_cast<float>(x), static_cast<float>(rowY), static_cast<float>(width), static_cast<float>(rowHeight - 4) };
-                    SDL_RenderFillRect(renderer, &bar);
+                    boxColor = LerpColor(COLOR_HIGHLIGHT_BG, COLOR_HIGHLIGHT_BG_LIGHT, pulse);
+                    textColor = COLOR_GREEN;
                 }
+                // Disabled items stay dark green even with the cursor on
+                // them - no pulse (Edward, 2026: "we can leave them like
+                // that for now").
+
+                SDL_FRect bar{ static_cast<float>(x), static_cast<float>(rowY), static_cast<float>(width), static_cast<float>(rowHeight - scale * 2) };
+                DrawRoundedRect(renderer, bar, static_cast<float>(scale * 2), boxColor);
 
                 DrawBitmapText(renderer, items[i].label, x + scale * 4, rowY + (rowHeight - TextHeight(scale)) / 2, scale, textColor);
             }
@@ -250,7 +300,9 @@ namespace ALTEngine::Menu
         // visually confirmed (highlighted) but not backed by a real
         // setting yet - no gameplay system exists to apply them to.
         void ApplyLeafAction(const std::string& parentLabel, const std::string& leafLabel,
-                              RenderSettings& renderSettings, ResolutionSettings& resolutionSettings, Language& language)
+                              RenderSettings& renderSettings, ResolutionSettings& resolutionSettings,
+                              DifficultySettings& difficultySettings, CameraSwaySettings& cameraSwaySettings,
+                              LanguageSettings& languageSettings, Language& language)
         {
             if (parentLabel == "Quality")
             {
@@ -273,6 +325,20 @@ namespace ALTEngine::Menu
                 else if (leafLabel == "Italiano") { language = Language::Italian; }
                 else if (leafLabel == "Español") { language = Language::Spanish; }
                 else { language = Language::English; }
+                languageSettings.Set(language);
+            }
+            // Difficulty and Camera Sway - Edward, 2026: previously
+            // completely unwired, selecting either did nothing at all.
+            else if (parentLabel == "Difficulty")
+            {
+                Difficulty difficulty = leafLabel == "Raging Terror" ? Difficulty::RagingTerror
+                                       : leafLabel == "Xenomania" ? Difficulty::Xenomania
+                                       : Difficulty::AcidReign;
+                difficultySettings.Set(difficulty);
+            }
+            else if (parentLabel == "Camera Sway")
+            {
+                cameraSwaySettings.Set(leafLabel == "On");
             }
         }
     }
@@ -281,6 +347,9 @@ namespace ALTEngine::Menu
         const std::filesystem::path& cdDirectory,
         RenderSettings& renderSettings,
         ResolutionSettings& resolutionSettings,
+        DifficultySettings& difficultySettings,
+        CameraSwaySettings& cameraSwaySettings,
+        LanguageSettings& languageSettings,
         Language& language)
     {
         AppWindow& app = AppWindow::Instance();
@@ -292,9 +361,11 @@ namespace ALTEngine::Menu
 
         // Apply a previously-saved resolution, if any - otherwise leave
         // the desktop's current mode alone.
+        std::string currentResolutionLabel;
         if (auto saved = resolutionSettings.Get())
         {
             app.ApplyFullscreenResolution(saved->first, saved->second);
+            currentResolutionLabel = std::to_string(saved->first) + "x" + std::to_string(saved->second);
         }
 
         std::vector<std::string> resolutionLabels = QueryResolutionLabels(app.Window());
@@ -303,8 +374,20 @@ namespace ALTEngine::Menu
         SDL_Texture* mainBg = LoadBackgroundTexture(cdDirectory, renderer, 0, mainBgW, mainBgH);
         SDL_Texture* optionsBg = LoadBackgroundTexture(cdDirectory, renderer, 1, optionsBgW, optionsBgH);
 
-        MenuNode root = BuildMainMenuTree(resolutionLabels);
-        const MenuNode& optionsRoot = root.children[3]; // "Options"
+        // Current values of every persisted setting the Options tree
+        // needs, so each settings list starts on whichever child
+        // actually matches what's saved, rather than always resetting
+        // to the first option (Edward, 2026: "so that the correct entry
+        // is selected when you enter each list").
+        MenuSettingsSnapshot settingsSnapshot;
+        settingsSnapshot.quality = renderSettings.Get();
+        settingsSnapshot.resolutionLabel = currentResolutionLabel;
+        settingsSnapshot.difficulty = difficultySettings.Get();
+        settingsSnapshot.cameraSwayOn = cameraSwaySettings.Get();
+        settingsSnapshot.language = language;
+
+        MenuNode root = BuildMainMenuTree(resolutionLabels, settingsSnapshot);
+        MenuNode& optionsRoot = root.children[3]; // "Options"
 
         // OPTOBJ preload queue - built here, drained in a blocking
         // loading phase below (not incrementally inside the main menu
@@ -443,6 +526,72 @@ namespace ALTEngine::Menu
         {
             MusicPlayer::Update();
 
+            // Shared Enter/Escape logic, callable from both their own
+            // dedicated keys and from left/right (Edward, 2026: "right
+            // on the keyboard to enter a menu as well as enter and left
+            // ... to escape a menu as well as escape" - matching the
+            // original game, which used the arrow keys this way too).
+            auto doEnter = [&]() {
+                if (screen == Screen::MainMenu)
+                {
+                    const MenuNode& chosen = WalkPath(root, mainPath);
+                    if (chosen.label == "Options")
+                    {
+                        screen = Screen::Options;
+                        optionsPath = { 0 };
+                    }
+                    else
+                    {
+                        result.action = chosen.label;
+                        running = false;
+                    }
+                    SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                }
+                else if (screen == Screen::Options)
+                {
+                    std::vector<int> parentPath(optionsPath.begin(), optionsPath.end() - 1);
+                    MenuNode& parent = parentPath.empty() ? optionsRoot : WalkPath(optionsRoot, parentPath);
+                    std::string parentLabel = parent.label;
+                    std::string leafLabel = WalkPath(optionsRoot, optionsPath).label;
+
+                    EnterResult r = Enter(optionsRoot, optionsPath);
+                    if (r == EnterResult::EnteredCredits) { screen = Screen::Credits; }
+                    else if (r == EnterResult::Toggled)
+                    {
+                        ApplyLeafAction(parentLabel, leafLabel, renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings, language);
+
+                        // Edward, 2026: "when I press escape it reverts
+                        // to selecting the resolution in the config file
+                        // rather than the newly selected option" - same
+                        // for Camera Sway and Difficulty. initialSelectedChild
+                        // was only ever computed once, at boot, from
+                        // whatever was in Config then - it never updated
+                        // when a setting changed live during the
+                        // session, so the one-ahead preview column (and
+                        // a later re-entry via Enter()) fell back to the
+                        // stale value. optionsPath.back() is exactly the
+                        // index just picked, since Enter() doesn't touch
+                        // path for a leaf Action.
+                        if (parent.isSettingsList) { parent.initialSelectedChild = optionsPath.back(); }
+                    }
+                    if (r != EnterResult::NoOp) { SfxPlayer::Play(SfxId::MenuSelect, cdDirectory); }
+                }
+            };
+
+            auto doEscape = [&]() {
+                if (screen == Screen::Credits) { screen = Screen::Options; }
+                else if (screen == Screen::Options)
+                {
+                    if (!Back(optionsPath)) { screen = Screen::MainMenu; }
+                }
+                else if (screen == Screen::MainMenu)
+                {
+                    result.action = "Exit";
+                    running = false;
+                }
+                SfxPlayer::Play(SfxId::MenuBack, cdDirectory);
+            };
+
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
@@ -463,45 +612,23 @@ namespace ALTEngine::Menu
                         break;
                     case SDLK_RETURN:
                     case SDLK_KP_ENTER:
-                        if (screen == Screen::MainMenu)
-                        {
-                            const MenuNode& chosen = WalkPath(root, mainPath);
-                            if (chosen.label == "Options")
-                            {
-                                screen = Screen::Options;
-                                optionsPath = { 0 };
-                            }
-                            else
-                            {
-                                result.action = chosen.label;
-                                running = false;
-                            }
-                            SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
-                        }
-                        else if (screen == Screen::Options)
-                        {
-                            std::vector<int> parentPath(optionsPath.begin(), optionsPath.end() - 1);
-                            std::string parentLabel = parentPath.empty() ? optionsRoot.label : WalkPath(optionsRoot, parentPath).label;
-                            std::string leafLabel = WalkPath(optionsRoot, optionsPath).label;
-
-                            EnterResult r = Enter(optionsRoot, optionsPath);
-                            if (r == EnterResult::EnteredCredits) { screen = Screen::Credits; }
-                            else if (r == EnterResult::Toggled) { ApplyLeafAction(parentLabel, leafLabel, renderSettings, resolutionSettings, language); }
-                            if (r != EnterResult::NoOp) { SfxPlayer::Play(SfxId::MenuSelect, cdDirectory); }
-                        }
+                        doEnter();
                         break;
                     case SDLK_ESCAPE:
-                        if (screen == Screen::Credits) { screen = Screen::Options; }
-                        else if (screen == Screen::Options)
-                        {
-                            if (!Back(optionsPath)) { screen = Screen::MainMenu; }
-                        }
-                        else if (screen == Screen::MainMenu)
-                        {
-                            result.action = "Exit";
-                            running = false;
-                        }
-                        SfxPlayer::Play(SfxId::MenuBack, cdDirectory);
+                        doEscape();
+                        break;
+                    // Edward, 2026: left/right moving the cursor was only
+                    // ever meant for the pause menu's Exit Game Yes/No
+                    // (matching the original), not any settings list
+                    // here - Difficulty/Camera Sway/Language/Quality/
+                    // Resolution all just use enter/escape like every
+                    // other list. The Main Menu itself doesn't respond
+                    // to left/right at all - only Enter and Escape.
+                    case SDLK_RIGHT:
+                        if (screen != Screen::MainMenu) { doEnter(); }
+                        break;
+                    case SDLK_LEFT:
+                        if (screen != Screen::MainMenu) { doEscape(); }
                         break;
                     default:
                         break;
@@ -548,8 +675,28 @@ namespace ALTEngine::Menu
                 {
                     if (node->children.empty()) { break; }
 
-                    int selectedHere = (depth < optionsPath.size()) ? optionsPath[depth] : 0;
                     bool isPreview = (depth == optionsPath.size());
+                    int selectedHere;
+                    bool pulseHere;
+                    if (!isPreview)
+                    {
+                        selectedHere = optionsPath[depth];
+                        pulseHere = true; // this is where the cursor actually is
+                    }
+                    else
+                    {
+                        // One-ahead preview column, before the user has
+                        // actually pressed Enter - only show a highlight
+                        // if this list has a real "current value" to
+                        // indicate (Difficulty, Camera Sway, Language,
+                        // Quality, Resolution). Pure navigation lists
+                        // (Volume, Controls) show no highlight at all
+                        // here (Edward, 2026), and never pulse even when
+                        // they do, since the cursor isn't really there
+                        // yet.
+                        selectedHere = node->isSettingsList ? node->initialSelectedChild : -1;
+                        pulseHere = false;
+                    }
 
                     const MenuNode& highlighted = node->children[static_cast<size_t>(std::clamp(
                         selectedHere, 0, static_cast<int>(node->children.size()) - 1))];
@@ -561,8 +708,8 @@ namespace ALTEngine::Menu
                         break;
                     }
 
-                    int columnWidth = DrawColumn(renderer, node->children, selectedHere, columnX, columnTop, rowHeight, scale);
-                    columnX += columnWidth; // packed tight against the next column, matching the reference
+                    int columnWidth = DrawColumn(renderer, node->children, selectedHere, pulseHere, columnX, columnTop, rowHeight, scale);
+                    columnX += columnWidth + scale * 4; // Edward, 2026: needs a visible gap between adjacent columns too, not just between stacked rows within one
 
                     if (depth >= optionsPath.size()) { break; }
                     node = &node->children[static_cast<size_t>(optionsPath[depth])];

@@ -10,8 +10,11 @@
 // Encoding: each glyph is 8 bytes, one byte per row, LSB = leftmost pixel.
 
 #include <SDL3/SDL.h>
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace ALTEngine::Bootstrap
 {
@@ -172,6 +175,59 @@ namespace ALTEngine::Bootstrap
             DrawChar(renderer, c, cursorX, cursorY, scale, color);
             cursorX += advance;
         }
+    }
+
+    // Filled rounded rectangle - SDL's render API has no native rounded-
+    // rect fill, so this builds one as a triangle fan (from the rect's
+    // centroid) around a perimeter of four small corner arcs joined by
+    // straight edges, drawn via SDL_RenderGeometry (Edward, 2026: "add
+    // slightly rounded edges on the highlight boxes"). `radius` is
+    // clamped to at most half the smaller dimension; a non-positive or
+    // tiny radius falls back to a plain SDL_RenderFillRect.
+    inline void DrawRoundedRect(SDL_Renderer* renderer, SDL_FRect rect, float radius, Color color)
+    {
+        radius = std::min({ radius, rect.w / 2.0f, rect.h / 2.0f });
+        if (radius <= 0.5f)
+        {
+            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+            SDL_RenderFillRect(renderer, &rect);
+            return;
+        }
+
+        constexpr int cornerSegments = 6; // small rounding - doesn't need many segments to look smooth
+        float left = rect.x, top = rect.y, right = rect.x + rect.w, bottom = rect.y + rect.h;
+
+        std::vector<SDL_FPoint> points;
+        auto addArc = [&](float cx, float cy, float startAngle, float endAngle) {
+            for (int i = 0; i <= cornerSegments; i++)
+            {
+                float t = static_cast<float>(i) / cornerSegments;
+                float angle = startAngle + t * (endAngle - startAngle);
+                points.push_back({ cx + std::cos(angle) * radius, cy + std::sin(angle) * radius });
+            }
+        };
+
+        constexpr float PI = 3.14159265358979323846f;
+        addArc(left + radius, top + radius, PI, 1.5f * PI);            // top-left
+        addArc(right - radius, top + radius, 1.5f * PI, 2.0f * PI);    // top-right
+        addArc(right - radius, bottom - radius, 0.0f, 0.5f * PI);      // bottom-right
+        addArc(left + radius, bottom - radius, 0.5f * PI, PI);         // bottom-left
+
+        SDL_FColor fColor{ color.r / 255.0f, color.g / 255.0f, color.b / 255.0f, color.a / 255.0f };
+        std::vector<SDL_Vertex> vertices;
+        vertices.push_back({ { (left + right) / 2.0f, (top + bottom) / 2.0f }, fColor, { 0.0f, 0.0f } });
+        for (const auto& p : points) { vertices.push_back({ p, fColor, { 0.0f, 0.0f } }); }
+
+        std::vector<int> indices;
+        int perimeterCount = static_cast<int>(points.size());
+        for (int i = 0; i < perimeterCount; i++)
+        {
+            indices.push_back(0);
+            indices.push_back(1 + i);
+            indices.push_back(1 + (i + 1) % perimeterCount);
+        }
+
+        SDL_RenderGeometry(renderer, nullptr, vertices.data(), static_cast<int>(vertices.size()), indices.data(), static_cast<int>(indices.size()));
     }
 
     inline int TextWidth(const std::string& text, int scale)

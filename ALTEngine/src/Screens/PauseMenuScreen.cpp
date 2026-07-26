@@ -10,6 +10,7 @@
 
 #include <SDL3/SDL.h>
 #include <algorithm>
+#include <cmath>
 #include <optional>
 #include <sstream>
 
@@ -40,8 +41,27 @@ namespace ALTEngine::Screens
         constexpr Color COLOR_DIM{ 24, 130, 52, 255 };       // ordinary items - matches the established dim-green
         constexpr Color COLOR_CURSOR{ 51, 255, 102, 255 };   // whichever item the cursor is on (not equipped)
         constexpr Color COLOR_EQUIPPED{ 235, 235, 235, 255 }; // the equipped weapon's label - bright/white, always, regardless of cursor
-        constexpr Color COLOR_HIGHLIGHT_BG{ 0, 40, 15, 255 };
+        constexpr Color COLOR_HIGHLIGHT_BG{ 0, 40, 15, 255 };         // very dark green - every row's default box now (Edward, 2026), not just the cursor's
+        constexpr Color COLOR_HIGHLIGHT_BG_LIGHT{ 20, 130, 60, 255 }; // light green - pulse target for the cursor's row
         constexpr Color COLOR_STATUS{ 51, 255, 102, 255 };   // "Selected" / "Not available" / etc
+
+        Color LerpColor(Color a, Color b, float t)
+        {
+            t = std::clamp(t, 0.0f, 1.0f);
+            return Color{
+                static_cast<Uint8>(a.r + (b.r - a.r) * t),
+                static_cast<Uint8>(a.g + (b.g - a.g) * t),
+                static_cast<Uint8>(a.b + (b.b - a.b) * t),
+                255
+            };
+        }
+
+        // Same ~1.7s "breathing" pulse as MenuController.cpp's own
+        // options screen (Edward, 2026).
+        float PulsePhase()
+        {
+            return static_cast<float>((std::sin(static_cast<double>(SDL_GetTicks()) / 400.0) + 1.0) / 2.0);
+        }
 
         struct WeaponInfo
         {
@@ -73,19 +93,26 @@ namespace ALTEngine::Screens
             width += scale * 8;
             outWidth = width;
 
+            float pulse = PulsePhase();
+
             for (size_t i = 0; i < items.size(); ++i)
             {
                 int rowY = y + static_cast<int>(i) * rowHeight;
                 bool isCursor = (static_cast<int>(i) == cursorIndex);
+                bool enabled = items[i].enabled;
                 bool isEquipped = false;
                 if (auto info = WeaponInfoFor(items[i].label, inventory, items[i])) { isEquipped = info->state->equipped; }
 
-                if (isCursor)
-                {
-                    SDL_SetRenderDrawColor(renderer, COLOR_HIGHLIGHT_BG.r, COLOR_HIGHLIGHT_BG.g, COLOR_HIGHLIGHT_BG.b, 255);
-                    SDL_FRect bar{ static_cast<float>(x), static_cast<float>(rowY), static_cast<float>(width), static_cast<float>(rowHeight - 4) };
-                    SDL_RenderFillRect(renderer, &bar);
-                }
+                // Every row gets a box now (Edward, 2026: "a disabled
+                // version of the current highlight around all options
+                // and pause menu items") - very dark green by default,
+                // brighter and pulsing only for the cursor's row, and
+                // only if that item is enabled.
+                Color boxColor = COLOR_HIGHLIGHT_BG;
+                if (isCursor && enabled) { boxColor = LerpColor(COLOR_HIGHLIGHT_BG, COLOR_HIGHLIGHT_BG_LIGHT, pulse); }
+
+                SDL_FRect bar{ static_cast<float>(x), static_cast<float>(rowY), static_cast<float>(width), static_cast<float>(rowHeight - scale * 2) };
+                DrawRoundedRect(renderer, bar, static_cast<float>(scale * 2), boxColor);
 
                 Color color = isEquipped ? COLOR_EQUIPPED : (isCursor ? COLOR_CURSOR : COLOR_DIM);
                 DrawBitmapText(renderer, items[i].label, x + scale * 4, rowY + (rowHeight - TextHeight(scale)) / 2, scale, color);
@@ -145,16 +172,22 @@ namespace ALTEngine::Screens
             }
         }
 
-        void DrawSlider(SDL_Renderer* renderer, const std::string& label, int value, int x, int y, int scale)
+        // barX is explicit (not derived from label's own width) so
+        // SFX/Music's bars align at the same X regardless of their
+        // different label lengths, and sit in their own space to the
+        // right of the button's highlight box rather than overlapping
+        // it (Edward, 2026: "the sliders should actually be in their own
+        // space to the right of the Music/SFX volume buttons... not
+        // within the highlight around the text itself").
+        void DrawSlider(SDL_Renderer* renderer, const std::string& label, int value, int labelX, int barX, int y, int scale)
         {
-            DrawBitmapText(renderer, label, x, y, scale, COLOR_CURSOR);
-            int barY = y + TextHeight(scale) + scale * 2;
+            DrawBitmapText(renderer, label, labelX, y, scale, COLOR_CURSOR);
             int cellSize = scale * 4;
             for (int i = 0; i < 10; ++i)
             {
                 Color c = (i < value) ? COLOR_CURSOR : COLOR_DIM;
                 SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 255);
-                SDL_FRect cell{ static_cast<float>(x + i * (cellSize + scale)), static_cast<float>(barY), static_cast<float>(cellSize), static_cast<float>(cellSize) };
+                SDL_FRect cell{ static_cast<float>(barX + i * (cellSize + scale)), static_cast<float>(y), static_cast<float>(cellSize), static_cast<float>(cellSize) };
                 SDL_RenderFillRect(renderer, &cell);
             }
         }
@@ -264,6 +297,40 @@ namespace ALTEngine::Screens
 
         while (running)
         {
+            // Shared Enter/Escape logic, callable from both their own
+            // dedicated keys and from left/right (Edward, 2026: same
+            // arrow-key behaviour as the boot menu - right enters a
+            // menu, left escapes one, and terminal selection lists like
+            // Exit Game's Yes/No move the cursor with left/right too).
+            auto doEnter = [&]() {
+                const MenuNode& deepest = WalkPath(root, path);
+                std::vector<int> parentPath(path.begin(), path.end() - 1);
+                std::string parentLabel = WalkPath(root, parentPath).label;
+
+                EnterResult r = Enter(root, path);
+                if (r == EnterResult::Toggled && parentLabel == "Exit Game" && deepest.label == "Yes")
+                {
+                    result.outcome = PauseMenuOutcome::ExitGame;
+                    running = false;
+                }
+                if (r != EnterResult::NoOp) { SfxPlayer::Play(SfxId::MenuSelect, cdDirectory); }
+            };
+
+            auto doEscape = [&]() {
+                if (!ALTEngine::Menu::Back(path)) { running = false; } // backed out of the top level - resume
+                SfxPlayer::Play(SfxId::MenuBack, cdDirectory);
+            };
+
+            // Left/right moving the cursor is specifically for the Exit
+            // Game Yes/No confirmation, matching the original - not a
+            // general rule for any list of leaf Actions (Edward, 2026).
+            auto currentListIsExitGameConfirmation = [&]() {
+                if (path.empty()) { return false; }
+                std::vector<int> parentPath(path.begin(), path.end() - 1);
+                const MenuNode& parent = parentPath.empty() ? root : WalkPath(root, parentPath);
+                return parent.label == "Exit Game";
+            };
+
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
@@ -282,23 +349,32 @@ namespace ALTEngine::Screens
                         break;
                     case SDLK_RETURN:
                     case SDLK_KP_ENTER:
-                    {
-                        const MenuNode& deepest = WalkPath(root, path);
-                        std::vector<int> parentPath(path.begin(), path.end() - 1);
-                        std::string parentLabel = WalkPath(root, parentPath).label;
-
-                        EnterResult r = Enter(root, path);
-                        if (r == EnterResult::Toggled && parentLabel == "Exit Game" && deepest.label == "Yes")
-                        {
-                            result.outcome = PauseMenuOutcome::ExitGame;
-                            running = false;
-                        }
-                        if (r != EnterResult::NoOp) { SfxPlayer::Play(SfxId::MenuSelect, cdDirectory); }
+                        doEnter();
                         break;
-                    }
                     case SDLK_ESCAPE:
-                        if (!ALTEngine::Menu::Back(path)) { running = false; } // backed out of the top level - resume
-                        SfxPlayer::Play(SfxId::MenuBack, cdDirectory);
+                        doEscape();
+                        break;
+                    case SDLK_RIGHT:
+                        if (currentListIsExitGameConfirmation())
+                        {
+                            MoveSelection(root, path, 1);
+                            SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+                        }
+                        else
+                        {
+                            doEnter();
+                        }
+                        break;
+                    case SDLK_LEFT:
+                        if (currentListIsExitGameConfirmation())
+                        {
+                            MoveSelection(root, path, -1);
+                            SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+                        }
+                        else
+                        {
+                            doEscape();
+                        }
                         break;
                     default:
                         break;
@@ -326,22 +402,68 @@ namespace ALTEngine::Screens
             if (topLabel == "Options")
             {
                 const MenuNode& optionsNode = root.children[static_cast<size_t>(path[0])];
-                DrawSlider(renderer, "SFX VOLUME", optionsNode.children[0].sliderValue, panelX, panelY, scale);
-                DrawSlider(renderer, "MUSIC VOLUME", optionsNode.children[1].sliderValue, panelX, panelY + rowHeight * 2, scale);
+                int cursorHere = (path.size() >= 2) ? path[1] : -1; // -1 = haven't descended into Options yet, nothing highlighted
 
-                bool exitCursor = (path.size() >= 2 && path[1] == 2);
+                // Highlight box width matches just the button/label area
+                // (like every other entry in this menu) - the slider bar
+                // gets its own separate space to the right, not enclosed
+                // within the box (Edward, 2026: "the sliders should
+                // actually be in their own space to the right of the
+                // Music/SFX volume buttons in the pause menu, not within
+                // the highlight around the text itself").
+                int buttonWidth = std::max({ TextWidth("SFX VOLUME", scale), TextWidth("MUSIC VOLUME", scale), TextWidth("EXIT GAME", scale) }) + scale * 8;
+                int barX = panelX - scale * 4 + buttonWidth + scale * 8; // fixed X so SFX/Music's bars align regardless of their different label widths
+                float pulse = PulsePhase();
+
+                // Row boxes at rowY..rowY+rowHeight-scale*2 (matching
+                // DrawColumn/DrawLeftColumn's own box-per-row convention
+                // exactly), text/sliders vertically centred within the
+                // full rowHeight - Edward, 2026: "the text spacing still
+                // isn't quite right" - these previously drew flush to
+                // the row's top instead of centred like every other
+                // entry.
+                auto drawRow = [&](int rowY, bool isCursor) {
+                    Color boxColor = isCursor ? LerpColor(COLOR_HIGHLIGHT_BG, COLOR_HIGHLIGHT_BG_LIGHT, pulse) : COLOR_HIGHLIGHT_BG;
+                    SDL_FRect bar{ static_cast<float>(panelX - scale * 4), static_cast<float>(rowY), static_cast<float>(buttonWidth), static_cast<float>(rowHeight - scale * 2) };
+                    DrawRoundedRect(renderer, bar, static_cast<float>(scale * 2), boxColor);
+                    return rowY + (rowHeight - TextHeight(scale)) / 2;
+                };
+
+                // One rowHeight apart now, matching the left column's own
+                // spacing (Edward, 2026: "they also do not line up with
+                // the entries to the left of them") - now that the
+                // slider's bar sits beside its label instead of below it,
+                // each row only needs a single rowHeight of vertical
+                // space, the same as every other row in this menu.
+                int sfxTextY = drawRow(panelY, cursorHere == 0);
+                DrawSlider(renderer, "SFX VOLUME", optionsNode.children[0].sliderValue, panelX, barX, sfxTextY, scale);
+
+                int musicY = panelY + rowHeight;
+                int musicTextY = drawRow(musicY, cursorHere == 1);
+                DrawSlider(renderer, "MUSIC VOLUME", optionsNode.children[1].sliderValue, panelX, barX, musicTextY, scale);
+
+                bool exitCursor = (cursorHere == 2);
+                int exitY = panelY + rowHeight * 2;
+                int exitTextY = drawRow(exitY, exitCursor);
                 Color exitColor = exitCursor ? COLOR_CURSOR : COLOR_DIM;
-                int exitY = panelY + rowHeight * 4;
-                DrawBitmapText(renderer, "EXIT GAME", panelX, exitY, scale, exitColor);
+                DrawBitmapText(renderer, "EXIT GAME", panelX, exitTextY, scale, exitColor);
 
-                if (path.size() >= 2 && path[1] == 2) // Exit Game is the active/previewed column
+                if (exitCursor) // Exit Game is the active/previewed column
                 {
+                    // Edward, 2026: "Are You Sure ? should appear below
+                    // Exit Game in the list when selected. Then the
+                    // No/Yes remains as it is on the right side of Are
+                    // You Sure ?" - moved to its own row below Exit Game
+                    // (was inline to the right on the same row before);
+                    // Yes/No's own text-colour highlighting (not a box)
+                    // stays exactly as it was.
                     int confirmIndex = (path.size() >= 3) ? path[2] : 0;
                     std::string confirmLabel = confirmIndex == 1 ? "Yes" : "No";
                     Color confirmColor = confirmIndex == 1 ? COLOR_CURSOR : COLOR_DIM;
                     std::string prefix = "ARE YOU SURE ? ";
-                    DrawBitmapText(renderer, prefix, panelX + TextWidth("EXIT GAME", scale) + scale * 8, exitY, scale, COLOR_DIM);
-                    DrawBitmapText(renderer, confirmLabel, panelX + TextWidth("EXIT GAME", scale) + scale * 8 + TextWidth(prefix, scale), exitY, scale, confirmColor);
+                    int confirmY = exitY + rowHeight + (rowHeight - TextHeight(scale)) / 2;
+                    DrawBitmapText(renderer, prefix, panelX, confirmY, scale, COLOR_DIM);
+                    DrawBitmapText(renderer, confirmLabel, panelX + TextWidth(prefix, scale), confirmY, scale, confirmColor);
                 }
             }
             else if (topLabel == "Mission")
