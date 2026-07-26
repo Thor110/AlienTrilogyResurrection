@@ -3,6 +3,7 @@
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/MissionText.h"
 #include "../Formats/SplashImageLoader.h"
+#include "MenuBackground.h"
 #include "../Renderer/ModelPreview.h"
 
 #include <SDL3/SDL.h>
@@ -110,20 +111,6 @@ namespace ALTEngine::Screens
                 SDL_Log("MissionBriefingScreen: failed to load %s: %s", baseName.c_str(), e.what());
                 return nullptr;
             }
-        }
-
-        void DrawBackground(SDL_Renderer* renderer, SDL_Texture* texture, int texW, int texH)
-        {
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-            SDL_RenderClear(renderer);
-            if (!texture) { return; }
-
-            int windowW = 0, windowH = 0;
-            SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-            float scale = std::min(static_cast<float>(windowW) / texW, static_cast<float>(windowH) / texH);
-            float destW = texW * scale, destH = texH * scale;
-            SDL_FRect dest{ (windowW - destW) / 2.0f, (windowH - destH) / 2.0f, destW, destH };
-            SDL_RenderTexture(renderer, texture, nullptr, &dest);
         }
 
         int TotalCharCount(const MissionBriefing& briefing)
@@ -325,7 +312,7 @@ namespace ALTEngine::Screens
             int revealedChars = textFullyRevealed ? totalChars : static_cast<int>(elapsed / MS_PER_CHAR);
             if (revealedChars >= totalChars) { revealedChars = totalChars; textFullyRevealed = true; }
 
-            DrawBackground(renderer, background, bgW, bgH);
+            DrawMenuBackground(renderer, background, bgW, bgH);
 
             int scale = ComputeMenuScale(renderer);
             int lineHeight = TextHeight(scale) + scale * 4;

@@ -65,7 +65,15 @@ namespace ALTEngine::Screens
 
         int windowW = 0, windowH = 0;
         SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-        float scale = std::min(static_cast<float>(windowW) / texW, static_cast<float>(windowH) / texH);
+
+        // Height-based fill, not aspect-preserving fit - Edward, 2026:
+        // "there are only 6 menu background images, I am thinking we
+        // should scale them to remove black bars for non 16:9
+        // resolutions... Scale the height and width until the height
+        // matches the resolution height" - lets any excess width run
+        // past the window edges (centred, clipped) rather than
+        // letterboxing with black bars on the sides.
+        float scale = static_cast<float>(windowH) / static_cast<float>(texH);
         float destW = texW * scale, destH = texH * scale;
         SDL_FRect dest{ (windowW - destW) / 2.0f, (windowH - destH) / 2.0f, destW, destH };
         SDL_RenderTexture(renderer, texture, nullptr, &dest);

@@ -9,6 +9,7 @@
 #include "../Formats/SplashImageLoader.h"
 #include "../Renderer/ModelRenderer.h"
 #include "../Renderer/ModelPreview.h"
+#include "../Screens/MenuBackground.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -44,10 +45,10 @@ namespace ALTEngine::Menu
     using ALTEngine::Formats::SplashImage;
     using ALTEngine::Formats::SplashImageLoader;
     using ALTEngine::Renderer::ModelRenderer;
+    using ALTEngine::Screens::DrawMenuBackground;
 
     namespace
     {
-        constexpr Color COLOR_BG{ 0, 0, 0, 255 };
         constexpr Color COLOR_GREEN{ 51, 255, 102, 255 };
         constexpr Color COLOR_GREEN_DIM{ 24, 130, 52, 255 };
         constexpr Color COLOR_HIGHLIGHT_BG{ 0, 40, 15, 255 };        // very dark green - every row's default box now (Edward, 2026), not just the selected one
@@ -136,21 +137,6 @@ namespace ALTEngine::Menu
                 SDL_Log("Menu: failed to load LOGOSGFX image %d: %s", imageIndex, e.what());
                 return nullptr;
             }
-        }
-
-        void DrawBackground(SDL_Renderer* renderer, SDL_Texture* texture, int texW, int texH)
-        {
-            SDL_SetRenderDrawColor(renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, 255);
-            SDL_RenderClear(renderer);
-            if (!texture) { return; }
-
-            int windowW = 0, windowH = 0;
-            SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-            float scale = std::min(static_cast<float>(windowW) / texW, static_cast<float>(windowH) / texH);
-            float destW = texW * scale;
-            float destH = texH * scale;
-            SDL_FRect dest{ (windowW - destW) / 2.0f, (windowH - destH) / 2.0f, destW, destH };
-            SDL_RenderTexture(renderer, texture, nullptr, &dest);
         }
 
         // Placeholder for the eventual real 3D model render - a labeled
@@ -613,14 +599,14 @@ namespace ALTEngine::Menu
 
             if (screen == Screen::MainMenu)
             {
-                DrawBackground(renderer, mainBg, mainBgW, mainBgH);
+                DrawMenuBackground(renderer, mainBg, mainBgW, mainBgH);
                 int windowW = 0, windowH = 0;
                 SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
                 DrawMainMenuList(renderer, root.children, mainPath[0], windowW, windowH * 2 / 3, rowHeight, scale);
             }
             else if (screen == Screen::Options)
             {
-                DrawBackground(renderer, optionsBg, optionsBgW, optionsBgH);
+                DrawMenuBackground(renderer, optionsBg, optionsBgW, optionsBgH);
 
                 int windowW = 0, windowH = 0;
                 SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
@@ -682,7 +668,7 @@ namespace ALTEngine::Menu
             }
             else // Credits
             {
-                DrawBackground(renderer, optionsBg, optionsBgW, optionsBgH);
+                DrawMenuBackground(renderer, optionsBg, optionsBgW, optionsBgH);
                 // Placeholder - real credits scroll (parsing CD/GFX/CREDITS.TXT
                 // and animating it) isn't implemented yet.
                 DrawBitmapText(renderer, "CREDITS", scale * 8, scale * 8, scale, COLOR_GREEN);
