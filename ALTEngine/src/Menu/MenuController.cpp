@@ -171,16 +171,6 @@ namespace ALTEngine::Menu
 
             ALTEngine::Renderer::ModelPreviewSource source = ALTEngine::Renderer::ModelPreviewSource::ForOptobj(cdDirectory, modelIndex);
 
-            // Multitap (3) and the Music/SFX speaker models (11/12) use a
-            // colour key (black) for transparency rather than most
-            // OPTOBJ models' "black is just opaque material colour"
-            // convention - see MenuTree.cpp's Volume() TODO and
-            // RawImageRenderer's transparentRgb parameter (Edward, 2026).
-            if (modelIndex == ModelIndex::Multitap || modelIndex == ModelIndex::SpeakerMusic || modelIndex == ModelIndex::SpeakerSfx)
-            {
-                source.transparentRgb = std::array<uint8_t, 3>{ 0, 0, 0 };
-            }
-
             if (!ALTEngine::Renderer::DrawModelPreview(renderer, source, x, y, w, h, rotationAngle))
             {
                 DrawModelPlaceholder(renderer, modelIndex, x, y, w, h, scale);
@@ -323,6 +313,37 @@ namespace ALTEngine::Menu
         // basically every game with a menu.
         MusicPlayer::PlayLooped(cdDirectory / "MUSIC" / "track02.wav");
 
+        // Incremental model preload queue - one model loaded per frame
+        // from inside the loop below, rather than a dedicated blocking
+        // step before the menu appears. Edward, 2026: even a batched
+        // GPU upload (ModelRenderer::PreloadBatch) still left a
+        // multi-second hang at boot, since GPU resource creation itself
+        // (CreateGPUBuffer/CreateGPUTexture, one call per model,
+        // ~120 calls for the full catalog) can't be batched into fewer
+        // driver calls the way the upload/transfer step can - each
+        // needs its own unique handle. Riding this along on frames that
+        // are already happening (this loop runs regardless) means
+        // there's no separate point where the window can appear to
+        // hang - worst case, a menu item visited before its model has
+        // reached the front of the queue briefly shows the existing
+        // placeholder box instead of the live 3D preview, which is
+        // already a fully supported, graceful path (DrawModelPlaceholder)
+        // rather than new behaviour.
+        std::vector<ALTEngine::Renderer::PreloadRequest> modelPreloadQueue;
+        for (int i = 0; i < 14; i++)
+        {
+            auto source = ALTEngine::Renderer::ModelPreviewSource::ForOptobj(cdDirectory, i);
+            modelPreloadQueue.push_back({ source.CacheKey(), i, source.objBndPath, source.gfxBndPath,
+                                           source.transparentRgb, source.baseRotationRadians });
+        }
+        for (int i = 0; i < 26; i++)
+        {
+            auto source = ALTEngine::Renderer::ModelPreviewSource::ForPickmod(cdDirectory, i);
+            modelPreloadQueue.push_back({ source.CacheKey(), i, source.objBndPath, source.gfxBndPath,
+                                           source.transparentRgb, source.baseRotationRadians });
+        }
+        size_t modelPreloadNext = 0;
+
         enum class Screen { MainMenu, Options, Credits };
         Screen screen = Screen::MainMenu;
 
@@ -335,6 +356,14 @@ namespace ALTEngine::Menu
         while (running)
         {
             MusicPlayer::Update();
+
+            if (modelPreloadNext < modelPreloadQueue.size())
+            {
+                const auto& req = modelPreloadQueue[modelPreloadNext++];
+                ALTEngine::Renderer::ModelRenderer::LoadModel(req.cacheKey, req.meshNumber, req.objBndPath, req.gfxBndPath,
+                                                               req.transparentRgb, req.baseRotationRadians);
+            }
+
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {

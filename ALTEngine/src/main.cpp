@@ -13,6 +13,8 @@
 #include "Bootstrap/ResolutionSettings.h"
 #include "Formats/SplashImageLoader.h"
 #include "Menu/MenuController.h"
+#include "Renderer/ModelPreview.h"
+#include "Renderer/ModelRenderer.h"
 #include "Screens/GameplayScreen.h"
 #include "Screens/MissionBriefingScreen.h"
 #include "Screens/MultiplayerScreens.h"

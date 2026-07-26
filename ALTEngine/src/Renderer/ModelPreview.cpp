@@ -24,7 +24,7 @@ namespace ALTEngine::Renderer
             return false;
         }
 
-        std::string cacheKey = source.cachePrefix + ":" + std::to_string(source.modelIndex);
+        ModelCacheKey cacheKey = source.CacheKey();
         if (!ModelRenderer::LoadModel(cacheKey, source.modelIndex, source.objBndPath, source.gfxBndPath,
                                        source.transparentRgb, source.baseRotationRadians))
         {
@@ -54,5 +54,39 @@ namespace ALTEngine::Renderer
         SDL_RenderTexture(renderer, texture, nullptr, &dest);
         SDL_DestroyTexture(texture);
         return true;
+    }
+
+    void PreloadAllModels(const std::filesystem::path& cdDirectory)
+    {
+        if (!ModelRenderer::Initialize())
+        {
+            SDL_Log("PreloadAllModels: ModelRenderer unavailable, skipping preload");
+            return;
+        }
+
+        std::vector<PreloadRequest> requests;
+
+        // OPTOBJ: confirmed gap-free, 14 models (0-13) - see
+        // ModelLoader.h's own confirmation note.
+        for (int i = 0; i < 14; i++)
+        {
+            ModelPreviewSource source = ModelPreviewSource::ForOptobj(cdDirectory, i);
+            requests.push_back({ source.CacheKey(), i, source.objBndPath, source.gfxBndPath,
+                                  source.transparentRgb, source.baseRotationRadians });
+        }
+
+        // PICKMOD: confirmed gaps at 5 and 24 (see ModelLoader.h) -
+        // PreloadBatch already skips a missing section number gracefully
+        // (logs, moves on) rather than failing the whole batch, so this
+        // just tries the full documented 0-25 range without needing to
+        // special-case the gaps itself.
+        for (int i = 0; i < 26; i++)
+        {
+            ModelPreviewSource source = ModelPreviewSource::ForPickmod(cdDirectory, i);
+            requests.push_back({ source.CacheKey(), i, source.objBndPath, source.gfxBndPath,
+                                  source.transparentRgb, source.baseRotationRadians });
+        }
+
+        ModelRenderer::PreloadBatch(requests);
     }
 }

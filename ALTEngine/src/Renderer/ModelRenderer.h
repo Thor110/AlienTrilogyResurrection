@@ -32,6 +32,51 @@ namespace ALTEngine::Renderer
     // GPU->CPU->GPU round trip per frame, which is an acceptable trade
     // for reliability given this is one small menu preview, not
     // gameplay-critical performance.
+    // Which model catalog a ModelCacheKey refers to - OPTOBJ (menu
+    // items like the harddrives/computer/etc) and PICKMOD (pause menu
+    // weapons/equipment) are separate BND files with their own,
+    // independently-numbered index ranges, so the same modelIndex means
+    // a different model depending on which catalog it's from.
+    enum class ModelCatalog : int32_t
+    {
+        Optobj,
+        Pickmod,
+    };
+
+    // A cheap-to-copy/hash/compare model cache key - replaces what used
+    // to be a string built as `cachePrefix + ":" + std::to_string(index)`
+    // at every call site (Edward, 2026: "wouldn't it be more practical
+    // to just use the model index as an integer rather than a string
+    // comparison?" - yes, and this also centralizes the key-building
+    // that string concatenation was duplicating everywhere).
+    struct ModelCacheKey
+    {
+        ModelCatalog catalog = ModelCatalog::Optobj;
+        int32_t modelIndex = -1;
+
+        bool operator==(const ModelCacheKey&) const = default;
+    };
+
+    struct ModelCacheKeyHash
+    {
+        size_t operator()(const ModelCacheKey& key) const noexcept
+        {
+            return std::hash<int64_t>{}((static_cast<int64_t>(key.catalog) << 32) | static_cast<uint32_t>(key.modelIndex));
+        }
+    };
+
+    // One entry per model to batch-load via PreloadBatch - same
+    // parameters LoadModel takes individually.
+    struct PreloadRequest
+    {
+        ModelCacheKey cacheKey;
+        int meshNumber = -1;
+        std::filesystem::path objBndPath;
+        std::filesystem::path gfxBndPath;
+        std::optional<std::array<uint8_t, 3>> transparentRgb;
+        float baseRotationRadians = 0.0f;
+    };
+
     class ModelRenderer
     {
     public:
@@ -74,17 +119,34 @@ namespace ALTEngine::Renderer
         // default orientation (Edward, 2026).
         //
         // Returns false if the model/texture couldn't be loaded.
-        static bool LoadModel(const std::string& cacheKey, int meshNumber,
+        static bool LoadModel(ModelCacheKey cacheKey, int meshNumber,
                                const std::filesystem::path& objBndPath, const std::filesystem::path& gfxBndPath,
                                std::optional<std::array<uint8_t, 3>> transparentRgb = std::nullopt,
                                float baseRotationRadians = 0.0f);
+
+        // Same end result as calling LoadModel once per request, but all
+        // GPU uploads share a single transfer buffer, command buffer,
+        // and submit - Edward, 2026: ~40 individual LoadModel calls
+        // during boot preload (14 OPTOBJ + 26 PICKMOD) were taking 2-3
+        // seconds despite the combined data being under 1MB, because
+        // each one independently created and tore down its own transfer
+        // buffer and issued its own command buffer submission - roughly
+        // 13 separate GPU API calls per model, ~520 total. Real GPU
+        // drivers have meaningful fixed overhead per submission/resource
+        // creation regardless of payload size, so the call count (not
+        // the data volume) was the actual cost. This does the same CPU-
+        // side work per model (parse, build render mesh, compute AABB)
+        // but creates one shared transfer buffer sized for everything
+        // combined, maps it once, and issues all the upload calls inside
+        // a single copy pass before one final submit.
+        static void PreloadBatch(const std::vector<PreloadRequest>& requests);
 
         // Renders the model cached under `cacheKey` (must already be
         // loaded via LoadModel), rotated by `angleRadians` around Y,
         // into a `width`x`height` offscreen target, and returns the
         // result as tightly-packed RGBA8 bytes (width*height*4), or an
         // empty vector on failure.
-        static std::vector<uint8_t> RenderToRgba(const std::string& cacheKey, float angleRadians, int width, int height);
+        static std::vector<uint8_t> RenderToRgba(ModelCacheKey cacheKey, float angleRadians, int width, int height);
 
         // Loads and GPU-uploads an entire level's static geometry,
         // cached under `cacheKey`. Unlike LoadModel (one texture, one

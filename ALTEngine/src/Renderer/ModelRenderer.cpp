@@ -18,6 +18,15 @@ namespace ALTEngine::Renderer
 {
     namespace
     {
+        // For logging only - ModelCacheKey itself stays a cheap
+        // catalog+int pair, not a string, but SDL_Log's %s calls still
+        // want something printable.
+        std::string DescribeCacheKey(ModelCacheKey key)
+        {
+            const char* catalogName = (key.catalog == ModelCatalog::Optobj) ? "OPTOBJ" : "PICKMOD";
+            return std::string(catalogName) + ":" + std::to_string(key.modelIndex);
+        }
+
         // Not M_PI - that's a POSIX/GNU extension, not standard C++, and
         // MSVC only defines it if _USE_MATH_DEFINES is set before
         // <cmath> is included, which is easy to get wrong across
@@ -65,7 +74,7 @@ namespace ALTEngine::Renderer
         SDL_GPUGraphicsPipeline* doubleSidedPipeline = nullptr; // cull_mode=NONE - see LoadModel's doc comment on why colour-key cutout models need this
         SDL_GPUSampler* sampler = nullptr;
         SDL_GPUTextureFormat depthFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
-        std::unordered_map<std::string, LoadedModel> loadedModels;
+        std::unordered_map<ModelCacheKey, LoadedModel, ModelCacheKeyHash> loadedModels;
         std::unordered_map<std::string, LoadedLevel> loadedLevels;
 
         // Offscreen render target cache - recreated only if the requested
@@ -486,7 +495,7 @@ namespace ALTEngine::Renderer
         device = nullptr;
     }
 
-    bool ModelRenderer::LoadModel(const std::string& cacheKey, int meshNumber,
+    bool ModelRenderer::LoadModel(ModelCacheKey cacheKey, int meshNumber,
                                    const std::filesystem::path& objBndPath, const std::filesystem::path& gfxBndPath,
                                    std::optional<std::array<uint8_t, 3>> transparentRgb,
                                    float baseRotationRadians)
@@ -503,14 +512,14 @@ namespace ALTEngine::Renderer
         }
         catch (const std::exception& e)
         {
-            SDL_Log("ModelRenderer::LoadModel(%s): %s", cacheKey.c_str(), e.what());
+            SDL_Log("ModelRenderer::LoadModel(%s): %s", DescribeCacheKey(cacheKey).c_str(), e.what());
             return false;
         }
 
         const auto* mesh = ModelLoader::FindByNumber(meshes, meshNumber);
         if (!mesh)
         {
-            SDL_Log("ModelRenderer::LoadModel(%s): no section for mesh number %d in %s", cacheKey.c_str(), meshNumber, objBndPath.string().c_str());
+            SDL_Log("ModelRenderer::LoadModel(%s): no section for mesh number %d in %s", DescribeCacheKey(cacheKey).c_str(), meshNumber, objBndPath.string().c_str());
             return false;
         }
 
@@ -545,14 +554,14 @@ namespace ALTEngine::Renderer
 
         if (!tex || !uvRects)
         {
-            SDL_Log("ModelRenderer::LoadModel(%s): no matching texture for mesh number %d in %s", cacheKey.c_str(), meshNumber, gfxBndPath.string().c_str());
+            SDL_Log("ModelRenderer::LoadModel(%s): no matching texture for mesh number %d in %s", DescribeCacheKey(cacheKey).c_str(), meshNumber, gfxBndPath.string().c_str());
             return false;
         }
 
         RenderMesh renderMesh = BuildRenderMesh(*mesh, *uvRects);
         if (renderMesh.vertices.empty() || renderMesh.indices.empty())
         {
-            SDL_Log("ModelRenderer::LoadModel(%s): model has no geometry", cacheKey.c_str());
+            SDL_Log("ModelRenderer::LoadModel(%s): model has no geometry", DescribeCacheKey(cacheKey).c_str());
             return false;
         }
 
@@ -575,7 +584,7 @@ namespace ALTEngine::Renderer
         LevelSubGroup uploaded = UploadMeshWithTexture(renderMesh, *tex);
         if (!uploaded.vertexBuffer || !uploaded.indexBuffer || !uploaded.texture)
         {
-            SDL_Log("ModelRenderer::LoadModel(%s): upload failed", cacheKey.c_str());
+            SDL_Log("ModelRenderer::LoadModel(%s): upload failed", DescribeCacheKey(cacheKey).c_str());
             return false;
         }
 
@@ -593,7 +602,245 @@ namespace ALTEngine::Renderer
         return true;
     }
 
-    std::vector<uint8_t> ModelRenderer::RenderToRgba(const std::string& cacheKey, float angleRadians, int width, int height)
+    void ModelRenderer::PreloadBatch(const std::vector<PreloadRequest>& requests)
+    {
+        if (!device) { return; }
+
+        // Phase 1: CPU-side work per model (parse, build render mesh,
+        // compute AABB) - identical to LoadModel's own logic, just
+        // collected into a list instead of uploaded immediately, so the
+        // GPU work below can be batched into one shared transfer buffer/
+        // command buffer/submit instead of one full cycle per model.
+        struct PendingUpload
+        {
+            ModelCacheKey cacheKey;
+            RenderMesh renderMesh;
+            std::vector<uint8_t> textureRgba;
+            int textureWidth = 0, textureHeight = 0;
+            float centerX = 0, centerY = 0, centerZ = 0, radius = 1.0f;
+            float baseRotationRadians = 0.0f;
+            bool useDoubleSided = false;
+            size_t vbSize = 0, ibSize = 0, texSize = 0;
+        };
+
+        std::vector<PendingUpload> pending;
+        pending.reserve(requests.size());
+
+        for (const auto& req : requests)
+        {
+            if (loadedModels.count(req.cacheKey)) { continue; }
+
+            std::vector<ALTEngine::Formats::ModelMesh> meshes;
+            BndTextureSet textureSet;
+            try
+            {
+                meshes = ModelLoader::Load(req.objBndPath);
+                textureSet = BndTextureLoader::Load(req.gfxBndPath, req.transparentRgb);
+            }
+            catch (const std::exception& e)
+            {
+                SDL_Log("ModelRenderer::PreloadBatch(%s): %s", DescribeCacheKey(req.cacheKey).c_str(), e.what());
+                continue;
+            }
+
+            const auto* mesh = ModelLoader::FindByNumber(meshes, req.meshNumber);
+            if (!mesh) { continue; }
+
+            const ALTEngine::Formats::BndTexture* tex = nullptr;
+            const std::vector<ALTEngine::Formats::BxRectangle>* uvRects = nullptr;
+
+            if (textureSet.uvSections.size() == 1 && !textureSet.textures.empty())
+            {
+                tex = &textureSet.textures[0];
+                uvRects = &textureSet.uvSections[0];
+            }
+            else
+            {
+                char buf[8];
+                std::snprintf(buf, sizeof(buf), "%02d", req.meshNumber);
+                std::string targetIndex(buf);
+                for (size_t i = 0; i < textureSet.textures.size() && i < textureSet.uvSections.size(); ++i)
+                {
+                    if (textureSet.textures[i].index == targetIndex)
+                    {
+                        tex = &textureSet.textures[i];
+                        uvRects = &textureSet.uvSections[i];
+                        break;
+                    }
+                }
+            }
+
+            if (!tex || !uvRects) { continue; }
+
+            RenderMesh renderMesh = BuildRenderMesh(*mesh, *uvRects);
+            if (renderMesh.vertices.empty() || renderMesh.indices.empty()) { continue; }
+
+            float minX = std::numeric_limits<float>::max(), maxX = std::numeric_limits<float>::lowest();
+            float minY = minX, maxY = maxX, minZ = minX, maxZ = maxX;
+            for (const auto& v : renderMesh.vertices)
+            {
+                minX = std::min(minX, v.x); maxX = std::max(maxX, v.x);
+                minY = std::min(minY, v.y); maxY = std::max(maxY, v.y);
+                minZ = std::min(minZ, v.z); maxZ = std::max(maxZ, v.z);
+            }
+            float cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
+            float dx = maxX - minX, dy = maxY - minY, dz = maxZ - minZ;
+            float radius = std::sqrt(dx * dx + dy * dy + dz * dz) / 2.0f;
+            if (radius < 1.0f) { radius = 1.0f; }
+
+            PendingUpload up;
+            up.cacheKey = req.cacheKey;
+            up.textureRgba = tex->rgba; // copied, not referenced - textureSet goes out of scope this iteration
+            up.textureWidth = tex->width;
+            up.textureHeight = tex->height;
+            up.centerX = cx; up.centerY = cy; up.centerZ = cz; up.radius = radius;
+            up.baseRotationRadians = req.baseRotationRadians;
+            up.useDoubleSided = req.transparentRgb.has_value();
+            up.vbSize = renderMesh.vertices.size() * sizeof(float) * 5;
+            up.ibSize = renderMesh.indices.size() * sizeof(uint32_t);
+            up.texSize = static_cast<size_t>(up.textureWidth) * up.textureHeight * 4;
+            up.renderMesh = std::move(renderMesh);
+            pending.push_back(std::move(up));
+        }
+
+        if (pending.empty()) { return; }
+
+        // Phase 2: create GPU buffer/texture objects up front - still
+        // one CreateGPUBuffer/CreateGPUTexture call per model (each
+        // needs its own unique handle, these can't be shared), but no
+        // per-model transfer buffer or command buffer anymore.
+        struct CreatedResources { SDL_GPUBuffer* vb = nullptr; SDL_GPUBuffer* ib = nullptr; SDL_GPUTexture* tex = nullptr; };
+        std::vector<CreatedResources> created(pending.size());
+        std::vector<size_t> offsets(pending.size(), 0);
+        size_t totalTransferSize = 0;
+
+        for (size_t i = 0; i < pending.size(); i++)
+        {
+            auto& up = pending[i];
+            SDL_GPUBufferCreateInfo vbInfo{ SDL_GPU_BUFFERUSAGE_VERTEX, static_cast<Uint32>(up.vbSize) };
+            SDL_GPUBuffer* vertexBuffer = SDL_CreateGPUBuffer(device, &vbInfo);
+            SDL_GPUBufferCreateInfo ibInfo{ SDL_GPU_BUFFERUSAGE_INDEX, static_cast<Uint32>(up.ibSize) };
+            SDL_GPUBuffer* indexBuffer = SDL_CreateGPUBuffer(device, &ibInfo);
+
+            SDL_GPUTextureCreateInfo texInfo{};
+            texInfo.type = SDL_GPU_TEXTURETYPE_2D;
+            texInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+            texInfo.width = static_cast<Uint32>(up.textureWidth);
+            texInfo.height = static_cast<Uint32>(up.textureHeight);
+            texInfo.layer_count_or_depth = 1;
+            texInfo.num_levels = 1;
+            texInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+            SDL_GPUTexture* texture = SDL_CreateGPUTexture(device, &texInfo);
+
+            if (!vertexBuffer || !indexBuffer || !texture)
+            {
+                SDL_Log("ModelRenderer::PreloadBatch(%s): buffer/texture creation failed: %s", DescribeCacheKey(up.cacheKey).c_str(), SDL_GetError());
+                if (vertexBuffer) { SDL_ReleaseGPUBuffer(device, vertexBuffer); }
+                if (indexBuffer) { SDL_ReleaseGPUBuffer(device, indexBuffer); }
+                if (texture) { SDL_ReleaseGPUTexture(device, texture); }
+                continue;
+            }
+
+            created[i] = { vertexBuffer, indexBuffer, texture };
+            offsets[i] = totalTransferSize;
+            totalTransferSize += up.vbSize + up.ibSize + up.texSize;
+        }
+
+        if (totalTransferSize == 0) { return; }
+
+        // Phase 3: one shared transfer buffer for everything, mapped
+        // once - each model's data copied to its own offset within it.
+        SDL_GPUTransferBufferCreateInfo transferInfo{};
+        transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+        transferInfo.size = static_cast<Uint32>(totalTransferSize);
+        SDL_GPUTransferBuffer* transfer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
+        if (!transfer)
+        {
+            SDL_Log("ModelRenderer::PreloadBatch: shared transfer buffer creation failed: %s", SDL_GetError());
+            for (auto& c : created)
+            {
+                if (c.vb) { SDL_ReleaseGPUBuffer(device, c.vb); }
+                if (c.ib) { SDL_ReleaseGPUBuffer(device, c.ib); }
+                if (c.tex) { SDL_ReleaseGPUTexture(device, c.tex); }
+            }
+            return;
+        }
+
+        uint8_t* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, transfer, false));
+        for (size_t i = 0; i < pending.size(); i++)
+        {
+            if (!created[i].vb) { continue; }
+            auto& up = pending[i];
+            uint8_t* dst = mapped + offsets[i];
+            std::memcpy(dst, up.renderMesh.vertices.data(), up.vbSize);
+            std::memcpy(dst + up.vbSize, up.renderMesh.indices.data(), up.ibSize);
+            std::memcpy(dst + up.vbSize + up.ibSize, up.textureRgba.data(), up.texSize);
+        }
+        SDL_UnmapGPUTransferBuffer(device, transfer);
+
+        // Phase 4: one command buffer, one copy pass containing every
+        // model's upload calls, one submit - this is the actual fix.
+        // Previously each model paid for its own AcquireGPUCommandBuffer
+        // + SubmitGPUCommandBuffer + transfer buffer create/destroy
+        // cycle (~13 separate GPU API calls per model, ~520 total across
+        // 40 models) - real GPU drivers have meaningful fixed overhead
+        // per submission/resource creation regardless of payload size,
+        // which is why ~960KB of combined data was taking 2-3 seconds:
+        // the call count was the cost, not the bytes.
+        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
+        SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
+
+        for (size_t i = 0; i < pending.size(); i++)
+        {
+            if (!created[i].vb) { continue; }
+            auto& up = pending[i];
+            size_t off = offsets[i];
+
+            SDL_GPUTransferBufferLocation vbSrc{ transfer, static_cast<Uint32>(off) };
+            SDL_GPUBufferRegion vbDst{ created[i].vb, 0, static_cast<Uint32>(up.vbSize) };
+            SDL_UploadToGPUBuffer(copyPass, &vbSrc, &vbDst, false);
+
+            SDL_GPUTransferBufferLocation ibSrc{ transfer, static_cast<Uint32>(off + up.vbSize) };
+            SDL_GPUBufferRegion ibDst{ created[i].ib, 0, static_cast<Uint32>(up.ibSize) };
+            SDL_UploadToGPUBuffer(copyPass, &ibSrc, &ibDst, false);
+
+            SDL_GPUTextureTransferInfo texSrc{};
+            texSrc.transfer_buffer = transfer;
+            texSrc.offset = static_cast<Uint32>(off + up.vbSize + up.ibSize);
+            SDL_GPUTextureRegion texDst{};
+            texDst.texture = created[i].tex;
+            texDst.w = static_cast<Uint32>(up.textureWidth);
+            texDst.h = static_cast<Uint32>(up.textureHeight);
+            texDst.d = 1;
+            SDL_UploadToGPUTexture(copyPass, &texSrc, &texDst, false);
+        }
+
+        SDL_EndGPUCopyPass(copyPass);
+        SDL_SubmitGPUCommandBuffer(cmd);
+        SDL_ReleaseGPUTransferBuffer(device, transfer);
+
+        // Phase 5: register every successfully-uploaded model in the
+        // same cache LoadModel uses - identical downstream behaviour,
+        // RenderToRgba/DrawModelPreview callers can't tell the
+        // difference between a model preloaded this way vs individually.
+        for (size_t i = 0; i < pending.size(); i++)
+        {
+            if (!created[i].vb) { continue; }
+            auto& up = pending[i];
+            LoadedModel model;
+            model.vertexBuffer = created[i].vb;
+            model.indexBuffer = created[i].ib;
+            model.indexCount = static_cast<uint32_t>(up.renderMesh.indices.size());
+            model.texture = created[i].tex;
+            model.centerX = up.centerX; model.centerY = up.centerY; model.centerZ = up.centerZ;
+            model.radius = up.radius;
+            model.baseRotationRadians = up.baseRotationRadians;
+            model.useDoubleSided = up.useDoubleSided;
+            loadedModels[up.cacheKey] = model;
+        }
+    }
+
+    std::vector<uint8_t> ModelRenderer::RenderToRgba(ModelCacheKey cacheKey, float angleRadians, int width, int height)
     {
         if (!device || !pipeline) { return {}; }
         auto it = loadedModels.find(cacheKey);
