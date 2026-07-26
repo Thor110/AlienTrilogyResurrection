@@ -119,11 +119,7 @@ namespace ALTEngine::Screens
         {
             if (modelIndex < 0) { return; }
 
-            ALTEngine::Renderer::ModelPreviewSource source;
-            source.objBndPath = cdDirectory / "GFX" / "PICKMOD.BND";
-            source.gfxBndPath = cdDirectory / "GFX" / "PICKGFX.BND";
-            source.cachePrefix = "PICKMOD";
-            source.modelIndex = modelIndex;
+            ALTEngine::Renderer::ModelPreviewSource source = ALTEngine::Renderer::ModelPreviewSource::ForPickmod(cdDirectory, modelIndex);
 
             if (!ALTEngine::Renderer::DrawModelPreview(renderer, source, x, y, w, h, rotationAngle))
             {
@@ -141,11 +137,7 @@ namespace ALTEngine::Screens
         {
             if (modelIndex < 0) { return; }
 
-            ALTEngine::Renderer::ModelPreviewSource source;
-            source.objBndPath = cdDirectory / "GFX" / "OPTOBJ.BND";
-            source.gfxBndPath = cdDirectory / "GFX" / "OPTGFX.B16";
-            source.cachePrefix = "OPTOBJ";
-            source.modelIndex = modelIndex;
+            ALTEngine::Renderer::ModelPreviewSource source = ALTEngine::Renderer::ModelPreviewSource::ForOptobj(cdDirectory, modelIndex);
 
             if (!ALTEngine::Renderer::DrawModelPreview(renderer, source, x, y, w, h, rotationAngle))
             {

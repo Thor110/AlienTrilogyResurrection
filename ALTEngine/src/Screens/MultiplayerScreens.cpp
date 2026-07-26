@@ -46,11 +46,7 @@ namespace ALTEngine::Screens
         // Options screen and SaveSlotScreen (Edward, 2026).
         void DrawNetworkedComputersModel(SDL_Renderer* renderer, const std::filesystem::path& cdDirectory)
         {
-            ALTEngine::Renderer::ModelPreviewSource source;
-            source.objBndPath = cdDirectory / "GFX" / "OPTOBJ.BND";
-            source.gfxBndPath = cdDirectory / "GFX" / "OPTGFX.B16";
-            source.cachePrefix = "OPTOBJ";
-            source.modelIndex = ALTEngine::Menu::ModelIndex::NetworkedComputers;
+            ALTEngine::Renderer::ModelPreviewSource source = ALTEngine::Renderer::ModelPreviewSource::ForOptobj(cdDirectory, ALTEngine::Menu::ModelIndex::NetworkedComputers);
             source.baseRotationRadians = NETWORKED_COMPUTERS_BASE_ROTATION;
 
             int windowW = 0, windowH = 0;

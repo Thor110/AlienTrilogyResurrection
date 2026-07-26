@@ -169,11 +169,7 @@ namespace ALTEngine::Menu
         {
             if (modelIndex < 0) { return; }
 
-            ALTEngine::Renderer::ModelPreviewSource source;
-            source.objBndPath = cdDirectory / "GFX" / "OPTOBJ.BND";
-            source.gfxBndPath = cdDirectory / "GFX" / "OPTGFX.B16";
-            source.cachePrefix = "OPTOBJ";
-            source.modelIndex = modelIndex;
+            ALTEngine::Renderer::ModelPreviewSource source = ALTEngine::Renderer::ModelPreviewSource::ForOptobj(cdDirectory, modelIndex);
 
             // Multitap (3) and the Music/SFX speaker models (11/12) use a
             // colour key (black) for transparency rather than most

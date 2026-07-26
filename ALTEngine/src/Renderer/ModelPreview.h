@@ -21,6 +21,41 @@ namespace ALTEngine::Renderer
         int modelIndex = -1;
         std::optional<std::array<uint8_t, 3>> transparentRgb; // colour-key cutout models (speakers, Multitap) - see MenuController's Volume() TODO
         float baseRotationRadians = 0.0f;                     // fixed per-model orientation offset, e.g. NetworkedComputers
+
+        // Centralizes the OPTOBJ.BND/OPTGFX.B16 paths and "OPTOBJ" cache
+        // prefix in one place. Edward, 2026: this construction (path +
+        // path + prefix, just modelIndex differing per call) was
+        // duplicated at 4 separate call sites - MenuController,
+        // PauseMenuScreen, SaveSlotScreen, MultiplayerScreens - which is
+        // exactly why fixing OPTGFX.BND -> OPTGFX.B16 (the 8-bit vs
+        // 16-bit palette mixup) needed touching all 4 files instead of
+        // one. Callers still set transparentRgb/baseRotationRadians
+        // themselves afterward when needed (Multitap/speakers,
+        // NetworkedComputers) since those genuinely vary per model, not
+        // per call site.
+        static ModelPreviewSource ForOptobj(const std::filesystem::path& cdDirectory, int modelIndex)
+        {
+            ModelPreviewSource source;
+            source.objBndPath = cdDirectory / "GFX" / "OPTOBJ.BND";
+            source.gfxBndPath = cdDirectory / "GFX" / "OPTGFX.B16";
+            source.cachePrefix = "OPTOBJ";
+            source.modelIndex = modelIndex;
+            return source;
+        }
+
+        // Same idea for PICKMOD.BND/PICKGFX.BND (the pause menu's
+        // weapon/equipment models) - currently only one call site
+        // (PauseMenuScreen), but centralized to match ForOptobj and stay
+        // consistent if that changes.
+        static ModelPreviewSource ForPickmod(const std::filesystem::path& cdDirectory, int modelIndex)
+        {
+            ModelPreviewSource source;
+            source.objBndPath = cdDirectory / "GFX" / "PICKMOD.BND";
+            source.gfxBndPath = cdDirectory / "GFX" / "PICKGFX.BND";
+            source.cachePrefix = "PICKMOD";
+            source.modelIndex = modelIndex;
+            return source;
+        }
     };
 
     // Renders a spinning model preview into the (x,y,w,h) destination
