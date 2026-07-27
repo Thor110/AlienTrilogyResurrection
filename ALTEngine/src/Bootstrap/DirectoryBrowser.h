@@ -8,7 +8,7 @@
 
 namespace ALTEngine::Bootstrap
 {
-    // Full-screen SDL2 folder browser styled after the MU/TH/UR 9000
+    // Full-screen SDL3 folder browser styled after the MU/TH/UR 9000
     // interface: green-on-black, bordered panels, bitmap font. Used to
     // locate the Alien Trilogy install directory when it can't be found
     // automatically.
