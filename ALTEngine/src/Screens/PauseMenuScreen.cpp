@@ -463,25 +463,37 @@ namespace ALTEngine::Screens
             }
             else if (topLabel == "Exit Game")
             {
-                // "Are You Sure ?" -> No / Yes - now a top-level entry
-                // (Edward, 2026: "move the Exit Game button into the
-                // main list in the pause menu") rather than nested
-                // within Options, so path[1] is directly the No/Yes
-                // cursor (was path[2] when nested one level deeper).
-                int confirmIndex = (path.size() >= 2) ? path[1] : 0;
-                std::string confirmLabel = confirmIndex == 1 ? "Yes" : "No";
-                Color confirmColor = confirmIndex == 1 ? COLOR_CURSOR : COLOR_DIM;
-                std::string prefix = "ARE YOU SURE ? ";
-                // Same row-Y formula DrawLeftColumn itself uses (y +
-                // index*rowHeight, vertically centred within the row) so
-                // this text lines up with the Exit Game button in the
-                // left column, rather than always sitting at the panel's
-                // top edge regardless of where Exit Game actually is in
-                // the list (Edward, 2026: "align the 'Are You Sure ? No
-                // / Yes' with the Exit Game button").
-                int exitGameTextY = margin + path[0] * rowHeight + (rowHeight - TextHeight(scale)) / 2;
-                DrawBitmapText(renderer, prefix, panelX, exitGameTextY, scale, COLOR_DIM);
-                DrawBitmapText(renderer, confirmLabel, panelX + TextWidth(prefix, scale), exitGameTextY, scale, confirmColor);
+                // "Are You Sure ?" -> No / Yes - only shown once Exit
+                // Game has actually been entered (path.size() >= 2),
+                // not just while it's highlighted (Edward, 2026: "Don't
+                // show the 'Are You Sure? / No / Yes' in the pause menu
+                // unless 'Exit Game' has been pressed"). Explicitly
+                // empty otherwise, rather than falling through to the
+                // generic model-preview branch below (Exit Game has no
+                // modelIndex of its own).
+                if (path.size() >= 2)
+                {
+                    // Now a top-level entry (Edward, 2026: "move the
+                    // Exit Game button into the main list in the pause
+                    // menu") rather than nested within Options, so
+                    // path[1] is directly the No/Yes cursor (was
+                    // path[2] when nested one level deeper).
+                    int confirmIndex = path[1];
+                    std::string confirmLabel = confirmIndex == 1 ? "Yes" : "No";
+                    Color confirmColor = confirmIndex == 1 ? COLOR_CURSOR : COLOR_DIM;
+                    std::string prefix = "ARE YOU SURE ? ";
+                    // Same row-Y formula DrawLeftColumn itself uses (y +
+                    // index*rowHeight, vertically centred within the
+                    // row) so this text lines up with the Exit Game
+                    // button in the left column, rather than always
+                    // sitting at the panel's top edge regardless of
+                    // where Exit Game actually is in the list (Edward,
+                    // 2026: "align the 'Are You Sure ? No / Yes' with
+                    // the Exit Game button").
+                    int exitGameTextY = margin + path[0] * rowHeight + (rowHeight - TextHeight(scale)) / 2;
+                    DrawBitmapText(renderer, prefix, panelX, exitGameTextY, scale, COLOR_DIM);
+                    DrawBitmapText(renderer, confirmLabel, panelX + TextWidth(prefix, scale), exitGameTextY, scale, confirmColor);
+                }
             }
             else if (topLabel == "Mission")
             {
