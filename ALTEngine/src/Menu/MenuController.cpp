@@ -59,6 +59,19 @@ namespace ALTEngine::Menu
         constexpr Color COLOR_DISABLED_TEXT{ 12, 65, 26, 255 };       // dark green text for disabled items (Controls hardware not yet tested) - darker than COLOR_GREEN_DIM, stays this dark even when the cursor is on it
         constexpr Color COLOR_WHITE{ 255, 255, 255, 255 };
 
+        // Music/SFX volume and Mouse Sensitivity (Edward, 2026: "keep
+        // the design of the slider which now only resides in the pause
+        // menu... revert to that so that we can match the original
+        // aesthetic") - identified by the same inputActionIndex
+        // sentinel range used throughout this file for rendering
+        // (DrawColumn) and input handling (AdjustNumericSettingIfOnEntry/
+        // TryEnterSliderIfOnEntry). One shared definition rather than
+        // three separate copies of the same -5..-3 range check.
+        bool IsSliderEntry(const MenuNode& node)
+        {
+            return node.inputActionIndex >= -5 && node.inputActionIndex <= -3;
+        }
+
         // Queries the real available fullscreen display modes for the
         // window's current display, deduped by resolution (ignoring
         // refresh rate - the Resolution menu picks a size, not a
@@ -199,9 +212,7 @@ namespace ALTEngine::Menu
             // Music/SFX volume and Mouse Sensitivity (Edward, 2026:
             // "keep the design of the slider which now only resides in
             // the pause menu... revert to that so that we can match the
-            // original aesthetic") - same inputActionIndex sentinel
-            // range AdjustNumericSettingIfOnEntry already uses.
-            auto isSliderEntry = [](const MenuNode& node) { return node.inputActionIndex >= -5 && node.inputActionIndex <= -3; };
+            // original aesthetic") - see IsSliderEntry above.
 
             // Box width is label text only - the slider sits outside/to
             // the right of the box, not stretching it, matching the
@@ -252,7 +263,7 @@ namespace ALTEngine::Menu
                 DrawRoundedRect(renderer, bar, static_cast<float>(scale * 2), boxColor);
 
                 std::string label = DisplayLabel(items[i], language);
-                if (isSliderEntry(items[i]))
+                if (IsSliderEntry(items[i]))
                 {
                     // rowY/boxHeight passed directly (not a pre-computed
                     // text Y) so the label and the slider cells - which
@@ -739,7 +750,7 @@ namespace ALTEngine::Menu
             auto AdjustNumericSettingIfOnEntry = [&](int delta) {
                 if (screen != Screen::Options || optionsPath.empty()) { return false; }
                 MenuNode& leaf = WalkPath(optionsRoot, optionsPath);
-                if (leaf.inputActionIndex < -5 || leaf.inputActionIndex > -3) { return false; }
+                if (!IsSliderEntry(leaf)) { return false; }
 
                 if (leaf.inputActionIndex == -5) // Mouse Sensitivity
                 {
@@ -781,7 +792,7 @@ namespace ALTEngine::Menu
             auto TryEnterSliderIfOnEntry = [&]() {
                 if (screen != Screen::Options || optionsPath.empty()) { return false; }
                 MenuNode& leaf = WalkPath(optionsRoot, optionsPath);
-                if (leaf.inputActionIndex < -5 || leaf.inputActionIndex > -3) { return false; }
+                if (!IsSliderEntry(leaf)) { return false; }
                 adjustingSlider = true;
                 SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                 return true;
