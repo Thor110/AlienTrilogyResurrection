@@ -57,7 +57,7 @@ namespace ALTEngine::Bootstrap
             // Redefine controls
             "Redefine",
             "Restore Defaults",
-            "Are You Sure ?",
+            "ARE YOU SURE ? ",
             "Yes",
             "No",
 

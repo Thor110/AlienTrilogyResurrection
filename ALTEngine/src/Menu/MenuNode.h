@@ -144,12 +144,4 @@ namespace ALTEngine::Menu
         n.children = std::move(children);
         return n;
     }
-
-    inline MenuNode MakeSlider(std::string label)
-    {
-        MenuNode n;
-        n.label = std::move(label);
-        n.kind = MenuNodeKind::Slider;
-        return n;
-    }
 }

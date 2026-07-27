@@ -1,7 +1,6 @@
 #include "PauseMenuScreen.h"
 #include "PauseMenuTree.h"
 #include "SaveSlotScreen.h"
-#include "../Audio/MusicPlayer.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
@@ -19,7 +18,6 @@
 
 namespace ALTEngine::Screens
 {
-    using ALTEngine::Audio::MusicPlayer;
     using ALTEngine::Audio::SfxId;
     using ALTEngine::Audio::SfxPlayer;
     using ALTEngine::Bootstrap::AppWindow;
@@ -282,17 +280,6 @@ namespace ALTEngine::Screens
         }
 
         MenuNode root = BuildPauseMenuTree(language);
-
-        // Functional volume sliders (Edward, 2026: "The pause menu also
-        // needs functional Music/SFX volume sliders") - Options is
-        // always the last top-level entry in this fixed tree, with SFX
-        // Volume/Music Volume as its first two children (see
-        // PauseMenuTree.cpp).
-        {
-            MenuNode& optionsForInit = root.children.back();
-            optionsForInit.children[0].sliderValue = audioSettings.SfxVolume();
-            optionsForInit.children[1].sliderValue = audioSettings.MusicVolume();
-        }
         std::vector<int> path = { 0 };
 
         PauseMenuResult result;
@@ -479,9 +466,9 @@ namespace ALTEngine::Screens
                     // path[1] is directly the No/Yes cursor (was
                     // path[2] when nested one level deeper).
                     int confirmIndex = path[1];
-                    std::string confirmLabel = confirmIndex == 1 ? "Yes" : "No";
+                    std::string confirmLabel = ALTEngine::Bootstrap::Tr(confirmIndex == 1 ? ALTEngine::Bootstrap::StringId::Yes : ALTEngine::Bootstrap::StringId::No, language);
                     Color confirmColor = confirmIndex == 1 ? COLOR_CURSOR : COLOR_DIM;
-                    std::string prefix = "ARE YOU SURE ? ";
+                    std::string prefix = ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::AreYouSure, language);
                     // Same row-Y formula DrawLeftColumn itself uses (y +
                     // index*rowHeight, vertically centred within the
                     // row) so this text lines up with the Exit Game
