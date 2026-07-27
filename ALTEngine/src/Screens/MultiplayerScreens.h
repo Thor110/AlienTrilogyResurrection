@@ -38,10 +38,16 @@ namespace ALTEngine::Screens
     // Options" - matches the reference screenshot exactly. Model is
     // NetworkedComputers (OPTOBJ index 10), shown across all four
     // multiplayer screens.
+    //
+    // `cursor` is owned by the caller and persists across repeated
+    // calls (main.cpp calls this in a loop each time a sub-screen
+    // returns) - Edward, 2026: "each of the multiplayer menus
+    // returning to the multiplayer menu" should keep whatever was
+    // previously selected, not reset to the first item.
     class MultiplayerMainScreen
     {
     public:
-        static MultiplayerMainResult Run(const std::filesystem::path& cdDirectory);
+        static MultiplayerMainResult Run(const std::filesystem::path& cdDirectory, int& cursor);
     };
 
     struct MultiplayerSubResult

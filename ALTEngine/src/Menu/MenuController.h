@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #include "../Bootstrap/GameplaySettings.h"
 #include "../Bootstrap/KeyBindings.h"
@@ -32,6 +33,7 @@ namespace ALTEngine::Menu
             ALTEngine::Bootstrap::CameraSwaySettings& cameraSwaySettings,
             ALTEngine::Bootstrap::LanguageSettings& languageSettings,
             ALTEngine::Bootstrap::KeyBindings& keyBindings,
-            ALTEngine::Bootstrap::Language& language);
+            ALTEngine::Bootstrap::Language& language,
+            std::vector<int>& mainPath);
     };
 }

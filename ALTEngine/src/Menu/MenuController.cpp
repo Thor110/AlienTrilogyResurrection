@@ -309,7 +309,8 @@ namespace ALTEngine::Menu
         CameraSwaySettings& cameraSwaySettings,
         LanguageSettings& languageSettings,
         KeyBindings& keyBindings,
-        Language& language)
+        Language& language,
+        std::vector<int>& mainPath)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
@@ -475,7 +476,6 @@ namespace ALTEngine::Menu
         enum class Screen { MainMenu, Options, Credits };
         Screen screen = Screen::MainMenu;
 
-        std::vector<int> mainPath = { 0 };
         std::vector<int> optionsPath = { 0 };
 
         // Redefine controls (Edward, 2026) - set while waiting for the

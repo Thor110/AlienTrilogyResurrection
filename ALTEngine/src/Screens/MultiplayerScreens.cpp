@@ -71,7 +71,7 @@ namespace ALTEngine::Screens
         }
     }
 
-    MultiplayerMainResult MultiplayerMainScreen::Run(const std::filesystem::path& cdDirectory)
+    MultiplayerMainResult MultiplayerMainScreen::Run(const std::filesystem::path& cdDirectory, int& cursor)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated()) { return { true, MultiplayerMainChoice::Back }; }
@@ -81,7 +81,6 @@ namespace ALTEngine::Screens
         SDL_Texture* background = LoadMenuBackground(cdDirectory, renderer, 1, bgW, bgH);
 
         constexpr std::array<const char*, 3> ITEMS{ "Start Multiplayer Game", "Join Multiplayer Game", "Multiplayer Options" };
-        int cursor = 0;
         MultiplayerMainResult result;
         bool running = true;
 

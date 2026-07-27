@@ -202,10 +202,12 @@ int main(int, char**)
     CameraSwaySettings cameraSwaySettings(config);
     KeyBindings keyBindings(config);
 
+    std::vector<int> mainPath = { 0 };
+
     while (true)
     {
         MenuResult menuResult = MenuController::Run(cdDirectory, renderSettings, resolutionSettings, difficultySettings,
-                                                      cameraSwaySettings, languageSettings, keyBindings, language);
+                                                      cameraSwaySettings, languageSettings, keyBindings, language, mainPath);
         if (menuResult.windowClosed)
         {
             std::cout << "Boot window closed. Aborting.\n";
@@ -230,11 +232,12 @@ int main(int, char**)
         if (menuResult.action == "Multiplayer")
         {
             MultiplayerSettings mpSettings;
+            int multiplayerCursor = 0;
             bool inMultiplayerMenu = true;
             bool windowClosed = false;
             while (inMultiplayerMenu)
             {
-                MultiplayerMainResult mainResult = MultiplayerMainScreen::Run(cdDirectory);
+                MultiplayerMainResult mainResult = MultiplayerMainScreen::Run(cdDirectory, multiplayerCursor);
                 if (mainResult.windowClosed) { windowClosed = true; break; }
 
                 switch (mainResult.choice)
