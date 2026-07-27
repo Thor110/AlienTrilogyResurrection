@@ -35,6 +35,7 @@ namespace ALTEngine::Menu
     using ALTEngine::Bootstrap::DrawRoundedRect;
     using ALTEngine::Bootstrap::Language;
     using ALTEngine::Bootstrap::LanguageSettings;
+    using ALTEngine::Bootstrap::KeyBindings;
     using ALTEngine::Bootstrap::LerpColor;
     using ALTEngine::Bootstrap::PulsePhase;
     using ALTEngine::Bootstrap::RenderFidelity;
@@ -307,6 +308,7 @@ namespace ALTEngine::Menu
         DifficultySettings& difficultySettings,
         CameraSwaySettings& cameraSwaySettings,
         LanguageSettings& languageSettings,
+        KeyBindings& keyBindings,
         Language& language)
     {
         AppWindow& app = AppWindow::Instance();
@@ -343,7 +345,7 @@ namespace ALTEngine::Menu
         settingsSnapshot.cameraSwayOn = cameraSwaySettings.Get();
         settingsSnapshot.language = language;
 
-        MenuNode root = BuildMainMenuTree(resolutionLabels, settingsSnapshot);
+        MenuNode root = BuildMainMenuTree(resolutionLabels, settingsSnapshot, keyBindings);
         MenuNode& optionsRoot = root.children[3]; // "Options"
 
         // OPTOBJ preload queue - built here, drained in a blocking
@@ -476,6 +478,15 @@ namespace ALTEngine::Menu
         std::vector<int> mainPath = { 0 };
         std::vector<int> optionsPath = { 0 };
 
+        // Redefine controls (Edward, 2026) - set while waiting for the
+        // next key/mouse-button press to capture as a new binding.
+        // Cleared by the capture itself, or by Escape (cancels without
+        // changing anything - standard "press a key..." convention).
+        bool awaitingRebind = false;
+        int rebindActionIndex = -1;
+        bool rebindIsMouse = false;
+        std::string rebindActionLabel;
+
         MenuResult result;
         bool running = true;
 
@@ -509,7 +520,23 @@ namespace ALTEngine::Menu
                     std::vector<int> parentPath(optionsPath.begin(), optionsPath.end() - 1);
                     MenuNode& parent = parentPath.empty() ? optionsRoot : WalkPath(optionsRoot, parentPath);
                     std::string parentLabel = parent.label;
-                    std::string leafLabel = WalkPath(optionsRoot, optionsPath).label;
+                    MenuNode& leaf = WalkPath(optionsRoot, optionsPath);
+
+                    // Redefine controls (Edward, 2026) - a leaf with a
+                    // real inputActionIndex means "capture the next key/
+                    // mouse-button press as this action's new binding",
+                    // not the normal Enter/Toggled flow.
+                    if (leaf.inputActionIndex >= 0)
+                    {
+                        awaitingRebind = true;
+                        rebindActionIndex = leaf.inputActionIndex;
+                        rebindIsMouse = leaf.isMouseAction;
+                        rebindActionLabel = ALTEngine::Bootstrap::ActionLabel(static_cast<ALTEngine::Bootstrap::InputAction>(leaf.inputActionIndex));
+                        SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                        return;
+                    }
+
+                    std::string leafLabel = leaf.label;
 
                     EnterResult r = Enter(optionsRoot, optionsPath);
                     if (r == EnterResult::EnteredCredits) { screen = Screen::Credits; }
@@ -552,8 +579,34 @@ namespace ALTEngine::Menu
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
-                if (event.type == SDL_EVENT_QUIT) { result.windowClosed = true; running = false; }
-                else if (event.type == SDL_EVENT_KEY_DOWN)
+                if (event.type == SDL_EVENT_QUIT) { result.windowClosed = true; running = false; continue; }
+
+                if (awaitingRebind)
+                {
+                    if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)
+                    {
+                        awaitingRebind = false; // cancel, no change - standard "press a key..." convention
+                    }
+                    else if (!rebindIsMouse && event.type == SDL_EVENT_KEY_DOWN)
+                    {
+                        auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
+                        keyBindings.SetKey(action, event.key.scancode);
+                        WalkPath(optionsRoot, optionsPath).label = rebindActionLabel + ": " + keyBindings.DisplayBinding(action, false);
+                        SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                        awaitingRebind = false;
+                    }
+                    else if (rebindIsMouse && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+                    {
+                        auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
+                        keyBindings.SetMouseButton(action, event.button.button);
+                        WalkPath(optionsRoot, optionsPath).label = rebindActionLabel + ": " + keyBindings.DisplayBinding(action, true);
+                        SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                        awaitingRebind = false;
+                    }
+                    continue; // no other input processed while awaiting a rebind
+                }
+
+                if (event.type == SDL_EVENT_KEY_DOWN)
                 {
                     switch (event.key.key)
                     {
@@ -665,6 +718,27 @@ namespace ALTEngine::Menu
 
                 DrawBitmapText(renderer, "PRESS ESC TO GO BACK", scale * 8, windowH - rowHeight * 2, scale, COLOR_GREEN);
                 DrawBitmapText(renderer, "PRESS ENTER TO SELECT", scale * 8, windowH - rowHeight, scale, COLOR_GREEN);
+
+                // Redefine controls (Edward, 2026) - a prominent, centred
+                // prompt while waiting for the next key/mouse-button
+                // press, since all other input is ignored in this state
+                // and the player needs a clear signal.
+                if (awaitingRebind)
+                {
+                    std::string promptLine1 = "PRESS A " + std::string(rebindIsMouse ? "MOUSE BUTTON" : "KEY") + " TO BIND";
+                    std::string promptLine2 = "\"" + rebindActionLabel + "\"";
+                    std::string promptLine3 = "OR ESC TO CANCEL";
+                    int promptWidth = std::max({ TextWidth(promptLine1, scale), TextWidth(promptLine2, scale), TextWidth(promptLine3, scale) }) + scale * 16;
+                    int promptHeight = rowHeight * 3 + scale * 8;
+                    SDL_FRect promptBox{ static_cast<float>((windowW - promptWidth) / 2), static_cast<float>((windowH - promptHeight) / 2),
+                                         static_cast<float>(promptWidth), static_cast<float>(promptHeight) };
+                    DrawRoundedRect(renderer, promptBox, static_cast<float>(scale * 3), COLOR_HIGHLIGHT_BG);
+
+                    int promptTextY = (windowH - promptHeight) / 2 + scale * 4;
+                    DrawBitmapText(renderer, promptLine1, (windowW - TextWidth(promptLine1, scale)) / 2, promptTextY, scale, COLOR_WHITE);
+                    DrawBitmapText(renderer, promptLine2, (windowW - TextWidth(promptLine2, scale)) / 2, promptTextY + rowHeight, scale, COLOR_GREEN);
+                    DrawBitmapText(renderer, promptLine3, (windowW - TextWidth(promptLine3, scale)) / 2, promptTextY + rowHeight * 2, scale, COLOR_GREEN_DIM);
+                }
             }
             else // Credits
             {

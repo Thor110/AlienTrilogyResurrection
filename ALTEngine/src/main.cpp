@@ -6,6 +6,7 @@
 #include "Bootstrap/DiscLocator.h"
 #include "Bootstrap/GameLocator.h"
 #include "Bootstrap/GameplaySettings.h"
+#include "Bootstrap/KeyBindings.h"
 #include "Bootstrap/ImageDisplay.h"
 #include "Bootstrap/InstallPipeline.h"
 #include "Bootstrap/Localization.h"
@@ -199,11 +200,12 @@ int main(int, char**)
     ResolutionSettings resolutionSettings(config);
     DifficultySettings difficultySettings(config);
     CameraSwaySettings cameraSwaySettings(config);
+    KeyBindings keyBindings(config);
 
     while (true)
     {
         MenuResult menuResult = MenuController::Run(cdDirectory, renderSettings, resolutionSettings, difficultySettings,
-                                                      cameraSwaySettings, languageSettings, language);
+                                                      cameraSwaySettings, languageSettings, keyBindings, language);
         if (menuResult.windowClosed)
         {
             std::cout << "Boot window closed. Aborting.\n";
@@ -310,7 +312,7 @@ int main(int, char**)
                 return 1;
             }
 
-            GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, "1.1.1");
+            GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, "1.1.1", keyBindings);
             if (gameplayResult.outcome == GameplayOutcome::WindowClosed)
             {
                 std::cout << "Boot window closed. Aborting.\n";

@@ -92,6 +92,15 @@ namespace ALTEngine::Menu
         // that hardware").
         bool enabled = true;
 
+        // Which InputAction (Bootstrap/InputActions.h) this leaf
+        // represents, as a plain int (matching modelIndex's own
+        // "plain int, not a typed enum" convention here) - -1 for
+        // everything that isn't a Redefine list entry. isMouseAction
+        // says whether Enter should capture a mouse button instead of
+        // a keyboard scancode (Edward, 2026 - redefine controls page).
+        int inputActionIndex = -1;
+        bool isMouseAction = false;
+
         // For Slider leaves: 0-10, matching the ~8/10 filled-bar look in
         // the reference images. Purely cosmetic placeholder for now - not
         // wired to actual audio.

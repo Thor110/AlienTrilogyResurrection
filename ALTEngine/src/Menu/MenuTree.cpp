@@ -26,8 +26,45 @@ namespace ALTEngine::Menu
             return 0;
         }
 
-        MenuNode Controls()
+        // Builds a Redefine list's children - one Action per input
+        // action, labelled "{action name}: {current binding}", with
+        // inputActionIndex/isMouseAction set so MenuController knows
+        // which binding to capture when Enter is pressed on it (Edward,
+        // 2026 - redefine controls page).
+        template <size_t N>
+        std::vector<MenuNode> BuildRedefineChildren(const std::array<ALTEngine::Bootstrap::InputAction, N>& actions,
+                                                      bool isMouseAction, ALTEngine::Bootstrap::KeyBindings& keyBindings)
         {
+            std::vector<MenuNode> children;
+            for (auto action : actions)
+            {
+                std::string binding = keyBindings.DisplayBinding(action, isMouseAction);
+                MenuNode n = Action(ALTEngine::Bootstrap::ActionLabel(action) + ": " + binding);
+                n.inputActionIndex = static_cast<int>(action);
+                n.isMouseAction = isMouseAction;
+                children.push_back(std::move(n));
+            }
+            return children;
+        }
+
+        MenuNode Controls(ALTEngine::Bootstrap::KeyBindings& keyBindings)
+        {
+            using ALTEngine::Bootstrap::InputAction;
+            using ALTEngine::Bootstrap::KeyboardActions;
+            using ALTEngine::Bootstrap::MouseActions;
+            using ALTEngine::Bootstrap::ActionLabel;
+
+            // Keyboard's Redefine list - every KeyboardActions() entry,
+            // plus Pause shown last on its own (Edward, 2026: redefine
+            // controls page, matching the README's own keyboard scheme).
+            std::vector<MenuNode> keyboardRedefine = BuildRedefineChildren(KeyboardActions(), false, keyBindings);
+            MenuNode pauseEntry = Action(ActionLabel(InputAction::Pause) + ": " + keyBindings.DisplayBinding(InputAction::Pause, false));
+            pauseEntry.inputActionIndex = static_cast<int>(InputAction::Pause);
+            pauseEntry.isMouseAction = false;
+            keyboardRedefine.push_back(std::move(pauseEntry));
+
+            std::vector<MenuNode> mouseRedefine = BuildRedefineChildren(MouseActions(), true, keyBindings);
+
             MenuNode n = List("Controls", {
                 // modelIndex on the List node itself (not the Redefine
                 // child) - EffectiveModelIndex takes the deepest SET
@@ -36,8 +73,8 @@ namespace ALTEngine::Menu
                 // not only after pressing Enter into Redefine. Matches
                 // the reference images, where highlighting alone changes
                 // the background model (Edward, 2026).
-                List("Keyboard", { Action("Redefine") }, ModelIndex::Keyboard),
-                List("Mouse", { Action("Redefine") }, ModelIndex::Mouse),
+                List("Keyboard", { List("Redefine", std::move(keyboardRedefine)) }, ModelIndex::Keyboard),
+                List("Mouse", { List("Redefine", std::move(mouseRedefine)) }, ModelIndex::Mouse),
                 List("Joystick", { Action("Joystick") }, ModelIndex::Joystick),
                 // Gravis Grip and Gravis Pad both use Multitap (index 3) -
                 // Edward: both peripherals visually look like a multitap.
@@ -155,7 +192,8 @@ namespace ALTEngine::Menu
             return n;
         }
 
-        MenuNode Options(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings)
+        MenuNode Options(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
+                         ALTEngine::Bootstrap::KeyBindings& keyBindings)
         {
             // modelIndex Computer here is inherited by every child that
             // doesn't set its own - matches the reference images, where
@@ -163,7 +201,7 @@ namespace ALTEngine::Menu
             // Options and only changes for Controls > Keyboard > Redefine.
             return List("Options", {
                 Volume(),
-                Controls(),
+                Controls(keyBindings),
                 Difficulty(settings.difficulty),
                 CameraSway(settings.cameraSwayOn),
                 Graphics(resolutionLabels, settings.quality, settings.resolutionLabel),
@@ -173,13 +211,14 @@ namespace ALTEngine::Menu
         }
     }
 
-    MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings)
+    MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
+                               ALTEngine::Bootstrap::KeyBindings& keyBindings)
     {
         return List("Main Menu", {
             Action("Start Game"),
             Action("Multiplayer"),
             Action("Load Game"),
-            Options(resolutionLabels, settings),
+            Options(resolutionLabels, settings, keyBindings),
         });
     }
 }

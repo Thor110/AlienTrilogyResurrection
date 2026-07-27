@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string>
 
+#include "../Bootstrap/KeyBindings.h"
 #include "../Bootstrap/Localization.h"
 #include "PlayerInventoryState.h"
 
@@ -21,12 +22,13 @@ namespace ALTEngine::Screens
 
     // Renders the actual level (real FPS camera, real geometry - see
     // Renderer/ModelRenderer.h's LoadLevel/RenderLevelToRgba) with basic
-    // keyboard movement (WASD move/strafe, arrow keys look). No
-    // collision yet - collision-block data isn't parsed from the .MAP
-    // format yet, so movement is currently free-fly rather than
-    // wall-blocked; "adjusted later to match the original gameplay if
-    // necessary" per Edward, 2026. Escape opens PauseMenuScreen;
-    // confirming "Exit Game" there ends this screen.
+    // movement (rebindable via keyBindings - defaults to WASD) and
+    // mouse look (Edward, 2026: "mouse look rather than arrow keys for
+    // the camera control"). No collision yet - collision-block data
+    // isn't parsed from the .MAP format yet, so movement is currently
+    // free-fly rather than wall-blocked; "adjusted later to match the
+    // original gameplay if necessary" per Edward, 2026. Escape opens
+    // PauseMenuScreen; confirming "Exit Game" there ends this screen.
     //
     // KNOWN OPEN QUESTION: the level header's playerStartX/playerStartY
     // fields are NOT currently used for initial camera placement -
@@ -43,6 +45,7 @@ namespace ALTEngine::Screens
         static GameplayResult Run(
             const std::filesystem::path& cdDirectory,
             ALTEngine::Bootstrap::Language language,
-            const std::string& missionLevelCode);
+            const std::string& missionLevelCode,
+            ALTEngine::Bootstrap::KeyBindings& keyBindings);
     };
 }

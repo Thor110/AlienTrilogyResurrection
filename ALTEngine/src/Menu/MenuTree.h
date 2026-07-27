@@ -5,6 +5,8 @@
 
 #include "MenuNode.h"
 #include "../Bootstrap/GameplaySettings.h"
+#include "../Bootstrap/InputActions.h"
+#include "../Bootstrap/KeyBindings.h"
 #include "../Bootstrap/Localization.h"
 #include "../Bootstrap/RenderSettings.h"
 
@@ -87,5 +89,10 @@ namespace ALTEngine::Menu
     // structurally present but their modelIndex is left unset (-1, falls
     // back to "Computer") since there's no reference image confirming
     // what they'd actually show.
-    MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels = {}, const MenuSettingsSnapshot& settings = {});
+    // `keyBindings` supplies the current keyboard/mouse bindings shown
+    // in Controls > Keyboard/Mouse > Redefine (Edward, 2026). Pass a
+    // Config-backed KeyBindings from the caller; there's no meaningful
+    // "default" for testing without one since it needs a real Config.
+    MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
+                                ALTEngine::Bootstrap::KeyBindings& keyBindings);
 }

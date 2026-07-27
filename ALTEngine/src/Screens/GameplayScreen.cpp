@@ -23,7 +23,7 @@ namespace ALTEngine::Screens
     namespace
     {
         constexpr float MOVE_SPEED = 2000.0f;   // world units/sec - a guess, matching the level's own coordinate scale (vertices span tens of thousands of units)
-        constexpr float LOOK_SPEED = 1.8f;      // radians/sec
+        constexpr float MOUSE_SENSITIVITY = 0.0025f; // radians per pixel of mouse delta - a starting guess, not tuned against real hardware yet
         constexpr float MAX_PITCH = 1.4f;       // just under 90 degrees, avoids the view flipping past vertical
 
         // "1.1.1" -> "111" - confirmed against the real filename
@@ -80,7 +80,8 @@ namespace ALTEngine::Screens
     GameplayResult GameplayScreen::Run(
         const std::filesystem::path& cdDirectory,
         Bootstrap::Language language,
-        const std::string& missionLevelCode)
+        const std::string& missionLevelCode,
+        Bootstrap::KeyBindings& keyBindings)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
@@ -139,14 +140,25 @@ namespace ALTEngine::Screens
         bool running = true;
         Uint64 lastTicks = SDL_GetTicks();
 
+        // Mouse look (Edward, 2026: "mouse look rather than arrow keys
+        // for the camera control") needs relative mode - captures and
+        // hides the cursor, and SDL_GetRelativeMouseState then reports
+        // motion as per-frame deltas rather than absolute position.
+        // Only while there's actually something to look around at;
+        // released again before the pause menu (a keyboard-navigated
+        // menu has no use for a captured cursor) and re-captured after
+        // returning if gameplay is still running.
+        if (levelReady) { SDL_SetWindowRelativeMouseMode(app.Window(), true); }
+
         while (running)
         {
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
                 if (event.type == SDL_EVENT_QUIT) { result.outcome = GameplayOutcome::WindowClosed; running = false; }
-                else if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)
+                else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == keyBindings.GetKey(ALTEngine::Bootstrap::InputAction::Pause))
                 {
+                    SDL_SetWindowRelativeMouseMode(app.Window(), false);
                     PauseMenuResult pauseResult = PauseMenuScreen::Run(cdDirectory, language, missionLevelCode, inventory);
                     if (pauseResult.outcome == PauseMenuOutcome::WindowClosed)
                     {
@@ -157,6 +169,12 @@ namespace ALTEngine::Screens
                     {
                         result.outcome = GameplayOutcome::ExitGame;
                         running = false;
+                    }
+                    else if (levelReady)
+                    {
+                        SDL_SetWindowRelativeMouseMode(app.Window(), true);
+                        float discardDx = 0.0f, discardDy = 0.0f;
+                        SDL_GetRelativeMouseState(&discardDx, &discardDy); // drain any stale delta before the next real frame
                     }
                     lastTicks = SDL_GetTicks(); // don't count time spent in the pause menu as a movement frame
                 }
@@ -172,10 +190,10 @@ namespace ALTEngine::Screens
             {
                 const bool* keys = SDL_GetKeyboardState(nullptr);
 
-                if (keys[SDL_SCANCODE_LEFT]) { camera.yaw -= LOOK_SPEED * dt; }
-                if (keys[SDL_SCANCODE_RIGHT]) { camera.yaw += LOOK_SPEED * dt; }
-                if (keys[SDL_SCANCODE_UP]) { camera.pitch = std::min(MAX_PITCH, camera.pitch + LOOK_SPEED * dt); }
-                if (keys[SDL_SCANCODE_DOWN]) { camera.pitch = std::max(-MAX_PITCH, camera.pitch - LOOK_SPEED * dt); }
+                float mouseDx = 0.0f, mouseDy = 0.0f;
+                SDL_GetRelativeMouseState(&mouseDx, &mouseDy);
+                camera.yaw += mouseDx * MOUSE_SENSITIVITY;
+                camera.pitch = std::clamp(camera.pitch - mouseDy * MOUSE_SENSITIVITY, -MAX_PITCH, MAX_PITCH);
 
                 // Ground-plane movement (X/Z only) relative to yaw -
                 // matches typical FPS convention of not flying up/down
@@ -185,11 +203,12 @@ namespace ALTEngine::Screens
                 float rightX = std::cos(camera.yaw);
                 float rightZ = std::sin(camera.yaw);
 
+                using ALTEngine::Bootstrap::InputAction;
                 float moveX = 0, moveZ = 0;
-                if (keys[SDL_SCANCODE_W]) { moveX += forwardX; moveZ += forwardZ; }
-                if (keys[SDL_SCANCODE_S]) { moveX -= forwardX; moveZ -= forwardZ; }
-                if (keys[SDL_SCANCODE_D]) { moveX += rightX; moveZ += rightZ; }
-                if (keys[SDL_SCANCODE_A]) { moveX -= rightX; moveZ -= rightZ; }
+                if (keys[keyBindings.GetKey(InputAction::MoveForward)]) { moveX += forwardX; moveZ += forwardZ; }
+                if (keys[keyBindings.GetKey(InputAction::MoveBackward)]) { moveX -= forwardX; moveZ -= forwardZ; }
+                if (keys[keyBindings.GetKey(InputAction::StrafeRight)]) { moveX += rightX; moveZ += rightZ; }
+                if (keys[keyBindings.GetKey(InputAction::StrafeLeft)]) { moveX -= rightX; moveZ -= rightZ; }
 
                 float moveLen = std::sqrt(moveX * moveX + moveZ * moveZ);
                 if (moveLen > 0.0001f)
@@ -232,6 +251,7 @@ namespace ALTEngine::Screens
             SDL_RenderPresent(renderer);
         }
 
+        SDL_SetWindowRelativeMouseMode(app.Window(), false);
         ModelRenderer::UnloadLevels();
         return result;
     }

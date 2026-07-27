@@ -4,6 +4,7 @@
 #include <string>
 
 #include "../Bootstrap/GameplaySettings.h"
+#include "../Bootstrap/KeyBindings.h"
 #include "../Bootstrap/Localization.h"
 #include "../Bootstrap/RenderSettings.h"
 #include "../Bootstrap/ResolutionSettings.h"
@@ -30,6 +31,7 @@ namespace ALTEngine::Menu
             ALTEngine::Bootstrap::DifficultySettings& difficultySettings,
             ALTEngine::Bootstrap::CameraSwaySettings& cameraSwaySettings,
             ALTEngine::Bootstrap::LanguageSettings& languageSettings,
+            ALTEngine::Bootstrap::KeyBindings& keyBindings,
             ALTEngine::Bootstrap::Language& language);
     };
 }
