@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "../Bootstrap/AudioSettings.h"
 #include "../Bootstrap/GameplaySettings.h"
 #include "../Bootstrap/KeyBindings.h"
 #include "../Bootstrap/Localization.h"
@@ -33,6 +34,7 @@ namespace ALTEngine::Menu
             ALTEngine::Bootstrap::CameraSwaySettings& cameraSwaySettings,
             ALTEngine::Bootstrap::LanguageSettings& languageSettings,
             ALTEngine::Bootstrap::KeyBindings& keyBindings,
+            ALTEngine::Bootstrap::AudioSettings& audioSettings,
             ALTEngine::Bootstrap::Language& language,
             std::vector<int>& mainPath);
     };

@@ -40,6 +40,13 @@ namespace ALTEngine::Audio
         // buffer. Safe to call even if nothing is playing.
         static void Stop();
 
+        // Sets playback volume, 0-10 (matching MenuNode::sliderValue's
+        // own scale) - takes effect immediately on whatever's currently
+        // playing, and persists for whatever plays next via
+        // PlayLooped. Clamped to 0-10 (Edward, 2026 - functional volume
+        // sliders).
+        static void SetVolume(int volume0to10);
+
         // Must be called once per frame - see class comment.
         static void Update();
     };

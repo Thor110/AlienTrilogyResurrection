@@ -2,6 +2,7 @@
 #include "../Bootstrap/AppWindow.h"
 
 #include <SDL3/SDL.h>
+#include <algorithm>
 #include <optional>
 
 namespace ALTEngine::Audio
@@ -31,6 +32,7 @@ namespace ALTEngine::Audio
         size_t feedPosition = 0; // how far into `buffer` we've queued so far
         SDL_AudioSpec spec{};
         bool active = false;
+        int volume = 8; // 0-10, matches MenuNode::sliderValue's own default/scale
 
         void FeedMore()
         {
@@ -71,7 +73,26 @@ namespace ALTEngine::Audio
         feedPosition = 0;
         active = true;
 
+        // PlayLooped may (re)open a fresh audio stream if the format
+        // differs from whatever was playing before (see
+        // AppWindow::MusicAudioStream) - a freshly opened stream starts
+        // at SDL's own default gain (1.0), so the persisted volume needs
+        // reapplying here too, not just in SetVolume.
+        if (SDL_AudioStream* stream = ALTEngine::Bootstrap::AppWindow::Instance().MusicAudioStream(spec))
+        {
+            SDL_SetAudioStreamGain(stream, static_cast<float>(volume) / 10.0f);
+        }
+
         FeedMore(); // start filling immediately rather than waiting for the next Update()
+    }
+
+    void MusicPlayer::SetVolume(int volume0to10)
+    {
+        volume = std::clamp(volume0to10, 0, 10);
+        if (!active) { return; }
+
+        SDL_AudioStream* stream = ALTEngine::Bootstrap::AppWindow::Instance().MusicAudioStream(spec);
+        if (stream) { SDL_SetAudioStreamGain(stream, static_cast<float>(volume) / 10.0f); }
     }
 
     void MusicPlayer::Stop()

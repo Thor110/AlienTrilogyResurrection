@@ -90,6 +90,16 @@ namespace ALTEngine::Menu
             using ALTEngine::Bootstrap::DeviceKind;
             using ALTEngine::Bootstrap::StringId;
 
+            // Mouse Sensitivity (Edward, 2026) - rendered as an actual
+            // slider bar (see Volume() for the same redesign and its
+            // reasoning). inputActionIndex -5 is a new sentinel in the
+            // same family as -3/-4 (volume) and -2 (restore defaults),
+            // letting MenuController intercept left/right on this
+            // specific entry.
+            MenuNode mouseSensitivity = Action("Mouse Sensitivity", StringId::MouseSensitivity);
+            mouseSensitivity.inputActionIndex = -5;
+            mouseSensitivity.sliderValue = keyBindings.MouseSensitivity();
+
             MenuNode n = List("Controls", StringId::Controls, {
                 // modelIndex on the List node itself (not the Redefine
                 // child) - EffectiveModelIndex takes the deepest SET
@@ -99,7 +109,7 @@ namespace ALTEngine::Menu
                 // the reference images, where highlighting alone changes
                 // the background model (Edward, 2026).
                 List("Keyboard", StringId::Keyboard, { BuildRedefineList(DeviceKind::Keyboard, keyBindings, language), BuildRestoreDefaultsList(DeviceKind::Keyboard) }, ModelIndex::Keyboard),
-                List("Mouse", StringId::Mouse, { BuildRedefineList(DeviceKind::Mouse, keyBindings, language), BuildRestoreDefaultsList(DeviceKind::Mouse) }, ModelIndex::Mouse),
+                List("Mouse", StringId::Mouse, { BuildRedefineList(DeviceKind::Mouse, keyBindings, language), BuildRestoreDefaultsList(DeviceKind::Mouse), std::move(mouseSensitivity) }, ModelIndex::Mouse),
                 List("Joystick", StringId::Joystick, { Action("Joystick", StringId::Joystick) }, ModelIndex::Joystick),
                 // Gravis Grip and Gravis Pad both use Multitap (index 3) -
                 // Edward: both peripherals visually look like a multitap.
@@ -150,9 +160,10 @@ namespace ALTEngine::Menu
         }
 
         MenuNode Graphics(const std::vector<std::string>& resolutionLabels, ALTEngine::Bootstrap::RenderFidelity currentQuality,
-                          const std::string& currentResolutionLabel)
+                          const std::string& currentResolutionLabel, bool currentVSync, ALTEngine::Bootstrap::DisplayMode currentDisplayMode)
         {
             using ALTEngine::Bootstrap::StringId;
+            using ALTEngine::Bootstrap::DisplayMode;
             // New - not in the original game. "Quality" ties to
             // RenderSettings; "Resolution" ties to ResolutionSettings.
             // resolutionLabels' own children ("1920x1080" etc) are
@@ -173,7 +184,27 @@ namespace ALTEngine::Menu
             resolution.initialSelectedChild = FindChildIndexByLabel(resolution.children, currentResolutionLabel);
             resolution.isSettingsList = true;
 
-            return List("Graphics", StringId::Graphics, { std::move(quality), std::move(resolution) });
+            // VSync and Display Mode (Edward, 2026) - same "settings
+            // list" pattern as Quality/Resolution above.
+            MenuNode vsync = List("VSync", StringId::VSync, {
+                Action("Off", StringId::Off),
+                Action("On", StringId::On),
+            });
+            vsync.initialSelectedChild = FindChildIndexByLabel(vsync.children, currentVSync ? "On" : "Off");
+            vsync.isSettingsList = true;
+
+            MenuNode displayMode = List("Display Mode", StringId::DisplayModeTitle, {
+                Action("Windowed", StringId::Windowed),
+                Action("Fullscreen", StringId::Fullscreen),
+                Action("Borderless", StringId::Borderless),
+            });
+            const char* displayModeLabel = currentDisplayMode == DisplayMode::Windowed ? "Windowed"
+                                          : currentDisplayMode == DisplayMode::Borderless ? "Borderless"
+                                          : "Fullscreen";
+            displayMode.initialSelectedChild = FindChildIndexByLabel(displayMode.children, displayModeLabel);
+            displayMode.isSettingsList = true;
+
+            return List("Graphics", StringId::Graphics, { std::move(quality), std::move(resolution), std::move(vsync), std::move(displayMode) });
         }
 
         MenuNode LanguageMenu(ALTEngine::Bootstrap::Language current)
@@ -203,7 +234,7 @@ namespace ALTEngine::Menu
             return n;
         }
 
-        MenuNode Volume()
+        MenuNode Volume(ALTEngine::Bootstrap::AudioSettings& audioSettings, ALTEngine::Bootstrap::Language)
         {
             using ALTEngine::Bootstrap::StringId;
             /*
@@ -213,10 +244,25 @@ namespace ALTEngine::Menu
             return n;
             */ // TODO : Black is transparent on these textures. RGB 0/0/0 HSL 160/0/0
             // only appears to be on these two models / textures.
-            return List("Volume", StringId::Volume, {
-                Action("Music", StringId::Music, ModelIndex::SpeakerMusic),
-                Action("SFX", StringId::Sfx, ModelIndex::SpeakerSfx),
-            });
+            //
+            // Rendered as an actual slider bar, not a text readout
+            // (Edward, 2026: "keep the design of the slider which now
+            // only resides in the pause menu... revert to that so that
+            // we can match the original aesthetic") - label stays the
+            // plain translated name (stringId set normally), the current
+            // value lives in sliderValue and MenuController's DrawColumn
+            // renders it via the shared DrawSlider. inputActionIndex
+            // borrows the same sentinel mechanism Redefine/Restore
+            // Defaults already use (-3/-4) so MenuController's input
+            // handling knows to intercept left/right on these entries.
+            MenuNode music = Action("Music", StringId::Music, ModelIndex::SpeakerMusic);
+            music.inputActionIndex = -3;
+            music.sliderValue = audioSettings.MusicVolume();
+            MenuNode sfx = Action("SFX", StringId::Sfx, ModelIndex::SpeakerSfx);
+            sfx.inputActionIndex = -4;
+            sfx.sliderValue = audioSettings.SfxVolume();
+
+            return List("Volume", StringId::Volume, { std::move(music), std::move(sfx) });
         }
 
         MenuNode Credits()
@@ -229,7 +275,7 @@ namespace ALTEngine::Menu
         }
 
         MenuNode Options(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
-                         ALTEngine::Bootstrap::KeyBindings& keyBindings)
+                         ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::AudioSettings& audioSettings)
         {
             using ALTEngine::Bootstrap::StringId;
             // modelIndex Computer here is inherited by every child that
@@ -237,11 +283,11 @@ namespace ALTEngine::Menu
             // the monitor+tower model is the default across almost all of
             // Options and only changes for Controls > Keyboard > Redefine.
             return List("Options", StringId::Options, {
-                Volume(),
+                Volume(audioSettings, settings.language),
                 Controls(keyBindings, settings.language),
                 Difficulty(settings.difficulty),
                 CameraSway(settings.cameraSwayOn),
-                Graphics(resolutionLabels, settings.quality, settings.resolutionLabel),
+                Graphics(resolutionLabels, settings.quality, settings.resolutionLabel, settings.vsync, settings.displayMode),
                 LanguageMenu(settings.language),
                 Credits(),
             }, ModelIndex::Computer);
@@ -249,14 +295,14 @@ namespace ALTEngine::Menu
     }
 
     MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
-                               ALTEngine::Bootstrap::KeyBindings& keyBindings)
+                               ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::AudioSettings& audioSettings)
     {
         using ALTEngine::Bootstrap::StringId;
         return List("Main Menu", {
             Action("Start Game", StringId::StartGame),
             Action("Multiplayer", StringId::Multiplayer),
             Action("Load Game", StringId::LoadGame),
-            Options(resolutionLabels, settings, keyBindings),
+            Options(resolutionLabels, settings, keyBindings, audioSettings),
         });
     }
 }

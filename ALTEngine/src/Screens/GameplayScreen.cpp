@@ -81,7 +81,8 @@ namespace ALTEngine::Screens
         const std::filesystem::path& cdDirectory,
         Bootstrap::Language language,
         const std::string& missionLevelCode,
-        Bootstrap::KeyBindings& keyBindings)
+        Bootstrap::KeyBindings& keyBindings,
+        Bootstrap::AudioSettings& audioSettings)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
@@ -159,7 +160,7 @@ namespace ALTEngine::Screens
                 else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == keyBindings.GetKey(ALTEngine::Bootstrap::InputAction::Pause))
                 {
                     SDL_SetWindowRelativeMouseMode(app.Window(), false);
-                    PauseMenuResult pauseResult = PauseMenuScreen::Run(cdDirectory, language, missionLevelCode, inventory);
+                    PauseMenuResult pauseResult = PauseMenuScreen::Run(cdDirectory, language, missionLevelCode, inventory, audioSettings);
                     if (pauseResult.outcome == PauseMenuOutcome::WindowClosed)
                     {
                         result.outcome = GameplayOutcome::WindowClosed;
@@ -192,8 +193,15 @@ namespace ALTEngine::Screens
 
                 float mouseDx = 0.0f, mouseDy = 0.0f;
                 SDL_GetRelativeMouseState(&mouseDx, &mouseDy);
-                camera.yaw += mouseDx * MOUSE_SENSITIVITY;
-                camera.pitch = std::clamp(camera.pitch - mouseDy * MOUSE_SENSITIVITY, -MAX_PITCH, MAX_PITCH);
+                // Read live rather than cached once - lets the Controls
+                // > Mouse > Mouse Sensitivity slider take effect
+                // immediately without needing a restart (Edward, 2026).
+                // 5/10 (the slider's own default) maps to exactly
+                // MOUSE_SENSITIVITY, so this changes nothing for anyone
+                // who hasn't touched the setting.
+                float sensitivity = MOUSE_SENSITIVITY * (static_cast<float>(keyBindings.MouseSensitivity()) / 5.0f);
+                camera.yaw += mouseDx * sensitivity;
+                camera.pitch = std::clamp(camera.pitch - mouseDy * sensitivity, -MAX_PITCH, MAX_PITCH);
 
                 // Ground-plane movement (X/Z only) relative to yaw -
                 // matches typical FPS convention of not flying up/down

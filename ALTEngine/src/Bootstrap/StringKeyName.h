@@ -15,6 +15,10 @@ namespace ALTEngine::Bootstrap
     // silently the way a plain array index would (Edward, 2026:
     // language packs need to be robust to editing, not just internally
     // consistent).
+    //
+    // Regenerated from StringId.h by a script (not hand-maintained) -
+    // whenever a StringId is added, this file must be regenerated too,
+    // or the new entry silently won't round-trip through any pack file.
     inline const char* StringKeyName(StringId id)
     {
         switch (id)
@@ -101,6 +105,12 @@ namespace ALTEngine::Bootstrap
         case StringId::OptionsTitle: return "OptionsTitle";
         case StringId::NotAvailable: return "NotAvailable";
         case StringId::ExitGameTitle: return "ExitGameTitle";
+        case StringId::VSync: return "VSync";
+        case StringId::DisplayModeTitle: return "DisplayModeTitle";
+        case StringId::Windowed: return "Windowed";
+        case StringId::Fullscreen: return "Fullscreen";
+        case StringId::Borderless: return "Borderless";
+        case StringId::MouseSensitivity: return "MouseSensitivity";
         default: return "";
         }
     }
@@ -193,6 +203,12 @@ namespace ALTEngine::Bootstrap
         if (name == "OptionsTitle") { return StringId::OptionsTitle; }
         if (name == "NotAvailable") { return StringId::NotAvailable; }
         if (name == "ExitGameTitle") { return StringId::ExitGameTitle; }
+        if (name == "VSync") { return StringId::VSync; }
+        if (name == "DisplayModeTitle") { return StringId::DisplayModeTitle; }
+        if (name == "Windowed") { return StringId::Windowed; }
+        if (name == "Fullscreen") { return StringId::Fullscreen; }
+        if (name == "Borderless") { return StringId::Borderless; }
+        if (name == "MouseSensitivity") { return StringId::MouseSensitivity; }
         return std::nullopt;
     }
 }

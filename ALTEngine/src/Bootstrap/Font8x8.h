@@ -295,4 +295,31 @@ namespace ALTEngine::Bootstrap
     {
         return 8 * scale;
     }
+
+    // The slider bar visual (label + 10 filled cells, lit up to `value`)
+    // - originally only in the pause menu, now shared so the boot menu's
+    // Volume/Mouse Sensitivity entries can use the identical aesthetic
+    // rather than a plain text readout (Edward, 2026). Takes the row's
+    // own (rowY, boxHeight) rather than a pre-computed text Y, so the
+    // label and the cells - which have different heights - each get
+    // centered correctly within the same box instead of the cells
+    // inheriting the label's own text-height centering (Edward, 2026:
+    // "the squares of the sliders are not aligned with the buttons
+    // themselves"). cellSize is boxHeight minus a small margin - "a
+    // little thinner than the button box".
+    inline void DrawSlider(SDL_Renderer* renderer, const std::string& label, int value, int labelX, int barX, int rowY, int boxHeight, int scale, Color labelColor, Color litColor, Color dimColor)
+    {
+        int textY = rowY + (boxHeight - TextHeight(scale)) / 2;
+        DrawBitmapText(renderer, label, labelX, textY, scale, labelColor);
+
+        int cellSize = boxHeight - scale * 2;
+        int cellY = rowY + (boxHeight - cellSize) / 2;
+        for (int i = 0; i < 10; ++i)
+        {
+            Color c = (i < value) ? litColor : dimColor;
+            SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 255);
+            SDL_FRect cell{ static_cast<float>(barX + i * (cellSize + scale)), static_cast<float>(cellY), static_cast<float>(cellSize), static_cast<float>(cellSize) };
+            SDL_RenderFillRect(renderer, &cell);
+        }
+    }
 }

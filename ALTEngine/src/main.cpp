@@ -6,6 +6,7 @@
 #include "Bootstrap/DiscLocator.h"
 #include "Bootstrap/GameLocator.h"
 #include "Bootstrap/GameplaySettings.h"
+#include "Bootstrap/AudioSettings.h"
 #include "Bootstrap/KeyBindings.h"
 #include "Bootstrap/Strings.h"
 #include "Bootstrap/ImageDisplay.h"
@@ -209,13 +210,42 @@ int main(int, char**)
     DifficultySettings difficultySettings(config);
     CameraSwaySettings cameraSwaySettings(config);
     KeyBindings keyBindings(config);
+    AudioSettings audioSettings(config);
+
+    // Applied once, here, rather than than every time MenuController::Run
+    // is re-entered (which would flicker the window every time the
+    // player returns to the menu from gameplay) - EnsureCreated always
+    // creates the window fullscreen regardless of what was last saved,
+    // so a persisted Windowed/Borderless preference needs reapplying
+    // explicitly on boot, or it's silently lost every restart.
+    AppWindow::Instance().SetVSync(renderSettings.VSync());
+    {
+        auto savedResolution = resolutionSettings.Get();
+        DisplayMode displayMode = renderSettings.GetDisplayMode();
+        if (savedResolution.has_value())
+        {
+            if (displayMode == DisplayMode::Fullscreen)
+            {
+                // SetDisplayMode alone only switches which kind of
+                // fullscreen is active - the exclusive resolution
+                // itself needs setting separately, same as the menu's
+                // own Resolution handling does.
+                AppWindow::Instance().ApplyFullscreenResolution(savedResolution->first, savedResolution->second);
+            }
+            AppWindow::Instance().SetDisplayMode(displayMode, savedResolution->first, savedResolution->second);
+        }
+        else
+        {
+            AppWindow::Instance().SetDisplayMode(displayMode);
+        }
+    }
 
     std::vector<int> mainPath = { 0 };
 
     while (true)
     {
         MenuResult menuResult = MenuController::Run(cdDirectory, renderSettings, resolutionSettings, difficultySettings,
-                                                      cameraSwaySettings, languageSettings, keyBindings, language, mainPath);
+                                                      cameraSwaySettings, languageSettings, keyBindings, audioSettings, language, mainPath);
         if (menuResult.windowClosed)
         {
             std::cout << "Boot window closed. Aborting.\n";
@@ -323,7 +353,7 @@ int main(int, char**)
                 return 1;
             }
 
-            GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, "1.1.1", keyBindings);
+            GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, "1.1.1", keyBindings, audioSettings);
             if (gameplayResult.outcome == GameplayOutcome::WindowClosed)
             {
                 std::cout << "Boot window closed. Aborting.\n";

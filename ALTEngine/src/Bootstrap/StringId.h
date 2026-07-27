@@ -119,6 +119,12 @@ namespace ALTEngine::Bootstrap
         OptionsTitle, // the Options SCREEN's own title ("OPTIONS", all caps) - distinct from the menu label ("Options", title case) used elsewhere, since the original code had these as two separate strings
         NotAvailable, // pause menu's weapon/ammo status text ("Not available")
         ExitGameTitle, // the pause menu's custom-drawn "EXIT GAME" panel label, all caps - distinct from the tree node's own "Exit Game" title-case label
+        VSync,
+        DisplayModeTitle,
+        Windowed,
+        Fullscreen,
+        Borderless,
+        MouseSensitivity,
 
         Count, // sentinel - not a real string, gives the tables their size
     };

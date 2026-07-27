@@ -108,6 +108,12 @@ namespace ALTEngine::Bootstrap
             "OPTIONS",
             "Not available",
             "EXIT GAME",
+            "VSync",
+            "Display Mode",
+            "Windowed",
+            "Fullscreen",
+            "Borderless",
+            "Mouse Sensitivity",
         };
         return table;
     }

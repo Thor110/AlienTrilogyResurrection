@@ -1,6 +1,7 @@
 #include "PauseMenuScreen.h"
 #include "PauseMenuTree.h"
 #include "SaveSlotScreen.h"
+#include "../Audio/MusicPlayer.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
@@ -17,9 +18,11 @@
 
 namespace ALTEngine::Screens
 {
+    using ALTEngine::Audio::MusicPlayer;
     using ALTEngine::Audio::SfxId;
     using ALTEngine::Audio::SfxPlayer;
     using ALTEngine::Bootstrap::AppWindow;
+    using ALTEngine::Bootstrap::AudioSettings;
     using ALTEngine::Bootstrap::ComputeMenuScale;
     using ALTEngine::Bootstrap::LerpColor;
     using ALTEngine::Bootstrap::PulsePhase;
@@ -165,18 +168,6 @@ namespace ALTEngine::Screens
         // it (Edward, 2026: "the sliders should actually be in their own
         // space to the right of the Music/SFX volume buttons... not
         // within the highlight around the text itself").
-        void DrawSlider(SDL_Renderer* renderer, const std::string& label, int value, int labelX, int barX, int y, int scale)
-        {
-            DrawBitmapText(renderer, label, labelX, y, scale, COLOR_CURSOR);
-            int cellSize = scale * 4;
-            for (int i = 0; i < 10; ++i)
-            {
-                Color c = (i < value) ? COLOR_CURSOR : COLOR_DIM;
-                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 255);
-                SDL_FRect cell{ static_cast<float>(barX + i * (cellSize + scale)), static_cast<float>(y), static_cast<float>(cellSize), static_cast<float>(cellSize) };
-                SDL_RenderFillRect(renderer, &cell);
-            }
-        }
 
         // Word-wraps a briefing's flattened text to fit `maxWidth` pixels
         // - unlike the full-screen MissionBriefingScreen (which keeps the
@@ -241,7 +232,8 @@ namespace ALTEngine::Screens
         const std::filesystem::path& cdDirectory,
         Language language,
         const std::string& missionLevelCode,
-        const PlayerInventoryState& inventory)
+        const PlayerInventoryState& inventory,
+        AudioSettings& audioSettings)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
@@ -276,7 +268,26 @@ namespace ALTEngine::Screens
         }
 
         MenuNode root = BuildPauseMenuTree(language);
+
+        // Functional volume sliders (Edward, 2026: "The pause menu also
+        // needs functional Music/SFX volume sliders") - Options is
+        // always the last top-level entry in this fixed tree, with SFX
+        // Volume/Music Volume as its first two children (see
+        // PauseMenuTree.cpp).
+        {
+            MenuNode& optionsForInit = root.children.back();
+            optionsForInit.children[0].sliderValue = audioSettings.SfxVolume();
+            optionsForInit.children[1].sliderValue = audioSettings.MusicVolume();
+        }
         std::vector<int> path = { 0 };
+
+        // SFX/Music Volume (Edward, 2026: "Separate the buttons from the
+        // sliders, so that you have to press the button to access the
+        // slider... only requiring escape if you have selected the
+        // music or sfx slider button") - false while just navigating
+        // (left/right behave like every other entry), true only once
+        // the button's been pressed.
+        bool adjustingSlider = false;
 
         PauseMenuResult result;
         bool running = true;
@@ -344,10 +355,79 @@ namespace ALTEngine::Screens
                 return parent.label == "Exit Game";
             };
 
+            // Functional volume sliders (Edward, 2026: "The pause menu
+            // also needs functional Music/SFX volume sliders") - same
+            // shape as currentListIsExitGameConfirmation above, but for
+            // adjusting a value rather than moving a cursor. Returns
+            // false (no-op) if the cursor isn't on one of these two
+            // specific entries, so the caller falls back to the normal
+            // enter/escape behaviour.
+            auto AdjustVolumeIfOnSliderEntry = [&](int delta) {
+                if (path.size() < 2) { return false; }
+                std::vector<int> parentPath(path.begin(), path.end() - 1);
+                const MenuNode& parent = WalkPath(root, parentPath);
+                if (parent.label != "Options") { return false; }
+
+                MenuNode& leaf = WalkPath(root, path);
+                bool isSfx = (leaf.label == "SFX Volume");
+                bool isMusic = (leaf.label == "Music Volume");
+                if (!isSfx && !isMusic) { return false; }
+
+                int current = isMusic ? audioSettings.MusicVolume() : audioSettings.SfxVolume();
+                int updated = std::clamp(current + delta, 0, 10);
+                if (isMusic)
+                {
+                    audioSettings.SetMusicVolume(updated);
+                    MusicPlayer::SetVolume(updated); // applies immediately, same as the boot menu's own Volume > Music entry
+                }
+                else
+                {
+                    audioSettings.SetSfxVolume(updated);
+                }
+                leaf.sliderValue = updated;
+                SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+                return true;
+            };
+
+            // The "press the button" half of the same feature (Edward,
+            // 2026) - checked before the normal doEnter() flow on Enter/
+            // Right.
+            auto TryEnterSliderIfOnEntry = [&]() {
+                if (path.size() < 2) { return false; }
+                std::vector<int> parentPath(path.begin(), path.end() - 1);
+                const MenuNode& parent = WalkPath(root, parentPath);
+                if (parent.label != "Options") { return false; }
+
+                const MenuNode& leaf = WalkPath(root, path);
+                if (leaf.label != "SFX Volume" && leaf.label != "Music Volume") { return false; }
+
+                adjustingSlider = true;
+                SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                return true;
+            };
+
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
                 if (event.type == SDL_EVENT_QUIT) { result.outcome = PauseMenuOutcome::WindowClosed; running = false; }
+
+                // SFX/Music Volume, once entered (Edward, 2026) - only
+                // left/right (adjust) and Escape (exit back to normal
+                // navigation, cursor still on the button) are processed;
+                // up/down/enter are ignored while adjusting.
+                else if (adjustingSlider)
+                {
+                    if (event.type == SDL_EVENT_KEY_DOWN)
+                    {
+                        if (event.key.key == SDLK_ESCAPE)
+                        {
+                            adjustingSlider = false;
+                            SfxPlayer::Play(SfxId::MenuBack, cdDirectory);
+                        }
+                        else if (event.key.key == SDLK_RIGHT) { AdjustVolumeIfOnSliderEntry(1); }
+                        else if (event.key.key == SDLK_LEFT) { AdjustVolumeIfOnSliderEntry(-1); }
+                    }
+                }
                 else if (event.type == SDL_EVENT_KEY_DOWN)
                 {
                     switch (event.key.key)
@@ -362,13 +442,27 @@ namespace ALTEngine::Screens
                         break;
                     case SDLK_RETURN:
                     case SDLK_KP_ENTER:
-                        doEnter();
+                        if (!TryEnterSliderIfOnEntry()) { doEnter(); }
                         break;
                     case SDLK_ESCAPE:
                         doEscape();
                         break;
+                    // Edward, 2026: "Separate the buttons from the
+                    // sliders, so that you have to press the button to
+                    // access the slider... you can still back out using
+                    // left, only requiring escape if you have selected
+                    // the music or sfx slider button" - Right on the
+                    // button enters slider-adjust mode (handled above);
+                    // once entered, left/right adjust and only Escape
+                    // exits. Until then, left/right behave like every
+                    // other entry (with Exit Game's own Yes/No
+                    // confirmation as the one pre-existing exception).
                     case SDLK_RIGHT:
-                        if (currentListIsExitGameConfirmation())
+                        if (TryEnterSliderIfOnEntry())
+                        {
+                            // handled
+                        }
+                        else if (currentListIsExitGameConfirmation())
                         {
                             MoveSelection(root, path, 1);
                             SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
@@ -448,12 +542,13 @@ namespace ALTEngine::Screens
                 // slider's bar sits beside its label instead of below it,
                 // each row only needs a single rowHeight of vertical
                 // space, the same as every other row in this menu.
-                int sfxTextY = drawRow(panelY, cursorHere == 0);
-                DrawSlider(renderer, "SFX VOLUME", optionsNode.children[0].sliderValue, panelX, barX, sfxTextY, scale);
+                int boxHeight = rowHeight - scale * 2;
+                drawRow(panelY, cursorHere == 0);
+                DrawSlider(renderer, "SFX VOLUME", optionsNode.children[0].sliderValue, panelX, barX, panelY, boxHeight, scale, COLOR_CURSOR, COLOR_CURSOR, COLOR_DIM);
 
                 int musicY = panelY + rowHeight;
-                int musicTextY = drawRow(musicY, cursorHere == 1);
-                DrawSlider(renderer, "MUSIC VOLUME", optionsNode.children[1].sliderValue, panelX, barX, musicTextY, scale);
+                drawRow(musicY, cursorHere == 1);
+                DrawSlider(renderer, "MUSIC VOLUME", optionsNode.children[1].sliderValue, panelX, barX, musicY, boxHeight, scale, COLOR_CURSOR, COLOR_CURSOR, COLOR_DIM);
 
                 bool exitCursor = (cursorHere == 2);
                 int exitY = panelY + rowHeight * 2;

@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string>
 
+#include "../Bootstrap/AudioSettings.h"
 #include "../Bootstrap/KeyBindings.h"
 #include "../Bootstrap/Localization.h"
 #include "PlayerInventoryState.h"
@@ -46,6 +47,7 @@ namespace ALTEngine::Screens
             const std::filesystem::path& cdDirectory,
             ALTEngine::Bootstrap::Language language,
             const std::string& missionLevelCode,
-            ALTEngine::Bootstrap::KeyBindings& keyBindings);
+            ALTEngine::Bootstrap::KeyBindings& keyBindings,
+            ALTEngine::Bootstrap::AudioSettings& audioSettings);
     };
 }

@@ -64,6 +64,43 @@ namespace ALTEngine::Bootstrap
         return true;
     }
 
+    void AppWindow::SetVSync(bool enabled)
+    {
+        if (!renderer) { return; }
+        SDL_SetRenderVSync(renderer, enabled ? 1 : 0);
+    }
+
+    void AppWindow::SetDisplayMode(DisplayMode mode, int windowedWidth, int windowedHeight)
+    {
+        if (!window) { return; }
+
+        switch (mode)
+        {
+        case DisplayMode::Windowed:
+            SDL_SetWindowFullscreen(window, false);
+            SDL_SetWindowSize(window, windowedWidth, windowedHeight);
+            break;
+        case DisplayMode::Fullscreen:
+            SDL_SetWindowFullscreen(window, true);
+            // Leaves whatever exclusive mode ApplyFullscreenResolution
+            // last set (or SDL's own default if that was never called)
+            // rather than picking a resolution here - Resolution is a
+            // separate menu entry, this only switches which kind of
+            // fullscreen is active.
+            break;
+        case DisplayMode::Borderless:
+            SDL_SetWindowFullscreen(window, true);
+            SDL_SetWindowFullscreenMode(window, nullptr); // nullptr = match the desktop's own current mode, not a specific exclusive one
+            break;
+        }
+    }
+
+    void AppWindow::SetWindowedSize(int width, int height)
+    {
+        if (!window) { return; }
+        SDL_SetWindowSize(window, width, height);
+    }
+
     SDL_AudioStream* AppWindow::SfxAudioStream()
     {
         if (sfxStream) { return sfxStream; }

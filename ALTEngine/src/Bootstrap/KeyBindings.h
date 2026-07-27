@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "InputActions.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <string>
 
@@ -117,6 +118,23 @@ namespace ALTEngine::Bootstrap
             // beyond this placeholder (Edward, 2026: these stay
             // disabled in Controls until that changes).
             return "(unavailable)";
+        }
+
+        // Mouse look sensitivity, 1-10 (never 0 - Edward, 2026: "Set a
+        // limit so that mouse sensitivity can not be set to zero.
+        // 1-10") - default 5 maps to GameplayScreen's existing
+        // MOUSE_SENSITIVITY constant (0.0025f), so nothing changes for
+        // anyone who hasn't touched this yet.
+        int MouseSensitivity() const
+        {
+            auto value = config.Get("MouseSensitivity");
+            if (!value.has_value()) { return 5; }
+            return std::clamp(std::atoi(value->c_str()), 1, 10);
+        }
+
+        void SetMouseSensitivity(int sensitivity1to10)
+        {
+            config.Set("MouseSensitivity", std::to_string(std::clamp(sensitivity1to10, 1, 10)));
         }
 
     private:

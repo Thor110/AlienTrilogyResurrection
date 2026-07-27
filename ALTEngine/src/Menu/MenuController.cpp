@@ -26,11 +26,13 @@ namespace ALTEngine::Menu
     using ALTEngine::Audio::SfxId;
     using ALTEngine::Audio::SfxPlayer;
     using ALTEngine::Bootstrap::AppWindow;
+    using ALTEngine::Bootstrap::AudioSettings;
     using ALTEngine::Bootstrap::CameraSwaySettings;
     using ALTEngine::Bootstrap::Color;
     using ALTEngine::Bootstrap::ComputeMenuScale;
     using ALTEngine::Bootstrap::Difficulty;
     using ALTEngine::Bootstrap::DifficultySettings;
+    using ALTEngine::Bootstrap::DisplayMode;
     using ALTEngine::Bootstrap::DrawBitmapText;
     using ALTEngine::Bootstrap::DrawRoundedRect;
     using ALTEngine::Bootstrap::Language;
@@ -194,9 +196,28 @@ namespace ALTEngine::Menu
         int DrawColumn(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int selectedIndex, bool pulseSelected,
                         int x, int y, int rowHeight, int scale, Language language)
         {
+            // Music/SFX volume and Mouse Sensitivity (Edward, 2026:
+            // "keep the design of the slider which now only resides in
+            // the pause menu... revert to that so that we can match the
+            // original aesthetic") - same inputActionIndex sentinel
+            // range AdjustNumericSettingIfOnEntry already uses.
+            auto isSliderEntry = [](const MenuNode& node) { return node.inputActionIndex >= -5 && node.inputActionIndex <= -3; };
+
+            // Box width is label text only - the slider sits outside/to
+            // the right of the box, not stretching it, matching the
+            // pause menu exactly (Edward, 2026: "The slider should not
+            // be within the button, it should be to the right of the
+            // button like it was before and still is in the pause
+            // menu").
             int width = 0;
             for (const auto& item : items) { width = std::max(width, TextWidth(DisplayLabel(item, language), scale)); }
             width += scale * 8; // padding
+
+            // Fixed barX (not relative to each label's own width) so
+            // Music/SFX/Mouse Sensitivity's bars all align in a column,
+            // same as the pause menu's own "fixed X so SFX/Music's bars
+            // align regardless of their different label widths".
+            int barX = x + width + scale * 8;
 
             float pulse = pulseSelected ? PulsePhase() : 1.0f;
 
@@ -223,10 +244,26 @@ namespace ALTEngine::Menu
                 // them - no pulse (Edward, 2026: "we can leave them like
                 // that for now").
 
-                SDL_FRect bar{ static_cast<float>(x), static_cast<float>(rowY), static_cast<float>(width), static_cast<float>(rowHeight - scale * 2) };
+                int boxHeight = rowHeight - scale * 2;
+                SDL_FRect bar{ static_cast<float>(x), static_cast<float>(rowY), static_cast<float>(width), static_cast<float>(boxHeight) };
                 DrawRoundedRect(renderer, bar, static_cast<float>(scale * 2), boxColor);
 
-                DrawBitmapText(renderer, DisplayLabel(items[i], language), x + scale * 4, rowY + (rowHeight - TextHeight(scale)) / 2, scale, textColor);
+                std::string label = DisplayLabel(items[i], language);
+                if (isSliderEntry(items[i]))
+                {
+                    // rowY/boxHeight passed directly (not a pre-computed
+                    // text Y) so the label and the slider cells - which
+                    // have different heights - each get centered
+                    // correctly within the same box (Edward, 2026: "the
+                    // squares of the sliders are not aligned with the
+                    // buttons themselves").
+                    DrawSlider(renderer, label, items[i].sliderValue, x + scale * 4, barX, rowY, boxHeight, scale, textColor, textColor, COLOR_HIGHLIGHT_BG_LIGHT);
+                }
+                else
+                {
+                    int textY = rowY + (rowHeight - TextHeight(scale)) / 2;
+                    DrawBitmapText(renderer, label, x + scale * 4, textY, scale, textColor);
+                }
             }
 
             return width;
@@ -272,10 +309,49 @@ namespace ALTEngine::Menu
                 int width = 0, height = 0;
                 if (std::sscanf(leafLabel.c_str(), "%dx%d", &width, &height) == 2 && width > 0 && height > 0)
                 {
-                    if (AppWindow::Instance().ApplyFullscreenResolution(width, height))
+                    // Always set the exclusive-fullscreen preference
+                    // (harmless if not currently in that mode - it just
+                    // takes effect whenever Fullscreen is next entered).
+                    bool ok = AppWindow::Instance().ApplyFullscreenResolution(width, height);
+
+                    // But that call alone does nothing visible while in
+                    // Windowed mode (Edward, 2026: "resolutions don't
+                    // apply when in windowed mode, at all") - resize the
+                    // actual window directly for that case.
+                    if (renderSettings.GetDisplayMode() == DisplayMode::Windowed)
                     {
-                        resolutionSettings.Set(width, height);
+                        AppWindow::Instance().SetWindowedSize(width, height);
+                        ok = true;
                     }
+
+                    if (ok) { resolutionSettings.Set(width, height); }
+                }
+            }
+            else if (parentLabel == "VSync")
+            {
+                bool enabled = (leafLabel == "On");
+                renderSettings.SetVSync(enabled);
+                AppWindow::Instance().SetVSync(enabled);
+            }
+            else if (parentLabel == "Display Mode")
+            {
+                DisplayMode mode = leafLabel == "Windowed" ? DisplayMode::Windowed
+                                  : leafLabel == "Borderless" ? DisplayMode::Borderless
+                                  : DisplayMode::Fullscreen;
+                renderSettings.SetDisplayMode(mode);
+
+                // Windowed needs an actual size - use whatever
+                // Resolution is currently set to, rather than a
+                // hardcoded default that would silently ignore it
+                // (Edward, 2026).
+                auto savedResolution = resolutionSettings.Get();
+                if (savedResolution.has_value())
+                {
+                    AppWindow::Instance().SetDisplayMode(mode, savedResolution->first, savedResolution->second);
+                }
+                else
+                {
+                    AppWindow::Instance().SetDisplayMode(mode);
                 }
             }
             else if (parentLabel == "Language")
@@ -310,6 +386,7 @@ namespace ALTEngine::Menu
         CameraSwaySettings& cameraSwaySettings,
         LanguageSettings& languageSettings,
         KeyBindings& keyBindings,
+        AudioSettings& audioSettings,
         Language& language,
         std::vector<int>& mainPath)
     {
@@ -343,11 +420,13 @@ namespace ALTEngine::Menu
         MenuSettingsSnapshot settingsSnapshot;
         settingsSnapshot.quality = renderSettings.Get();
         settingsSnapshot.resolutionLabel = currentResolutionLabel;
+        settingsSnapshot.vsync = renderSettings.VSync();
+        settingsSnapshot.displayMode = renderSettings.GetDisplayMode();
         settingsSnapshot.difficulty = difficultySettings.Get();
         settingsSnapshot.cameraSwayOn = cameraSwaySettings.Get();
         settingsSnapshot.language = language;
 
-        MenuNode root = BuildMainMenuTree(resolutionLabels, settingsSnapshot, keyBindings);
+        MenuNode root = BuildMainMenuTree(resolutionLabels, settingsSnapshot, keyBindings, audioSettings);
         MenuNode& optionsRoot = root.children[3]; // "Options"
 
         // OPTOBJ preload queue - built here, drained in a blocking
@@ -473,6 +552,7 @@ namespace ALTEngine::Menu
         // jarring, hearing menu music over a black loading screen for
         // several seconds before anything shows.
         MusicPlayer::PlayLooped(cdDirectory / "MUSIC" / "track02.wav");
+        MusicPlayer::SetVolume(audioSettings.MusicVolume());
 
         enum class Screen { MainMenu, Options, Credits };
         Screen screen = Screen::MainMenu;
@@ -487,6 +567,17 @@ namespace ALTEngine::Menu
         int rebindActionIndex = -1;
         ALTEngine::Bootstrap::DeviceKind rebindDevice = ALTEngine::Bootstrap::DeviceKind::Keyboard;
         std::string rebindActionLabel;
+
+        // Music/SFX volume and Mouse Sensitivity (Edward, 2026:
+        // "Separate the buttons from the sliders, so that you have to
+        // press the button to access the slider. That way you can still
+        // back out using left, only requiring escape if you have
+        // selected the music or sfx slider button.") - false while just
+        // navigating (left/right behave like every other entry: back/
+        // enter), true only once the button's been pressed, at which
+        // point left/right adjust the value and only Escape exits back
+        // to normal navigation.
+        bool adjustingSlider = false;
 
         MenuResult result;
         bool running = true;
@@ -611,6 +702,66 @@ namespace ALTEngine::Menu
                 SfxPlayer::Play(SfxId::MenuBack, cdDirectory);
             };
 
+            // Music/SFX volume and Mouse Sensitivity (Edward, 2026:
+            // "Functional volume sliders effecting the music which is
+            // all we have to test against currently", "Mouse
+            // sensitivity slider in the Controls / Mouse list") -
+            // identified by the same inputActionIndex sentinel
+            // mechanism Redefine/Restore Defaults already use. Returns
+            // false (no-op) if the cursor isn't on one of these three
+            // specific entries, so the caller falls back to the normal
+            // enter/escape behaviour.
+            auto AdjustNumericSettingIfOnEntry = [&](int delta) {
+                if (screen != Screen::Options || optionsPath.empty()) { return false; }
+                MenuNode& leaf = WalkPath(optionsRoot, optionsPath);
+                if (leaf.inputActionIndex < -5 || leaf.inputActionIndex > -3) { return false; }
+
+                if (leaf.inputActionIndex == -5) // Mouse Sensitivity
+                {
+                    int updated = std::clamp(keyBindings.MouseSensitivity() + delta, 1, 10);
+                    keyBindings.SetMouseSensitivity(updated);
+                    // No immediate "apply" call needed - GameplayScreen
+                    // reads this live from keyBindings every frame,
+                    // unlike music volume which needs pushing into
+                    // MusicPlayer's own separate, already-playing stream.
+                    leaf.sliderValue = updated;
+                    SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+                    return true;
+                }
+
+                bool isMusic = (leaf.inputActionIndex == -3);
+                int current = isMusic ? audioSettings.MusicVolume() : audioSettings.SfxVolume();
+                int updated = std::clamp(current + delta, 0, 10);
+                if (isMusic)
+                {
+                    audioSettings.SetMusicVolume(updated);
+                    MusicPlayer::SetVolume(updated); // applied immediately - this is the one actually playing right now
+                }
+                else
+                {
+                    audioSettings.SetSfxVolume(updated);
+                }
+
+                leaf.sliderValue = updated;
+                SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+                return true;
+            };
+
+            // The "press the button" half of the same feature (Edward,
+            // 2026) - checked before the normal doEnter() flow on Enter/
+            // Right. Same range check as AdjustNumericSettingIfOnEntry
+            // above; returns false if the cursor isn't on one of the
+            // three slider entries, so the caller falls back to normal
+            // enter behaviour.
+            auto TryEnterSliderIfOnEntry = [&]() {
+                if (screen != Screen::Options || optionsPath.empty()) { return false; }
+                MenuNode& leaf = WalkPath(optionsRoot, optionsPath);
+                if (leaf.inputActionIndex < -5 || leaf.inputActionIndex > -3) { return false; }
+                adjustingSlider = true;
+                SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                return true;
+            };
+
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
@@ -650,6 +801,26 @@ namespace ALTEngine::Menu
                     continue; // no other input processed while awaiting a rebind
                 }
 
+                // Music/SFX volume and Mouse Sensitivity, once entered
+                // (Edward, 2026) - only left/right (adjust) and Escape
+                // (exit back to normal navigation, cursor still on the
+                // button) are processed; up/down/enter are ignored while
+                // adjusting, same as the rebind-capture block above.
+                if (adjustingSlider)
+                {
+                    if (event.type == SDL_EVENT_KEY_DOWN)
+                    {
+                        if (event.key.key == SDLK_ESCAPE)
+                        {
+                            adjustingSlider = false;
+                            SfxPlayer::Play(SfxId::MenuBack, cdDirectory);
+                        }
+                        else if (event.key.key == SDLK_RIGHT) { AdjustNumericSettingIfOnEntry(1); }
+                        else if (event.key.key == SDLK_LEFT) { AdjustNumericSettingIfOnEntry(-1); }
+                    }
+                    continue;
+                }
+
                 if (event.type == SDL_EVENT_KEY_DOWN)
                 {
                     switch (event.key.key)
@@ -666,7 +837,7 @@ namespace ALTEngine::Menu
                         break;
                     case SDLK_RETURN:
                     case SDLK_KP_ENTER:
-                        doEnter();
+                        if (!TryEnterSliderIfOnEntry()) { doEnter(); }
                         break;
                     case SDLK_ESCAPE:
                         doEscape();
@@ -678,8 +849,20 @@ namespace ALTEngine::Menu
                     // Resolution all just use enter/escape like every
                     // other list. The Main Menu itself doesn't respond
                     // to left/right at all - only Enter and Escape.
+                    //
+                    // Music/SFX volume and Mouse Sensitivity (Edward,
+                    // 2026: "Separate the buttons from the sliders, so
+                    // that you have to press the button to access the
+                    // slider... you can still back out using left, only
+                    // requiring escape if you have selected the music or
+                    // sfx slider button") - Right on the button enters
+                    // slider-adjust mode (handled above via
+                    // TryEnterSliderIfOnEntry); once entered, left/right
+                    // adjust and only Escape exits (handled by the
+                    // adjustingSlider block earlier in this loop). Until
+                    // then, left/right behave like every other entry.
                     case SDLK_RIGHT:
-                        if (screen != Screen::MainMenu) { doEnter(); }
+                        if (!TryEnterSliderIfOnEntry()) { if (screen != Screen::MainMenu) { doEnter(); } }
                         break;
                     case SDLK_LEFT:
                         if (screen != Screen::MainMenu) { doEscape(); }

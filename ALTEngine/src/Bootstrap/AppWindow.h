@@ -4,6 +4,15 @@
 
 namespace ALTEngine::Bootstrap
 {
+    // Edward, 2026: "Display Mode / Windowed / Fullscreen / Borderless
+    // options in the graphics options list."
+    enum class DisplayMode
+    {
+        Windowed,
+        Fullscreen,  // exclusive fullscreen at a specific resolution - see ApplyFullscreenResolution
+        Borderless,  // fullscreen "desktop" mode - matches the current desktop resolution, no exclusive mode switch
+    };
+
     // Single persistent SDL window/renderer for the whole boot sequence
     // (and eventually the game itself). DirectoryBrowser, ImageDisplay,
     // VideoPlayer etc all use this instead of each creating/destroying
@@ -48,6 +57,29 @@ namespace ALTEngine::Bootstrap
         // was found. Safe to call repeatedly (e.g. every time the
         // Resolution menu selection changes).
         bool ApplyFullscreenResolution(int width, int height);
+
+        // Toggles vsync on the renderer - on by default (see
+        // EnsureCreated). Safe to call repeatedly (Edward, 2026: "VSync
+        // On / Off options in the Graphics options list").
+        void SetVSync(bool enabled);
+
+        // Switches between windowed/fullscreen/borderless. windowedWidth/
+        // windowedHeight are used for the Windowed case - should be the
+        // persisted Resolution setting, not a hardcoded default, so
+        // switching to Windowed doesn't silently ignore whatever
+        // resolution was actually selected.
+        void SetDisplayMode(DisplayMode mode, int windowedWidth = 1280, int windowedHeight = 720);
+
+        // Resizes the actual window directly - the missing piece for
+        // resolution changes to take effect while in Windowed mode.
+        // ApplyFullscreenResolution only sets the exclusive-fullscreen
+        // display mode (SDL_SetWindowFullscreenMode), which has no
+        // effect on window size at all while not actually in that mode
+        // (Edward, 2026: "resolutions don't apply when in windowed
+        // mode... it just seems to get stuck at whatever resolution is
+        // set scaled down to windowed"). Safe to call regardless of
+        // current display mode - only visually matters while Windowed.
+        void SetWindowedSize(int width, int height);
 
         // Call once, at actual program exit - not between boot stages.
         void Shutdown();

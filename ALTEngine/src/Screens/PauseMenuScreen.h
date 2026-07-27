@@ -2,6 +2,7 @@
 
 #include <filesystem>
 
+#include "../Bootstrap/AudioSettings.h"
 #include "../Bootstrap/Localization.h"
 #include "PlayerInventoryState.h"
 
@@ -30,6 +31,7 @@ namespace ALTEngine::Screens
             const std::filesystem::path& cdDirectory,
             ALTEngine::Bootstrap::Language language,
             const std::string& missionLevelCode,
-            const PlayerInventoryState& inventory);
+            const PlayerInventoryState& inventory,
+            ALTEngine::Bootstrap::AudioSettings& audioSettings);
     };
 }

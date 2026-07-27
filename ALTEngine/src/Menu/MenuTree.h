@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "MenuNode.h"
+#include "../Bootstrap/AudioSettings.h"
 #include "../Bootstrap/GameplaySettings.h"
 #include "../Bootstrap/InputActions.h"
 #include "../Bootstrap/KeyBindings.h"
@@ -60,6 +61,8 @@ namespace ALTEngine::Menu
     {
         ALTEngine::Bootstrap::RenderFidelity quality = ALTEngine::Bootstrap::RenderFidelity::Original;
         std::string resolutionLabel; // e.g. "1920x1080" - matches one of resolutionLabels, or empty if none match
+        bool vsync = true;
+        ALTEngine::Bootstrap::DisplayMode displayMode = ALTEngine::Bootstrap::DisplayMode::Fullscreen;
         ALTEngine::Bootstrap::Difficulty difficulty = ALTEngine::Bootstrap::Difficulty::AcidReign;
         bool cameraSwayOn = true;
         ALTEngine::Bootstrap::Language language = ALTEngine::Bootstrap::Language::English;
@@ -95,5 +98,5 @@ namespace ALTEngine::Menu
     // Config-backed KeyBindings from the caller; there's no meaningful
     // "default" for testing without one since it needs a real Config.
     MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
-                                ALTEngine::Bootstrap::KeyBindings& keyBindings);
+                                ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::AudioSettings& audioSettings);
 }
