@@ -82,10 +82,13 @@ namespace ALTEngine::Bootstrap
         // {current binding}". Was duplicated identically across
         // MenuTree.cpp (building the list) and MenuController.cpp
         // (updating a label after a rebind or a Restore Defaults reset)
-        // before being centralized here.
-        std::string FormatBinding(DeviceKind device, InputAction action) const
+        // before being centralized here. The action name translates via
+        // ActionLabel's Language-aware overload; the binding itself
+        // (after the ":") stays untranslated either way, since it's
+        // SDL's own hardware key/button name.
+        std::string FormatBinding(DeviceKind device, InputAction action, Language language) const
         {
-            return ActionLabel(action) + ": " + DisplayBinding(device, action);
+            return ActionLabel(action, language) + ": " + DisplayBinding(device, action);
         }
 
         // Human-readable current binding, for the Redefine list's own

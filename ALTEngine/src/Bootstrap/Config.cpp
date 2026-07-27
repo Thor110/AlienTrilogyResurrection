@@ -1,8 +1,7 @@
 #include "Config.h"
+#include "KeyValueFile.h"
 #include "PlatformPaths.h"
 
-#include <fstream>
-#include <sstream>
 #include <string>
 
 namespace ALTEngine::Bootstrap
@@ -29,28 +28,11 @@ namespace ALTEngine::Bootstrap
 
     void Config::Load()
     {
-        std::ifstream file(filePath);
-        if (!file.is_open()) { return; }
-
-        std::string line;
-        while (std::getline(file, line))
-        {
-            size_t separator = line.find('=');
-            if (separator == std::string::npos) { continue; }
-            std::string key = line.substr(0, separator);
-            std::string value = line.substr(separator + 1);
-            values[key] = value;
-        }
+        values = ParseKeyValueFile(filePath);
     }
 
     void Config::Save() const
     {
-        std::ofstream file(filePath, std::ios::trunc);
-        if (!file.is_open()) { return; }
-
-        for (const auto& [key, value] : values)
-        {
-            file << key << "=" << value << "\n";
-        }
+        WriteKeyValueFile(filePath, values);
     }
 }

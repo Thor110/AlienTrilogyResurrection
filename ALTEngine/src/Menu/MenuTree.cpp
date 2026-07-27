@@ -14,6 +14,25 @@ namespace ALTEngine::Menu
         MenuNode Action(std::string label, int modelIndex = -1) { return MakeAction(std::move(label), modelIndex); }
         MenuNode List(std::string label, std::vector<MenuNode> children, int modelIndex = -1) { return MakeList(std::move(label), std::move(children), modelIndex); }
 
+        // Same, but also tags the node with a StringId for translated
+        // display (Edward, 2026 - localization foundations). `label`
+        // stays the plain English string either way - it's the stable
+        // internal identifier every existing comparison already relies
+        // on (ApplyLeafAction, FindChildIndexByLabel, etc), never the
+        // translated text.
+        MenuNode Action(std::string label, ALTEngine::Bootstrap::StringId id, int modelIndex = -1)
+        {
+            MenuNode n = MakeAction(std::move(label), modelIndex);
+            n.stringId = static_cast<int>(id);
+            return n;
+        }
+        MenuNode List(std::string label, ALTEngine::Bootstrap::StringId id, std::vector<MenuNode> children, int modelIndex = -1)
+        {
+            MenuNode n = MakeList(std::move(label), std::move(children), modelIndex);
+            n.stringId = static_cast<int>(id);
+            return n;
+        }
+
         // Index of the child whose label matches `label`, or 0 (the old,
         // always-first-item default) if none match - used to compute
         // initialSelectedChild for settings lists (Edward, 2026).
@@ -37,12 +56,12 @@ namespace ALTEngine::Menu
         // turn the list into a helper that takes an input type, then
         // we can reuse it for keyboard/mouse and the other hardware
         // peripherals if I ever manage to get a hold of them").
-        MenuNode BuildRedefineList(ALTEngine::Bootstrap::DeviceKind device, ALTEngine::Bootstrap::KeyBindings& keyBindings)
+        MenuNode BuildRedefineList(ALTEngine::Bootstrap::DeviceKind device, ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::Language language)
         {
             std::vector<MenuNode> children;
             for (auto action : ALTEngine::Bootstrap::AllActions())
             {
-                MenuNode n = Action(keyBindings.FormatBinding(device, action));
+                MenuNode n = Action(keyBindings.FormatBinding(device, action, language));
                 n.inputActionIndex = static_cast<int>(action);
                 n.deviceIndex = static_cast<int>(device);
                 children.push_back(std::move(n));
@@ -66,11 +85,12 @@ namespace ALTEngine::Menu
             return List("Restore Defaults", { Action("No"), std::move(yes) });
         }
 
-        MenuNode Controls(ALTEngine::Bootstrap::KeyBindings& keyBindings)
+        MenuNode Controls(ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::Language language)
         {
             using ALTEngine::Bootstrap::DeviceKind;
+            using ALTEngine::Bootstrap::StringId;
 
-            MenuNode n = List("Controls", {
+            MenuNode n = List("Controls", StringId::Controls, {
                 // modelIndex on the List node itself (not the Redefine
                 // child) - EffectiveModelIndex takes the deepest SET
                 // index along the current path, so this shows the
@@ -78,18 +98,18 @@ namespace ALTEngine::Menu
                 // not only after pressing Enter into Redefine. Matches
                 // the reference images, where highlighting alone changes
                 // the background model (Edward, 2026).
-                List("Keyboard", { BuildRedefineList(DeviceKind::Keyboard, keyBindings), BuildRestoreDefaultsList(DeviceKind::Keyboard) }, ModelIndex::Keyboard),
-                List("Mouse", { BuildRedefineList(DeviceKind::Mouse, keyBindings), BuildRestoreDefaultsList(DeviceKind::Mouse) }, ModelIndex::Mouse),
-                List("Joystick", { Action("Joystick") }, ModelIndex::Joystick),
+                List("Keyboard", StringId::Keyboard, { BuildRedefineList(DeviceKind::Keyboard, keyBindings, language), BuildRestoreDefaultsList(DeviceKind::Keyboard) }, ModelIndex::Keyboard),
+                List("Mouse", StringId::Mouse, { BuildRedefineList(DeviceKind::Mouse, keyBindings, language), BuildRestoreDefaultsList(DeviceKind::Mouse) }, ModelIndex::Mouse),
+                List("Joystick", StringId::Joystick, { Action("Joystick", StringId::Joystick) }, ModelIndex::Joystick),
                 // Gravis Grip and Gravis Pad both use Multitap (index 3) -
                 // Edward: both peripherals visually look like a multitap.
                 // Real hardware to test against is going to be genuinely
                 // hard to source either way, but the menu entries and
                 // model association are ready regardless.
-                Action("Gravis Grip", ModelIndex::Multitap),
-                Action("Gravis Pad", ModelIndex::Multitap),
-                Action("SpaceOrb 360", ModelIndex::Gamepad), // menu label differs from the OPTOBJ catalog's own generic name for this index
-                Action("VFX-1", ModelIndex::Headphones),     // ditto - VFX-1 was a VR headset, repurposing "Headphones"
+                Action("Gravis Grip", StringId::GravisGrip, ModelIndex::Multitap),
+                Action("Gravis Pad", StringId::GravisPad, ModelIndex::Multitap),
+                Action("SpaceOrb 360", StringId::SpaceOrb360, ModelIndex::Gamepad), // menu label differs from the OPTOBJ catalog's own generic name for this index
+                Action("VFX-1", StringId::Vfx1, ModelIndex::Headphones),     // ditto - VFX-1 was a VR headset, repurposing "Headphones"
             });
 
             // Everything except Keyboard/Mouse - Edward, 2026: "All
@@ -103,10 +123,11 @@ namespace ALTEngine::Menu
 
         MenuNode Difficulty(ALTEngine::Bootstrap::Difficulty current)
         {
-            MenuNode n = List("Difficulty", {
-                Action("Acid Reign"),
-                Action("Raging Terror"),
-                Action("Xenomania"),
+            using ALTEngine::Bootstrap::StringId;
+            MenuNode n = List("Difficulty", StringId::Difficulty, {
+                Action("Acid Reign", StringId::AcidReign),
+                Action("Raging Terror", StringId::RagingTerror),
+                Action("Xenomania", StringId::Xenomania),
             });
             const char* label = current == ALTEngine::Bootstrap::Difficulty::RagingTerror ? "Raging Terror"
                                : current == ALTEngine::Bootstrap::Difficulty::Xenomania ? "Xenomania"
@@ -118,9 +139,10 @@ namespace ALTEngine::Menu
 
         MenuNode CameraSway(bool currentlyOn)
         {
-            MenuNode n = List("Camera Sway", {
-                Action("Off", ModelIndex::CameraCrossedOut),
-                Action("On", ModelIndex::Camera),
+            using ALTEngine::Bootstrap::StringId;
+            MenuNode n = List("Camera Sway", StringId::CameraSway, {
+                Action("Off", StringId::Off, ModelIndex::CameraCrossedOut),
+                Action("On", StringId::On, ModelIndex::Camera),
             });
             n.initialSelectedChild = FindChildIndexByLabel(n.children, currentlyOn ? "On" : "Off");
             n.isSettingsList = true;
@@ -130,35 +152,40 @@ namespace ALTEngine::Menu
         MenuNode Graphics(const std::vector<std::string>& resolutionLabels, ALTEngine::Bootstrap::RenderFidelity currentQuality,
                           const std::string& currentResolutionLabel)
         {
+            using ALTEngine::Bootstrap::StringId;
             // New - not in the original game. "Quality" ties to
             // RenderSettings; "Resolution" ties to ResolutionSettings.
+            // resolutionLabels' own children ("1920x1080" etc) are
+            // dynamic content, not fixed UI strings - left untagged
+            // (stringId stays -1, showing the label as-is).
             std::vector<MenuNode> resolutionChildren;
             for (const auto& label : resolutionLabels) { resolutionChildren.push_back(Action(label)); }
 
-            MenuNode quality = List("Quality", {
-                Action("Original"),
-                Action("Smoothed"),
+            MenuNode quality = List("Quality", StringId::Quality, {
+                Action("Original", StringId::Original),
+                Action("Smoothed", StringId::Smoothed),
             });
             quality.initialSelectedChild = FindChildIndexByLabel(quality.children,
                 currentQuality == ALTEngine::Bootstrap::RenderFidelity::Smoothed ? "Smoothed" : "Original");
             quality.isSettingsList = true;
 
-            MenuNode resolution = List("Resolution", std::move(resolutionChildren));
+            MenuNode resolution = List("Resolution", StringId::Resolution, std::move(resolutionChildren));
             resolution.initialSelectedChild = FindChildIndexByLabel(resolution.children, currentResolutionLabel);
             resolution.isSettingsList = true;
 
-            return List("Graphics", { std::move(quality), std::move(resolution) });
+            return List("Graphics", StringId::Graphics, { std::move(quality), std::move(resolution) });
         }
 
         MenuNode LanguageMenu(ALTEngine::Bootstrap::Language current)
         {
-            MenuNode n = List("Language", {
-                Action("English"),          // English
-                Action("Français"),         // French
-                Action("Italiano"),         // Italian
-                Action("Español"),          // Spanish
-                Action("Deutsch"),          // German
-                Action("Japanese 日本語"),   // Japanese
+            using ALTEngine::Bootstrap::StringId;
+            MenuNode n = List("Language", StringId::LanguageMenuTitle, {
+                Action("English", StringId::LanguageEnglish),          // English
+                Action("Français", StringId::LanguageFrench),         // French
+                Action("Italiano", StringId::LanguageItalian),         // Italian
+                Action("Español", StringId::LanguageSpanish),          // Spanish
+                Action("Deutsch", StringId::LanguageGerman),          // German
+                Action("Japanese 日本語", StringId::LanguageJapanese),   // Japanese
             });
             const char* label = "English";
             switch (current)
@@ -166,6 +193,8 @@ namespace ALTEngine::Menu
             case ALTEngine::Bootstrap::Language::French:  label = "Français"; break;
             case ALTEngine::Bootstrap::Language::Italian: label = "Italiano"; break;
             case ALTEngine::Bootstrap::Language::Spanish: label = "Español";  break;
+            case ALTEngine::Bootstrap::Language::German:  label = "Deutsch";  break;
+            case ALTEngine::Bootstrap::Language::Japanese: label = "Japanese 日本語"; break;
             case ALTEngine::Bootstrap::Language::English:
             default: break;
             }
@@ -176,6 +205,7 @@ namespace ALTEngine::Menu
 
         MenuNode Volume()
         {
+            using ALTEngine::Bootstrap::StringId;
             /*
             MenuNode n;
             n.label = "Volume";
@@ -183,9 +213,9 @@ namespace ALTEngine::Menu
             return n;
             */ // TODO : Black is transparent on these textures. RGB 0/0/0 HSL 160/0/0
             // only appears to be on these two models / textures.
-            return List("Volume", {
-                Action("Music", ModelIndex::SpeakerMusic),
-                Action("SFX", ModelIndex::SpeakerSfx),
+            return List("Volume", StringId::Volume, {
+                Action("Music", StringId::Music, ModelIndex::SpeakerMusic),
+                Action("SFX", StringId::Sfx, ModelIndex::SpeakerSfx),
             });
         }
 
@@ -193,6 +223,7 @@ namespace ALTEngine::Menu
         {
             MenuNode n;
             n.label = "Credits";
+            n.stringId = static_cast<int>(ALTEngine::Bootstrap::StringId::Credits);
             n.kind = MenuNodeKind::CreditsScroll;
             return n;
         }
@@ -200,13 +231,14 @@ namespace ALTEngine::Menu
         MenuNode Options(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
                          ALTEngine::Bootstrap::KeyBindings& keyBindings)
         {
+            using ALTEngine::Bootstrap::StringId;
             // modelIndex Computer here is inherited by every child that
             // doesn't set its own - matches the reference images, where
             // the monitor+tower model is the default across almost all of
             // Options and only changes for Controls > Keyboard > Redefine.
-            return List("Options", {
+            return List("Options", StringId::Options, {
                 Volume(),
-                Controls(keyBindings),
+                Controls(keyBindings, settings.language),
                 Difficulty(settings.difficulty),
                 CameraSway(settings.cameraSwayOn),
                 Graphics(resolutionLabels, settings.quality, settings.resolutionLabel),
@@ -219,10 +251,11 @@ namespace ALTEngine::Menu
     MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
                                ALTEngine::Bootstrap::KeyBindings& keyBindings)
     {
+        using ALTEngine::Bootstrap::StringId;
         return List("Main Menu", {
-            Action("Start Game"),
-            Action("Multiplayer"),
-            Action("Load Game"),
+            Action("Start Game", StringId::StartGame),
+            Action("Multiplayer", StringId::Multiplayer),
+            Action("Load Game", StringId::LoadGame),
             Options(resolutionLabels, settings, keyBindings),
         });
     }

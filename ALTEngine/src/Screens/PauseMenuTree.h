@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Menu/MenuNode.h"
+#include "../Bootstrap/Localization.h"
 
 namespace ALTEngine::Screens
 {
@@ -19,5 +20,5 @@ namespace ALTEngine::Screens
     // Runtime state (which items are actually available/equipped, ammo
     // counts) is NOT part of this static tree - see PlayerInventoryState,
     // queried separately at render time by label.
-    ALTEngine::Menu::MenuNode BuildPauseMenuTree();
+    ALTEngine::Menu::MenuNode BuildPauseMenuTree(ALTEngine::Bootstrap::Language language);
 }

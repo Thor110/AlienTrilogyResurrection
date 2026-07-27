@@ -11,6 +11,8 @@ namespace ALTEngine::Bootstrap
         French,
         Italian,
         Spanish,
+        German,
+        Japanese,
     };
 
     // English has no prefix. All four confirmed: French 'F' (INTRO.AVI ->

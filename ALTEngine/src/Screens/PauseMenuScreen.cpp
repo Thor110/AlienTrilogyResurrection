@@ -72,10 +72,10 @@ namespace ALTEngine::Screens
         }
 
         void DrawLeftColumn(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int cursorIndex,
-                             const PlayerInventoryState& inventory, int x, int y, int rowHeight, int scale, int& outWidth)
+                             const PlayerInventoryState& inventory, int x, int y, int rowHeight, int scale, int& outWidth, Language language)
         {
             int width = 0;
-            for (const auto& item : items) { width = std::max(width, TextWidth(item.label, scale)); }
+            for (const auto& item : items) { width = std::max(width, TextWidth(DisplayLabel(item, language), scale)); }
             width += scale * 8;
             outWidth = width;
 
@@ -101,7 +101,7 @@ namespace ALTEngine::Screens
                 DrawRoundedRect(renderer, bar, static_cast<float>(scale * 2), boxColor);
 
                 Color color = isEquipped ? COLOR_EQUIPPED : (isCursor ? COLOR_CURSOR : COLOR_DIM);
-                DrawBitmapText(renderer, items[i].label, x + scale * 4, rowY + (rowHeight - TextHeight(scale)) / 2, scale, color);
+                DrawBitmapText(renderer, DisplayLabel(items[i], language), x + scale * 4, rowY + (rowHeight - TextHeight(scale)) / 2, scale, color);
             }
         }
 
@@ -275,7 +275,7 @@ namespace ALTEngine::Screens
             break;
         }
 
-        MenuNode root = BuildPauseMenuTree();
+        MenuNode root = BuildPauseMenuTree(language);
         std::vector<int> path = { 0 };
 
         PauseMenuResult result;
@@ -406,7 +406,7 @@ namespace ALTEngine::Screens
             int margin = scale * 8;
 
             int leftWidth = 0;
-            DrawLeftColumn(renderer, root.children, path[0], inventory, margin, margin, rowHeight, scale, leftWidth);
+            DrawLeftColumn(renderer, root.children, path[0], inventory, margin, margin, rowHeight, scale, leftWidth, language);
 
             int panelX = margin + leftWidth + scale * 8;
             int panelY = margin;
@@ -459,7 +459,7 @@ namespace ALTEngine::Screens
                 int exitY = panelY + rowHeight * 2;
                 int exitTextY = drawRow(exitY, exitCursor);
                 Color exitColor = exitCursor ? COLOR_CURSOR : COLOR_DIM;
-                DrawBitmapText(renderer, "EXIT GAME", panelX, exitTextY, scale, exitColor);
+                DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::ExitGameTitle, language), panelX, exitTextY, scale, exitColor);
 
                 if (exitCursor) // Exit Game is the active/previewed column
                 {
@@ -489,7 +489,7 @@ namespace ALTEngine::Screens
                 }
                 else
                 {
-                    DrawBitmapText(renderer, "Not available", panelX, panelY, scale, COLOR_STATUS);
+                    DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::NotAvailable, language), panelX, panelY, scale, COLOR_STATUS);
                 }
             }
             else if (auto weaponInfo = WeaponInfoFor(topLabel, inventory, root.children[static_cast<size_t>(path[0])]))
@@ -502,7 +502,7 @@ namespace ALTEngine::Screens
                 DrawPickModModel(renderer, cdDirectory, weaponInfo->ammoModel, panelX, panelY + rowHeight * 2, 200, 150, scale, rotationAngle);
                 DrawPickModModel(renderer, cdDirectory, weaponInfo->weaponModel, panelX, panelY + rowHeight * 2 + 170, 260, 150, scale, rotationAngle);
 
-                std::string statusText = weaponInfo->state->equipped ? "Selected" : "Not available";
+                std::string statusText = weaponInfo->state->equipped ? "Selected" : ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::NotAvailable, language);
                 DrawBitmapText(renderer, statusText, panelX, panelY + rowHeight * 2 + 340, scale, COLOR_STATUS);
             }
             else if (topLabel == "Save Game" || topLabel == "Load Game")
@@ -521,7 +521,7 @@ namespace ALTEngine::Screens
                              (topLabel == "Shoulder Lamp" && inventory.hasShoulderLamp) ||
                              (topLabel == "Batteries" && inventory.hasBatteries);
                 DrawPickModModel(renderer, cdDirectory, node.modelIndex, panelX, panelY, 260, 200, scale, rotationAngle);
-                if (!owned) { DrawBitmapText(renderer, "Not available", panelX, panelY + 220, scale, COLOR_STATUS); }
+                if (!owned) { DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::NotAvailable, language), panelX, panelY + 220, scale, COLOR_STATUS); }
             }
 
             SDL_RenderPresent(renderer);

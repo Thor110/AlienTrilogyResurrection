@@ -9,6 +9,7 @@
 #include "../Bootstrap/KeyBindings.h"
 #include "../Bootstrap/Localization.h"
 #include "../Bootstrap/RenderSettings.h"
+#include "../Bootstrap/StringId.h"
 
 namespace ALTEngine::Menu
 {

@@ -4,9 +4,25 @@
 #include <vector>
 
 #include "MenuNode.h"
+#include "../Bootstrap/Strings.h"
 
 namespace ALTEngine::Menu
 {
+    // What to actually draw for `node` - Tr(stringId, language) if it
+    // has a real stringId (a fixed UI string), otherwise `node.label`
+    // as-is (dynamic content: Resolution's "1920x1080", Redefine's own
+    // "{action}: {binding}" labels, which aren't single fixed strings
+    // to translate). Every render function (DrawColumn, DrawMainMenuList,
+    // DrawLeftColumn) should go through this rather than reading
+    // node.label directly, so label stays free to keep serving as the
+    // stable, English-based internal identifier existing comparisons
+    // already rely on (Edward, 2026 - localization foundations).
+    inline std::string DisplayLabel(const MenuNode& node, ALTEngine::Bootstrap::Language language)
+    {
+        if (node.stringId < 0) { return node.label; }
+        return ALTEngine::Bootstrap::Tr(static_cast<ALTEngine::Bootstrap::StringId>(node.stringId), language);
+    }
+
     // Walks `path` from `root`: path[i] indexes into the children of the
     // node reached after path[0..i-1]. Returns the deepest node reached.
     // Throws std::out_of_range on an invalid path (shouldn't happen if

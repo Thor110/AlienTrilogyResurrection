@@ -104,6 +104,18 @@ namespace ALTEngine::Menu
         int inputActionIndex = -1;
         int deviceIndex = -1;
 
+        // Which StringId (Bootstrap/StringId.h) to actually display for
+        // this node, looked up via Tr(stringId, language) - separate
+        // from `label`, which stays the stable, English-based internal
+        // identifier every existing comparison (ApplyLeafAction,
+        // FindChildIndexByLabel, parentLabel == "Exit Game", etc)
+        // already relies on. -1 means "no translation entry, just show
+        // label as-is" - used for dynamic content that isn't a fixed
+        // UI string (Resolution's "1920x1080", Redefine's own
+        // "{action}: {binding}" labels) (Edward, 2026: "lay the
+        // foundations for a language system").
+        int stringId = -1;
+
         // For Slider leaves: 0-10, matching the ~8/10 filled-bar look in
         // the reference images. Purely cosmetic placeholder for now - not
         // wired to actual audio.

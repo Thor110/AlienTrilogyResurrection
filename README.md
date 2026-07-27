@@ -47,6 +47,7 @@ The road map for this project.
 	- Integrated main menu audio, functional layout drafts, options configs, resolution detection  and selection.
 	- Graphics quality options smoothed and original rendering styles. (WIP)
 	- Resolution scaling.
+	- Modular language localization system.
 - [❌ 1 : Text Editor](#text-editor) ( 50% Complete )
 	- View text from the games missions and user interface.
 	- Editing and saving functions not implemented yet.
@@ -181,6 +182,12 @@ Resolution Scaling
 
 <div align="center">
   <img src="Images/ALTEngine/resolution-scaling.png" alt="Resolution Scaling">
+</div>
+
+Localization System - Modular Language Packs
+
+<div align="center">
+  <img src="Images/ALTEngine/localisation-system.png" alt="Localization System">
 </div>
 
 ## Alien Trilogy Viewer

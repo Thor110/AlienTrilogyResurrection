@@ -7,6 +7,7 @@
 #include "Bootstrap/GameLocator.h"
 #include "Bootstrap/GameplaySettings.h"
 #include "Bootstrap/KeyBindings.h"
+#include "Bootstrap/Strings.h"
 #include "Bootstrap/ImageDisplay.h"
 #include "Bootstrap/InstallPipeline.h"
 #include "Bootstrap/Localization.h"
@@ -170,6 +171,13 @@ int main(int, char**)
     // Patching happens as part of installation itself (InstallFromDisc)
     // - no separate re-check needed here every boot.
     std::filesystem::path cdDirectory = result.gameDirectory / "CD";
+
+    // Must happen before anything below could possibly call Tr() -
+    // LoadedLanguagePacks() only ever initializes its cache once, on
+    // first use, so setting this any later would have no effect
+    // (Edward, 2026: "move the LANGUAGE folder to GameData\CD\LANGUAGE
+    // so that it sits alongside the original language files").
+    ALTEngine::Bootstrap::SetLanguagePackDirectory(cdDirectory);
 
     if (!ShowLegalSplash(cdDirectory))
     {

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Localization.h"
+#include "Strings.h"
+
 #include <SDL3/SDL.h>
 #include <array>
 #include <string>
@@ -79,7 +82,9 @@ namespace ALTEngine::Bootstrap
     };
 
     // Display label shown in the Redefine list (e.g. "Move Forward",
-    // "Select Weapon 1").
+    // "Select Weapon 1") - English default, for callers that don't have
+    // a Language handy. Prefer the Language-aware overload below when
+    // one is available (Edward, 2026 - localization foundations).
     inline std::string ActionLabel(InputAction action)
     {
         switch (action)
@@ -103,6 +108,37 @@ namespace ALTEngine::Bootstrap
         case InputAction::Turnaround: return "Turnaround";
         case InputAction::WeaponSelectMenu: return "Weapon Select";
         case InputAction::Pause: return "Pause";
+        default: return "";
+        }
+    }
+
+    // Language-aware version - looks up StringId::ActionXxx via Tr(),
+    // so the Redefine list's action names translate (the binding
+    // portion after the ":" - "W", "MOUSE LEFT" etc - stays untranslated
+    // either way, since those are SDL's own hardware key/button names).
+    inline std::string ActionLabel(InputAction action, Language language)
+    {
+        switch (action)
+        {
+        case InputAction::MoveForward: return Tr(StringId::ActionMoveForward, language);
+        case InputAction::MoveBackward: return Tr(StringId::ActionMoveBackward, language);
+        case InputAction::StrafeLeft: return Tr(StringId::ActionStrafeLeft, language);
+        case InputAction::StrafeRight: return Tr(StringId::ActionStrafeRight, language);
+        case InputAction::Fire1: return Tr(StringId::ActionFire1, language);
+        case InputAction::Fire2: return Tr(StringId::ActionFire2, language);
+        case InputAction::Use: return Tr(StringId::ActionUse, language);
+        case InputAction::StrafeModifier: return Tr(StringId::ActionStrafeModifier, language);
+        case InputAction::RunMode: return Tr(StringId::ActionRunMode, language);
+        case InputAction::RunModifier: return Tr(StringId::ActionRunModifier, language);
+        case InputAction::SelectWeapon1: return Tr(StringId::ActionSelectWeapon1, language);
+        case InputAction::SelectWeapon2: return Tr(StringId::ActionSelectWeapon2, language);
+        case InputAction::SelectWeapon3: return Tr(StringId::ActionSelectWeapon3, language);
+        case InputAction::SelectWeapon4: return Tr(StringId::ActionSelectWeapon4, language);
+        case InputAction::SelectWeapon5: return Tr(StringId::ActionSelectWeapon5, language);
+        case InputAction::NextWeapon: return Tr(StringId::ActionNextWeapon, language);
+        case InputAction::Turnaround: return Tr(StringId::ActionTurnaround, language);
+        case InputAction::WeaponSelectMenu: return Tr(StringId::ActionWeaponSelectMenu, language);
+        case InputAction::Pause: return Tr(StringId::ActionPause, language);
         default: return "";
         }
     }

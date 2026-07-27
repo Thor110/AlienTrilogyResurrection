@@ -192,10 +192,10 @@ namespace ALTEngine::Menu
         // settings-list preview column showing its current value one
         // column ahead of actually entering it).
         int DrawColumn(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int selectedIndex, bool pulseSelected,
-                        int x, int y, int rowHeight, int scale)
+                        int x, int y, int rowHeight, int scale, Language language)
         {
             int width = 0;
-            for (const auto& item : items) { width = std::max(width, TextWidth(item.label, scale)); }
+            for (const auto& item : items) { width = std::max(width, TextWidth(DisplayLabel(item, language), scale)); }
             width += scale * 8; // padding
 
             float pulse = pulseSelected ? PulsePhase() : 1.0f;
@@ -226,7 +226,7 @@ namespace ALTEngine::Menu
                 SDL_FRect bar{ static_cast<float>(x), static_cast<float>(rowY), static_cast<float>(width), static_cast<float>(rowHeight - scale * 2) };
                 DrawRoundedRect(renderer, bar, static_cast<float>(scale * 2), boxColor);
 
-                DrawBitmapText(renderer, items[i].label, x + scale * 4, rowY + (rowHeight - TextHeight(scale)) / 2, scale, textColor);
+                DrawBitmapText(renderer, DisplayLabel(items[i], language), x + scale * 4, rowY + (rowHeight - TextHeight(scale)) / 2, scale, textColor);
             }
 
             return width;
@@ -236,7 +236,7 @@ namespace ALTEngine::Menu
         // green by default, white when selected. Distinct from DrawColumn
         // (used for Options, which keeps its filled-bar highlight).
         void DrawMainMenuList(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int selectedIndex,
-            int windowW, int y, int rowHeight, int scale)
+            int windowW, int y, int rowHeight, int scale, Language language)
         {
             float pulse = PulsePhase();
             for (size_t i = 0; i < items.size(); ++i)
@@ -245,10 +245,11 @@ namespace ALTEngine::Menu
                 bool isSelected = (static_cast<int>(i) == selectedIndex);
                 Color textColor = isSelected ? LerpColor(COLOR_GREEN, COLOR_WHITE, pulse) : COLOR_GREEN;
 
-                int textW = TextWidth(items[i].label, scale);
+                std::string text = DisplayLabel(items[i], language);
+                int textW = TextWidth(text, scale);
                 int textX = (windowW - textW) / 2;
 
-                DrawBitmapText(renderer, items[i].label, textX, rowY + (rowHeight - TextHeight(scale)) / 2, scale, textColor);
+                DrawBitmapText(renderer, text, textX, rowY + (rowHeight - TextHeight(scale)) / 2, scale, textColor);
             }
         }
 
@@ -531,7 +532,7 @@ namespace ALTEngine::Menu
                         awaitingRebind = true;
                         rebindActionIndex = leaf.inputActionIndex;
                         rebindDevice = static_cast<ALTEngine::Bootstrap::DeviceKind>(leaf.deviceIndex);
-                        rebindActionLabel = ALTEngine::Bootstrap::ActionLabel(static_cast<ALTEngine::Bootstrap::InputAction>(leaf.inputActionIndex));
+                        rebindActionLabel = ALTEngine::Bootstrap::ActionLabel(static_cast<ALTEngine::Bootstrap::InputAction>(leaf.inputActionIndex), language);
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         return;
                     }
@@ -564,7 +565,7 @@ namespace ALTEngine::Menu
                         for (auto& child : redefineList.children)
                         {
                             auto action = static_cast<ALTEngine::Bootstrap::InputAction>(child.inputActionIndex);
-                            child.label = keyBindings.FormatBinding(device, action);
+                            child.label = keyBindings.FormatBinding(device, action, language);
                         }
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         return;
@@ -626,7 +627,7 @@ namespace ALTEngine::Menu
                     {
                         auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
                         keyBindings.SetKey(action, event.key.scancode);
-                        WalkPath(optionsRoot, optionsPath).label = keyBindings.FormatBinding(rebindDevice, action);
+                        WalkPath(optionsRoot, optionsPath).label = keyBindings.FormatBinding(rebindDevice, action, language);
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         awaitingRebind = false;
                     }
@@ -634,7 +635,7 @@ namespace ALTEngine::Menu
                     {
                         auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
                         keyBindings.SetMouseButton(action, event.button.button);
-                        WalkPath(optionsRoot, optionsPath).label = keyBindings.FormatBinding(rebindDevice, action);
+                        WalkPath(optionsRoot, optionsPath).label = keyBindings.FormatBinding(rebindDevice, action, language);
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         awaitingRebind = false;
                     }
@@ -642,7 +643,7 @@ namespace ALTEngine::Menu
                     {
                         auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
                         keyBindings.SetMouseWheel(action, event.wheel.y > 0); // y>0 = scrolled away from the user (up), per SDL3's own docs
-                        WalkPath(optionsRoot, optionsPath).label = keyBindings.FormatBinding(rebindDevice, action);
+                        WalkPath(optionsRoot, optionsPath).label = keyBindings.FormatBinding(rebindDevice, action, language);
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         awaitingRebind = false;
                     }
@@ -698,7 +699,7 @@ namespace ALTEngine::Menu
                 DrawMenuBackground(renderer, mainBg, mainBgW, mainBgH);
                 int windowW = 0, windowH = 0;
                 SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-                DrawMainMenuList(renderer, root.children, mainPath[0], windowW, windowH * 2 / 3, rowHeight, scale);
+                DrawMainMenuList(renderer, root.children, mainPath[0], windowW, windowH * 2 / 3, rowHeight, scale, language);
             }
             else if (screen == Screen::Options)
             {
@@ -718,7 +719,7 @@ namespace ALTEngine::Menu
                 float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f; // 1 radian/sec - a slow, steady spin
                 DrawModel(renderer, cdDirectory, modelIndex, 0, 0, windowW, windowH, scale, rotationAngle);
 
-                std::string title = "OPTIONS";
+                std::string title = ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::OptionsTitle, language);
                 DrawBitmapText(renderer, title, (windowW - TextWidth(title, scale)) / 2, scale * 6, scale, COLOR_GREEN);
 
                 int columnTop = scale * 20;
@@ -751,7 +752,7 @@ namespace ALTEngine::Menu
                         pulseHere = false;
                     }
 
-                    int columnWidth = DrawColumn(renderer, node->children, selectedHere, pulseHere, columnX, columnTop, rowHeight, scale);
+                    int columnWidth = DrawColumn(renderer, node->children, selectedHere, pulseHere, columnX, columnTop, rowHeight, scale, language);
                     columnX += columnWidth + scale * 4; // Edward, 2026: needs a visible gap between adjacent columns too, not just between stacked rows within one
 
                     if (depth >= optionsPath.size()) { break; }
@@ -759,8 +760,10 @@ namespace ALTEngine::Menu
                     if (node->kind != MenuNodeKind::List) { break; } // leaf - nothing further to preview as a column
                 }
 
-                DrawBitmapText(renderer, "PRESS ESC TO GO BACK", (windowW - TextWidth("PRESS ESC TO GO BACK", scale)) / 2, windowH - rowHeight * 2, scale, COLOR_GREEN);
-                DrawBitmapText(renderer, "PRESS ENTER TO SELECT", (windowW - TextWidth("PRESS ENTER TO SELECT", scale)) / 2, windowH - rowHeight, scale, COLOR_GREEN);
+                DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::PressEscToGoBack, language),
+                                (windowW - TextWidth(ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::PressEscToGoBack, language), scale)) / 2, windowH - rowHeight * 2, scale, COLOR_GREEN);
+                DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::PressEnterToSelect, language),
+                                (windowW - TextWidth(ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::PressEnterToSelect, language), scale)) / 2, windowH - rowHeight, scale, COLOR_GREEN);
 
                 // Redefine controls (Edward, 2026) - a prominent, centred
                 // prompt while waiting for the next key/mouse-button
@@ -769,9 +772,10 @@ namespace ALTEngine::Menu
                 if (awaitingRebind)
                 {
                     bool isMouse = (rebindDevice == ALTEngine::Bootstrap::DeviceKind::Mouse);
-                    std::string promptLine1 = "PRESS A " + std::string(isMouse ? "MOUSE BUTTON OR WHEEL" : "KEY") + " TO BIND";
+                    std::string promptLine1 = ALTEngine::Bootstrap::Tr(isMouse ? ALTEngine::Bootstrap::StringId::PressAMouseButtonOrWheelToBind
+                                                                                : ALTEngine::Bootstrap::StringId::PressAKeyToBind, language);
                     std::string promptLine2 = "\"" + rebindActionLabel + "\"";
-                    std::string promptLine3 = "OR ESC TO CANCEL";
+                    std::string promptLine3 = ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::OrEscToCancel, language);
                     int promptWidth = std::max({ TextWidth(promptLine1, scale), TextWidth(promptLine2, scale), TextWidth(promptLine3, scale) }) + scale * 16;
                     int promptHeight = rowHeight * 3 + scale * 8;
                     SDL_FRect promptBox{ static_cast<float>((windowW - promptWidth) / 2), static_cast<float>((windowH - promptHeight) / 2),
@@ -789,10 +793,10 @@ namespace ALTEngine::Menu
                 DrawMenuBackground(renderer, optionsBg, optionsBgW, optionsBgH);
                 // Placeholder - real credits scroll (parsing CD/GFX/CREDITS.TXT
                 // and animating it) isn't implemented yet.
-                DrawBitmapText(renderer, "CREDITS", scale * 8, scale * 8, scale, COLOR_GREEN);
-                DrawBitmapText(renderer, "(scroll not yet implemented - see CD/GFX/CREDITS.TXT)",
+                DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::CreditsTitle, language), scale * 8, scale * 8, scale, COLOR_GREEN);
+                DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::CreditsPlaceholder, language),
                                 scale * 8, scale * 8 + rowHeight, scale, COLOR_GREEN_DIM);
-                DrawBitmapText(renderer, "PRESS ESC TO GO BACK", scale * 8, scale * 8 + rowHeight * 3, scale, COLOR_GREEN);
+                DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::PressEscToGoBack, language), scale * 8, scale * 8 + rowHeight * 3, scale, COLOR_GREEN);
             }
 
             SDL_RenderPresent(renderer);

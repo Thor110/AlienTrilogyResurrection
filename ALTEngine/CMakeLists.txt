@@ -239,6 +239,18 @@ add_custom_command(TARGET ALTEngine POST_BUILD
         "$<TARGET_FILE_DIR:ALTEngine>/data"
 )
 
+# LANGUAGE/ (localisation packs) lives in the source tree as the source
+# of truth, deployed to GameData/CD/LANGUAGE at build time - alongside
+# where the original disc's own language-specific files end up (see
+# Bootstrap/Strings.h's SetLanguagePackDirectory). GameData sits next to
+# the executable, matching InstallFromDisc's own destination (Edward,
+# 2026).
+add_custom_command(TARGET ALTEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/LANGUAGE"
+        "$<TARGET_FILE_DIR:ALTEngine>/GameData/CD/LANGUAGE"
+)
+
 # ---------------------------------------------------------------------------
 # Third-party licenses. Every dependency we link against gets its license
 # text committed under third_party_licenses/<name>/ and shipped alongside
@@ -257,6 +269,7 @@ add_custom_command(TARGET ALTEngine POST_BUILD
 
 install(TARGETS ALTEngine RUNTIME DESTINATION bin)
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/data/" DESTINATION bin/data)
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/LANGUAGE/" DESTINATION bin/GameData/CD/LANGUAGE)
 install(FILES "${CMAKE_SOURCE_DIR}/third_party_licenses/SDL3/LICENSE.txt"
         DESTINATION bin/licenses/SDL3)
 install(FILES "${CMAKE_SOURCE_DIR}/third_party_licenses/nlohmann-json/LICENSE.txt"
