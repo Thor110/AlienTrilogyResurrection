@@ -275,34 +275,41 @@ namespace ALTEngine::Menu
         }
 
         MenuNode Options(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
-                         ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::AudioSettings& audioSettings)
+                         ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::AudioSettings& audioSettings,
+                         bool includeCredits)
         {
             using ALTEngine::Bootstrap::StringId;
             // modelIndex Computer here is inherited by every child that
             // doesn't set its own - matches the reference images, where
             // the monitor+tower model is the default across almost all of
             // Options and only changes for Controls > Keyboard > Redefine.
-            return List("Options", StringId::Options, {
+            std::vector<MenuNode> children = {
                 Volume(audioSettings, settings.language),
                 Controls(keyBindings, settings.language),
                 Difficulty(settings.difficulty),
                 CameraSway(settings.cameraSwayOn),
                 Graphics(resolutionLabels, settings.quality, settings.resolutionLabel, settings.vsync, settings.displayMode),
                 LanguageMenu(settings.language),
-                Credits(),
-            }, ModelIndex::Computer);
+            };
+            // Excluded when opened from the pause menu - Credits doesn't
+            // make sense mid-game (Edward, 2026: "when coming from the
+            // pause menu, the Credits button does not spawn").
+            if (includeCredits) { children.push_back(Credits()); }
+
+            return List("Options", StringId::Options, std::move(children), ModelIndex::Computer);
         }
     }
 
     MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
-                               ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::AudioSettings& audioSettings)
+                               ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::AudioSettings& audioSettings,
+                               bool includeCredits)
     {
         using ALTEngine::Bootstrap::StringId;
         return List("Main Menu", {
             Action("Start Game", StringId::StartGame),
             Action("Multiplayer", StringId::Multiplayer),
             Action("Load Game", StringId::LoadGame),
-            Options(resolutionLabels, settings, keyBindings, audioSettings),
+            Options(resolutionLabels, settings, keyBindings, audioSettings, includeCredits),
         });
     }
 }

@@ -6,6 +6,7 @@
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/MissionText.h"
+#include "../Menu/MenuController.h"
 #include "../Menu/MenuNavigation.h"
 #include "../Renderer/ModelRenderer.h"
 #include "../Renderer/ModelPreview.h"
@@ -23,9 +24,15 @@ namespace ALTEngine::Screens
     using ALTEngine::Audio::SfxPlayer;
     using ALTEngine::Bootstrap::AppWindow;
     using ALTEngine::Bootstrap::AudioSettings;
+    using ALTEngine::Bootstrap::CameraSwaySettings;
     using ALTEngine::Bootstrap::ComputeMenuScale;
+    using ALTEngine::Bootstrap::DifficultySettings;
+    using ALTEngine::Bootstrap::KeyBindings;
+    using ALTEngine::Bootstrap::LanguageSettings;
     using ALTEngine::Bootstrap::LerpColor;
     using ALTEngine::Bootstrap::PulsePhase;
+    using ALTEngine::Bootstrap::RenderSettings;
+    using ALTEngine::Bootstrap::ResolutionSettings;
     using ALTEngine::Bootstrap::Color;
     using ALTEngine::Bootstrap::DrawBitmapText;
     using ALTEngine::Bootstrap::Language;
@@ -38,6 +45,7 @@ namespace ALTEngine::Screens
     using ALTEngine::Menu::EffectiveModelIndex;
     using ALTEngine::Menu::Enter;
     using ALTEngine::Menu::EnterResult;
+    using ALTEngine::Menu::MenuController;
     using ALTEngine::Menu::MenuNode;
     using ALTEngine::Menu::MenuNodeKind;
     using ALTEngine::Menu::MoveSelection;
@@ -230,10 +238,16 @@ namespace ALTEngine::Screens
 
     PauseMenuResult PauseMenuScreen::Run(
         const std::filesystem::path& cdDirectory,
-        Language language,
+        Language& language,
         const std::string& missionLevelCode,
         const PlayerInventoryState& inventory,
-        AudioSettings& audioSettings)
+        AudioSettings& audioSettings,
+        RenderSettings& renderSettings,
+        ResolutionSettings& resolutionSettings,
+        DifficultySettings& difficultySettings,
+        CameraSwaySettings& cameraSwaySettings,
+        LanguageSettings& languageSettings,
+        KeyBindings& keyBindings)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
@@ -281,14 +295,6 @@ namespace ALTEngine::Screens
         }
         std::vector<int> path = { 0 };
 
-        // SFX/Music Volume (Edward, 2026: "Separate the buttons from the
-        // sliders, so that you have to press the button to access the
-        // slider... only requiring escape if you have selected the
-        // music or sfx slider button") - false while just navigating
-        // (left/right behave like every other entry), true only once
-        // the button's been pressed.
-        bool adjustingSlider = false;
-
         PauseMenuResult result;
         bool running = true;
 
@@ -315,6 +321,30 @@ namespace ALTEngine::Screens
                     // Backs out, matching Escape, rather than doing
                     // nothing at all (Edward, 2026).
                     ALTEngine::Menu::Back(path);
+                }
+                else if (r == EnterResult::Toggled && deepest.label == "Options")
+                {
+                    // Opens the same full Options menu the boot menu
+                    // uses (Edward, 2026: "update the options button in
+                    // the pause menu so that it opens the [options]
+                    // menu") - startInOptionsOnly renders it without the
+                    // main-menu list behind it and skips its music,
+                    // returning control back here (resuming this same
+                    // pause menu loop) once backed all the way out,
+                    // rather than falling back to a main menu that was
+                    // never shown. includeCredits=false since Credits
+                    // doesn't make sense mid-game (Edward, 2026: "when
+                    // coming from the pause menu, the Credits button
+                    // does not spawn").
+                    std::vector<int> unusedMainPath = { 0 };
+                    ALTEngine::Menu::MenuResult optionsResult = MenuController::Run(cdDirectory, renderSettings, resolutionSettings,
+                        difficultySettings, cameraSwaySettings, languageSettings, keyBindings, audioSettings,
+                        language, unusedMainPath, /*startInOptionsOnly=*/true);
+                    if (optionsResult.windowClosed)
+                    {
+                        result.outcome = PauseMenuOutcome::WindowClosed;
+                        running = false;
+                    }
                 }
                 else if (r == EnterResult::Toggled && (deepest.label == "Save Game" || deepest.label == "Load Game"))
                 {
@@ -355,79 +385,10 @@ namespace ALTEngine::Screens
                 return parent.label == "Exit Game";
             };
 
-            // Functional volume sliders (Edward, 2026: "The pause menu
-            // also needs functional Music/SFX volume sliders") - same
-            // shape as currentListIsExitGameConfirmation above, but for
-            // adjusting a value rather than moving a cursor. Returns
-            // false (no-op) if the cursor isn't on one of these two
-            // specific entries, so the caller falls back to the normal
-            // enter/escape behaviour.
-            auto AdjustVolumeIfOnSliderEntry = [&](int delta) {
-                if (path.size() < 2) { return false; }
-                std::vector<int> parentPath(path.begin(), path.end() - 1);
-                const MenuNode& parent = WalkPath(root, parentPath);
-                if (parent.label != "Options") { return false; }
-
-                MenuNode& leaf = WalkPath(root, path);
-                bool isSfx = (leaf.label == "SFX Volume");
-                bool isMusic = (leaf.label == "Music Volume");
-                if (!isSfx && !isMusic) { return false; }
-
-                int current = isMusic ? audioSettings.MusicVolume() : audioSettings.SfxVolume();
-                int updated = std::clamp(current + delta, 0, 10);
-                if (isMusic)
-                {
-                    audioSettings.SetMusicVolume(updated);
-                    MusicPlayer::SetVolume(updated); // applies immediately, same as the boot menu's own Volume > Music entry
-                }
-                else
-                {
-                    audioSettings.SetSfxVolume(updated);
-                }
-                leaf.sliderValue = updated;
-                SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
-                return true;
-            };
-
-            // The "press the button" half of the same feature (Edward,
-            // 2026) - checked before the normal doEnter() flow on Enter/
-            // Right.
-            auto TryEnterSliderIfOnEntry = [&]() {
-                if (path.size() < 2) { return false; }
-                std::vector<int> parentPath(path.begin(), path.end() - 1);
-                const MenuNode& parent = WalkPath(root, parentPath);
-                if (parent.label != "Options") { return false; }
-
-                const MenuNode& leaf = WalkPath(root, path);
-                if (leaf.label != "SFX Volume" && leaf.label != "Music Volume") { return false; }
-
-                adjustingSlider = true;
-                SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
-                return true;
-            };
-
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
                 if (event.type == SDL_EVENT_QUIT) { result.outcome = PauseMenuOutcome::WindowClosed; running = false; }
-
-                // SFX/Music Volume, once entered (Edward, 2026) - only
-                // left/right (adjust) and Escape (exit back to normal
-                // navigation, cursor still on the button) are processed;
-                // up/down/enter are ignored while adjusting.
-                else if (adjustingSlider)
-                {
-                    if (event.type == SDL_EVENT_KEY_DOWN)
-                    {
-                        if (event.key.key == SDLK_ESCAPE)
-                        {
-                            adjustingSlider = false;
-                            SfxPlayer::Play(SfxId::MenuBack, cdDirectory);
-                        }
-                        else if (event.key.key == SDLK_RIGHT) { AdjustVolumeIfOnSliderEntry(1); }
-                        else if (event.key.key == SDLK_LEFT) { AdjustVolumeIfOnSliderEntry(-1); }
-                    }
-                }
                 else if (event.type == SDL_EVENT_KEY_DOWN)
                 {
                     switch (event.key.key)
@@ -442,27 +403,13 @@ namespace ALTEngine::Screens
                         break;
                     case SDLK_RETURN:
                     case SDLK_KP_ENTER:
-                        if (!TryEnterSliderIfOnEntry()) { doEnter(); }
+                        doEnter();
                         break;
                     case SDLK_ESCAPE:
                         doEscape();
                         break;
-                    // Edward, 2026: "Separate the buttons from the
-                    // sliders, so that you have to press the button to
-                    // access the slider... you can still back out using
-                    // left, only requiring escape if you have selected
-                    // the music or sfx slider button" - Right on the
-                    // button enters slider-adjust mode (handled above);
-                    // once entered, left/right adjust and only Escape
-                    // exits. Until then, left/right behave like every
-                    // other entry (with Exit Game's own Yes/No
-                    // confirmation as the one pre-existing exception).
                     case SDLK_RIGHT:
-                        if (TryEnterSliderIfOnEntry())
-                        {
-                            // handled
-                        }
-                        else if (currentListIsExitGameConfirmation())
+                        if (currentListIsExitGameConfirmation())
                         {
                             MoveSelection(root, path, 1);
                             SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
@@ -508,71 +455,33 @@ namespace ALTEngine::Screens
 
             if (topLabel == "Options")
             {
-                const MenuNode& optionsNode = root.children[static_cast<size_t>(path[0])];
-                int cursorHere = (path.size() >= 2) ? path[1] : -1; // -1 = haven't descended into Options yet, nothing highlighted
-
-                // Highlight box width matches just the button/label area
-                // (like every other entry in this menu) - the slider bar
-                // gets its own separate space to the right, not enclosed
-                // within the box (Edward, 2026: "the sliders should
-                // actually be in their own space to the right of the
-                // Music/SFX volume buttons in the pause menu, not within
-                // the highlight around the text itself").
-                int buttonWidth = std::max({ TextWidth("SFX VOLUME", scale), TextWidth("MUSIC VOLUME", scale), TextWidth("EXIT GAME", scale) }) + scale * 8;
-                int barX = panelX - scale * 4 + buttonWidth + scale * 8; // fixed X so SFX/Music's bars align regardless of their different label widths
-                float pulse = PulsePhase();
-
-                // Row boxes at rowY..rowY+rowHeight-scale*2 (matching
-                // DrawColumn/DrawLeftColumn's own box-per-row convention
-                // exactly), text/sliders vertically centred within the
-                // full rowHeight - Edward, 2026: "the text spacing still
-                // isn't quite right" - these previously drew flush to
-                // the row's top instead of centred like every other
-                // entry.
-                auto drawRow = [&](int rowY, bool isCursor) {
-                    Color boxColor = isCursor ? LerpColor(COLOR_HIGHLIGHT_BG, COLOR_HIGHLIGHT_BG_LIGHT, pulse) : COLOR_HIGHLIGHT_BG;
-                    SDL_FRect bar{ static_cast<float>(panelX - scale * 4), static_cast<float>(rowY), static_cast<float>(buttonWidth), static_cast<float>(rowHeight - scale * 2) };
-                    DrawRoundedRect(renderer, bar, static_cast<float>(scale * 2), boxColor);
-                    return rowY + (rowHeight - TextHeight(scale)) / 2;
-                };
-
-                // One rowHeight apart now, matching the left column's own
-                // spacing (Edward, 2026: "they also do not line up with
-                // the entries to the left of them") - now that the
-                // slider's bar sits beside its label instead of below it,
-                // each row only needs a single rowHeight of vertical
-                // space, the same as every other row in this menu.
-                int boxHeight = rowHeight - scale * 2;
-                drawRow(panelY, cursorHere == 0);
-                DrawSlider(renderer, "SFX VOLUME", optionsNode.children[0].sliderValue, panelX, barX, panelY, boxHeight, scale, COLOR_CURSOR, COLOR_CURSOR, COLOR_DIM);
-
-                int musicY = panelY + rowHeight;
-                drawRow(musicY, cursorHere == 1);
-                DrawSlider(renderer, "MUSIC VOLUME", optionsNode.children[1].sliderValue, panelX, barX, musicY, boxHeight, scale, COLOR_CURSOR, COLOR_CURSOR, COLOR_DIM);
-
-                bool exitCursor = (cursorHere == 2);
-                int exitY = panelY + rowHeight * 2;
-                int exitTextY = drawRow(exitY, exitCursor);
-                Color exitColor = exitCursor ? COLOR_CURSOR : COLOR_DIM;
-                DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::ExitGameTitle, language), panelX, exitTextY, scale, exitColor);
-
-                if (exitCursor) // Exit Game is the active/previewed column
-                {
-                    // Edward, 2026: "Are You Sure ? should appear below
-                    // Exit Game in the list when selected. Then the
-                    // No/Yes remains as it is on the right side of Are
-                    // You Sure ?" - moved to its own row below Exit Game
-                    // (was inline to the right on the same row before);
-                    // Yes/No's own text-colour highlighting (not a box)
-                    // stays exactly as it was.
-                    int confirmIndex = (path.size() >= 3) ? path[2] : 0;
-                    std::string confirmLabel = confirmIndex == 1 ? "Yes" : "No";
-                    Color confirmColor = confirmIndex == 1 ? COLOR_CURSOR : COLOR_DIM;
-                    std::string prefix = "ARE YOU SURE ? ";
-                    int confirmY = exitY + rowHeight + (rowHeight - TextHeight(scale)) / 2;
-                    DrawBitmapText(renderer, prefix, panelX, confirmY, scale, COLOR_DIM);
-                    DrawBitmapText(renderer, confirmLabel, panelX + TextWidth(prefix, scale), confirmY, scale, confirmColor);
-                }
+                // Nothing to preview here anymore - Options is a plain
+                // trigger now (Edward, 2026: "update the options button
+                // in the pause menu so that it opens the [options]
+                // menu"), pressing it launches the real Options menu
+                // directly rather than showing anything in this panel.
+            }
+            else if (topLabel == "Exit Game")
+            {
+                // "Are You Sure ?" -> No / Yes - now a top-level entry
+                // (Edward, 2026: "move the Exit Game button into the
+                // main list in the pause menu") rather than nested
+                // within Options, so path[1] is directly the No/Yes
+                // cursor (was path[2] when nested one level deeper).
+                int confirmIndex = (path.size() >= 2) ? path[1] : 0;
+                std::string confirmLabel = confirmIndex == 1 ? "Yes" : "No";
+                Color confirmColor = confirmIndex == 1 ? COLOR_CURSOR : COLOR_DIM;
+                std::string prefix = "ARE YOU SURE ? ";
+                // Same row-Y formula DrawLeftColumn itself uses (y +
+                // index*rowHeight, vertically centred within the row) so
+                // this text lines up with the Exit Game button in the
+                // left column, rather than always sitting at the panel's
+                // top edge regardless of where Exit Game actually is in
+                // the list (Edward, 2026: "align the 'Are You Sure ? No
+                // / Yes' with the Exit Game button").
+                int exitGameTextY = margin + path[0] * rowHeight + (rowHeight - TextHeight(scale)) / 2;
+                DrawBitmapText(renderer, prefix, panelX, exitGameTextY, scale, COLOR_DIM);
+                DrawBitmapText(renderer, confirmLabel, panelX + TextWidth(prefix, scale), exitGameTextY, scale, confirmColor);
             }
             else if (topLabel == "Mission")
             {

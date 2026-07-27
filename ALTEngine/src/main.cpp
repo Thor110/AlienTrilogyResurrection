@@ -353,7 +353,8 @@ int main(int, char**)
                 return 1;
             }
 
-            GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, "1.1.1", keyBindings, audioSettings);
+            GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, "1.1.1", keyBindings, audioSettings,
+                                                                  renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings);
             if (gameplayResult.outcome == GameplayOutcome::WindowClosed)
             {
                 std::cout << "Boot window closed. Aborting.\n";

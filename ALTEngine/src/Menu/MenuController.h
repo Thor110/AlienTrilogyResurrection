@@ -36,6 +36,7 @@ namespace ALTEngine::Menu
             ALTEngine::Bootstrap::KeyBindings& keyBindings,
             ALTEngine::Bootstrap::AudioSettings& audioSettings,
             ALTEngine::Bootstrap::Language& language,
-            std::vector<int>& mainPath);
+            std::vector<int>& mainPath,
+            bool startInOptionsOnly = false);
     };
 }

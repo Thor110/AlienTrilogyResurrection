@@ -98,5 +98,6 @@ namespace ALTEngine::Menu
     // Config-backed KeyBindings from the caller; there's no meaningful
     // "default" for testing without one since it needs a real Config.
     MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
-                                ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::AudioSettings& audioSettings);
+                                ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::AudioSettings& audioSettings,
+                                bool includeCredits = true);
 }

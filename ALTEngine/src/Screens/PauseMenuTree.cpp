@@ -7,7 +7,6 @@ namespace ALTEngine::Screens
 {
     using ALTEngine::Menu::MakeAction;
     using ALTEngine::Menu::MakeList;
-    using ALTEngine::Menu::MakeSlider;
     using ALTEngine::Menu::MenuNode;
     using ALTEngine::Menu::ModelSource;
     using ALTEngine::Bootstrap::StringId;
@@ -46,14 +45,21 @@ namespace ALTEngine::Screens
             // hence ModelSource::Optobj (Edward, 2026).
             Tagged(MakeAction("Save Game", ALTEngine::Menu::ModelIndex::HarddriveLeft, -1, ModelSource::Optobj), StringId::SaveGame),
             Tagged(MakeAction("Load Game", ALTEngine::Menu::ModelIndex::HarddriveRight, -1, ModelSource::Optobj), StringId::LoadGame),
-            Tagged(MakeList("Options", {
-                Tagged(MakeSlider("SFX Volume"), StringId::SfxVolume),
-                Tagged(MakeSlider("Music Volume"), StringId::MusicVolume),
-                Tagged(MakeList("Exit Game", {
-                    Tagged(MakeAction("No"), StringId::No),
-                    Tagged(MakeAction("Yes"), StringId::Yes),
-                }), StringId::ExitGame),
-            }), StringId::Options),
+            // Options is now a plain trigger (Edward, 2026: "update the
+            // options button in the pause menu so that it opens the
+            // [options] menu") - PauseMenuScreen intercepts it specially
+            // and launches MenuController::Run directly into the same
+            // Options tree the boot menu uses, same pattern Save Game/
+            // Load Game already use for SaveSlotScreen. No children of
+            // its own here anymore - SFX/Music Volume moved into that
+            // real Options menu (removed from here entirely, not
+            // duplicated), and Exit Game moved out to the top level
+            // below.
+            Tagged(MakeAction("Options"), StringId::Options),
+            Tagged(MakeList("Exit Game", {
+                Tagged(MakeAction("No"), StringId::No),
+                Tagged(MakeAction("Yes"), StringId::Yes),
+            }), StringId::ExitGame),
         });
     }
 }

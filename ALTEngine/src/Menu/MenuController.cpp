@@ -388,7 +388,8 @@ namespace ALTEngine::Menu
         KeyBindings& keyBindings,
         AudioSettings& audioSettings,
         Language& language,
-        std::vector<int>& mainPath)
+        std::vector<int>& mainPath,
+        bool startInOptionsOnly)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
@@ -409,8 +410,13 @@ namespace ALTEngine::Menu
         std::vector<std::string> resolutionLabels = QueryResolutionLabels(app.Window());
 
         int mainBgW = 0, mainBgH = 0, optionsBgW = 0, optionsBgH = 0;
-        SDL_Texture* mainBg = LoadBackgroundTexture(cdDirectory, renderer, 0, mainBgW, mainBgH);
-        SDL_Texture* optionsBg = LoadBackgroundTexture(cdDirectory, renderer, 1, optionsBgW, optionsBgH);
+        SDL_Texture* mainBg = startInOptionsOnly ? nullptr : LoadBackgroundTexture(cdDirectory, renderer, 0, mainBgW, mainBgH);
+        // nullptr when opened from the pause menu (Edward, 2026: "the
+        // background menu is still showing when accessing the options
+        // menu from the pause menu") - DrawMenuBackground is nullptr-
+        // safe (clears to black), same pattern SaveSlotScreen's own
+        // showBackground=false already uses.
+        SDL_Texture* optionsBg = startInOptionsOnly ? nullptr : LoadBackgroundTexture(cdDirectory, renderer, 1, optionsBgW, optionsBgH);
 
         // Current values of every persisted setting the Options tree
         // needs, so each settings list starts on whichever child
@@ -426,7 +432,7 @@ namespace ALTEngine::Menu
         settingsSnapshot.cameraSwayOn = cameraSwaySettings.Get();
         settingsSnapshot.language = language;
 
-        MenuNode root = BuildMainMenuTree(resolutionLabels, settingsSnapshot, keyBindings, audioSettings);
+        MenuNode root = BuildMainMenuTree(resolutionLabels, settingsSnapshot, keyBindings, audioSettings, /*includeCredits=*/!startInOptionsOnly);
         MenuNode& optionsRoot = root.children[3]; // "Options"
 
         // OPTOBJ preload queue - built here, drained in a blocking
@@ -551,11 +557,18 @@ namespace ALTEngine::Menu
         // "the music starts playing before the main menu appears" was
         // jarring, hearing menu music over a black loading screen for
         // several seconds before anything shows.
-        MusicPlayer::PlayLooped(cdDirectory / "MUSIC" / "track02.wav");
-        MusicPlayer::SetVolume(audioSettings.MusicVolume());
+        // Skipped when opened from the pause menu - starting the boot
+        // menu's own music mid-gameplay would be a jarring, unwanted
+        // side effect (Edward, 2026: "so that it can render without a
+        // menu").
+        if (!startInOptionsOnly)
+        {
+            MusicPlayer::PlayLooped(cdDirectory / "MUSIC" / "track02.wav");
+            MusicPlayer::SetVolume(audioSettings.MusicVolume());
+        }
 
         enum class Screen { MainMenu, Options, Credits };
-        Screen screen = Screen::MainMenu;
+        Screen screen = startInOptionsOnly ? Screen::Options : Screen::MainMenu;
 
         std::vector<int> optionsPath = { 0 };
 
@@ -692,7 +705,16 @@ namespace ALTEngine::Menu
                 if (screen == Screen::Credits) { screen = Screen::Options; }
                 else if (screen == Screen::Options)
                 {
-                    if (!Back(optionsPath)) { screen = Screen::MainMenu; }
+                    if (!Back(optionsPath))
+                    {
+                        // Started directly in Options from the pause
+                        // menu (Edward, 2026) - escaping out of it
+                        // entirely means returning control to the
+                        // caller, not falling back to a main menu that
+                        // was never shown in the first place.
+                        if (startInOptionsOnly) { running = false; }
+                        else { screen = Screen::MainMenu; }
+                    }
                 }
                 else if (screen == Screen::MainMenu)
                 {

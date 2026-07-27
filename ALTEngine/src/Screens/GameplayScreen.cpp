@@ -79,10 +79,15 @@ namespace ALTEngine::Screens
 
     GameplayResult GameplayScreen::Run(
         const std::filesystem::path& cdDirectory,
-        Bootstrap::Language language,
+        Bootstrap::Language& language,
         const std::string& missionLevelCode,
         Bootstrap::KeyBindings& keyBindings,
-        Bootstrap::AudioSettings& audioSettings)
+        Bootstrap::AudioSettings& audioSettings,
+        Bootstrap::RenderSettings& renderSettings,
+        Bootstrap::ResolutionSettings& resolutionSettings,
+        Bootstrap::DifficultySettings& difficultySettings,
+        Bootstrap::CameraSwaySettings& cameraSwaySettings,
+        Bootstrap::LanguageSettings& languageSettings)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
@@ -160,7 +165,8 @@ namespace ALTEngine::Screens
                 else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == keyBindings.GetKey(ALTEngine::Bootstrap::InputAction::Pause))
                 {
                     SDL_SetWindowRelativeMouseMode(app.Window(), false);
-                    PauseMenuResult pauseResult = PauseMenuScreen::Run(cdDirectory, language, missionLevelCode, inventory, audioSettings);
+                    PauseMenuResult pauseResult = PauseMenuScreen::Run(cdDirectory, language, missionLevelCode, inventory, audioSettings,
+                                                                        renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings, keyBindings);
                     if (pauseResult.outcome == PauseMenuOutcome::WindowClosed)
                     {
                         result.outcome = GameplayOutcome::WindowClosed;

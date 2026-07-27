@@ -4,8 +4,11 @@
 #include <string>
 
 #include "../Bootstrap/AudioSettings.h"
+#include "../Bootstrap/GameplaySettings.h"
 #include "../Bootstrap/KeyBindings.h"
 #include "../Bootstrap/Localization.h"
+#include "../Bootstrap/RenderSettings.h"
+#include "../Bootstrap/ResolutionSettings.h"
 #include "PlayerInventoryState.h"
 
 namespace ALTEngine::Screens
@@ -45,9 +48,14 @@ namespace ALTEngine::Screens
     public:
         static GameplayResult Run(
             const std::filesystem::path& cdDirectory,
-            ALTEngine::Bootstrap::Language language,
+            ALTEngine::Bootstrap::Language& language,
             const std::string& missionLevelCode,
             ALTEngine::Bootstrap::KeyBindings& keyBindings,
-            ALTEngine::Bootstrap::AudioSettings& audioSettings);
+            ALTEngine::Bootstrap::AudioSettings& audioSettings,
+            ALTEngine::Bootstrap::RenderSettings& renderSettings,
+            ALTEngine::Bootstrap::ResolutionSettings& resolutionSettings,
+            ALTEngine::Bootstrap::DifficultySettings& difficultySettings,
+            ALTEngine::Bootstrap::CameraSwaySettings& cameraSwaySettings,
+            ALTEngine::Bootstrap::LanguageSettings& languageSettings);
     };
 }
