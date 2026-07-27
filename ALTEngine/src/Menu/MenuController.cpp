@@ -230,19 +230,22 @@ namespace ALTEngine::Menu
                 // Every row gets a box now (Edward, 2026: "a disabled
                 // version of the current highlight around all options
                 // and pause menu items") - very dark green by default,
-                // brighter (and pulsing, for the real cursor) only for
-                // the selected row, and only if that item is enabled.
+                // brighter and pulsing for the selected row regardless
+                // of whether that item is enabled (Edward, 2026: "make
+                // it so that disabled menu items in the controls
+                // section still have a highlight to indicate the
+                // currently selected item... a matching pulsing
+                // highlight, just leaving the darker text in place") -
+                // only the text brightens to full green, and only when
+                // the item is actually enabled.
                 Color boxColor = COLOR_HIGHLIGHT_BG;
                 Color textColor = enabled ? COLOR_GREEN_DIM : COLOR_DISABLED_TEXT;
 
-                if (isSelected && enabled)
+                if (isSelected)
                 {
                     boxColor = LerpColor(COLOR_HIGHLIGHT_BG, COLOR_HIGHLIGHT_BG_LIGHT, pulse);
-                    textColor = COLOR_GREEN;
+                    if (enabled) { textColor = COLOR_GREEN; }
                 }
-                // Disabled items stay dark green even with the cursor on
-                // them - no pulse (Edward, 2026: "we can leave them like
-                // that for now").
 
                 int boxHeight = rowHeight - scale * 2;
                 SDL_FRect bar{ static_cast<float>(x), static_cast<float>(rowY), static_cast<float>(width), static_cast<float>(boxHeight) };

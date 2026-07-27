@@ -94,17 +94,21 @@ namespace ALTEngine::Screens
             {
                 int rowY = y + static_cast<int>(i) * rowHeight;
                 bool isCursor = (static_cast<int>(i) == cursorIndex);
-                bool enabled = items[i].enabled;
                 bool isEquipped = false;
                 if (auto info = WeaponInfoFor(items[i].label, inventory, items[i])) { isEquipped = info->state->equipped; }
 
                 // Every row gets a box now (Edward, 2026: "a disabled
                 // version of the current highlight around all options
                 // and pause menu items") - very dark green by default,
-                // brighter and pulsing only for the cursor's row, and
-                // only if that item is enabled.
+                // brighter and pulsing for the cursor's row regardless
+                // of whether that item is enabled, matching the boot
+                // menu's own Controls list (Edward, 2026: "a matching
+                // pulsing highlight, just leaving the darker text in
+                // place") - currently a no-op here since no pause-menu
+                // item is ever actually disabled, but keeps this
+                // consistent with DrawColumn in case one is later.
                 Color boxColor = COLOR_HIGHLIGHT_BG;
-                if (isCursor && enabled) { boxColor = LerpColor(COLOR_HIGHLIGHT_BG, COLOR_HIGHLIGHT_BG_LIGHT, pulse); }
+                if (isCursor) { boxColor = LerpColor(COLOR_HIGHLIGHT_BG, COLOR_HIGHLIGHT_BG_LIGHT, pulse); }
 
                 SDL_FRect bar{ static_cast<float>(x), static_cast<float>(rowY), static_cast<float>(width), static_cast<float>(rowHeight - scale * 2) };
                 DrawRoundedRect(renderer, bar, static_cast<float>(scale * 2), boxColor);
