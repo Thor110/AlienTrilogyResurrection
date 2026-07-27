@@ -484,7 +484,7 @@ namespace ALTEngine::Menu
         // changing anything - standard "press a key..." convention).
         bool awaitingRebind = false;
         int rebindActionIndex = -1;
-        bool rebindIsMouse = false;
+        ALTEngine::Bootstrap::DeviceKind rebindDevice = ALTEngine::Bootstrap::DeviceKind::Keyboard;
         std::string rebindActionLabel;
 
         MenuResult result;
@@ -530,8 +530,30 @@ namespace ALTEngine::Menu
                     {
                         awaitingRebind = true;
                         rebindActionIndex = leaf.inputActionIndex;
-                        rebindIsMouse = leaf.isMouseAction;
+                        rebindDevice = static_cast<ALTEngine::Bootstrap::DeviceKind>(leaf.deviceIndex);
                         rebindActionLabel = ALTEngine::Bootstrap::ActionLabel(static_cast<ALTEngine::Bootstrap::InputAction>(leaf.inputActionIndex));
+                        SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                        return;
+                    }
+
+                    // "Restore Defaults" confirmed (Edward, 2026) - Yes
+                    // is tagged inputActionIndex=-2. optionsPath here is
+                    // [..., device, "Restore Defaults", "Yes"] - the
+                    // device's own node is two levels up; its first
+                    // child is always the Redefine list built alongside
+                    // it (see Controls() in MenuTree.cpp).
+                    if (leaf.inputActionIndex == -2)
+                    {
+                        auto device = static_cast<ALTEngine::Bootstrap::DeviceKind>(leaf.deviceIndex);
+                        keyBindings.ResetToDefaults(device);
+
+                        std::vector<int> devicePath(optionsPath.begin(), optionsPath.end() - 2);
+                        MenuNode& redefineList = WalkPath(optionsRoot, devicePath).children[0];
+                        for (auto& child : redefineList.children)
+                        {
+                            auto action = static_cast<ALTEngine::Bootstrap::InputAction>(child.inputActionIndex);
+                            child.label = ALTEngine::Bootstrap::ActionLabel(action) + ": " + keyBindings.DisplayBinding(device, action);
+                        }
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         return;
                     }
@@ -583,23 +605,32 @@ namespace ALTEngine::Menu
 
                 if (awaitingRebind)
                 {
+                    using ALTEngine::Bootstrap::DeviceKind;
                     if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)
                     {
                         awaitingRebind = false; // cancel, no change - standard "press a key..." convention
                     }
-                    else if (!rebindIsMouse && event.type == SDL_EVENT_KEY_DOWN)
+                    else if (rebindDevice == DeviceKind::Keyboard && event.type == SDL_EVENT_KEY_DOWN)
                     {
                         auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
                         keyBindings.SetKey(action, event.key.scancode);
-                        WalkPath(optionsRoot, optionsPath).label = rebindActionLabel + ": " + keyBindings.DisplayBinding(action, false);
+                        WalkPath(optionsRoot, optionsPath).label = rebindActionLabel + ": " + keyBindings.DisplayBinding(rebindDevice, action);
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         awaitingRebind = false;
                     }
-                    else if (rebindIsMouse && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+                    else if (rebindDevice == DeviceKind::Mouse && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
                     {
                         auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
                         keyBindings.SetMouseButton(action, event.button.button);
-                        WalkPath(optionsRoot, optionsPath).label = rebindActionLabel + ": " + keyBindings.DisplayBinding(action, true);
+                        WalkPath(optionsRoot, optionsPath).label = rebindActionLabel + ": " + keyBindings.DisplayBinding(rebindDevice, action);
+                        SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                        awaitingRebind = false;
+                    }
+                    else if (rebindDevice == DeviceKind::Mouse && event.type == SDL_EVENT_MOUSE_WHEEL && event.wheel.y != 0)
+                    {
+                        auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
+                        keyBindings.SetMouseWheel(action, event.wheel.y > 0); // y>0 = scrolled away from the user (up), per SDL3's own docs
+                        WalkPath(optionsRoot, optionsPath).label = rebindActionLabel + ": " + keyBindings.DisplayBinding(rebindDevice, action);
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         awaitingRebind = false;
                     }
@@ -725,7 +756,8 @@ namespace ALTEngine::Menu
                 // and the player needs a clear signal.
                 if (awaitingRebind)
                 {
-                    std::string promptLine1 = "PRESS A " + std::string(rebindIsMouse ? "MOUSE BUTTON" : "KEY") + " TO BIND";
+                    bool isMouse = (rebindDevice == ALTEngine::Bootstrap::DeviceKind::Mouse);
+                    std::string promptLine1 = "PRESS A " + std::string(isMouse ? "MOUSE BUTTON OR WHEEL" : "KEY") + " TO BIND";
                     std::string promptLine2 = "\"" + rebindActionLabel + "\"";
                     std::string promptLine3 = "OR ESC TO CANCEL";
                     int promptWidth = std::max({ TextWidth(promptLine1, scale), TextWidth(promptLine2, scale), TextWidth(promptLine3, scale) }) + scale * 16;

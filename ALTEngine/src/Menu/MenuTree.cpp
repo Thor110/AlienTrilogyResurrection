@@ -26,44 +26,50 @@ namespace ALTEngine::Menu
             return 0;
         }
 
-        // Builds a Redefine list's children - one Action per input
-        // action, labelled "{action name}: {current binding}", with
-        // inputActionIndex/isMouseAction set so MenuController knows
-        // which binding to capture when Enter is pressed on it (Edward,
-        // 2026 - redefine controls page).
-        template <size_t N>
-        std::vector<MenuNode> BuildRedefineChildren(const std::array<ALTEngine::Bootstrap::InputAction, N>& actions,
-                                                      bool isMouseAction, ALTEngine::Bootstrap::KeyBindings& keyBindings)
+        // Builds a device's full Redefine list - one Action per
+        // AllActions() entry, labelled "{action name}: {current
+        // binding}", with inputActionIndex/deviceIndex set so
+        // MenuController knows which binding to capture when Enter is
+        // pressed on it. One shared helper for every device rather than
+        // a separate list-builder per device (Edward, 2026: "All
+        // options in that list will eventually contain the same
+        // options but only accept input from those specific devices...
+        // turn the list into a helper that takes an input type, then
+        // we can reuse it for keyboard/mouse and the other hardware
+        // peripherals if I ever manage to get a hold of them").
+        MenuNode BuildRedefineList(ALTEngine::Bootstrap::DeviceKind device, ALTEngine::Bootstrap::KeyBindings& keyBindings)
         {
             std::vector<MenuNode> children;
-            for (auto action : actions)
+            for (auto action : ALTEngine::Bootstrap::AllActions())
             {
-                std::string binding = keyBindings.DisplayBinding(action, isMouseAction);
+                std::string binding = keyBindings.DisplayBinding(device, action);
                 MenuNode n = Action(ALTEngine::Bootstrap::ActionLabel(action) + ": " + binding);
                 n.inputActionIndex = static_cast<int>(action);
-                n.isMouseAction = isMouseAction;
+                n.deviceIndex = static_cast<int>(device);
                 children.push_back(std::move(n));
             }
-            return children;
+            return List("Redefine", std::move(children));
+        }
+
+        // "Restore Defaults" -> "Are You Sure ?" -> No / Yes, below the
+        // Redefine entry (Edward, 2026). "Yes" carries inputActionIndex
+        // = -2, a sentinel distinct from -1 ("not a binding leaf") and
+        // >=0 ("rebind this specific action") meaning "confirmed: reset
+        // every action's binding for deviceIndex back to default" -
+        // MenuController intercepts it the same way it already
+        // intercepts individual rebind leaves. "No" is left as a plain,
+        // unhandled Action, same as Exit Game's own "No" elsewhere.
+        MenuNode BuildRestoreDefaultsList(ALTEngine::Bootstrap::DeviceKind device)
+        {
+            MenuNode yes = Action("Yes");
+            yes.inputActionIndex = -2;
+            yes.deviceIndex = static_cast<int>(device);
+            return List("Restore Defaults", { Action("No"), std::move(yes) });
         }
 
         MenuNode Controls(ALTEngine::Bootstrap::KeyBindings& keyBindings)
         {
-            using ALTEngine::Bootstrap::InputAction;
-            using ALTEngine::Bootstrap::KeyboardActions;
-            using ALTEngine::Bootstrap::MouseActions;
-            using ALTEngine::Bootstrap::ActionLabel;
-
-            // Keyboard's Redefine list - every KeyboardActions() entry,
-            // plus Pause shown last on its own (Edward, 2026: redefine
-            // controls page, matching the README's own keyboard scheme).
-            std::vector<MenuNode> keyboardRedefine = BuildRedefineChildren(KeyboardActions(), false, keyBindings);
-            MenuNode pauseEntry = Action(ActionLabel(InputAction::Pause) + ": " + keyBindings.DisplayBinding(InputAction::Pause, false));
-            pauseEntry.inputActionIndex = static_cast<int>(InputAction::Pause);
-            pauseEntry.isMouseAction = false;
-            keyboardRedefine.push_back(std::move(pauseEntry));
-
-            std::vector<MenuNode> mouseRedefine = BuildRedefineChildren(MouseActions(), true, keyBindings);
+            using ALTEngine::Bootstrap::DeviceKind;
 
             MenuNode n = List("Controls", {
                 // modelIndex on the List node itself (not the Redefine
@@ -73,8 +79,8 @@ namespace ALTEngine::Menu
                 // not only after pressing Enter into Redefine. Matches
                 // the reference images, where highlighting alone changes
                 // the background model (Edward, 2026).
-                List("Keyboard", { List("Redefine", std::move(keyboardRedefine)) }, ModelIndex::Keyboard),
-                List("Mouse", { List("Redefine", std::move(mouseRedefine)) }, ModelIndex::Mouse),
+                List("Keyboard", { BuildRedefineList(DeviceKind::Keyboard, keyBindings), BuildRestoreDefaultsList(DeviceKind::Keyboard) }, ModelIndex::Keyboard),
+                List("Mouse", { BuildRedefineList(DeviceKind::Mouse, keyBindings), BuildRestoreDefaultsList(DeviceKind::Mouse) }, ModelIndex::Mouse),
                 List("Joystick", { Action("Joystick") }, ModelIndex::Joystick),
                 // Gravis Grip and Gravis Pad both use Multitap (index 3) -
                 // Edward: both peripherals visually look like a multitap.

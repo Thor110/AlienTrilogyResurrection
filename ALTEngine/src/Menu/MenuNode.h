@@ -95,11 +95,14 @@ namespace ALTEngine::Menu
         // Which InputAction (Bootstrap/InputActions.h) this leaf
         // represents, as a plain int (matching modelIndex's own
         // "plain int, not a typed enum" convention here) - -1 for
-        // everything that isn't a Redefine list entry. isMouseAction
-        // says whether Enter should capture a mouse button instead of
-        // a keyboard scancode (Edward, 2026 - redefine controls page).
+        // everything that isn't a Redefine list entry. deviceIndex is
+        // the DeviceKind (also Bootstrap/InputActions.h, also a plain
+        // int) this binding applies to - Keyboard, Mouse, or (once
+        // real hardware exists to test against) one of the other
+        // peripherals (Edward, 2026 - redefine controls page, reused
+        // per device via a single generic helper).
         int inputActionIndex = -1;
-        bool isMouseAction = false;
+        int deviceIndex = -1;
 
         // For Slider leaves: 0-10, matching the ~8/10 filled-bar look in
         // the reference images. Purely cosmetic placeholder for now - not

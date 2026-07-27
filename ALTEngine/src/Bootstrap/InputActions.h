@@ -6,9 +6,13 @@
 
 namespace ALTEngine::Bootstrap
 {
-    // Every rebindable action, keyboard and mouse together - based on
-    // the disc's own README.TXT control scheme (Edward, 2026, quoting
-    // it directly: Ctrl=Fire1, "5" on keypad=Fire2, Space=Do/Use,
+    // Every rebindable action - device-agnostic. The same list applies
+    // to every device (Edward, 2026: "All options in that list will
+    // eventually contain the same options but only accept input from
+    // those specific devices... turn the list into a helper that takes
+    // an input type, then we can reuse it for keyboard/mouse and the
+    // other hardware peripherals"). Based on the disc's own README.TXT
+    // control scheme (Ctrl=Fire1, "5" on keypad=Fire2, Space=Do/Use,
     // </>=Strafe, 1-5=Select weapon, 6=Next weapon, Backspace=
     // Turnaround, Caps Lock=Run mode, Shift=Run modifier, Alt=Strafe
     // modifier, Tab/Esc=Weapon select, Pause=Pause; Mouse: Left=Fire1,
@@ -16,7 +20,7 @@ namespace ALTEngine::Bootstrap
     // the original keyboard scheme by those names (it used keypad
     // arrows for "directions") - named this way to match the WASD
     // scheme GameplayScreen already implements, which these four
-    // actions are wired to directly.
+    // actions are wired to directly for Keyboard.
     enum class InputAction
     {
         MoveForward,
@@ -38,16 +42,14 @@ namespace ALTEngine::Bootstrap
         Turnaround,
         WeaponSelectMenu,
         Pause,
-        // Mouse-only - not in KeyboardActions() below
-        MouseFire1,
-        MouseFire2,
     };
 
-    // Every keyboard-bindable action, in the order the Redefine list
-    // shows them.
-    inline const std::array<InputAction, 18>& KeyboardActions()
+    // Every action, in the order every device's Redefine list shows
+    // them - one shared list, not a separate one per device (Edward,
+    // 2026).
+    inline const std::array<InputAction, 19>& AllActions()
     {
-        static const std::array<InputAction, 18> actions{
+        static const std::array<InputAction, 19> actions{
             InputAction::MoveForward, InputAction::MoveBackward,
             InputAction::StrafeLeft, InputAction::StrafeRight,
             InputAction::Fire1, InputAction::Fire2, InputAction::Use,
@@ -55,19 +57,26 @@ namespace ALTEngine::Bootstrap
             InputAction::SelectWeapon1, InputAction::SelectWeapon2, InputAction::SelectWeapon3,
             InputAction::SelectWeapon4, InputAction::SelectWeapon5,
             InputAction::NextWeapon, InputAction::Turnaround,
-            InputAction::WeaponSelectMenu,
+            InputAction::WeaponSelectMenu, InputAction::Pause,
         };
         return actions;
     }
 
-    // Pause is deliberately not in KeyboardActions() above - it's
-    // listed separately here since it's shown as its own last entry
-    // (see MenuTree.cpp), not mixed in with weapon/movement actions.
-    inline const std::array<InputAction, 2>& MouseActions()
+    // Which physical device a binding applies to - only Keyboard and
+    // Mouse are actually usable right now (matching Controls' own
+    // enabled/disabled split), the rest exist so the same Redefine
+    // helper can be reused the moment real hardware exists to test
+    // against (Edward, 2026).
+    enum class DeviceKind
     {
-        static const std::array<InputAction, 2> actions{ InputAction::MouseFire1, InputAction::MouseFire2 };
-        return actions;
-    }
+        Keyboard,
+        Mouse,
+        Joystick,
+        GravisGrip,
+        GravisPad,
+        SpaceOrb360,
+        VFX1,
+    };
 
     // Display label shown in the Redefine list (e.g. "Move Forward",
     // "Select Weapon 1").
@@ -94,13 +103,11 @@ namespace ALTEngine::Bootstrap
         case InputAction::Turnaround: return "Turnaround";
         case InputAction::WeaponSelectMenu: return "Weapon Select";
         case InputAction::Pause: return "Pause";
-        case InputAction::MouseFire1: return "Fire 1";
-        case InputAction::MouseFire2: return "Fire 2";
         default: return "";
         }
     }
 
-    // Default scancode for a keyboard action - matches the README
+    // Default scancode for a KEYBOARD binding - matches the README
     // where the action exists in the original scheme (Fire1=Ctrl,
     // Fire2=Keypad 5, Use=Space, weapon select=1-6, Turnaround=
     // Backspace, RunMode=Caps Lock, RunModifier=Shift, StrafeModifier=
@@ -135,10 +142,34 @@ namespace ALTEngine::Bootstrap
         }
     }
 
-    // Default mouse button for a mouse action (SDL_BUTTON_LEFT/RIGHT -
-    // matches the README: "Left button: Fire 1, Right button: Fire 2").
-    inline Uint8 DefaultMouseButton(InputAction action)
+    // MOUSE binding storage - a single Uint8 slot per action, shared
+    // between real buttons (SDL_BUTTON_LEFT etc, 1-5+, room for side/
+    // extra buttons) and two reserved pseudo-button values for the
+    // wheel, rather than a separate variant type. 0 means "unbound" -
+    // deliberately not every action gets a sensible default, since
+    // there are far fewer physical mouse inputs than actions (Edward,
+    // 2026: "there are other mouse buttons, mouse wheel up/down/click
+    // for example, sometimes side buttons, sometimes extra buttons").
+    // Movement itself isn't given a mouse default (Edward: mouse look
+    // already occupies the mouse's continuous-motion channel, so
+    // movement-via-mouse-motion the original game supported can't
+    // really be matched) - Move/Strafe are still in the list and
+    // bindable to a button/wheel-tick if the player wants that,
+    // they just don't get an out-of-the-box default.
+    constexpr Uint8 MOUSE_UNBOUND = 0;
+    constexpr Uint8 MOUSE_WHEEL_UP = 250;
+    constexpr Uint8 MOUSE_WHEEL_DOWN = 251;
+
+    inline Uint8 DefaultMouseBinding(InputAction action)
     {
-        return (action == InputAction::MouseFire2) ? SDL_BUTTON_RIGHT : SDL_BUTTON_LEFT;
+        switch (action)
+        {
+        case InputAction::Fire1: return SDL_BUTTON_LEFT;
+        case InputAction::Fire2: return SDL_BUTTON_RIGHT;
+        case InputAction::Use: return SDL_BUTTON_MIDDLE;
+        case InputAction::NextWeapon: return MOUSE_WHEEL_UP;
+        case InputAction::WeaponSelectMenu: return MOUSE_WHEEL_DOWN;
+        default: return MOUSE_UNBOUND;
+        }
     }
 }
