@@ -78,6 +78,16 @@ namespace ALTEngine::Bootstrap
             config.Set(ConfigKey(device, action), std::to_string(value));
         }
 
+        // The exact string every Redefine label shows - "{action name}:
+        // {current binding}". Was duplicated identically across
+        // MenuTree.cpp (building the list) and MenuController.cpp
+        // (updating a label after a rebind or a Restore Defaults reset)
+        // before being centralized here.
+        std::string FormatBinding(DeviceKind device, InputAction action) const
+        {
+            return ActionLabel(action) + ": " + DisplayBinding(device, action);
+        }
+
         // Human-readable current binding, for the Redefine list's own
         // label (e.g. "W", "LEFT CTRL", "MOUSE LEFT", "MOUSE WHEEL UP").
         std::string DisplayBinding(DeviceKind device, InputAction action) const

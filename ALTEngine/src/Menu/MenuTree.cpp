@@ -42,8 +42,7 @@ namespace ALTEngine::Menu
             std::vector<MenuNode> children;
             for (auto action : ALTEngine::Bootstrap::AllActions())
             {
-                std::string binding = keyBindings.DisplayBinding(device, action);
-                MenuNode n = Action(ALTEngine::Bootstrap::ActionLabel(action) + ": " + binding);
+                MenuNode n = Action(keyBindings.FormatBinding(device, action));
                 n.inputActionIndex = static_cast<int>(action);
                 n.deviceIndex = static_cast<int>(device);
                 children.push_back(std::move(n));

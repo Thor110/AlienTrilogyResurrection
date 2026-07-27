@@ -564,7 +564,7 @@ namespace ALTEngine::Menu
                         for (auto& child : redefineList.children)
                         {
                             auto action = static_cast<ALTEngine::Bootstrap::InputAction>(child.inputActionIndex);
-                            child.label = ALTEngine::Bootstrap::ActionLabel(action) + ": " + keyBindings.DisplayBinding(device, action);
+                            child.label = keyBindings.FormatBinding(device, action);
                         }
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         return;
@@ -626,7 +626,7 @@ namespace ALTEngine::Menu
                     {
                         auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
                         keyBindings.SetKey(action, event.key.scancode);
-                        WalkPath(optionsRoot, optionsPath).label = rebindActionLabel + ": " + keyBindings.DisplayBinding(rebindDevice, action);
+                        WalkPath(optionsRoot, optionsPath).label = keyBindings.FormatBinding(rebindDevice, action);
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         awaitingRebind = false;
                     }
@@ -634,7 +634,7 @@ namespace ALTEngine::Menu
                     {
                         auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
                         keyBindings.SetMouseButton(action, event.button.button);
-                        WalkPath(optionsRoot, optionsPath).label = rebindActionLabel + ": " + keyBindings.DisplayBinding(rebindDevice, action);
+                        WalkPath(optionsRoot, optionsPath).label = keyBindings.FormatBinding(rebindDevice, action);
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         awaitingRebind = false;
                     }
@@ -642,7 +642,7 @@ namespace ALTEngine::Menu
                     {
                         auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
                         keyBindings.SetMouseWheel(action, event.wheel.y > 0); // y>0 = scrolled away from the user (up), per SDL3's own docs
-                        WalkPath(optionsRoot, optionsPath).label = rebindActionLabel + ": " + keyBindings.DisplayBinding(rebindDevice, action);
+                        WalkPath(optionsRoot, optionsPath).label = keyBindings.FormatBinding(rebindDevice, action);
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         awaitingRebind = false;
                     }
