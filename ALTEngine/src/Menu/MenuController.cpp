@@ -257,7 +257,7 @@ namespace ALTEngine::Menu
                     // correctly within the same box (Edward, 2026: "the
                     // squares of the sliders are not aligned with the
                     // buttons themselves").
-                    DrawSlider(renderer, label, items[i].sliderValue, x + scale * 4, barX, rowY, boxHeight, scale, textColor, textColor, COLOR_HIGHLIGHT_BG_LIGHT);
+                    DrawSlider(renderer, label, items[i].sliderValue, x + scale * 4, barX, rowY, boxHeight, scale, textColor, COLOR_GREEN, COLOR_HIGHLIGHT_BG);
                 }
                 else
                 {
