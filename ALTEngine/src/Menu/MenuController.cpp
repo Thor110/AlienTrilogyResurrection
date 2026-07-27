@@ -536,6 +536,18 @@ namespace ALTEngine::Menu
                         return;
                     }
 
+                    // "Restore Defaults" declined (Edward, 2026) - "No"
+                    // just backs out, matching Escape, rather than
+                    // falling through to the normal Enter/Toggled flow
+                    // (which would do nothing at all, since there's no
+                    // ApplyLeafAction case for "No").
+                    if (parentLabel == "Restore Defaults" && leaf.label == "No")
+                    {
+                        Back(optionsPath);
+                        SfxPlayer::Play(SfxId::MenuBack, cdDirectory);
+                        return;
+                    }
+
                     // "Restore Defaults" confirmed (Edward, 2026) - Yes
                     // is tagged inputActionIndex=-2. optionsPath here is
                     // [..., device, "Restore Defaults", "Yes"] - the

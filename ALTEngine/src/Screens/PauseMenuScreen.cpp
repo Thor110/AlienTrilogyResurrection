@@ -299,6 +299,12 @@ namespace ALTEngine::Screens
                     result.outcome = PauseMenuOutcome::ExitGame;
                     running = false;
                 }
+                else if (r == EnterResult::Toggled && parentLabel == "Exit Game" && deepest.label == "No")
+                {
+                    // Backs out, matching Escape, rather than doing
+                    // nothing at all (Edward, 2026).
+                    ALTEngine::Menu::Back(path);
+                }
                 else if (r == EnterResult::Toggled && (deepest.label == "Save Game" || deepest.label == "Load Game"))
                 {
                     // Same SaveSlotScreen::Run the main menu's own "Load
