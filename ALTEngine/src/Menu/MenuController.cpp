@@ -759,8 +759,8 @@ namespace ALTEngine::Menu
                     if (node->kind != MenuNodeKind::List) { break; } // leaf - nothing further to preview as a column
                 }
 
-                DrawBitmapText(renderer, "PRESS ESC TO GO BACK", scale * 8, windowH - rowHeight * 2, scale, COLOR_GREEN);
-                DrawBitmapText(renderer, "PRESS ENTER TO SELECT", scale * 8, windowH - rowHeight, scale, COLOR_GREEN);
+                DrawBitmapText(renderer, "PRESS ESC TO GO BACK", (windowW - TextWidth("PRESS ESC TO GO BACK", scale)) / 2, windowH - rowHeight * 2, scale, COLOR_GREEN);
+                DrawBitmapText(renderer, "PRESS ENTER TO SELECT", (windowW - TextWidth("PRESS ENTER TO SELECT", scale)) / 2, windowH - rowHeight, scale, COLOR_GREEN);
 
                 // Redefine controls (Edward, 2026) - a prominent, centred
                 // prompt while waiting for the next key/mouse-button
