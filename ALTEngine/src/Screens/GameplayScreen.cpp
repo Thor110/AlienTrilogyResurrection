@@ -246,8 +246,13 @@ namespace ALTEngine::Screens
                     // the actual formula. See LevelLoader::FindFloorHeight.
                     for (const auto& crate : level.crates)
                     {
+                        // Sub-cell placement, in world units (one cell =
+                        // 512). X takes no offset, Z takes half a cell -
+                        // both established against a known-good
+                        // reference crate.
+                        constexpr float HALF_CELL = GRID_CELL_TO_WORLD_UNITS * 0.5f;
                         float worldX = GRID_CELL_TO_WORLD_UNITS * (centerPosX + static_cast<float>(crate.x));
-                        float worldZ = GRID_CELL_TO_WORLD_UNITS * (static_cast<float>(crate.y) - centerPosZ);
+                        float worldZ = GRID_CELL_TO_WORLD_UNITS * (static_cast<float>(crate.y) - centerPosZ) + HALF_CELL;
                         // "entities rest 32 units above the floor" -
                         // confirmed standing offset from the same
                         // decompilation, on top of the floor height itself.
@@ -258,12 +263,16 @@ namespace ALTEngine::Screens
                         placed.x = worldX;
                         placed.y = floorY;
                         placed.z = worldZ;
-                        // 4-direction scheme (0=N,2=E,4=S,6=W) -> radians,
-                        // matching Monster's 8-direction scheme's own
-                        // 45-degrees-per-step convention halved appropriately
-                        // (90 degrees per step here, per Crate's own doc
-                        // comment in LevelLoader.h).
-                        placed.rotationRadians = static_cast<float>(crate.rotation) * (3.14159265f / 4.0f);
+                        // Facing byte: 0=N, 2=E, 4=S, 6=W (45 degrees per
+                        // step). Mirrored about the E-W axis - angle =
+                        // PI - step - because our world Z runs opposite
+                        // to the coordinate frame those bytes were
+                        // authored in. That swaps N and S while leaving
+                        // E and W alone, which is what the level data
+                        // shows: the rot=2 (East) wide switch was already
+                        // correct, both rot=0 (North) small switches were
+                        // facing the wall.
+                        placed.rotationRadians = 3.14159265f - static_cast<float>(crate.rotation) * (3.14159265f / 4.0f);
                         placedObjects.push_back(placed);
                     }
                 }
