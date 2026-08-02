@@ -30,66 +30,31 @@ namespace ALTEngine::Formats
             float x1 = (rect.x + rect.width) / TEX_SIZE;
             float y1 = (rect.y + rect.height) / TEX_SIZE;
 
-            std::array<Uv, 4> baseUvs = { Uv{x0, y1}, Uv{x1, y1}, Uv{x1, y0}, Uv{x0, y0} }; // A, B, C, D
-
-            std::array<Uv, 4> uvs;
-            // Matches ExportModel's own switch exactly (Edward's
-            // ModelRenderer.cs, 2026) - models use case 2/130 for
-            // special-triangle and case 11/139 for flip-180. This is a
-            // genuinely different mapping from levels (see
-            // ComputeLevelQuadUvs below) - confirmed directly from the
-            // authoritative source, not inferred from a bit-mask that
-            // happened to produce the same result for 128/130 by
-            // coincidence.
+            // Models use case 2/130 and 11/139 - a different mapping
+            // from level geometry (see ComputeLevelQuadUvs below).
+            //
+            // No "1 - v" flip here: ModelRenderer.cs applies one, but
+            // only at OBJ-export time ("Flip Y for OBJ"), a quirk of the
+            // .obj V-axis convention. SDL_GPU already treats v=0 as the
+            // texture's top row, which is what these values encode.
             switch (q.flags)
             {
             case 2:
             case 130:
-                uvs = { baseUvs[0], baseUvs[2], baseUvs[3], baseUvs[3] };
-                break;
+                return { Uv{x0, y1}, Uv{x1, y0}, Uv{x0, y0}, Uv{x0, y0} };
             case 11:
             case 139:
-                uvs = { baseUvs[1], baseUvs[0], baseUvs[3], baseUvs[2] };
-                break;
+                return { Uv{x1, y1}, Uv{x0, y1}, Uv{x0, y0}, Uv{x1, y0} };
             default:
-                uvs = baseUvs;
-                break;
+                return { Uv{x0, y1}, Uv{x1, y1}, Uv{x1, y0}, Uv{x0, y0} };
             }
-
-            // NOTE: ModelRenderer.cs applies a "1 - v" flip here, but
-            // only at OBJ-text-export time - every instance of it in the
-            // source is explicitly commented "Flip Y for OBJ", meaning
-            // it's a quirk of the .obj file format's V-axis convention,
-            // not a property of the "correct" UV values themselves.
-            // D3D/Vulkan/SDL_GPU already treat V=0 as the texture's top
-            // row, which is exactly what baseUvs already encodes
-            // (rect.y/TEX_SIZE = top of the rect in image space) - no
-            // flip needed here. Applying the OBJ-specific flip anyway
-            // was the bug behind the upside-down/scrambled texture
-            // mapping (Edward, 2026).
-            return uvs;
         }
 
-        // Resolves a level quad's global texIndex to its UV rect,
-        // directly - shared by ComputeLevelQuadUvs and the per-group
-        // mesh builder. Returns rect=nullptr if texIndex is out of range
-        // (the confirmed out-of-range fallback case).
-        //
-        // Confirmed via Ghidra decompilation (Edward, 2026 - full
-        // deep-dive into the actual executable): texIndex is a direct,
-        // flat, global index into ONE descriptor array built by
-        // appending every BX chunk's rects in file order - there is NO
-        // per-group/cumulative-subtraction resolution at all. Each
-        // descriptor's own TPage field (stamped at load time from its
-        // BX chunk's own tag digits, e.g. "BX00" -> page 0) is what
-        // actually selects which texture it belongs to, not its position
-        // in the array. The earlier version of this function walked 5
-        // separate groups, subtracting each group's own rect count until
-        // the index fit inside one - an accidental equivalent that only
-        // produces the right page while BX chunks happen to appear in
-        // ascending tag order with exactly one chunk per page. That was
-        // the confirmed root cause of "many faces throughout the level
-        // are mapped to the wrong texture" (Edward, 2026).
+        // Resolves a level quad's texIndex to its UV rect. texIndex is a
+        // direct, flat, global index into one descriptor array built by
+        // appending every BX chunk's rects in file order (Ghidra) - each
+        // descriptor carries its own page, stamped at load time from its
+        // BX chunk's tag digits. rect=nullptr if texIndex is out of range.
         struct ResolvedLevelTexture { int groupIndex = -1; const BxRectangle* rect = nullptr; };
 
         ResolvedLevelTexture ResolveLevelTexture(uint16_t texIndex, const std::vector<BxRectangle>& uvRects)
@@ -99,17 +64,15 @@ namespace ALTEngine::Formats
             return { rect.page, &rect };
         }
 
-        // Level geometry's UV resolution - the texIndex resolution is
-        // genuinely different from ComputeQuadUvs above (a level's
-        // texIndex is a direct, flat, global index into one descriptor
-        // array spanning all BX chunks - see ResolveLevelTexture above),
-        // but the FLAGS mapping is NOT different - confirmed against
-        // AlienTrilogyMapLoader.cs's BuildMapGeometry (Edward, 2026):
-        // levels use the identical flags==2/flags==11 mapping models do.
-        // An earlier version of this function used a different mapping
-        // (flags 1/5/13 special, flags==2 flip) based on a less careful
-        // reading of ModelRenderer.cs - that was wrong, and was the bug
-        // behind "many faces are flipped".
+        // Level geometry's UV resolution. texIndex resolution differs
+        // from ComputeQuadUvs above (flat global index - see
+        // ResolveLevelTexture); the flags mapping differs too.
+        //
+        // Corner values are written out literally per case rather than
+        // permuting a shared base array. Edward established these
+        // against his own tool with the level's faces colour-coded by
+        // flag in Blender - every face except lights (flag 8) and
+        // breakable glass now matches.
         std::array<Uv, 4> ComputeLevelQuadUvs(const ModelQuad& q, const std::vector<BxRectangle>& uvRects)
         {
             ResolvedLevelTexture resolved = ResolveLevelTexture(q.texIndex, uvRects);
@@ -117,7 +80,7 @@ namespace ALTEngine::Formats
 
             if (!rect)
             {
-                // Confirmed real case per ExportLevel's own comment -
+                // Real case per ExportLevel's own comment -
                 // "L905LEV:6358 // this only pops for one face in one
                 // level" - texIndex 0xFFFF with no matching rect.
                 return { Uv{1.0f, 1.0f}, Uv{1.0f, 1.0f}, Uv{1.0f, 1.0f}, Uv{1.0f, 1.0f} };
@@ -128,40 +91,15 @@ namespace ALTEngine::Formats
             float x1 = (rect->x + rect->width) / TEX_SIZE;
             float y1 = (rect->y + rect->height) / TEX_SIZE;
 
-            std::array<Uv, 4> baseUvs = { Uv{x0, y1}, Uv{x1, y1}, Uv{x1, y0}, Uv{x0, y0} }; // A, B, C, D
-
-            // NO per-flags UV modification (Edward, 2026 - Ghidra
-            // deep-dive, full statistical verification against real
-            // L111LEV data): the byte at quad offset 0x12 (`q.flags`) is
-            // NOT a UV-orientation flag. Four independent tests ruled
-            // this out: no correlation with quad winding, IDENTICAL
-            // height distribution between flags==0 and flags==2, and -
-            // the decisive one - 82 of 201 textures in this level appear
-            // paired with more than one flags value, meaning it varies
-            // independently of which texture/orientation a quad actually
-            // has. It's confirmed instead to be the rasterizer's RGBC
-            // selector (vertex colour + PSX semi-transparency/blend bit),
-            // baked from a small lookup table, not read from the
-            // descriptor at all.
-            //
-            // TWO earlier schemes were tried here based on that same
-            // mistaken "this byte is orientation" premise - the C#
-            // reference's own flags==2/11 mapping, and a later
-            // flags==1/5/13/2 revision built from comparing against an
-            // OBJ export. Both are removed; this was confirmed as
-            // exactly the reported bug's signature ("tonnes of ceiling
-            // tiles... some other tiles here and there") - flags==2
-            // alone affected 1,902 quads (17% of the level), 1,462 of
-            // them horizontal (ceiling/floor-facing).
-            //
-            // Real UV orientation almost certainly comes from vertex
-            // winding order (which of a quad's 4 vertex indices maps to
-            // which screen corner) rather than any flag byte - not yet
-            // confirmed, still open. If ceilings are now merely
-            // mis-oriented rather than showing a wrong image entirely,
-            // that confirms this diagnosis and narrows the remaining
-            // work to vertex order, not texture/UV selection.
-            return baseUvs;
+            switch (q.flags)
+            {
+            case 11: // triangle: fourth corner repeats the third
+                return { Uv{x0, y1}, Uv{x1, y1}, Uv{x1, y0}, Uv{x1, y0} };
+            case 2:  // mirrored horizontally, right way up
+                return { Uv{x1, y1}, Uv{x0, y1}, Uv{x0, y0}, Uv{x1, y0} };
+            default:
+                return { Uv{x0, y1}, Uv{x1, y1}, Uv{x1, y0}, Uv{x0, y0} };
+            }
         }
 
         // Shared vertex-emission + triangulation - identical between
@@ -203,9 +141,17 @@ namespace ALTEngine::Formats
                 return static_cast<uint32_t>(result.vertices.size() - 1);
             };
 
-            uint32_t ia = emitVertex(a, effectiveUvs[0]);
-            uint32_t ib = emitVertex(b, effectiveUvs[1]);
-            uint32_t ic = emitVertex(c, effectiveUvs[2]);
+            // Genuine flag-1 triangles need their UVs rotated one step
+            // clockwise (ABC -> CAB). Excludes the degenerate-quad
+            // fallback above, which already forces isTriangle = false.
+            bool rotateTriangleUvs = isTriangle && (q.flags == 1);
+            Uv uvA = rotateTriangleUvs ? effectiveUvs[2] : effectiveUvs[0];
+            Uv uvB = rotateTriangleUvs ? effectiveUvs[0] : effectiveUvs[1];
+            Uv uvC = rotateTriangleUvs ? effectiveUvs[1] : effectiveUvs[2];
+
+            uint32_t ia = emitVertex(a, uvA);
+            uint32_t ib = emitVertex(b, uvB);
+            uint32_t ic = emitVertex(c, uvC);
 
             if (isTriangle)
             {
