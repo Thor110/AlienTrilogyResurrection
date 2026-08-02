@@ -259,38 +259,28 @@ namespace ALTEngine::Formats
         return result;
     }
 
-    float FindFloorHeight(const LevelGeometry& level, int gridX, int gridZ)
+    // Core height query, in GRID SPACE: gameX/gameZ are continuous
+    // coordinates where cell = value >> 9 and the sub-cell position is
+    // value & 0x1ff. This is the game's own GetFloorHeight
+    // (FUN_00027e28) reproduced exactly, including the ramp and stair
+    // cases which depend on where inside the cell you stand.
+    float FindFloorHeightGridSpace(const LevelGeometry& level, int gameX, int gameZ)
     {
-        if (gridX < 0 || gridZ < 0 || gridX >= level.header.mapLength || gridZ >= level.header.mapWidth) { return 0.0f; }
+        if (gameX < 0 || gameZ < 0) { return 0.0f; }
+        int cellX = gameX >> 9;
+        int cellZ = gameZ >> 9;
+        if (cellX >= level.header.mapLength || cellZ >= level.header.mapWidth) { return 0.0f; }
 
-        size_t cellIndex = static_cast<size_t>(gridZ) * static_cast<size_t>(level.header.mapLength) + static_cast<size_t>(gridX);
+        size_t cellIndex = static_cast<size_t>(cellZ) * static_cast<size_t>(level.header.mapLength) + static_cast<size_t>(cellX);
         if (cellIndex >= level.collisionGrid.size()) { return 0.0f; }
         const CollisionNode& cell = level.collisionGrid[cellIndex];
 
-        // Confirmed scale: worldY = floorHeight * 32 (Ghidra: FUN_00027e28,
-        // via Edward's Ghidra deep-dive, 2026). This alone is why the
-        // earlier empirical correlation against quad geometry never found
-        // a clean fit - the real formula also depends on `attribute` and
-        // sub-cell position below, so no linear fit over the byte alone
-        // could ever have worked.
         int floorHeight = static_cast<int>(cell.floorHeight) * 32;
+        int fx = gameX & 0x1ff;
+        int fz = gameZ & 0x1ff;
 
-        // Sub-cell position (fx, fz) within the 512-unit cell - entities
-        // spawn at the exact cell CORNER (confirmed from the same
-        // decompilation's spawn code: `ent.x = rec.x * 512 - bias`, i.e.
-        // fx = fz = 0), not the cell centre, so that's what's evaluated
-        // here to match the real game's own spawn placement exactly.
-        constexpr int fx = 0;
-        constexpr int fz = 0;
-
-        // Ramp/stair sub-height adjustment, keyed on the attribute byte -
-        // stairs (0x2d-0x30) split the cell into two flat halves 128
-        // units apart; ramps (0x31-0x38) interpolate linearly across the
-        // cell. At fx=fz=0 most of these reduce to the flat floorHeight,
-        // but 0x2e and 0x30 add the +128 half-step even at the corner -
-        // reproduced in full (rather than only the fx=fz=0-reduced cases)
-        // so this stays correct if a future caller ever needs a non-corner
-        // sub-cell position.
+        // Stairs (0x2d-0x30) split the cell into two flat halves 128
+        // apart; ramps (0x31-0x38) interpolate across the cell.
         switch (cell.attribute)
         {
         case 0x2d: if (fz > 0x100) { return static_cast<float>(floorHeight + 0x80); } break;
@@ -304,5 +294,34 @@ namespace ALTEngine::Formats
         default: break;
         }
         return static_cast<float>(floorHeight);
+    }
+
+    float FindFloorHeight(const LevelGeometry& level, int gridX, int gridZ)
+    {
+        if (gridX < 0 || gridZ < 0) { return 0.0f; }
+        return FindFloorHeightGridSpace(level, gridX * 512, gridZ * 512);
+    }
+
+    bool IsCellBlocking(const LevelGeometry& level, int gameX, int gameZ)
+    {
+        if (gameX < 0 || gameZ < 0) { return true; }
+        int cellX = gameX >> 9;
+        int cellZ = gameZ >> 9;
+        if (cellX >= level.header.mapLength || cellZ >= level.header.mapWidth) { return true; }
+
+        size_t cellIndex = static_cast<size_t>(cellZ) * static_cast<size_t>(level.header.mapLength) + static_cast<size_t>(cellX);
+        if (cellIndex >= level.collisionGrid.size()) { return true; }
+        const CollisionNode& cell = level.collisionGrid[cellIndex];
+
+        // Bytes +0x02/+0x03: 255 = wall, 0 = traversable.
+        if (cell.unknown3 == 255 || cell.unknown4 == 255) { return true; }
+
+        // Attribute band 0x14-0x2c blocks. 0x2d and above are the stair
+        // and ramp attributes, which are walkable - their height change
+        // is handled by FindFloorHeightGridSpace and gated by the
+        // step-up limit instead.
+        if (cell.attribute > 0x13 && cell.attribute < 0x2d) { return true; }
+
+        return false;
     }
 }

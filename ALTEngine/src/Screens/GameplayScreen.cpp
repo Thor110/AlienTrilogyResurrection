@@ -24,7 +24,14 @@ namespace ALTEngine::Screens
 
     namespace
     {
-        constexpr float MOVE_SPEED = 2000.0f;   // world units/sec - a guess, matching the level's own coordinate scale (vertices span tens of thousands of units)
+        // TODO: still a guess. The real value lives at DAT_000b0a64 in
+        // the original and could not be found statically - it is written
+        // through an unresolved struct pointer. It can be recovered
+        // empirically instead: the view-bob phase advances by
+        // (speed * 3) >> 1 per tick and a footstep fires each time it
+        // crosses 0x800, so matching footstep cadence against a recording
+        // of the original solves for speed directly.
+        constexpr float MOVE_SPEED = 2000.0f;   // world units/sec
         constexpr float MOUSE_SENSITIVITY = 0.0025f; // radians per pixel of mouse delta - a starting guess, not tuned against real hardware yet
         constexpr float MAX_PITCH = 1.4f;       // just under 90 degrees, avoids the view flipping past vertical
 
@@ -73,6 +80,39 @@ namespace ALTEngine::Screens
             case 27: return Obj3D::LargeSwitchBatteryBothLightsOff; // "wide switch without zipper" - battery required
             default: return Obj3D::SingleCrate;       // 20/21/28/29/32/>37 and anything else - "a regular box", still a placeholder for these
             }
+        }
+
+        // Player collision constants, taken from the game's own entity
+        // mover (Ghidra: FUN_00031afc / FUN_000315f0).
+        constexpr float COLLISION_RADIUS = 200.0f; // 400-unit footprint, sampled at -r, centre, +r
+        constexpr float MAX_STEP_UP = 256.0f;      // a rise steeper than this blocks movement
+        constexpr float EYE_HEIGHT = 768.0f;       // camera sits this far above the player's feet
+        constexpr float STAND_OFFSET = 32.0f;      // feet sit this far above the floor
+
+        // World space -> grid space, where cell = coord >> 9. Inverts the
+        // crate placement used above, so player and objects agree.
+        int ToGridSpaceX(float worldX, float centerPosX) { return static_cast<int>(std::lround(worldX - 512.0f * centerPosX)); }
+        int ToGridSpaceZ(float worldZ, float centerPosZ) { return static_cast<int>(std::lround(worldZ + 512.0f * centerPosZ)); }
+
+        // Can the player's footprint sit at this world position? Samples
+        // the centre and the four corners of the +/-200 box: every point
+        // must be non-blocking, and no point may rise more than the
+        // step-up limit above the floor the player is currently on.
+        bool CanOccupy(const ALTEngine::Formats::LevelGeometry& level,
+                       float centerPosX, float centerPosZ,
+                       float worldX, float worldZ, float currentFloorY)
+        {
+            constexpr float R = COLLISION_RADIUS;
+            const float offsets[5][2] = { {0, 0}, {-R, -R}, {R, -R}, {-R, R}, {R, R} };
+            for (const auto& o : offsets)
+            {
+                int gx = ToGridSpaceX(worldX + o[0], centerPosX);
+                int gz = ToGridSpaceZ(worldZ + o[1], centerPosZ);
+                if (ALTEngine::Formats::IsCellBlocking(level, gx, gz)) { return false; }
+                float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
+                if (floorY - currentFloorY > MAX_STEP_UP) { return false; }
+            }
+            return true;
         }
 
         // Level files live in disc-sector folders (SECT11, SECT12, etc -
@@ -146,6 +186,12 @@ namespace ALTEngine::Screens
         FpsCamera camera;
         ALTEngine::Formats::LevelGeometry level;
         std::vector<ALTEngine::Renderer::PlacedObject> placedObjects;
+        // World <-> grid-space transform. Grid space is what the game
+        // itself uses: cell = coord >> 9, sub-cell = coord & 0x1ff.
+        // Derived from the confirmed crate placement below, so the two
+        // stay consistent by construction.
+        float centerPosX = 0.0f;
+        float centerPosZ = 0.0f;
 
         if (mapPath.has_value() && gfxPath.has_value())
         {
@@ -159,16 +205,35 @@ namespace ALTEngine::Screens
                 try
                 {
                     level = ALTEngine::Formats::LevelLoader::Load(*mapPath);
-                    float minY, cx, cy, cz;
-                    ComputeVertexBounds(level, minY, cx, cy, cz);
-                    // Placeholder start position - see the header's doc
-                    // comment on the playerStartX/Y coordinate-system
-                    // question. Uses the level's own geometric center at
-                    // a reasonable height above its lowest point, not the
-                    // header's playerStartX/Y fields.
-                    camera.x = cx;
-                    camera.z = cz;
-                    camera.y = minY + 300.0f;
+
+                    // Grid centring, needed by both the player spawn and
+                    // the object placement below.
+                    centerPosX = -static_cast<float>(level.header.mapLength) / 2.0f;
+                    if (level.header.mapLength % 2 == 0) { centerPosX += 0.5f; }
+                    centerPosZ = static_cast<float>(level.header.mapWidth) / 2.0f;
+                    if (level.header.mapWidth % 2 == 0) { centerPosZ -= 0.5f; }
+
+                    // Player start from the header. playerStartX/Y are
+                    // cell coordinates - for L111 they are (39, 100)
+                    // against a 92x105 grid, landing on a cell with no
+                    // wall bytes and attribute 0. Placed with the same
+                    // transform the crates use so the player shares one
+                    // coordinate space with them.
+                    camera.x = 512.0f * (centerPosX + static_cast<float>(level.header.playerStartX));
+                    camera.z = 512.0f * (static_cast<float>(level.header.playerStartY) - centerPosZ) + 256.0f;
+                    camera.y = ALTEngine::Formats::FindFloorHeightGridSpace(
+                                   level,
+                                   ToGridSpaceX(camera.x, centerPosX),
+                                   ToGridSpaceZ(camera.z, centerPosZ))
+                               + STAND_OFFSET + EYE_HEIGHT;
+
+                    // playerStartAngle is 2 for L111, which fits the same
+                    // 8-step facing scheme the crates use (0=N, 2=E, 4=S,
+                    // 6=W) rather than the 4096-step space used for
+                    // entity angles elsewhere. Mirrored the same way crate
+                    // facing is. Unverified - position can be checked
+                    // independently of which way you end up looking.
+                    camera.yaw = 3.14159265f - static_cast<float>(level.header.playerStartAngle) * (3.14159265f / 4.0f);
 
                     // Object spawning (Edward, 2026: "all of the level
                     // objects spawning") - crates/barrels/switches first,
@@ -229,10 +294,6 @@ namespace ALTEngine::Screens
                     // geometry rather than merely offset within it,
                     // confirmed against real L111LEV.MAP data).
                     constexpr float GRID_CELL_TO_WORLD_UNITS = 512.0f;
-                    float centerPosX = -static_cast<float>(level.header.mapLength) / 2.0f;
-                    if (level.header.mapLength % 2 == 0) { centerPosX += 0.5f; }
-                    float centerPosZ = static_cast<float>(level.header.mapWidth) / 2.0f;
-                    if (level.header.mapWidth % 2 == 0) { centerPosZ -= 0.5f; }
 
                     // Vertical position via the CONFIRMED formula from a
                     // full Ghidra decompilation of the real game's own
@@ -373,8 +434,39 @@ namespace ALTEngine::Screens
                 float moveLen = std::sqrt(moveX * moveX + moveZ * moveZ);
                 if (moveLen > 0.0001f)
                 {
-                    camera.x += (moveX / moveLen) * MOVE_SPEED * dt;
-                    camera.z += (moveZ / moveLen) * MOVE_SPEED * dt;
+                    float stepX = (moveX / moveLen) * MOVE_SPEED * dt;
+                    float stepZ = (moveZ / moveLen) * MOVE_SPEED * dt;
+
+                    // Per-axis movement, matching the game's separate X
+                    // and Z movers - moving each axis independently is
+                    // what lets you slide along a wall instead of
+                    // sticking to it.
+                    if (levelReady)
+                    {
+                        float currentFloorY = ALTEngine::Formats::FindFloorHeightGridSpace(
+                            level,
+                            ToGridSpaceX(camera.x, centerPosX),
+                            ToGridSpaceZ(camera.z, centerPosZ));
+
+                        if (CanOccupy(level, centerPosX, centerPosZ, camera.x + stepX, camera.z, currentFloorY)) { camera.x += stepX; }
+                        if (CanOccupy(level, centerPosX, centerPosZ, camera.x, camera.z + stepZ, currentFloorY)) { camera.z += stepZ; }
+                    }
+                    else
+                    {
+                        camera.x += stepX;
+                        camera.z += stepZ;
+                    }
+                }
+
+                // Follow the floor. No gravity or fall handling yet - the
+                // camera is simply pinned to the surface underfoot.
+                if (levelReady)
+                {
+                    float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(
+                        level,
+                        ToGridSpaceX(camera.x, centerPosX),
+                        ToGridSpaceZ(camera.z, centerPosZ));
+                    camera.y = floorY + STAND_OFFSET + EYE_HEIGHT;
                 }
             }
 

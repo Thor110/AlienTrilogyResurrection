@@ -291,4 +291,18 @@ namespace ALTEngine::Formats
     // from a single collision cell byte plus a confirmed x32 scale -
     // this replaces guessing with the actual formula.
     float FindFloorHeight(const LevelGeometry& level, int gridX, int gridZ);
+
+    // Height query in GRID SPACE, where cell = coord >> 9 and the
+    // sub-cell position is coord & 0x1ff. Unlike the grid-index version
+    // above (which always samples a cell corner), this evaluates the
+    // stair and ramp attributes at the exact point given, so it is the
+    // one to use for anything that moves.
+    float FindFloorHeightGridSpace(const LevelGeometry& level, int gameX, int gameZ);
+
+    // True if a mover cannot occupy this grid-space point: outside the
+    // grid, a wall (bytes +0x02/+0x03 == 255), or an attribute in the
+    // 0x14-0x2c blocking band. Stairs and ramps (0x2d+) are walkable and
+    // return false - use the step-up limit against
+    // FindFloorHeightGridSpace to reject rises that are too steep.
+    bool IsCellBlocking(const LevelGeometry& level, int gameX, int gameZ);
 }
