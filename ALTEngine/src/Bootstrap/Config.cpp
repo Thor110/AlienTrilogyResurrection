@@ -22,6 +22,17 @@ namespace ALTEngine::Bootstrap
 
     void Config::Set(const std::string& key, const std::string& value)
     {
+        // Merge with whatever is currently on disk before writing. More
+        // than one Config instance can be alive at once, and each holds
+        // its own snapshot taken when it was constructed - without this,
+        // a long-lived instance writing any single key would rewrite the
+        // whole file from its stale map and silently drop keys another
+        // instance had saved since.
+        auto onDisk = ParseKeyValueFile(filePath);
+        for (const auto& [k, v] : onDisk)
+        {
+            if (values.find(k) == values.end()) { values[k] = v; }
+        }
         values[key] = value;
         Save();
     }

@@ -111,6 +111,10 @@ namespace ALTEngine::Bootstrap
         case StringId::Fullscreen: return "Fullscreen";
         case StringId::Borderless: return "Borderless";
         case StringId::MouseSensitivity: return "MouseSensitivity";
+        case StringId::Modern: return "Modern";
+        case StringId::EnableAll: return "EnableAll";
+        case StringId::AutomaticDoors: return "AutomaticDoors";
+        case StringId::Custom: return "Custom";
         default: return "";
         }
     }
@@ -209,6 +213,10 @@ namespace ALTEngine::Bootstrap
         if (name == "Fullscreen") { return StringId::Fullscreen; }
         if (name == "Borderless") { return StringId::Borderless; }
         if (name == "MouseSensitivity") { return StringId::MouseSensitivity; }
+        if (name == "Modern") { return StringId::Modern; }
+        if (name == "EnableAll") { return StringId::EnableAll; }
+        if (name == "AutomaticDoors") { return StringId::AutomaticDoors; }
+        if (name == "Custom") { return StringId::Custom; }
         return std::nullopt;
     }
 }

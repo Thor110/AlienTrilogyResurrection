@@ -114,6 +114,10 @@ namespace ALTEngine::Bootstrap
             "Fullscreen",
             "Borderless",
             "Mouse Sensitivity",
+            "Modern",
+            "Enable All",
+            "Automatic Doors",
+            "Custom",
         };
         return table;
     }

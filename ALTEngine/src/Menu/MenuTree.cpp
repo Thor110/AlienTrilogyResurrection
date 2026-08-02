@@ -1,4 +1,5 @@
 #include "MenuTree.h"
+#include "../Bootstrap/ModernSettings.h"
 
 #include <string>
 #include <utility>
@@ -274,6 +275,46 @@ namespace ALTEngine::Menu
             return n;
         }
 
+        // Optional departures from original behaviour, all off by
+        // default. Reads its current values directly rather than through
+        // MenuSettingsSnapshot - worth folding into the snapshot if this
+        // list grows.
+        MenuNode Modern()
+        {
+            using ALTEngine::Bootstrap::StringId;
+            ALTEngine::Bootstrap::Config config;
+            ALTEngine::Bootstrap::ModernSettings modern(config);
+
+            MenuNode enableAll = List("Enable All", StringId::EnableAll, {
+                Action("Off", StringId::Off),
+                Action("Custom", StringId::Custom),
+                Action("On", StringId::On),
+            });
+            auto mode = modern.Mode();
+            enableAll.initialSelectedChild = FindChildIndexByLabel(
+                enableAll.children,
+                mode == ALTEngine::Bootstrap::ModernMode::On ? "On"
+                    : mode == ALTEngine::Bootstrap::ModernMode::Custom ? "Custom" : "Off");
+            enableAll.isSettingsList = true;
+
+            MenuNode autoDoors = List("Automatic Doors", StringId::AutomaticDoors, {
+                Action("Off", StringId::Off),
+                Action("On", StringId::On),
+            });
+            // Show what the feature will actually do, not just its stored
+            // toggle - under On or Off the mode overrides the toggle, and
+            // displaying the stale stored value reads as the setting having
+            // been ignored. The stored value is still what Custom returns to.
+            bool autoDoorsEffective =
+                mode == ALTEngine::Bootstrap::ModernMode::On ? true
+                : mode == ALTEngine::Bootstrap::ModernMode::Off ? false
+                : modern.FeatureSetting(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
+            autoDoors.initialSelectedChild = FindChildIndexByLabel(autoDoors.children, autoDoorsEffective ? "On" : "Off");
+            autoDoors.isSettingsList = true;
+
+            return List("Modern", StringId::Modern, { std::move(enableAll), std::move(autoDoors) });
+        }
+
         MenuNode Options(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
                          ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::AudioSettings& audioSettings,
                          bool includeCredits)
@@ -289,6 +330,7 @@ namespace ALTEngine::Menu
                 Difficulty(settings.difficulty),
                 CameraSway(settings.cameraSwayOn),
                 Graphics(resolutionLabels, settings.quality, settings.resolutionLabel, settings.vsync, settings.displayMode),
+                Modern(),
                 LanguageMenu(settings.language),
             };
             // Excluded when opened from the pause menu - Credits doesn't

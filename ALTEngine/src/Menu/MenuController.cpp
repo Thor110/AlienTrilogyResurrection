@@ -1,4 +1,5 @@
 #include "MenuController.h"
+#include "../Bootstrap/ModernSettings.h"
 #include "MenuTree.h"
 #include "MenuNavigation.h"
 #include "../Audio/MusicPlayer.h"
@@ -309,6 +310,49 @@ namespace ALTEngine::Menu
         // persist to right now. Camera Sway/Difficulty selections are
         // visually confirmed (highlighted) but not backed by a real
         // setting yet - no gameplay system exists to apply them to.
+        // Re-reads the Modern list's selections from config. Needed
+        // because these entries are not independent: Enable All changes
+        // what every feature below it displays, and initialSelectedChild
+        // is otherwise only refreshed for the one node just changed, so
+        // siblings kept showing whatever they read when the tree was
+        // built at boot.
+        void RefreshModernSelections(MenuNode& optionsRoot)
+        {
+            using ALTEngine::Bootstrap::ModernFeature;
+            using ALTEngine::Bootstrap::ModernMode;
+
+            ALTEngine::Bootstrap::Config config;
+            ALTEngine::Bootstrap::ModernSettings modern(config);
+            ModernMode mode = modern.Mode();
+
+            auto selectByLabel = [](MenuNode& list, const std::string& label) {
+                for (size_t i = 0; i < list.children.size(); ++i)
+                {
+                    if (list.children[i].label == label) { list.initialSelectedChild = static_cast<int>(i); return; }
+                }
+            };
+
+            for (auto& group : optionsRoot.children)
+            {
+                if (group.label != "Modern") { continue; }
+                for (auto& node : group.children)
+                {
+                    if (node.label == "Enable All")
+                    {
+                        selectByLabel(node, mode == ModernMode::On ? "On"
+                                          : mode == ModernMode::Custom ? "Custom" : "Off");
+                    }
+                    else if (node.label == "Automatic Doors")
+                    {
+                        bool effective = mode == ModernMode::On ? true
+                                       : mode == ModernMode::Off ? false
+                                       : modern.FeatureSetting(ModernFeature::AutoOpenDoors);
+                        selectByLabel(node, effective ? "On" : "Off");
+                    }
+                }
+            }
+        }
+
         void ApplyLeafAction(const std::string& parentLabel, const std::string& leafLabel,
                               RenderSettings& renderSettings, ResolutionSettings& resolutionSettings,
                               DifficultySettings& difficultySettings, CameraSwaySettings& cameraSwaySettings,
@@ -339,6 +383,28 @@ namespace ALTEngine::Menu
                     }
 
                     if (ok) { resolutionSettings.Set(width, height); }
+                }
+            }
+            else if (parentLabel == "Enable All" || parentLabel == "Automatic Doors")
+            {
+                ALTEngine::Bootstrap::Config modernConfig;
+                ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
+                if (parentLabel == "Enable All")
+                {
+                    modern.SetMode(leafLabel == "On" ? ALTEngine::Bootstrap::ModernMode::On
+                                  : leafLabel == "Custom" ? ALTEngine::Bootstrap::ModernMode::Custom
+                                  : ALTEngine::Bootstrap::ModernMode::Off);
+                }
+                else
+                {
+                    modern.SetFeature(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors, leafLabel == "On");
+                    // Touching an individual toggle only has meaning under
+                    // Custom, so switch to it rather than silently ignoring
+                    // the change.
+                    if (modern.Mode() != ALTEngine::Bootstrap::ModernMode::Custom)
+                    {
+                        modern.SetMode(ALTEngine::Bootstrap::ModernMode::Custom);
+                    }
                 }
             }
             else if (parentLabel == "VSync")
@@ -710,6 +776,13 @@ namespace ALTEngine::Menu
                         // index just picked, since Enter() doesn't touch
                         // path for a leaf Action.
                         if (parent.isSettingsList) { parent.initialSelectedChild = optionsPath.back(); }
+
+                        // Modern entries depend on each other, so refresh
+                        // the whole group rather than just the one changed.
+                        if (parentLabel == "Enable All" || parentLabel == "Automatic Doors")
+                        {
+                            RefreshModernSelections(optionsRoot);
+                        }
                     }
                     if (r != EnterResult::NoOp) { SfxPlayer::Play(SfxId::MenuSelect, cdDirectory); }
                 }

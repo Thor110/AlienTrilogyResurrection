@@ -125,6 +125,10 @@ namespace ALTEngine::Bootstrap
         Fullscreen,
         Borderless,
         MouseSensitivity,
+        Modern,
+        EnableAll,
+        AutomaticDoors,
+        Custom,
 
         Count, // sentinel - not a real string, gives the tables their size
     };

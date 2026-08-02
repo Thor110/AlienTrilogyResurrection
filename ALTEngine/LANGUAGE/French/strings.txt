@@ -86,3 +86,7 @@ Windowed=Fenêtré
 Fullscreen=Plein Écran
 Borderless=Sans Bordure
 MouseSensitivity=Sensibilité de la Souris
+Modern=Moderne
+EnableAll=Tout Activer
+AutomaticDoors=Portes Automatiques
+Custom=Personnalisé

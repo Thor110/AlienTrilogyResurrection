@@ -86,3 +86,7 @@ Windowed=Windowed
 Fullscreen=Fullscreen
 Borderless=Borderless
 MouseSensitivity=Mouse Sensitivity
+Modern=Modern
+EnableAll=Enable All
+AutomaticDoors=Automatic Doors
+Custom=Custom

@@ -3,6 +3,7 @@
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/LevelLoader.h"
+#include "../Bootstrap/ModernSettings.h"
 #include "../Formats/ModelIndices.h"
 #include "../Formats/ModelLoader.h"
 #include "../Formats/BndTextureLoader.h"
@@ -222,7 +223,16 @@ namespace ALTEngine::Screens
             float worldX = 0.0f, worldZ = 0.0f, baseY = 0.0f;
         };
         std::vector<DoorState> doorStates;
+        // Read once here rather than threaded through Run's already long
+        // settings chain - worth tidying if more of these appear.
+        bool autoOpenDoors = false;
+        {
+            ALTEngine::Bootstrap::Config modernConfig;
+            ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
+            autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
+        }
         int lastTriggerAction = 0;
+        bool prevUseHeld = false;
         int lastCellIndex = -1;
         float tickAccumulator = 0.0f;
 
@@ -612,6 +622,37 @@ namespace ALTEngine::Screens
                 // Triggers and door ticking.
                 if (levelReady)
                 {
+                    // Runs one trigger's command chain. Shared by the
+                    // automatic path (walking onto the cell) and the
+                    // interact key, so both behave identically once fired.
+                    auto runTriggerChain = [&](int action)
+                    {
+                        if (static_cast<size_t>(action) >= level.actions.size()) { return; }
+                        const auto& trigger = level.actions[static_cast<size_t>(action)];
+                        if ((trigger.activationMask & 0x01) == 0 || trigger.enable == 0) { return; }
+
+                        int cmd = trigger.commandStart;
+                        std::vector<bool> visited(level.logics.size(), false);
+                        while (cmd != 0xFF && static_cast<size_t>(cmd) < level.logics.size() && !visited[static_cast<size_t>(cmd)])
+                        {
+                            visited[static_cast<size_t>(cmd)] = true;
+                            const auto& c = level.logics[static_cast<size_t>(cmd)];
+                            if ((c.action == 1 || c.action == 6) && c.objectIndex < doorStates.size())
+                            {
+                                DoorState& ds = doorStates[c.objectIndex];
+                                if (ds.phase == DoorState::Phase::Idle && ds.unlockProgress < ds.threshold)
+                                {
+                                    ds.unlockProgress = static_cast<uint8_t>(ds.unlockProgress + c.modifier);
+                                }
+                            }
+                            else if (c.action == 8)
+                            {
+                                SDL_Log("GameplayScreen: EndLevel trigger fired (action %d)", action);
+                            }
+                            cmd = c.nextStep;
+                        }
+                    };
+
                     int pgx = ToGridSpaceX(camera.x, originX);
                     int pgz = ToGridSpaceZ(camera.z, originZ);
                     int cellX = pgx >> 9, cellZ = pgz >> 9;
@@ -636,40 +677,26 @@ namespace ALTEngine::Screens
                         }
 
                         if (action == 0) { lastTriggerAction = 0; }
-                        else if (action != lastTriggerAction && static_cast<size_t>(action) < level.actions.size())
+                        else if (autoOpenDoors && action != lastTriggerAction)
                         {
                             lastTriggerAction = action;
-                            const auto& trigger = level.actions[static_cast<size_t>(action)];
-                            // Bit 0x01 is the class that fires from the
-                            // player standing on the cell. (Every trigger in
-                            // L111 uses it; see the note in the writeup -
-                            // the bit table there has this as 0x04.)
-                            if ((trigger.activationMask & 0x01) != 0 && trigger.enable != 0)
-                            {
-                                int cmd = trigger.commandStart;
-                                std::vector<bool> visited(level.logics.size(), false);
-                                while (cmd != 0xFF && static_cast<size_t>(cmd) < level.logics.size() && !visited[static_cast<size_t>(cmd)])
-                                {
-                                    visited[static_cast<size_t>(cmd)] = true;
-                                    const auto& c = level.logics[static_cast<size_t>(cmd)];
-                                    // Only door commands are wired up so far.
-                                    if ((c.action == 1 || c.action == 6) && c.objectIndex < doorStates.size())
-                                    {
-                                        DoorState& ds = doorStates[c.objectIndex];
-                                        if (ds.phase == DoorState::Phase::Idle && ds.unlockProgress < ds.threshold)
-                                        {
-                                            ds.unlockProgress = static_cast<uint8_t>(ds.unlockProgress + c.modifier);
-                                        }
-                                    }
-                                    else if (c.action == 8)
-                                    {
-                                        SDL_Log("GameplayScreen: EndLevel trigger fired (action %d)", action);
-                                    }
-                                    cmd = c.nextStep;
-                                }
-                            }
+                            runTriggerChain(action);
                         }
                     }
+
+                    // Interact key - the original's way of opening a door.
+                    // Fires on the press edge for whatever trigger cell the
+                    // player is standing on, independent of the automatic
+                    // path's latch, so it works whether or not Automatic
+                    // Doors is enabled and can be pressed repeatedly.
+                    bool useHeld = keys[keyBindings.GetKey(InputAction::Use)];
+                    if (useHeld && !prevUseHeld && cellIndex >= 0
+                        && static_cast<size_t>(cellIndex) < level.collisionGrid.size())
+                    {
+                        int useAction = level.collisionGrid[static_cast<size_t>(cellIndex)].scriptAction;
+                        if (useAction != 0) { runTriggerChain(useAction); }
+                    }
+                    prevUseHeld = useHeld;
 
                     // Fixed 60 Hz tick - the original moves doors one
                     // height unit per tick, and quantising matters: the
