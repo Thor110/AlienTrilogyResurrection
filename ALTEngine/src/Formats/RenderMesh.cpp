@@ -70,49 +70,56 @@ namespace ALTEngine::Formats
             return uvs;
         }
 
-        // Resolves a level quad's global texIndex to (which of the 5 BX
-        // groups, the rect within it) - shared by ComputeLevelQuadUvs and
-        // the per-group mesh builder. Returns groupIndex=-1, rect=nullptr
-        // if texIndex doesn't fall within any group (the confirmed
-        // out-of-range fallback case).
+        // Resolves a level quad's global texIndex to its UV rect,
+        // directly - shared by ComputeLevelQuadUvs and the per-group
+        // mesh builder. Returns rect=nullptr if texIndex is out of range
+        // (the confirmed out-of-range fallback case).
+        //
+        // Confirmed via Ghidra decompilation (Edward, 2026 - full
+        // deep-dive into the actual executable): texIndex is a direct,
+        // flat, global index into ONE descriptor array built by
+        // appending every BX chunk's rects in file order - there is NO
+        // per-group/cumulative-subtraction resolution at all. Each
+        // descriptor's own TPage field (stamped at load time from its
+        // BX chunk's own tag digits, e.g. "BX00" -> page 0) is what
+        // actually selects which texture it belongs to, not its position
+        // in the array. The earlier version of this function walked 5
+        // separate groups, subtracting each group's own rect count until
+        // the index fit inside one - an accidental equivalent that only
+        // produces the right page while BX chunks happen to appear in
+        // ascending tag order with exactly one chunk per page. That was
+        // the confirmed root cause of "many faces throughout the level
+        // are mapped to the wrong texture" (Edward, 2026).
         struct ResolvedLevelTexture { int groupIndex = -1; const BxRectangle* rect = nullptr; };
 
-        ResolvedLevelTexture ResolveLevelTexture(uint16_t texIndex, const std::array<std::vector<BxRectangle>, 5>& uvGroups)
+        ResolvedLevelTexture ResolveLevelTexture(uint16_t texIndex, const std::vector<BxRectangle>& uvRects)
         {
-            int localIndex = texIndex;
-            for (size_t g = 0; g < uvGroups.size(); ++g)
-            {
-                if (static_cast<size_t>(localIndex) < uvGroups[g].size())
-                {
-                    return { static_cast<int>(g), &uvGroups[g][static_cast<size_t>(localIndex)] };
-                }
-                localIndex -= static_cast<int>(uvGroups[g].size());
-            }
-            return {};
+            if (static_cast<size_t>(texIndex) >= uvRects.size()) { return {}; }
+            const BxRectangle& rect = uvRects[texIndex];
+            return { rect.page, &rect };
         }
 
         // Level geometry's UV resolution - the texIndex resolution is
         // genuinely different from ComputeQuadUvs above (a level's
-        // texIndex is a GLOBAL index across all 5 BX00-BX04 groups
-        // concatenated, resolved via cumulative offset - subtract each
-        // group's rect count until the index fits within a group), but
-        // the FLAGS mapping is NOT different - confirmed against
+        // texIndex is a direct, flat, global index into one descriptor
+        // array spanning all BX chunks - see ResolveLevelTexture above),
+        // but the FLAGS mapping is NOT different - confirmed against
         // AlienTrilogyMapLoader.cs's BuildMapGeometry (Edward, 2026):
         // levels use the identical flags==2/flags==11 mapping models do.
         // An earlier version of this function used a different mapping
         // (flags 1/5/13 special, flags==2 flip) based on a less careful
         // reading of ModelRenderer.cs - that was wrong, and was the bug
         // behind "many faces are flipped".
-        std::array<Uv, 4> ComputeLevelQuadUvs(const ModelQuad& q, const std::array<std::vector<BxRectangle>, 5>& uvGroups)
+        std::array<Uv, 4> ComputeLevelQuadUvs(const ModelQuad& q, const std::vector<BxRectangle>& uvRects)
         {
-            ResolvedLevelTexture resolved = ResolveLevelTexture(q.texIndex, uvGroups);
+            ResolvedLevelTexture resolved = ResolveLevelTexture(q.texIndex, uvRects);
             const BxRectangle* rect = resolved.rect;
 
             if (!rect)
             {
                 // Confirmed real case per ExportLevel's own comment -
                 // "L905LEV:6358 // this only pops for one face in one
-                // level" - texIndex 0xFFFF with no matching group.
+                // level" - texIndex 0xFFFF with no matching rect.
                 return { Uv{1.0f, 1.0f}, Uv{1.0f, 1.0f}, Uv{1.0f, 1.0f}, Uv{1.0f, 1.0f} };
             }
 
@@ -123,29 +130,38 @@ namespace ALTEngine::Formats
 
             std::array<Uv, 4> baseUvs = { Uv{x0, y1}, Uv{x1, y1}, Uv{x1, y0}, Uv{x0, y0} }; // A, B, C, D
 
-            // Levels have their own independent switch (not shared code
-            // with models). Directly verified against real ground-truth
-            // data (Edward's own OBJ export of L111LEV, compared
-            // quad-by-quad by matching vertex positions): flags 1/5/13
-            // need the special-triangle pattern and flags 2 needs
-            // flip-180, matching ModelRenderer.cs's ExportLevel exactly.
-            // An earlier revert to AlienTrilogyMapLoader.cs's scheme
-            // (case 2/11) was wrong for this level - that scheme doesn't
-            // handle flags==1 at all, and 285 of 285 flags==1 quads in
-            // L111LEV came back wrong under it (falling through to
-            // unmodified default UVs). Every other flags value in that
-            // level (0, 2, 3, 4, 8) already matched correctly either way.
-            switch (q.flags)
-            {
-            case 1:
-            case 5:
-            case 13:
-                return { baseUvs[0], baseUvs[2], baseUvs[3], baseUvs[3] };
-            case 2:
-                return { baseUvs[1], baseUvs[0], baseUvs[3], baseUvs[2] };
-            default:
-                return baseUvs;
-            }
+            // NO per-flags UV modification (Edward, 2026 - Ghidra
+            // deep-dive, full statistical verification against real
+            // L111LEV data): the byte at quad offset 0x12 (`q.flags`) is
+            // NOT a UV-orientation flag. Four independent tests ruled
+            // this out: no correlation with quad winding, IDENTICAL
+            // height distribution between flags==0 and flags==2, and -
+            // the decisive one - 82 of 201 textures in this level appear
+            // paired with more than one flags value, meaning it varies
+            // independently of which texture/orientation a quad actually
+            // has. It's confirmed instead to be the rasterizer's RGBC
+            // selector (vertex colour + PSX semi-transparency/blend bit),
+            // baked from a small lookup table, not read from the
+            // descriptor at all.
+            //
+            // TWO earlier schemes were tried here based on that same
+            // mistaken "this byte is orientation" premise - the C#
+            // reference's own flags==2/11 mapping, and a later
+            // flags==1/5/13/2 revision built from comparing against an
+            // OBJ export. Both are removed; this was confirmed as
+            // exactly the reported bug's signature ("tonnes of ceiling
+            // tiles... some other tiles here and there") - flags==2
+            // alone affected 1,902 quads (17% of the level), 1,462 of
+            // them horizontal (ceiling/floor-facing).
+            //
+            // Real UV orientation almost certainly comes from vertex
+            // winding order (which of a quad's 4 vertex indices maps to
+            // which screen corner) rather than any flag byte - not yet
+            // confirmed, still open. If ceilings are now merely
+            // mis-oriented rather than showing a wrong image entirely,
+            // that confirms this diagnosis and narrows the remaining
+            // work to vertex order, not texture/UV selection.
+            return baseUvs;
         }
 
         // Shared vertex-emission + triangulation - identical between
@@ -228,7 +244,7 @@ namespace ALTEngine::Formats
         return result;
     }
 
-    RenderMesh BuildLevelRenderMesh(const LevelGeometry& level, const std::array<std::vector<BxRectangle>, 5>& uvGroups)
+    RenderMesh BuildLevelRenderMesh(const LevelGeometry& level, const std::vector<BxRectangle>& uvRects)
     {
         RenderMesh result;
         result.vertices.reserve(level.quads.size() * 4);
@@ -236,20 +252,24 @@ namespace ALTEngine::Formats
 
         for (const auto& q : level.quads)
         {
-            EmitQuad(result, level.vertices, q, ComputeLevelQuadUvs(q, uvGroups));
+            EmitQuad(result, level.vertices, q, ComputeLevelQuadUvs(q, uvRects));
         }
         return result;
     }
 
-    std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level, const std::array<std::vector<BxRectangle>, 5>& uvGroups)
+    std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level, const std::vector<BxRectangle>& uvRects)
     {
         std::array<RenderMesh, 5> result;
 
         for (const auto& q : level.quads)
         {
-            ResolvedLevelTexture resolved = ResolveLevelTexture(q.texIndex, uvGroups);
-            int group = (resolved.groupIndex >= 0) ? resolved.groupIndex : 0; // fallback case -> group 0, see header comment
-            EmitQuad(result[static_cast<size_t>(group)], level.vertices, q, ComputeLevelQuadUvs(q, uvGroups));
+            ResolvedLevelTexture resolved = ResolveLevelTexture(q.texIndex, uvRects);
+            // Each descriptor's own page field (0-4, stamped at load time
+            // from its BX chunk's own tag digits) selects the output
+            // group directly - not a computed/cumulative index. Fallback
+            // (out-of-range texIndex) -> group 0, see header comment.
+            int group = (resolved.groupIndex >= 0 && resolved.groupIndex < 5) ? resolved.groupIndex : 0;
+            EmitQuad(result[static_cast<size_t>(group)], level.vertices, q, ComputeLevelQuadUvs(q, uvRects));
         }
         return result;
     }

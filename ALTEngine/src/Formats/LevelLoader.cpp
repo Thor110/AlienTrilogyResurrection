@@ -146,8 +146,16 @@ namespace ALTEngine::Formats
             CollisionNode n;
             n.unknown1 = data[pos + 0]; n.unknown2 = data[pos + 1]; n.unknown3 = data[pos + 2]; n.unknown4 = data[pos + 3];
             n.unknown5 = data[pos + 4]; n.unknown6 = data[pos + 5]; n.unknown7 = data[pos + 6]; n.unknown8 = data[pos + 7];
-            n.ceilingFog = data[pos + 8]; n.floorFog = data[pos + 9]; n.ceilingHeight = data[pos + 10]; n.floorHeight = data[pos + 11];
-            n.unknown13 = data[pos + 12]; n.unknown14 = data[pos + 13]; n.lighting = data[pos + 14]; n.scriptAction = data[pos + 15];
+            n.ceilingFog = data[pos + 8]; n.floorFog = data[pos + 9]; n.attribute = data[pos + 10]; n.floorHeight = data[pos + 11];
+            // unknown13 deliberately NOT read from the file here - Ghidra
+            // confirms it's runtime-only occupancy state (occupying
+            // monster's type while alive, 0 = free), overwritten during
+            // play. Whatever value the file itself carries is stale
+            // editor navigation-bake data, not level data - loading it
+            // would let leftover editor state leak into actual gameplay
+            // (Edward, 2026 - Ghidra deep-dive).
+            n.unknown13 = 0;
+            n.ceilingHeight = data[pos + 13]; n.lighting = data[pos + 14]; n.scriptAction = data[pos + 15];
             pos += 16;
             result.collisionGrid.push_back(n);
         }
@@ -249,5 +257,52 @@ namespace ALTEngine::Formats
         }
 
         return result;
+    }
+
+    float FindFloorHeight(const LevelGeometry& level, int gridX, int gridZ)
+    {
+        if (gridX < 0 || gridZ < 0 || gridX >= level.header.mapLength || gridZ >= level.header.mapWidth) { return 0.0f; }
+
+        size_t cellIndex = static_cast<size_t>(gridZ) * static_cast<size_t>(level.header.mapLength) + static_cast<size_t>(gridX);
+        if (cellIndex >= level.collisionGrid.size()) { return 0.0f; }
+        const CollisionNode& cell = level.collisionGrid[cellIndex];
+
+        // Confirmed scale: worldY = floorHeight * 32 (Ghidra: FUN_00027e28,
+        // via Edward's Ghidra deep-dive, 2026). This alone is why the
+        // earlier empirical correlation against quad geometry never found
+        // a clean fit - the real formula also depends on `attribute` and
+        // sub-cell position below, so no linear fit over the byte alone
+        // could ever have worked.
+        int floorHeight = static_cast<int>(cell.floorHeight) * 32;
+
+        // Sub-cell position (fx, fz) within the 512-unit cell - entities
+        // spawn at the exact cell CORNER (confirmed from the same
+        // decompilation's spawn code: `ent.x = rec.x * 512 - bias`, i.e.
+        // fx = fz = 0), not the cell centre, so that's what's evaluated
+        // here to match the real game's own spawn placement exactly.
+        constexpr int fx = 0;
+        constexpr int fz = 0;
+
+        // Ramp/stair sub-height adjustment, keyed on the attribute byte -
+        // stairs (0x2d-0x30) split the cell into two flat halves 128
+        // units apart; ramps (0x31-0x38) interpolate linearly across the
+        // cell. At fx=fz=0 most of these reduce to the flat floorHeight,
+        // but 0x2e and 0x30 add the +128 half-step even at the corner -
+        // reproduced in full (rather than only the fx=fz=0-reduced cases)
+        // so this stays correct if a future caller ever needs a non-corner
+        // sub-cell position.
+        switch (cell.attribute)
+        {
+        case 0x2d: if (fz > 0x100) { return static_cast<float>(floorHeight + 0x80); } break;
+        case 0x2e: if (fx <= 0x100) { return static_cast<float>(floorHeight + 0x80); } break;
+        case 0x2f: if (fx > 0x100) { return static_cast<float>(floorHeight + 0x80); } break;
+        case 0x30: if (fz <= 0x100) { return static_cast<float>(floorHeight + 0x80); } break;
+        case 0x31: case 0x35: return static_cast<float>(floorHeight + (fz >> 2));
+        case 0x32: case 0x36: return static_cast<float>(floorHeight - 0x80 + ((0x200 - fx) >> 2));
+        case 0x33: case 0x37: return static_cast<float>(floorHeight + (fx >> 2));
+        case 0x34: case 0x38: return static_cast<float>(floorHeight - 0x80 + ((0x200 - fz) >> 2));
+        default: break;
+        }
+        return static_cast<float>(floorHeight);
     }
 }

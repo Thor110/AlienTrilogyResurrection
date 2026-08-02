@@ -21,8 +21,8 @@ namespace ALTEngine::Formats
 
     struct BndTextureSet
     {
-        std::vector<BndTexture> textures;               // one per matched TP{NN}/CL{NN} pair, in file order
-        std::vector<std::vector<BxRectangle>> uvSections; // one entry per BX{NN} section, in file order
+        std::vector<BndTexture> textures;         // one per matched TP{NN}/CL{NN} pair, in file order
+        std::vector<BxRectangle> uvRects;          // FLAT - every BX{NN} section's rects appended in file order, each stamped with its own `page` (from that BX chunk's own tag digits). Confirmed via Ghidra (Edward, 2026): descriptors are indexed directly and globally by a quad's texIndex with no per-group resolution at all - the earlier per-section `uvSections` grouping (and any "which group does this index fall into" cumulative-subtraction logic built on top of it) was the root cause of many level faces showing the wrong texture.
     };
 
     // Loads the general case of a .BND/.B16 file: level textures, menus,

@@ -27,6 +27,13 @@ namespace ALTEngine::Renderer
             return r;
         }
 
+        static Mat4 Translation(float x, float y, float z)
+        {
+            Mat4 r = Identity();
+            r.m[12] = x; r.m[13] = y; r.m[14] = z;
+            return r;
+        }
+
         // Right-handed look-at, matching the standard textbook formula.
         static Mat4 LookAt(float eyeX, float eyeY, float eyeZ, float atX, float atY, float atZ, float upX, float upY, float upZ)
         {

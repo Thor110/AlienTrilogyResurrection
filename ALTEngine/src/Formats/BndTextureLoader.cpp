@@ -117,10 +117,14 @@ namespace ALTEngine::Formats
                 result.textures.push_back(std::move(texture));
             }
 
-            result.uvSections.reserve(bxSections.size());
             for (const auto& bx : bxSections)
             {
-                result.uvSections.push_back(BxParser::ParseRectangles(bx.data));
+                std::string suffix = Suffix(bx.name);
+                int page = 0;
+                try { page = std::stoi(suffix); }
+                catch (...) { page = 0; } // malformed suffix - shouldn't happen given filterByPrefix already matched "BX", but don't throw over it
+                auto rects = BxParser::ParseRectangles(bx.data, page);
+                result.uvRects.insert(result.uvRects.end(), rects.begin(), rects.end());
             }
 
             return result;

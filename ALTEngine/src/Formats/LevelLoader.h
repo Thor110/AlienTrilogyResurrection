@@ -66,16 +66,16 @@ namespace ALTEngine::Formats
         uint8_t unknown2 = 0;
         uint8_t unknown3 = 0;    // 255 = wall, 0 = traversable (confirmed, only ever these two values)
         uint8_t unknown4 = 0;    // 255 = wall, 0 = traversable (confirmed, only ever these two values)
-        uint8_t unknown5 = 0;    // confirmed always 0
+        uint8_t unknown5 = 0;    // confirmed always 0 on disk - runtime-only, entity+0x70 copied here (Ghidra: FUN_00032aec)
         uint8_t unknown6 = 0;
         uint8_t unknown7 = 0;
-        uint8_t unknown8 = 0;    // confirmed always 0
-        uint8_t ceilingFog = 0;
+        uint8_t unknown8 = 0;    // confirmed always 0 on disk - runtime-only, unidentified
+        uint8_t ceilingFog = 0;  // low byte of a u16 "visibility" field spanning +0x08/+0x09 per Ghidra - kept as two bytes here since nothing currently interprets it as one value
         uint8_t floorFog = 0;
-        uint8_t ceilingHeight = 0;
-        uint8_t floorHeight = 0; // the "entities fall to the floor" answer - this is where that height comes from
+        uint8_t attribute = 0;   // WAS misnamed ceilingHeight - Ghidra: GetFloorHeight's switch on this exact byte drives ramp/stair sub-height interpolation (0x2d-0x38) and the 0x13<a<0x2d blocking/sloped predicate
+        uint8_t floorHeight = 0; // world Y = floorHeight * 32 (confirmed scale, Ghidra FUN_00027e28), modified by `attribute` for ramps/stairs - see LevelLoader::FindFloorHeight
         uint8_t unknown13 = 0;
-        uint8_t unknown14 = 0;
+        uint8_t ceilingHeight = 0; // WAS misnamed unknown14 - Ghidra FUN_00027fb0: world ceiling Y = this * 32, same scale as floorHeight
         uint8_t lighting = 0;
         uint8_t scriptAction = 0; // indexes into `actions`
     };
@@ -263,4 +263,32 @@ namespace ALTEngine::Formats
     public:
         static LevelGeometry Load(const std::filesystem::path& mapPath);
     };
+
+    // Floor height at grid cell (gridX, gridZ), confirmed via Ghidra
+    // decompilation of the actual game's GetFloorHeight/FUN_00027e28
+    // (Edward, 2026 - full formula supplied from a Ghidra deep-dive):
+    //
+    //   worldY = floorHeight * 32, then adjusted by `attribute` for
+    //   ramps/stairs based on sub-cell position (fx, fz).
+    //
+    // Entities are spawned at exact grid-cell CORNERS - confirmed from
+    // the same decompilation's spawn code: `ent.x = rec.x * 512 - bias`,
+    // i.e. fx = fz = 0 relative to the cell - not the cell center. Since
+    // Crate::x/y (and every other entity record) are already grid
+    // indices rather than world coordinates, this takes grid indices
+    // directly rather than a world position, matching how the real
+    // spawn code actually calls it (no >>9 conversion needed - we
+    // already have the grid index).
+    //
+    // Does NOT include the "+32, entities rest one floorHeight unit
+    // above the floor" standing offset - callers add that themselves,
+    // since it's specific to how an object should visually sit on the
+    // surface, not part of the surface height itself.
+    //
+    // Supersedes the old quad-geometry search entirely: that heuristic
+    // (picking the min, then the mode, of nearby quad heights) was
+    // fundamentally guessing at something the real game reads directly
+    // from a single collision cell byte plus a confirmed x32 scale -
+    // this replaces guessing with the actual formula.
+    float FindFloorHeight(const LevelGeometry& level, int gridX, int gridZ);
 }

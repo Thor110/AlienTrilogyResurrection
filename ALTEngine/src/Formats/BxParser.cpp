@@ -5,7 +5,7 @@
 
 namespace ALTEngine::Formats
 {
-    std::vector<BxRectangle> BxParser::ParseRectangles(const std::vector<uint8_t>& bxData)
+    std::vector<BxRectangle> BxParser::ParseRectangles(const std::vector<uint8_t>& bxData, int page)
     {
         if (bxData.size() < 2)
         {
@@ -30,7 +30,7 @@ namespace ALTEngine::Formats
             uint16_t textureIndex = static_cast<uint16_t>(bxData[pos + 4] | (bxData[pos + 5] << 8));
             pos += 6;
 
-            rectangles.push_back({ x, y, width + 1, height + 1, textureIndex });
+            rectangles.push_back({ x, y, width + 1, height + 1, textureIndex, page });
         }
 
         return rectangles;

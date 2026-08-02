@@ -81,6 +81,20 @@ namespace ALTEngine::Renderer
         float baseRotationRadians = 0.0f;
     };
 
+    // A single positioned, oriented instance of an already-loaded model
+    // (crate, monster, pickup, door, lift...) drawn alongside a level's
+    // static geometry in the same pass. `cacheKey` must already be
+    // loaded via LoadModel/PreloadBatch - this doesn't load anything
+    // itself, matching RenderLevelToRgba's own "level must already be
+    // loaded" convention (Edward, 2026: "get the map rendering properly
+    // and all of the level objects spawning").
+    struct PlacedObject
+    {
+        ModelCacheKey cacheKey;
+        float x = 0, y = 0, z = 0;
+        float rotationRadians = 0.0f;
+    };
+
     class ModelRenderer
     {
     public:
@@ -202,6 +216,17 @@ namespace ALTEngine::Renderer
         // (near/far chosen generously since level geometry spans tens of
         // thousands of units, confirmed from real L111LEV.MAP vertex
         // ranges).
-        static std::vector<uint8_t> RenderLevelToRgba(const std::string& cacheKey, const FpsCamera& camera, int width, int height);
+        //
+        // `objects`, if non-empty, are drawn in the same pass right
+        // after the level geometry - each one must already be loaded
+        // via LoadModel/PreloadBatch under its own cacheKey (silently
+        // skipped otherwise, same "must already be loaded" convention
+        // as the level itself). This is how monsters/pickups/crates/
+        // doors/lifts actually appear in a level, since level geometry
+        // alone has no gameplay objects in it at all - those are a
+        // separate list in LevelGeometry, not part of the MAP0 mesh
+        // (Edward, 2026).
+        static std::vector<uint8_t> RenderLevelToRgba(const std::string& cacheKey, const FpsCamera& camera, int width, int height,
+                                                        const std::vector<PlacedObject>& objects = {});
     };
 }

@@ -59,10 +59,23 @@ namespace ALTEngine::Formats
     // Level geometry's equivalent of BuildRenderMesh above - separate
     // function specifically because texIndex resolution genuinely
     // differs from ExportModel's:
-    //   - Levels resolve texIndex against FIVE separate BX00-BX04 groups
-    //     via a cumulative global offset (subtract each group's rect
-    //     count from the index until it fits within a group), not a
-    //     single group like OPTOBJ models use.
+    //   - CORRECTED (Edward, 2026 - full Ghidra decompilation of the
+    //     real texture-selection code): texIndex is a DIRECT, FLAT index
+    //     into one continuous descriptor array built by appending every
+    //     BX00-BX04 section's rects in file order - there is no
+    //     per-group resolution at render time at all. Each descriptor
+    //     carries its own `page` field (which TP/texture it belongs to),
+    //     stamped at load time from its BX chunk's own tag digits
+    //     ("BX00" -> page 0, etc), not computed from its position in the
+    //     flattened sequence.
+    //   - An EARLIER version of this used cumulative-subtraction group
+    //     resolution (matching AlienTrilogyMapLoader.cs's own approach)
+    //     - confirmed WRONG via Ghidra: that C# logic is "an accidental
+    //     equivalent" that only gives the right answer when BX chunks
+    //     appear in ascending tag order with exactly one chunk per page,
+    //     and was the actual cause of "many faces throughout the level
+    //     are mapped to the wrong texture" (Edward, 2026) once real
+    //     level rendering was visible.
     //   - The per-quad flags meaning is the SAME as ExportModel's
     //     (flags==2 = flip 180, flags==11 = special triangle order) -
     //     CORRECTED (Edward's AlienTrilogyMapLoader.cs, 2026). An
@@ -74,34 +87,29 @@ namespace ALTEngine::Formats
     //   - Same out-of-range fallback (UV (1,1)) and same "no extra V
     //     flip" correction as BuildRenderMesh.
     //
-    // CONFIRMED against real level data (L111LEV.MAP + its paired
-    // 111GFX.B16, Edward, 2026): 111GFX.B16 has exactly 5 TP/CL/BX
-    // sections as expected, and running the full 22,242-triangle level
-    // through this function produced index counts exactly matching
-    // expected triangulation, zero out-of-bounds indices, zero UVs
-    // outside [0,1], and - the precise test, not just "lands on
-    // non-black content" - 44,770/44,770 (100%) vertex UVs land within
-    // their quad's exact, correctly-resolved rect bounds, verified by
-    // independently replicating the cumulative-offset group resolution
-    // and checking each vertex against it. No code changes were needed
-    // to pass this - unlike BuildRenderMesh's UV flip bug, which only
-    // surfaced once real model data was available, this one was correct
-    // on the first real-data test.
-    RenderMesh BuildLevelRenderMesh(const LevelGeometry& level, const std::array<std::vector<BxRectangle>, 5>& uvGroups);
+    // Structurally checked against real level data (L111LEV.MAP +
+    // 111GFX.B16): index counts, bounds, and UV range were all clean
+    // under the OLD group-resolution scheme too - that test caught
+    // structural errors (out-of-bounds, wrong triangle counts) but,
+    // same lesson as BuildRenderMesh's earlier V-flip bug, was never
+    // capable of catching "resolves to a plausible-looking but wrong
+    // page" on its own. Re-verification against the new flat-index
+    // scheme is still pending actual visual confirmation.
+    RenderMesh BuildLevelRenderMesh(const LevelGeometry& level, const std::vector<BxRectangle>& uvDescriptors);
 
     // Same UV/texture resolution as BuildLevelRenderMesh, but partitions
-    // the output by which of the 5 BX groups each quad's texture
-    // actually belongs to, instead of merging everything into one
-    // buffer. Needed for actually rendering a level: unlike a single
-    // OPTOBJ/PICKMOD model (one texture, one draw call), a level can use
-    // up to 5 different textures, and a GPU draw call can only have one
-    // texture bound at a time - so the renderer needs one vertex/index
-    // buffer + draw call per group actually used, not one mixed buffer.
-    // Quads whose texIndex didn't resolve to any real group (the
-    // documented out-of-range fallback case) are placed in group 0 with
-    // the fallback UV (1,1), same as BuildLevelRenderMesh - they still
-    // need to go somewhere, and group 0 is as good as any since the
-    // fallback isn't texture-specific.
-    std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level, const std::array<std::vector<BxRectangle>, 5>& uvGroups);
+    // the output by which TEXTURE PAGE each quad's resolved descriptor
+    // actually belongs to (its own `page` field), instead of merging
+    // everything into one buffer. Needed for actually rendering a
+    // level: unlike a single OPTOBJ/PICKMOD model (one texture, one draw
+    // call), a level can use up to 5 different textures, and a GPU draw
+    // call can only have one texture bound at a time - so the renderer
+    // needs one vertex/index buffer + draw call per page actually used,
+    // not one mixed buffer. Quads whose texIndex is out of range for the
+    // descriptor array (the documented fallback case) are placed in
+    // page 0 with the fallback UV (1,1) - they still need to go
+    // somewhere, and page 0 is as good as any since the fallback isn't
+    // texture-specific.
+    std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level, const std::vector<BxRectangle>& uvDescriptors);
 }
 

@@ -21,48 +21,48 @@ namespace ALTEngine::Formats::ModelIndices
     // OBJ3D.BND - in-game world objects (crates, switches, etc)
     namespace Obj3D
     {
-        // 0 - Explosive Barrel
-        // 1 - Single Crate
-        // 2 - Double Crate
-        // 3 - Switch Red Left Light
-        // 4 - Switch Red Right Light
-        // 5 - Switch Both Lights Off
-        // 6 - Switch Both Lights Yellow
-        // 7 - Large Switch Red Left Light
-        // 8 - Large Switch Red Right Light
-        // 9 - Large Switch Both Lights Off
-        // 10 - Large Switch Both Lights Yellow
-        // 11 - Switch Battery Red Left Light
-        // 12 - Switch Battery Red Right Light
-        // 13 - Switch Battery Both Lights Off
-        // 14 - Switch Battery Both Lights Yellow
-        // 15 - Large Switch Battery Red Left Light
-        // 16 - Large Switch Battery Red Right Light
-        // 17 - Large Switch Battery Both Lights Off
-        // 18 - Large Switch Battery Both Lights Yellow
-        // 19 - Boneship Switch Red Left Light
-        // 20 - Boneship Switch Red Right Light
-        // 21 - Boneship Switch Both Lights Off
-        // 22 - Boneship Switch Both Lights Yellow
-        // 23 - Boneship Switch Red Left Light
-        // 24 - Boneship Switch Red Right Light
-        // 25 - Boneship Switch Both Lights Off
-        // 26 - Boneship Switch Both Lights Yellow
-        // 27 - Boneship Switch Red Left Light
-        // 28 - Boneship Switch Red Right Light
-        // 29 - Boneship Switch Both Lights Off
-        // 30 - Boneship Switch Both Lights Yellow
-        // 31 - Boneship Switch Red Left Light
-        // 32 - Boneship Switch Red Right Light
-        // 33 - Boneship Switch Both Lights Off
-        // 34 - Boneship Switch Both Lights Yellow
-        // 35 - Steel Coil
-        // 36 - Unused Shape
-        // 37 - Pylon(Unused )
-        // 38 - Computer(Unused? )
-        // 39 - Egg Husk Shape Untextured
-        // 40 - Stasis Pod Cover
-        // 41 - Egg Husk
+        constexpr int ExplosiveBarrel = 0;
+        constexpr int SingleCrate = 1;
+        constexpr int DoubleCrate = 2;
+        constexpr int SwitchRedLeftLight = 3;
+        constexpr int SwitchRedRightLight = 4;
+        constexpr int SwitchBothLightsOff = 5;
+        constexpr int SwitchBothLightsYellow = 6;
+        constexpr int LargeSwitchRedLeftLight = 7;
+        constexpr int LargeSwitchRedRightLight = 8;
+        constexpr int LargeSwitchBothLightsOff = 9;
+        constexpr int LargeSwitchBothLightsYellow = 10;
+        constexpr int SwitchBatteryRedLeftLight = 11;
+        constexpr int SwitchBatteryRedRightLight = 12;
+        constexpr int SwitchBatteryBothLightsOff = 13;
+        constexpr int SwitchBatteryBothLightsYellow = 14;
+        constexpr int LargeSwitchBatteryRedLeftLight = 15;
+        constexpr int LargeSwitchBatteryRedRightLight = 16;
+        constexpr int LargeSwitchBatteryBothLightsOff = 17;
+        constexpr int LargeSwitchBatteryBothLightsYellow = 18;
+        constexpr int BoneshipSwitchRedLeftLight1 = 19;
+        constexpr int BoneshipSwitchRedRightLight1 = 20;
+        constexpr int BoneshipSwitchBothLightsOff1 = 21;
+        constexpr int BoneshipSwitchBothLightsYellow1 = 22;
+        constexpr int BoneshipSwitchRedLeftLight2 = 23;
+        constexpr int BoneshipSwitchRedRightLight2 = 24;
+        constexpr int BoneshipSwitchBothLightsOff2 = 25;
+        constexpr int BoneshipSwitchBothLightsYellow2 = 26;
+        constexpr int BoneshipSwitchRedLeftLight3 = 27;
+        constexpr int BoneshipSwitchRedRightLight3 = 28;
+        constexpr int BoneshipSwitchBothLightsOff3 = 29;
+        constexpr int BoneshipSwitchBothLightsYellow3 = 30;
+        constexpr int BoneshipSwitchRedLeftLight4 = 31;
+        constexpr int BoneshipSwitchRedRightLight4 = 32;
+        constexpr int BoneshipSwitchBothLightsOff4 = 33;
+        constexpr int BoneshipSwitchBothLightsYellow4 = 34;
+        constexpr int SteelCoil = 35;
+        constexpr int UnusedShape = 36;
+        constexpr int Pylon = 37;         // unused
+        constexpr int Computer = 38;      // unused
+        constexpr int EggHuskUntextured = 39;
+        constexpr int StasisPodCover = 40;
+        constexpr int EggHusk = 41;
     }
 
     // PICKMOD.BND indices - CORRECTED (Edward, 2026): the original

@@ -537,31 +537,45 @@ namespace ALTEngine::Renderer
         // (confirmed for PICKGFX.BND, used by both PICKMOD and OBJ3D) -
         // otherwise each model uses the texture/BX section matching its
         // own number (confirmed for OPTGFX.BND, one per OPTOBJ model).
+        //
+        // uvRects is now a flat array spanning every BX section, each
+        // entry stamped with its own `page` (Edward, 2026 - Ghidra
+        // deep-dive; see RenderMesh.h/BxParser.h) - filtering by page
+        // reconstructs "the rects belonging to one specific BX section",
+        // same as the old per-section uvSections[i] did, but sourced
+        // from one flat list instead of a vector-of-vectors. `page` is
+        // parsed from the same "NN" suffix meshNumber/targetIndex
+        // already represents, so a plain int comparison replaces the
+        // old string comparison for this part.
         const ALTEngine::Formats::BndTexture* tex = nullptr;
-        const std::vector<ALTEngine::Formats::BxRectangle>* uvRects = nullptr;
+        std::vector<ALTEngine::Formats::BxRectangle> filteredUvRects;
 
-        if (textureSet.uvSections.size() == 1 && !textureSet.textures.empty())
+        if (textureSet.textures.size() == 1 && !textureSet.textures.empty())
         {
             tex = &textureSet.textures[0];
-            uvRects = &textureSet.uvSections[0];
+            filteredUvRects = textureSet.uvRects;
         }
         else
         {
             char buf[8];
             std::snprintf(buf, sizeof(buf), "%02d", meshNumber);
             std::string targetIndex(buf);
-            for (size_t i = 0; i < textureSet.textures.size() && i < textureSet.uvSections.size(); ++i)
+            for (size_t i = 0; i < textureSet.textures.size(); ++i)
             {
                 if (textureSet.textures[i].index == targetIndex)
                 {
                     tex = &textureSet.textures[i];
-                    uvRects = &textureSet.uvSections[i];
+                    for (const auto& rect : textureSet.uvRects)
+                    {
+                        if (rect.page == meshNumber) { filteredUvRects.push_back(rect); }
+                    }
                     break;
                 }
             }
         }
 
-        if (!tex || !uvRects)
+        const std::vector<ALTEngine::Formats::BxRectangle>* uvRects = &filteredUvRects;
+        if (!tex || filteredUvRects.empty())
         {
             SDL_Log("ModelRenderer::LoadModel(%s): no matching texture for mesh number %d in %s", DescribeCacheKey(cacheKey).c_str(), meshNumber, gfxBndPath.string().c_str());
             return false;
@@ -656,30 +670,34 @@ namespace ALTEngine::Renderer
             if (!mesh) { continue; }
 
             const ALTEngine::Formats::BndTexture* tex = nullptr;
-            const std::vector<ALTEngine::Formats::BxRectangle>* uvRects = nullptr;
+            std::vector<ALTEngine::Formats::BxRectangle> filteredUvRects;
 
-            if (textureSet.uvSections.size() == 1 && !textureSet.textures.empty())
+            if (textureSet.textures.size() == 1 && !textureSet.textures.empty())
             {
                 tex = &textureSet.textures[0];
-                uvRects = &textureSet.uvSections[0];
+                filteredUvRects = textureSet.uvRects;
             }
             else
             {
                 char buf[8];
                 std::snprintf(buf, sizeof(buf), "%02d", req.meshNumber);
                 std::string targetIndex(buf);
-                for (size_t i = 0; i < textureSet.textures.size() && i < textureSet.uvSections.size(); ++i)
+                for (size_t i = 0; i < textureSet.textures.size(); ++i)
                 {
                     if (textureSet.textures[i].index == targetIndex)
                     {
                         tex = &textureSet.textures[i];
-                        uvRects = &textureSet.uvSections[i];
+                        for (const auto& rect : textureSet.uvRects)
+                        {
+                            if (rect.page == req.meshNumber) { filteredUvRects.push_back(rect); }
+                        }
                         break;
                     }
                 }
             }
 
-            if (!tex || !uvRects) { continue; }
+            const std::vector<ALTEngine::Formats::BxRectangle>* uvRects = &filteredUvRects;
+            if (!tex || filteredUvRects.empty()) { continue; }
 
             RenderMesh renderMesh = BuildRenderMesh(*mesh, *uvRects);
             if (renderMesh.vertices.empty() || renderMesh.indices.empty()) { continue; }
@@ -932,17 +950,14 @@ namespace ALTEngine::Renderer
             return false;
         }
 
-        if (textureSet.textures.size() != 5 || textureSet.uvSections.size() != 5)
+        if (textureSet.textures.size() != 5)
         {
             SDL_Log("ModelRenderer::LoadLevel(%s): expected 5 texture groups in %s, got %zu",
                     cacheKey.c_str(), gfxPath.string().c_str(), textureSet.textures.size());
             return false;
         }
 
-        std::array<std::vector<ALTEngine::Formats::BxRectangle>, 5> uvGroups;
-        for (size_t i = 0; i < 5; ++i) { uvGroups[i] = textureSet.uvSections[i]; }
-
-        auto perGroupMeshes = ALTEngine::Formats::BuildLevelRenderMeshPerGroup(level, uvGroups);
+        auto perGroupMeshes = ALTEngine::Formats::BuildLevelRenderMeshPerGroup(level, textureSet.uvRects);
 
         LoadedLevel loadedLevel;
         bool anyGroupUsed = false;
@@ -963,7 +978,8 @@ namespace ALTEngine::Renderer
         return true;
     }
 
-    std::vector<uint8_t> ModelRenderer::RenderLevelToRgba(const std::string& cacheKey, const FpsCamera& camera, int width, int height)
+    std::vector<uint8_t> ModelRenderer::RenderLevelToRgba(const std::string& cacheKey, const FpsCamera& camera, int width, int height,
+                                                             const std::vector<PlacedObject>& objects)
     {
         if (!device || !pipeline) { return {}; }
         auto it = loadedLevels.find(cacheKey);
@@ -1024,6 +1040,35 @@ namespace ALTEngine::Renderer
             SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
             SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
             SDL_DrawGPUIndexedPrimitives(renderPass, group.indexCount, 1, 0, 0, 0);
+        }
+
+        // Placed objects (crates, monsters, pickups, doors, lifts...) -
+        // same pass, same pipeline, each with its own model matrix
+        // combined into the level's vp (Edward, 2026: "all of the level
+        // objects spawning"). Silently skipped if a requested object's
+        // model was never actually loaded - matches this function's own
+        // existing "level must already be loaded" convention, rather
+        // than failing the whole level render over one missing model.
+        for (const auto& object : objects)
+        {
+            auto modelIt = loadedModels.find(object.cacheKey);
+            if (modelIt == loadedModels.end()) { continue; }
+            const LoadedModel& model = modelIt->second;
+            if (!model.vertexBuffer || model.indexCount == 0) { continue; }
+
+            Mat4 modelMatrix = Mat4::Multiply(Mat4::Translation(object.x, object.y, object.z),
+                                               Mat4::RotationY(object.rotationRadians + model.baseRotationRadians));
+            Mat4 mvp = Mat4::Multiply(vp, modelMatrix);
+
+            SDL_BindGPUGraphicsPipeline(renderPass, model.useDoubleSided ? doubleSidedPipeline : pipeline);
+            SDL_GPUBufferBinding vbBinding{ model.vertexBuffer, 0 };
+            SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
+            SDL_GPUBufferBinding ibBinding{ model.indexBuffer, 0 };
+            SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+            SDL_GPUTextureSamplerBinding texBinding{ model.texture, sampler };
+            SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
+            SDL_PushGPUVertexUniformData(cmd, 0, mvp.m.data(), sizeof(float) * 16);
+            SDL_DrawGPUIndexedPrimitives(renderPass, model.indexCount, 1, 0, 0, 0);
         }
 
         SDL_EndGPURenderPass(renderPass);
