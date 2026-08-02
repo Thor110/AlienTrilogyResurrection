@@ -316,6 +316,12 @@ namespace ALTEngine::Formats
         // Bytes +0x02/+0x03: 255 = wall, 0 = traversable.
         if (cell.unknown3 == 255 || cell.unknown4 == 255) { return true; }
 
+        // No vertical gap means solid - this is how a closed door
+        // blocks: it writes ceiling == floor across its cells. Walls and
+        // out-of-bounds fill are the same shape, so this is the main
+        // blocking test rather than a door special case.
+        if (cell.ceilingHeight <= cell.floorHeight) { return true; }
+
         // Attribute band 0x14-0x2c blocks. 0x2d and above are the stair
         // and ramp attributes, which are walkable - their height change
         // is handled by FindFloorHeightGridSpace and gated by the

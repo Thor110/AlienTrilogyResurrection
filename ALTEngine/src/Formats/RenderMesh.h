@@ -110,6 +110,18 @@ namespace ALTEngine::Formats
     // page 0 with the fallback UV (1,1) - they still need to go
     // somewhere, and page 0 is as good as any since the fallback isn't
     // texture-specific.
+    // Per-texture-page split for a single model mesh, using the MODEL
+    // UV convention (flags 2/130 = triangle order, 11/139 = flip 180).
+    //
+    // This is what door and lift meshes need: they live in the level's
+    // own .MAP, are textured from the level's texture pages, and index
+    // the level's flat descriptor array - but they follow the model
+    // flags convention, not the level one. Pass the level's uvRects.
+    // A door mesh can span more than one page (both L111 doors span
+    // pages 2 and 4), which is why this splits rather than returning a
+    // single mesh.
+    std::array<RenderMesh, 5> BuildRenderMeshPerGroup(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects);
+
     std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level, const std::vector<BxRectangle>& uvDescriptors);
 }
 

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "../Formats/BndTextureLoader.h"
+#include "../Formats/RenderMesh.h"
+
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -45,6 +48,13 @@ namespace ALTEngine::Renderer
         Optobj,
         Pickmod,
         Obj3d,
+        // Door and lift meshes, which live in the level's own .MAP under
+        // "D"/"L" sections rather than a model BND. modelIndex packs the
+        // mesh and its texture page as mesh * 8 + page, since one door
+        // mesh can span several of the level's texture pages and each
+        // page needs its own draw call.
+        LevelDoor,
+        LevelLift,
     };
 
     // A cheap-to-copy/hash/compare model cache key - replaces what used
@@ -181,6 +191,15 @@ namespace ALTEngine::Renderer
         // combined, maps it once, and issues all the upload calls inside
         // a single copy pass before one final submit.
         static void PreloadBatch(const std::vector<PreloadRequest>& requests);
+
+        // Uploads an already-built mesh and texture straight into the
+        // model cache. Door and lift meshes come from the level file and
+        // are textured from the level's own pages, so they cannot go
+        // through LoadModel's BND-path-based loading - this is how they
+        // get registered before being drawn as PlacedObjects.
+        static bool RegisterMesh(ModelCacheKey cacheKey,
+                                 const ALTEngine::Formats::RenderMesh& renderMesh,
+                                 const ALTEngine::Formats::BndTexture& texture);
 
         // Renders the model cached under `cacheKey` (must already be
         // loaded via LoadModel), rotated by `angleRadians` around Y,

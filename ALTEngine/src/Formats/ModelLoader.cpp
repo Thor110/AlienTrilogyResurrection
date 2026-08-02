@@ -12,13 +12,13 @@ namespace ALTEngine::Formats
 {
     namespace
     {
-        std::vector<ModelMesh> ParseMeshes(const std::filesystem::path& bndPath)
+        std::vector<ModelMesh> ParseMeshes(const std::filesystem::path& bndPath, const std::string& sectionPrefix)
         {
             const std::vector<BndSection>& allSections = BndParser::LoadCached(bndPath);
             std::vector<BndSection> modelSections;
             for (auto& section : allSections)
             {
-                if (section.name.rfind("M0", 0) == 0) { modelSections.push_back(section); }
+                if (section.name.rfind(sectionPrefix, 0) == 0) { modelSections.push_back(section); }
             }
 
             std::vector<ModelMesh> meshes;
@@ -104,7 +104,7 @@ namespace ALTEngine::Formats
         }
     }
 
-    std::vector<ModelMesh> ModelLoader::Load(const std::filesystem::path& bndPath)
+    std::vector<ModelMesh> ModelLoader::Load(const std::filesystem::path& bndPath, const std::string& sectionPrefix)
     {
         // Cached by path, at the fully-parsed level - not just the raw
         // BND sections (BndParser::LoadCached already handles that
@@ -116,14 +116,18 @@ namespace ALTEngine::Formats
         // though only one model is actually needed each time.
         static std::unordered_map<std::string, std::vector<ModelMesh>> cache;
 
-        std::string key = std::filesystem::absolute(bndPath).lexically_normal().string();
+        // Key includes the prefix: the same file can be asked for
+        // different section sets (a .MAP holds both "D" doors and "L"
+        // lifts), and a path-only key would hand back whichever was
+        // requested first.
+        std::string key = std::filesystem::absolute(bndPath).lexically_normal().string() + "|" + sectionPrefix;
         auto it = cache.find(key);
         if (it != cache.end())
         {
             return it->second;
         }
 
-        std::vector<ModelMesh> meshes = ParseMeshes(bndPath);
+        std::vector<ModelMesh> meshes = ParseMeshes(bndPath, sectionPrefix);
         auto [inserted, _] = cache.emplace(std::move(key), meshes);
         return inserted->second;
     }

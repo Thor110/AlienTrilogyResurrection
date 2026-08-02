@@ -59,7 +59,11 @@ namespace ALTEngine::Formats
     class ModelLoader
     {
     public:
-        static std::vector<ModelMesh> Load(const std::filesystem::path& bndPath);
+        // sectionPrefix selects which FORM sections to parse as meshes.
+        // "M0" is the usual model naming; door and lift meshes live in
+        // the level's own .MAP under "D" and "L" instead, alongside the
+        // MAP0 chunk (which has no OBJ1 tag and must not be parsed).
+        static std::vector<ModelMesh> Load(const std::filesystem::path& bndPath, const std::string& sectionPrefix = "M0");
 
         // Finds a mesh by its section NUMBER (e.g. 6 -> "M006"), not
         // array position - needed because PICKMOD.BND's section naming

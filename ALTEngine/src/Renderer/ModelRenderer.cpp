@@ -625,6 +625,26 @@ namespace ALTEngine::Renderer
         return true;
     }
 
+    bool ModelRenderer::RegisterMesh(ModelCacheKey cacheKey,
+                                     const ALTEngine::Formats::RenderMesh& renderMesh,
+                                     const ALTEngine::Formats::BndTexture& texture)
+    {
+        if (!Initialize()) { return false; }
+        if (renderMesh.vertices.empty() || renderMesh.indices.empty()) { return false; }
+        if (loadedModels.find(cacheKey) != loadedModels.end()) { return true; }
+
+        LevelSubGroup group = UploadMeshWithTexture(renderMesh, texture);
+        if (!group.vertexBuffer || group.indexCount == 0) { return false; }
+
+        LoadedModel model;
+        model.vertexBuffer = group.vertexBuffer;
+        model.indexBuffer = group.indexBuffer;
+        model.indexCount = group.indexCount;
+        model.texture = group.texture;
+        loadedModels[cacheKey] = model;
+        return true;
+    }
+
     void ModelRenderer::PreloadBatch(const std::vector<PreloadRequest>& requests)
     {
         if (!device) { return; }

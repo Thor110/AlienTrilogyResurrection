@@ -203,6 +203,19 @@ namespace ALTEngine::Formats
         return result;
     }
 
+    std::array<RenderMesh, 5> BuildRenderMeshPerGroup(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects)
+    {
+        std::array<RenderMesh, 5> result;
+
+        for (const auto& q : mesh.quads)
+        {
+            ResolvedLevelTexture resolved = ResolveLevelTexture(q.texIndex, uvRects);
+            int group = (resolved.groupIndex >= 0 && resolved.groupIndex < 5) ? resolved.groupIndex : 0;
+            EmitQuad(result[static_cast<size_t>(group)], mesh.vertices, q, ComputeQuadUvs(q, uvRects));
+        }
+        return result;
+    }
+
     std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level, const std::vector<BxRectangle>& uvRects)
     {
         std::array<RenderMesh, 5> result;

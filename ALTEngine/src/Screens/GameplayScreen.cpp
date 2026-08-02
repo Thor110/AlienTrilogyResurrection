@@ -4,6 +4,8 @@
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/LevelLoader.h"
 #include "../Formats/ModelIndices.h"
+#include "../Formats/ModelLoader.h"
+#include "../Formats/BndTextureLoader.h"
 #include "../Formats/Obj3DTexture.h"
 #include "../Renderer/ModelRenderer.h"
 
@@ -335,6 +337,64 @@ namespace ALTEngine::Screens
                         // facing the wall.
                         placed.rotationRadians = 3.14159265f - static_cast<float>(crate.rotation) * (3.14159265f / 4.0f);
                         placedObjects.push_back(placed);
+                    }
+
+                    // Doors. Their meshes live in this same .MAP under
+                    // "D" sections, textured from the level's own pages,
+                    // and can span more than one page - so each page
+                    // becomes its own cache entry and its own PlacedObject
+                    // at the same transform. Placed closed; the opening
+                    // state machine is not implemented yet.
+                    try
+                    {
+                        auto doorMeshes = ALTEngine::Formats::ModelLoader::Load(*mapPath, "D");
+                        auto levelTextures = ALTEngine::Formats::BndTextureLoader::Load(*gfxPath);
+
+                        for (size_t m = 0; m < doorMeshes.size(); ++m)
+                        {
+                            auto groups = ALTEngine::Formats::BuildRenderMeshPerGroup(doorMeshes[m], levelTextures.uvRects);
+                            for (size_t page = 0; page < groups.size(); ++page)
+                            {
+                                if (groups[page].indices.empty()) { continue; }
+                                if (page >= levelTextures.textures.size()) { continue; }
+                                ALTEngine::Renderer::ModelCacheKey key{
+                                    ALTEngine::Renderer::ModelCatalog::LevelDoor,
+                                    static_cast<int>(m) * 8 + static_cast<int>(page) };
+                                ModelRenderer::RegisterMesh(key, groups[page], levelTextures.textures[page]);
+                            }
+                        }
+
+                        for (const auto& door : level.doors)
+                        {
+                            size_t cellIndex = static_cast<size_t>(door.y) * level.header.mapLength + static_cast<size_t>(door.x);
+                            int cellFloor = (cellIndex < level.collisionGrid.size())
+                                                ? level.collisionGrid[cellIndex].floorHeight : 0;
+
+                            float worldX = GRID_CELL_TO_WORLD_UNITS * (centerPosX + static_cast<float>(door.x));
+                            float worldZ = GRID_CELL_TO_WORLD_UNITS * (static_cast<float>(door.y) - centerPosZ) + GRID_CELL_TO_WORLD_UNITS * 0.5f;
+                            // Closed height: floorHeight * 32 + 16.
+                            float worldY = static_cast<float>(cellFloor) * 32.0f + 16.0f;
+
+                            for (int page = 0; page < 5; ++page)
+                            {
+                                ALTEngine::Renderer::ModelCacheKey key{
+                                    ALTEngine::Renderer::ModelCatalog::LevelDoor,
+                                    static_cast<int>(door.modelIndex) * 8 + page };
+
+                                ALTEngine::Renderer::PlacedObject placed;
+                                placed.cacheKey = key;
+                                placed.x = worldX;
+                                placed.y = worldY;
+                                placed.z = worldZ;
+                                // Same facing convention as the crates.
+                                placed.rotationRadians = 3.14159265f - static_cast<float>(door.rotation) * (3.14159265f / 4.0f);
+                                placedObjects.push_back(placed);
+                            }
+                        }
+                    }
+                    catch (const std::exception& e)
+                    {
+                        SDL_Log("GameplayScreen: door setup failed: %s", e.what());
                     }
                 }
                 catch (const std::exception& e)
