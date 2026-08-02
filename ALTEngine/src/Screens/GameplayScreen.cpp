@@ -199,6 +199,33 @@ namespace ALTEngine::Screens
         float originX = 0.0f;
         float originZ = 0.0f;
 
+        // Live door state. Doors drive the collision grid directly: the
+        // ceiling byte of the four cells they cover rises and falls with
+        // the mesh, one height unit (32 world units) per tick, so
+        // movement clearance and the visual stay in lockstep.
+        struct DoorState
+        {
+            enum class Phase { Idle, Opening, Open, Closing };
+            bool alongZ = false;
+            int floorUnits = 0;
+            int travel = 30;
+            int progress = 0;            // 0 .. travel
+            uint8_t threshold = 1;
+            uint8_t unlockProgress = 0;
+            int holdTicks = 0;
+            int holdTimer = 0;
+            Phase phase = Phase::Idle;
+            std::array<size_t, 4> cells{};
+            int cellCount = 0;
+            size_t placedFirst = 0;
+            int placedCount = 0;
+            float worldX = 0.0f, worldZ = 0.0f, baseY = 0.0f;
+        };
+        std::vector<DoorState> doorStates;
+        int lastTriggerAction = 0;
+        int lastCellIndex = -1;
+        float tickAccumulator = 0.0f;
+
         if (mapPath.has_value() && gfxPath.has_value())
         {
             if (ModelRenderer::Initialize())
@@ -415,6 +442,31 @@ namespace ALTEngine::Screens
                                 level.collisionGrid[ci].ceilingHeight = static_cast<uint8_t>(ceilingUnits);
                             }
 
+                            DoorState ds;
+                            ds.alongZ = alongZ;
+                            ds.floorUnits = cellFloor;
+                            ds.travel = doorTravel;
+                            ds.progress = startsOpen ? doorTravel : 0;
+                            ds.threshold = door.lockState == 0 ? 1 : door.lockState;
+                            ds.unlockProgress = 0;
+                            ds.holdTicks = static_cast<int>(door.time) * 4;
+                            ds.holdTimer = 0;
+                            ds.phase = startsOpen ? DoorState::Phase::Open : DoorState::Phase::Idle;
+                            ds.worldX = worldX;
+                            ds.worldZ = worldZ;
+                            ds.baseY = static_cast<float>(cellFloor) * 32.0f + 16.0f;
+                            for (int step = 0; step < 4; ++step)
+                            {
+                                int cx = anchorX + (alongZ ? 0 : step);
+                                int cz = anchorZ + (alongZ ? step : 0);
+                                if (cx < 0 || cz < 0 || cx >= level.header.mapLength || cz >= level.header.mapWidth) { continue; }
+                                size_t ci = static_cast<size_t>(cz) * level.header.mapLength + static_cast<size_t>(cx);
+                                if (ci < level.collisionGrid.size()) { ds.cells[static_cast<size_t>(ds.cellCount++)] = ci; }
+                            }
+                            ds.placedFirst = placedObjects.size();
+                            ds.placedCount = 5;
+                            doorStates.push_back(ds);
+
                             for (int page = 0; page < 5; ++page)
                             {
                                 ALTEngine::Renderer::ModelCacheKey key{
@@ -554,6 +606,122 @@ namespace ALTEngine::Screens
                     {
                         camera.x += stepX;
                         camera.z += stepZ;
+                    }
+                }
+
+                // Triggers and door ticking.
+                if (levelReady)
+                {
+                    int pgx = ToGridSpaceX(camera.x, originX);
+                    int pgz = ToGridSpaceZ(camera.z, originZ);
+                    int cellX = pgx >> 9, cellZ = pgz >> 9;
+                    int cellIndex = -1;
+                    if (cellX >= 0 && cellZ >= 0 && cellX < level.header.mapLength && cellZ < level.header.mapWidth)
+                    {
+                        cellIndex = cellZ * level.header.mapLength + cellX;
+                    }
+
+                    // Only evaluated when the player changes cell, and then
+                    // only when the new cell's action byte differs from the
+                    // last one acted on - standing still fires nothing, and
+                    // stepping onto a plain cell clears the latch so the
+                    // same trigger can fire again on re-entry.
+                    if (cellIndex != lastCellIndex)
+                    {
+                        lastCellIndex = cellIndex;
+                        int action = 0;
+                        if (cellIndex >= 0 && static_cast<size_t>(cellIndex) < level.collisionGrid.size())
+                        {
+                            action = level.collisionGrid[static_cast<size_t>(cellIndex)].scriptAction;
+                        }
+
+                        if (action == 0) { lastTriggerAction = 0; }
+                        else if (action != lastTriggerAction && static_cast<size_t>(action) < level.actions.size())
+                        {
+                            lastTriggerAction = action;
+                            const auto& trigger = level.actions[static_cast<size_t>(action)];
+                            // Bit 0x01 is the class that fires from the
+                            // player standing on the cell. (Every trigger in
+                            // L111 uses it; see the note in the writeup -
+                            // the bit table there has this as 0x04.)
+                            if ((trigger.activationMask & 0x01) != 0 && trigger.enable != 0)
+                            {
+                                int cmd = trigger.commandStart;
+                                std::vector<bool> visited(level.logics.size(), false);
+                                while (cmd != 0xFF && static_cast<size_t>(cmd) < level.logics.size() && !visited[static_cast<size_t>(cmd)])
+                                {
+                                    visited[static_cast<size_t>(cmd)] = true;
+                                    const auto& c = level.logics[static_cast<size_t>(cmd)];
+                                    // Only door commands are wired up so far.
+                                    if ((c.action == 1 || c.action == 6) && c.objectIndex < doorStates.size())
+                                    {
+                                        DoorState& ds = doorStates[c.objectIndex];
+                                        if (ds.phase == DoorState::Phase::Idle && ds.unlockProgress < ds.threshold)
+                                        {
+                                            ds.unlockProgress = static_cast<uint8_t>(ds.unlockProgress + c.modifier);
+                                        }
+                                    }
+                                    else if (c.action == 8)
+                                    {
+                                        SDL_Log("GameplayScreen: EndLevel trigger fired (action %d)", action);
+                                    }
+                                    cmd = c.nextStep;
+                                }
+                            }
+                        }
+                    }
+
+                    // Fixed 60 Hz tick - the original moves doors one
+                    // height unit per tick, and quantising matters: the
+                    // 32-unit step is what keeps the step-up test and
+                    // clearance behaving.
+                    tickAccumulator += dt;
+                    while (tickAccumulator >= 1.0f / 60.0f)
+                    {
+                        tickAccumulator -= 1.0f / 60.0f;
+                        for (auto& ds : doorStates)
+                        {
+                            switch (ds.phase)
+                            {
+                            case DoorState::Phase::Idle:
+                                if (ds.unlockProgress >= ds.threshold) { ds.phase = DoorState::Phase::Opening; }
+                                break;
+                            case DoorState::Phase::Opening:
+                                ds.progress++;
+                                if (ds.progress >= ds.travel) { ds.progress = ds.travel; ds.phase = DoorState::Phase::Open; ds.holdTimer = ds.holdTicks; }
+                                break;
+                            case DoorState::Phase::Open:
+                            {
+                                float d = ds.alongZ ? (ds.worldZ - camera.z) : (ds.worldX - camera.x);
+                                if (d < 0) { d = -d; }
+                                if (d > 1024.0f) { ds.phase = DoorState::Phase::Closing; }
+                                break;
+                            }
+                            case DoorState::Phase::Closing:
+                                ds.progress--;
+                                if (ds.progress <= 0)
+                                {
+                                    ds.progress = 0;
+                                    ds.phase = DoorState::Phase::Idle;
+                                    if (ds.holdTicks == 0) { ds.unlockProgress = 0; }
+                                }
+                                break;
+                            }
+
+                            // Push the current height into both the grid and
+                            // the mesh, so collision and visuals agree.
+                            uint8_t ceilingUnits = static_cast<uint8_t>(ds.floorUnits + ds.progress);
+                            for (int i = 0; i < ds.cellCount; ++i)
+                            {
+                                level.collisionGrid[ds.cells[static_cast<size_t>(i)]].ceilingHeight = ceilingUnits;
+                            }
+                            float y = ds.baseY + static_cast<float>(ds.progress) * 32.0f;
+                            for (int i = 0; i < ds.placedCount; ++i)
+                            {
+                                size_t pi = ds.placedFirst + static_cast<size_t>(i);
+                                if (pi < placedObjects.size()) { placedObjects[pi].y = y; }
+                            }
+                        }
                     }
                 }
 

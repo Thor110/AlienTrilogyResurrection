@@ -239,9 +239,12 @@ namespace ALTEngine::Formats
         for (int i = 0; i < 64; ++i)
         {
             ActionGroup a;
-            a.actionType = data[pos + 0]; a.logicStep = data[pos + 1]; a.byte3 = data[pos + 2]; a.byte4 = data[pos + 3];
+            a.activationMask = data[pos + 0]; a.commandStart = data[pos + 1]; a.enable = data[pos + 2]; a.byte4 = data[pos + 3];
             pos += 4;
-            if (a.actionType != 0) { result.actions.push_back(a); }
+            // All 64 kept, unfiltered: a cell's action byte indexes this
+            // table directly, so dropping the empty entries would shift
+            // every index after the first gap.
+            result.actions.push_back(a);
         }
 
         // Always exactly 64 entries, all kept (no filtering, unlike

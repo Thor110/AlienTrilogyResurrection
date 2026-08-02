@@ -50,7 +50,7 @@ namespace ALTEngine::Formats
         std::vector<struct Crate> crates;
         std::vector<struct Door> doors;
         std::vector<struct Lift> lifts;
-        std::vector<struct ActionGroup> actions;  // always 64 slots, but only ones with actionType != 0 are kept - matches AlienTrilogyMapLoader.cs's own filtering
+        std::vector<struct ActionGroup> actions;  // always exactly 64, unfiltered - a cell's action byte indexes this directly
         std::vector<struct LogicGroup> logics;    // always exactly 64 entries
     };
 
@@ -196,10 +196,13 @@ namespace ALTEngine::Formats
     // filtering). Referenced by CollisionNode::scriptAction.
     struct ActionGroup
     {
-        uint8_t actionType = 0; // 0=no action, 1=standard, 2=shootable, 3=mission(?)
-        uint8_t logicStep = 0;  // index into `logics`
-        uint8_t byte3 = 0;      // possibly repeatable/activation count
-        uint8_t byte4 = 0;      // confirmed always 0
+        // Indexed directly by a cell's action byte (+0x0f). Entry 0 is
+        // unused. Confirmed via Ghidra: the game compacts these into a
+        // working table keeping only the first three bytes.
+        uint8_t activationMask = 0; // which trigger classes fire this: 0x04 = player walks onto the cell
+        uint8_t commandStart = 0;   // first index into `logics`
+        uint8_t enable = 0;         // must be non-zero or nothing fires
+        uint8_t byte4 = 0;          // confirmed always 0
     };
 
     // 4 bytes, always exactly 64 entries (all kept, unlike ActionGroup).
