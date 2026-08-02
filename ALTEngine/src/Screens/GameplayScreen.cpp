@@ -370,10 +370,29 @@ namespace ALTEngine::Screens
                             int cellFloor = (cellIndex < level.collisionGrid.size())
                                                 ? level.collisionGrid[cellIndex].floorHeight : 0;
 
+                            // Cell centre on both axes, unlike the crates,
+                            // which sit on the cell in X.
                             float worldX = GRID_CELL_TO_WORLD_UNITS * (centerPosX + static_cast<float>(door.x));
-                            float worldZ = GRID_CELL_TO_WORLD_UNITS * (static_cast<float>(door.y) - centerPosZ) + GRID_CELL_TO_WORLD_UNITS * 0.5f;
+                            float worldZ = GRID_CELL_TO_WORLD_UNITS * (static_cast<float>(door.y) - centerPosZ) + GRID_CELL_TO_WORLD_UNITS;
                             // Closed height: floorHeight * 32 + 16.
                             float worldY = static_cast<float>(cellFloor) * 32.0f + 16.0f;
+
+                            // A closed door writes ceiling == floor across
+                            // the four cells it covers, leaving no vertical
+                            // gap - that is what blocks movement, there is
+                            // no door-specific collision test. Orientation
+                            // 2 and 6 run along X, everything else along Z.
+                            bool alongX = (door.rotation == 2 || door.rotation == 6);
+                            for (int step = 0; step < 4; ++step)
+                            {
+                                int cx = static_cast<int>(door.x) + (alongX ? step : 0);
+                                int cz = static_cast<int>(door.y) + (alongX ? 0 : step);
+                                if (cx >= level.header.mapLength || cz >= level.header.mapWidth) { break; }
+                                size_t ci = static_cast<size_t>(cz) * level.header.mapLength + static_cast<size_t>(cx);
+                                if (ci >= level.collisionGrid.size()) { break; }
+                                level.collisionGrid[ci].floorHeight = static_cast<uint8_t>(cellFloor);
+                                level.collisionGrid[ci].ceilingHeight = static_cast<uint8_t>(cellFloor);
+                            }
 
                             for (int page = 0; page < 5; ++page)
                             {
