@@ -93,23 +93,23 @@ namespace ALTEngine::Screens
 
         // World space -> grid space, where cell = coord >> 9. Inverts the
         // crate placement used above, so player and objects agree.
-        int ToGridSpaceX(float worldX, float centerPosX) { return static_cast<int>(std::lround(worldX - 512.0f * centerPosX)); }
-        int ToGridSpaceZ(float worldZ, float centerPosZ) { return static_cast<int>(std::lround(worldZ + 512.0f * centerPosZ)); }
+        int ToGridSpaceX(float worldX, float originX) { return static_cast<int>(std::lround(worldX + originX)); }
+        int ToGridSpaceZ(float worldZ, float originZ) { return static_cast<int>(std::lround(worldZ + originZ)); }
 
         // Can the player's footprint sit at this world position? Samples
         // the centre and the four corners of the +/-200 box: every point
         // must be non-blocking, and no point may rise more than the
         // step-up limit above the floor the player is currently on.
         bool CanOccupy(const ALTEngine::Formats::LevelGeometry& level,
-                       float centerPosX, float centerPosZ,
+                       float originX, float originZ,
                        float worldX, float worldZ, float currentFloorY)
         {
             constexpr float R = COLLISION_RADIUS;
             const float offsets[5][2] = { {0, 0}, {-R, -R}, {R, -R}, {-R, R}, {R, R} };
             for (const auto& o : offsets)
             {
-                int gx = ToGridSpaceX(worldX + o[0], centerPosX);
-                int gz = ToGridSpaceZ(worldZ + o[1], centerPosZ);
+                int gx = ToGridSpaceX(worldX + o[0], originX);
+                int gz = ToGridSpaceZ(worldZ + o[1], originZ);
                 if (ALTEngine::Formats::IsCellBlocking(level, gx, gz)) { return false; }
                 float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
                 if (floorY - currentFloorY > MAX_STEP_UP) { return false; }
@@ -188,12 +188,16 @@ namespace ALTEngine::Screens
         FpsCamera camera;
         ALTEngine::Formats::LevelGeometry level;
         std::vector<ALTEngine::Renderer::PlacedObject> placedObjects;
-        // World <-> grid-space transform. Grid space is what the game
-        // itself uses: cell = coord >> 9, sub-cell = coord & 0x1ff.
-        // Derived from the confirmed crate placement below, so the two
-        // stay consistent by construction.
-        float centerPosX = 0.0f;
-        float centerPosZ = 0.0f;
+        // Grid space is the game's own coordinate system: cell =
+        // coord >> 9, sub-cell = coord & 0x1ff. World space is grid
+        // space shifted by this origin, which is the level's own
+        // geometric origin - confirmed against the vertex bounds, where
+        // grid 0 lands exactly on the minimum vertex coordinate on both
+        // axes. Everything (player, crates, doors) goes through this one
+        // transform, and the sub-cell offsets come from the game's own
+        // per-entity formulas rather than being fudged in here.
+        float originX = 0.0f;
+        float originZ = 0.0f;
 
         if (mapPath.has_value() && gfxPath.has_value())
         {
@@ -210,10 +214,8 @@ namespace ALTEngine::Screens
 
                     // Grid centring, needed by both the player spawn and
                     // the object placement below.
-                    centerPosX = -static_cast<float>(level.header.mapLength) / 2.0f;
-                    if (level.header.mapLength % 2 == 0) { centerPosX += 0.5f; }
-                    centerPosZ = static_cast<float>(level.header.mapWidth) / 2.0f;
-                    if (level.header.mapWidth % 2 == 0) { centerPosZ -= 0.5f; }
+                    originX = static_cast<float>(level.header.mapLength) / 2.0f * 512.0f;
+                    originZ = static_cast<float>(level.header.mapWidth) / 2.0f * 512.0f;
 
                     // Player start from the header. playerStartX/Y are
                     // cell coordinates - for L111 they are (39, 100)
@@ -221,12 +223,12 @@ namespace ALTEngine::Screens
                     // wall bytes and attribute 0. Placed with the same
                     // transform the crates use so the player shares one
                     // coordinate space with them.
-                    camera.x = 512.0f * (centerPosX + static_cast<float>(level.header.playerStartX));
-                    camera.z = 512.0f * (static_cast<float>(level.header.playerStartY) - centerPosZ) + 256.0f;
+                    camera.x = static_cast<float>(level.header.playerStartX) * 512.0f + 256.0f - originX;
+                    camera.z = static_cast<float>(level.header.playerStartY) * 512.0f + 256.0f - originZ;
                     camera.y = ALTEngine::Formats::FindFloorHeightGridSpace(
                                    level,
-                                   ToGridSpaceX(camera.x, centerPosX),
-                                   ToGridSpaceZ(camera.z, centerPosZ))
+                                   ToGridSpaceX(camera.x, originX),
+                                   ToGridSpaceZ(camera.z, originZ))
                                + STAND_OFFSET + EYE_HEIGHT;
 
                     // playerStartAngle is 2 for L111, which fits the same
@@ -313,9 +315,8 @@ namespace ALTEngine::Screens
                         // 512). X takes no offset, Z takes half a cell -
                         // both established against a known-good
                         // reference crate.
-                        constexpr float HALF_CELL = GRID_CELL_TO_WORLD_UNITS * 0.5f;
-                        float worldX = GRID_CELL_TO_WORLD_UNITS * (centerPosX + static_cast<float>(crate.x));
-                        float worldZ = GRID_CELL_TO_WORLD_UNITS * (static_cast<float>(crate.y) - centerPosZ) + HALF_CELL;
+                        float worldX = static_cast<float>(crate.x) * GRID_CELL_TO_WORLD_UNITS + 256.0f - originX;
+                        float worldZ = static_cast<float>(crate.y) * GRID_CELL_TO_WORLD_UNITS + 256.0f - originZ;
                         // "entities rest 32 units above the floor" -
                         // confirmed standing offset from the same
                         // decompilation, on top of the floor height itself.
@@ -364,34 +365,54 @@ namespace ALTEngine::Screens
                             }
                         }
 
+                        // Door travel distance in height units: 30 on
+                        // the first two levels, 43 from level 2 onward.
+                        int doorTravel = (digits == "111" || digits == "112") ? 30 : 43;
+
                         for (const auto& door : level.doors)
                         {
-                            size_t cellIndex = static_cast<size_t>(door.y) * level.header.mapLength + static_cast<size_t>(door.x);
-                            int cellFloor = (cellIndex < level.collisionGrid.size())
-                                                ? level.collisionGrid[cellIndex].floorHeight : 0;
+                            // Orientation 2 and 6 run along Z, 0 and 4 along
+                            // X. 0 vs 4 and 2 vs 6 are 180 degrees apart and
+                            // only affect the model's yaw.
+                            bool alongZ = (door.rotation == 2 || door.rotation == 6);
 
-                            // Cell centre on both axes, unlike the crates,
-                            // which sit on the cell in X.
-                            float worldX = GRID_CELL_TO_WORLD_UNITS * (centerPosX + static_cast<float>(door.x));
-                            float worldZ = GRID_CELL_TO_WORLD_UNITS * (static_cast<float>(door.y) - centerPosZ) + GRID_CELL_TO_WORLD_UNITS;
-                            // Closed height: floorHeight * 32 + 16.
-                            float worldY = static_cast<float>(cellFloor) * 32.0f + 16.0f;
+                            // The mesh origin is the centre of the 4-cell
+                            // span, not the centre of the anchor cell. The
+                            // span runs from grid-1 to grid+2, so its centre
+                            // lands on the boundary between grid and grid+1 -
+                            // hence +512 along the door's own axis, and an
+                            // ordinary +256 cell centre across it.
+                            float gameX = static_cast<float>(door.x) * 512.0f + (alongZ ? 256.0f : 512.0f);
+                            float gameZ = static_cast<float>(door.y) * 512.0f + (alongZ ? 512.0f : 256.0f);
 
-                            // A closed door writes ceiling == floor across
-                            // the four cells it covers, leaving no vertical
-                            // gap - that is what blocks movement, there is
-                            // no door-specific collision test. Orientation
-                            // 2 and 6 run along X, everything else along Z.
-                            bool alongX = (door.rotation == 2 || door.rotation == 6);
+                            float worldX = gameX - originX;
+                            float worldZ = gameZ - originZ;
+
+                            // Four covered cells, anchored one cell BACK
+                            // along the door's axis.
+                            int anchorX = static_cast<int>(door.x) - (alongZ ? 0 : 1);
+                            int anchorZ = static_cast<int>(door.y) - (alongZ ? 1 : 0);
+
+                            size_t ownCell = static_cast<size_t>(door.y) * level.header.mapLength + static_cast<size_t>(door.x);
+                            int cellFloor = (ownCell < level.collisionGrid.size())
+                                                ? level.collisionGrid[ownCell].floorHeight : 0;
+
+                            // Flag 0x40 means the door starts open: its
+                            // ceiling is already raised by the full travel
+                            // distance and the mesh sits at that height.
+                            bool startsOpen = (door.unknown & 0x40) != 0;
+                            int ceilingUnits = startsOpen ? cellFloor + doorTravel : cellFloor;
+                            float worldY = static_cast<float>(startsOpen ? ceilingUnits : cellFloor) * 32.0f + 16.0f;
+
                             for (int step = 0; step < 4; ++step)
                             {
-                                int cx = static_cast<int>(door.x) + (alongX ? step : 0);
-                                int cz = static_cast<int>(door.y) + (alongX ? 0 : step);
-                                if (cx >= level.header.mapLength || cz >= level.header.mapWidth) { break; }
+                                int cx = anchorX + (alongZ ? 0 : step);
+                                int cz = anchorZ + (alongZ ? step : 0);
+                                if (cx < 0 || cz < 0 || cx >= level.header.mapLength || cz >= level.header.mapWidth) { continue; }
                                 size_t ci = static_cast<size_t>(cz) * level.header.mapLength + static_cast<size_t>(cx);
-                                if (ci >= level.collisionGrid.size()) { break; }
+                                if (ci >= level.collisionGrid.size()) { continue; }
                                 level.collisionGrid[ci].floorHeight = static_cast<uint8_t>(cellFloor);
-                                level.collisionGrid[ci].ceilingHeight = static_cast<uint8_t>(cellFloor);
+                                level.collisionGrid[ci].ceilingHeight = static_cast<uint8_t>(ceilingUnits);
                             }
 
                             for (int page = 0; page < 5; ++page)
@@ -405,7 +426,6 @@ namespace ALTEngine::Screens
                                 placed.x = worldX;
                                 placed.y = worldY;
                                 placed.z = worldZ;
-                                // Same facing convention as the crates.
                                 placed.rotationRadians = 3.14159265f - static_cast<float>(door.rotation) * (3.14159265f / 4.0f);
                                 placedObjects.push_back(placed);
                             }
@@ -524,11 +544,11 @@ namespace ALTEngine::Screens
                     {
                         float currentFloorY = ALTEngine::Formats::FindFloorHeightGridSpace(
                             level,
-                            ToGridSpaceX(camera.x, centerPosX),
-                            ToGridSpaceZ(camera.z, centerPosZ));
+                            ToGridSpaceX(camera.x, originX),
+                            ToGridSpaceZ(camera.z, originZ));
 
-                        if (CanOccupy(level, centerPosX, centerPosZ, camera.x + stepX, camera.z, currentFloorY)) { camera.x += stepX; }
-                        if (CanOccupy(level, centerPosX, centerPosZ, camera.x, camera.z + stepZ, currentFloorY)) { camera.z += stepZ; }
+                        if (CanOccupy(level, originX, originZ, camera.x + stepX, camera.z, currentFloorY)) { camera.x += stepX; }
+                        if (CanOccupy(level, originX, originZ, camera.x, camera.z + stepZ, currentFloorY)) { camera.z += stepZ; }
                     }
                     else
                     {
@@ -543,8 +563,8 @@ namespace ALTEngine::Screens
                 {
                     float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(
                         level,
-                        ToGridSpaceX(camera.x, centerPosX),
-                        ToGridSpaceZ(camera.z, centerPosZ));
+                        ToGridSpaceX(camera.x, originX),
+                        ToGridSpaceZ(camera.z, originZ));
                     camera.y = floorY + STAND_OFFSET + EYE_HEIGHT;
                 }
             }
