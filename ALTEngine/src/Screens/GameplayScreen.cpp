@@ -213,8 +213,10 @@ namespace ALTEngine::Screens
             int progress = 0;            // 0 .. travel
             uint8_t threshold = 1;
             uint8_t unlockProgress = 0;
-            int holdTicks = 0;
-            int holdTimer = 0;
+            // NOT a timer: the original stores this and never decrements
+            // it. Zero means unlock progress resets each cycle (the door
+            // re-locks); non-zero means it stays unlocked for the level.
+            bool staysUnlocked = false;
             Phase phase = Phase::Idle;
             std::array<size_t, 4> cells{};
             int cellCount = 0;
@@ -357,7 +359,12 @@ namespace ALTEngine::Screens
                         // "entities rest 32 units above the floor" -
                         // confirmed standing offset from the same
                         // decompilation, on top of the floor height itself.
-                        float floorY = ALTEngine::Formats::FindFloorHeight(level, crate.x, crate.y) + 32.0f;
+                        // No standing offset: every OBJ3D mesh has its origin
+                        // exactly at its base (vertex Y runs 0 upward), so the
+                        // mesh sits on the floor when placed at the floor
+                        // height itself. The +32 used for entities belongs to
+                        // the monster spawn path, not to objects.
+                        float floorY = ALTEngine::Formats::FindFloorHeight(level, crate.x, crate.y);
 
                         ALTEngine::Renderer::PlacedObject placed;
                         placed.cacheKey = { ALTEngine::Renderer::ModelCatalog::Obj3d, Obj3DIndexForCrateType(crate.type) };
@@ -374,6 +381,15 @@ namespace ALTEngine::Screens
                         // correct, both rot=0 (North) small switches were
                         // facing the wall.
                         placed.rotationRadians = 3.14159265f - static_cast<float>(crate.rotation) * (3.14159265f / 4.0f);
+                        // Hardcoded in the original's object draw path as a
+                        // 12.12 fixed-point triple (0xc00, 0xd98, 0xc00),
+                        // applied to the matrix for every object type alike.
+                        // A 512-unit crate becomes 384 in a 512 cell, which
+                        // is where the gaps between adjacent crates come
+                        // from. Doors do not go through this path.
+                        placed.scaleX = 0.75f;
+                        placed.scaleY = 0.849609375f;
+                        placed.scaleZ = 0.75f;
                         placedObjects.push_back(placed);
                     }
 
@@ -459,8 +475,7 @@ namespace ALTEngine::Screens
                             ds.progress = startsOpen ? doorTravel : 0;
                             ds.threshold = door.lockState == 0 ? 1 : door.lockState;
                             ds.unlockProgress = 0;
-                            ds.holdTicks = static_cast<int>(door.time) * 4;
-                            ds.holdTimer = 0;
+                            ds.staysUnlocked = (door.time != 0);
                             ds.phase = startsOpen ? DoorState::Phase::Open : DoorState::Phase::Idle;
                             ds.worldX = worldX;
                             ds.worldZ = worldZ;
@@ -679,6 +694,20 @@ namespace ALTEngine::Screens
                     // same trigger can fire again on re-entry.
                     if (cellIndex != lastCellIndex)
                     {
+                        // Occupancy: byte 12 holds the occupier's type, 0 when
+                        // free, and is written on cell change rather than every
+                        // tick. 0xFF is used for the player - the real value is
+                        // unknown, and anything non-zero outside the monster
+                        // (1-19) and object (0x14-0x21) ranges behaves the same
+                        // for the only test that reads it.
+                        if (lastCellIndex >= 0 && static_cast<size_t>(lastCellIndex) < level.collisionGrid.size())
+                        {
+                            level.collisionGrid[static_cast<size_t>(lastCellIndex)].unknown13 = 0;
+                        }
+                        if (cellIndex >= 0 && static_cast<size_t>(cellIndex) < level.collisionGrid.size())
+                        {
+                            level.collisionGrid[static_cast<size_t>(cellIndex)].unknown13 = 0xFF;
+                        }
                         lastCellIndex = cellIndex;
                         int action = 0;
                         if (cellIndex >= 0 && static_cast<size_t>(cellIndex) < level.collisionGrid.size())
@@ -725,13 +754,18 @@ namespace ALTEngine::Screens
                                 break;
                             case DoorState::Phase::Opening:
                                 ds.progress++;
-                                if (ds.progress >= ds.travel) { ds.progress = ds.travel; ds.phase = DoorState::Phase::Open; ds.holdTimer = ds.holdTicks; }
+                                if (ds.progress >= ds.travel) { ds.progress = ds.travel; ds.phase = DoorState::Phase::Open; }
                                 break;
                             case DoorState::Phase::Open:
                             {
                                 float d = ds.alongZ ? (ds.worldZ - camera.z) : (ds.worldX - camera.x);
                                 if (d < 0) { d = -d; }
-                                if (d > 1024.0f) { ds.phase = DoorState::Phase::Closing; }
+                                bool occupied = false;
+                                for (int i = 0; i < ds.cellCount; ++i)
+                                {
+                                    if (level.collisionGrid[ds.cells[static_cast<size_t>(i)]].unknown13 != 0) { occupied = true; break; }
+                                }
+                                if (d > 1024.0f && !occupied) { ds.phase = DoorState::Phase::Closing; }
                                 break;
                             }
                             case DoorState::Phase::Closing:
@@ -740,7 +774,7 @@ namespace ALTEngine::Screens
                                 {
                                     ds.progress = 0;
                                     ds.phase = DoorState::Phase::Idle;
-                                    if (ds.holdTicks == 0) { ds.unlockProgress = 0; }
+                                    if (!ds.staysUnlocked) { ds.unlockProgress = 0; }
                                 }
                                 break;
                             }

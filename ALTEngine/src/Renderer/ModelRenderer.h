@@ -103,6 +103,10 @@ namespace ALTEngine::Renderer
         ModelCacheKey cacheKey;
         float x = 0, y = 0, z = 0;
         float rotationRadians = 0.0f;
+        // Non-uniform, and applied to the model matrix rather than the
+        // vertices. Objects (crates, switches) are drawn at 0.75/0.85/0.75
+        // in the original; doors are drawn 1:1.
+        float scaleX = 1.0f, scaleY = 1.0f, scaleZ = 1.0f;
     };
 
     class ModelRenderer

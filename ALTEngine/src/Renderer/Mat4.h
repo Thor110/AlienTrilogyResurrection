@@ -27,6 +27,13 @@ namespace ALTEngine::Renderer
             return r;
         }
 
+        static Mat4 Scale(float x, float y, float z)
+        {
+            Mat4 r = Identity();
+            r.m[0] = x; r.m[5] = y; r.m[10] = z;
+            return r;
+        }
+
         static Mat4 Translation(float x, float y, float z)
         {
             Mat4 r = Identity();

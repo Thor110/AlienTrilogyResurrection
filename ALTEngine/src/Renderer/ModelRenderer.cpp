@@ -1076,8 +1076,10 @@ namespace ALTEngine::Renderer
             const LoadedModel& model = modelIt->second;
             if (!model.vertexBuffer || model.indexCount == 0) { continue; }
 
-            Mat4 modelMatrix = Mat4::Multiply(Mat4::Translation(object.x, object.y, object.z),
-                                               Mat4::RotationY(object.rotationRadians + model.baseRotationRadians));
+            Mat4 modelMatrix = Mat4::Multiply(
+                Mat4::Translation(object.x, object.y, object.z),
+                Mat4::Multiply(Mat4::RotationY(object.rotationRadians + model.baseRotationRadians),
+                               Mat4::Scale(object.scaleX, object.scaleY, object.scaleZ)));
             Mat4 mvp = Mat4::Multiply(vp, modelMatrix);
 
             SDL_BindGPUGraphicsPipeline(renderPass, model.useDoubleSided ? doubleSidedPipeline : pipeline);
