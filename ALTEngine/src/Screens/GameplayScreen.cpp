@@ -535,6 +535,16 @@ namespace ALTEngine::Screens
                     SDL_SetWindowRelativeMouseMode(app.Window(), false);
                     PauseMenuResult pauseResult = PauseMenuScreen::Run(cdDirectory, language, missionLevelCode, inventory, audioSettings,
                                                                         renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings, keyBindings);
+                    // Re-read on return: the pause menu can reach the same
+                    // Options screen the boot menu does, so this can have
+                    // changed while paused. Reading it once at level load
+                    // meant a mid-game toggle silently did nothing.
+                    {
+                        ALTEngine::Bootstrap::Config modernConfig;
+                        ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
+                        autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
+                    }
+
                     if (pauseResult.outcome == PauseMenuOutcome::WindowClosed)
                     {
                         result.outcome = GameplayOutcome::WindowClosed;
