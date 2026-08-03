@@ -96,6 +96,7 @@ The road map for this project.
 	- [Patched an issue on L111LEV where four crates had textures which were sideways.](#L111LEV-Fix-1)
 	- [Patched an issue on L111LEV where multiple texture flags were incorrectly set.](#L111LEV-Fix-2)
 	- [Patched an issue on L111LEV where a vertice in the first lift had the wrong Z coordinate.](#L111LEV-Fix-3)
+	- [Patched an issue on L111LEV where a face was assigned the wrong texture index.](#L111LEV-Fix-4)
 	- [Patched an issue on L141LEV where some crates had incorrect textures.](#L141LEV-Fix-1)
 	- [Patched an issue on L161LEV where one face had an incorrect texture.](#L161LEV-Fix-1)
 	- [Patched an issue on L161LEV where one face on a door had an incorrect texture.](#L161LEV-Fix-2)
@@ -530,6 +531,18 @@ Here it is with the fix I applied to the level.
 Patch listed at Patch/new-fix.txt
 
 Not implemented in the toolkit yet
+
+## L111LEV Fix 4
+
+Patched an issue on L111LEV where a face was assigned the wrong texture index.
+
+Patch listed at Patch/another-fix.txt
+
+Not implemented in the toolkit yet
+
+<div align="center">
+  <img src="Images/L111LEV-incorrect-texture-index.png" alt="L111LEV Patched">
+</div>
 
 ## L141LEV Fix 1
 
