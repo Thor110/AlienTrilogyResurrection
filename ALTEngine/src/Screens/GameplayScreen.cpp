@@ -214,6 +214,17 @@ namespace ALTEngine::Screens
             int progress = 0;            // 0 .. travel
             uint8_t threshold = 1;
             uint8_t unlockProgress = 0;
+            // Consumed when the door starts opening. Without this a door
+            // whose unlock progress is kept (staysUnlocked) re-opens the
+            // instant it finishes closing, forever - reaching the threshold
+            // is what unlocks it, but a fresh trigger is what opens it.
+            bool openRequested = false;
+            // Doors opened by throwing a switch stay open; only doors you
+            // open by walking up to them close behind you. NOT derived from
+            // the disassembly - the dumped Open state has a single
+            // distance check with no such distinction - so this is
+            // behavioural until that is traced.
+            bool switchOperated = false;
             // NOT a timer: the original stores this and never decrements
             // it. Zero means unlock progress resets each cycle (the door
             // re-locks); non-zero means it stays unlocked for the level.
@@ -712,30 +723,89 @@ namespace ALTEngine::Screens
                     // Runs one trigger's command chain. Shared by the
                     // automatic path (walking onto the cell) and the
                     // interact key, so both behave identically once fired.
-                    auto runTriggerChain = [&](int action)
+                    // viaInteract distinguishes a deliberate use from simply
+                    // walking onto the cell. Activate Object only succeeds on
+                    // the former, which is what keeps the automatic-door
+                    // option from also throwing switches.
+                    auto runTriggerChain = [&](int action, bool viaInteract)
                     {
                         if (static_cast<size_t>(action) >= level.actions.size()) { return; }
                         const auto& trigger = level.actions[static_cast<size_t>(action)];
                         if ((trigger.activationMask & 0x01) == 0 || trigger.enable == 0) { return; }
 
                         int cmd = trigger.commandStart;
+                        bool sawActivateObject = false;
                         std::vector<bool> visited(level.logics.size(), false);
                         while (cmd != 0xFF && static_cast<size_t>(cmd) < level.logics.size() && !visited[static_cast<size_t>(cmd)])
                         {
                             visited[static_cast<size_t>(cmd)] = true;
                             const auto& c = level.logics[static_cast<size_t>(cmd)];
-                            if ((c.action == 1 || c.action == 6) && c.objectIndex < doorStates.size())
+
+                            // The chain is conditional: handlers return
+                            // success and a failure aborts the remainder.
+                            // That is how a level says "only if the switch
+                            // actually worked". Commands we have not built
+                            // yet must therefore stop the chain rather than
+                            // fall through - otherwise a switch-operated
+                            // door opens without its switch.
+                            switch (c.action)
                             {
-                                DoorState& ds = doorStates[c.objectIndex];
-                                if (ds.phase == DoorState::Phase::Idle && ds.unlockProgress < ds.threshold)
+                            case 1: // Unlock Door
+                            case 6: // Open Door
+                                if (c.objectIndex >= doorStates.size()) { cmd = 0xFF; break; }
+                                else
                                 {
+                                    DoorState& ds = doorStates[c.objectIndex];
+
+                                    // Both fail (and abort the chain) if the
+                                    // door is already fully unlocked or busy.
+                                    if (ds.phase != DoorState::Phase::Idle || ds.unlockProgress >= ds.threshold)
+                                    {
+                                        cmd = 0xFF;
+                                        break;
+                                    }
+
+                                    // Open Door additionally requires this to
+                                    // be the final increment: a door needing
+                                    // two activations cannot be opened by its
+                                    // own trigger until something else - a
+                                    // switch - has supplied the first one.
+                                    if (c.action == 6 && ds.unlockProgress < ds.threshold - 1)
+                                    {
+                                        cmd = 0xFF;
+                                        break;
+                                    }
+
+                                    if (sawActivateObject) { ds.switchOperated = true; }
                                     ds.unlockProgress = static_cast<uint8_t>(ds.unlockProgress + c.modifier);
+                                    if (ds.unlockProgress >= ds.threshold) { ds.openRequested = true; }
                                 }
-                            }
-                            else if (c.action == 8)
-                            {
+                                break;
+                            case 8: // End Level
                                 SDL_Log("GameplayScreen: EndLevel trigger fired (action %d)", action);
+                                break;
+                            case 0: // Toggle Light
+                            case 2: // Spawn Pickup
+                            case 3: // Spawn Monster
+                            case 9: // Change Texture
+                                // Do not set the success flag in the
+                                // original either, so continuing is correct.
+                                break;
+                            case 4: // Activate Object
+                                // Pressing use on the cell is what activates
+                                // the switch. Walking onto it is not, so the
+                                // chain stops there and whatever the switch
+                                // controls stays shut.
+                                if (!viaInteract) { cmd = 0xFF; }
+                                else { sawActivateObject = true; }
+                                break;
+                            default:
+                                // Lift commands (5, 7) also gate the chain on
+                                // their result. Unimplemented, so stop here.
+                                cmd = 0xFF;
+                                break;
                             }
+                            if (cmd == 0xFF) { break; }
                             cmd = c.nextStep;
                         }
                     };
@@ -781,7 +851,7 @@ namespace ALTEngine::Screens
                         else if (autoOpenDoors && action != lastTriggerAction)
                         {
                             lastTriggerAction = action;
-                            runTriggerChain(action);
+                            runTriggerChain(action, false);
                         }
                     }
 
@@ -795,7 +865,7 @@ namespace ALTEngine::Screens
                         && static_cast<size_t>(cellIndex) < level.collisionGrid.size())
                     {
                         int useAction = level.collisionGrid[static_cast<size_t>(cellIndex)].scriptAction;
-                        if (useAction != 0) { runTriggerChain(useAction); }
+                        if (useAction != 0) { runTriggerChain(useAction, true); }
                     }
                     prevUseHeld = useHeld;
 
@@ -819,7 +889,11 @@ namespace ALTEngine::Screens
                             switch (ds.phase)
                             {
                             case DoorState::Phase::Idle:
-                                if (ds.unlockProgress >= ds.threshold) { ds.phase = DoorState::Phase::Opening; }
+                                if (ds.openRequested && ds.unlockProgress >= ds.threshold)
+                                {
+                                    ds.openRequested = false;
+                                    ds.phase = DoorState::Phase::Opening;
+                                }
                                 break;
                             case DoorState::Phase::Opening:
                                 ds.progress++;
@@ -827,8 +901,12 @@ namespace ALTEngine::Screens
                                 break;
                             case DoorState::Phase::Open:
                             {
-                                float d = ds.alongZ ? (ds.worldZ - camera.z) : (ds.worldX - camera.x);
+                                // Measured across the doorway, not along it:
+                                // a door running along Z is walked through
+                                // in X, so that is the axis that matters.
+                                float d = ds.alongZ ? (ds.worldX - camera.x) : (ds.worldZ - camera.z);
                                 if (d < 0) { d = -d; }
+                                if (ds.switchOperated) { break; }
                                 bool occupied = false;
                                 for (int i = 0; i < ds.cellCount; ++i)
                                 {
