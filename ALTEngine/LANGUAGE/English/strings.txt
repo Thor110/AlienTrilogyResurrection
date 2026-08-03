@@ -90,3 +90,4 @@ Modern=Modern
 EnableAll=Enable All
 AutomaticDoors=Automatic Doors
 Custom=Custom
+KeepItems=Keep Items

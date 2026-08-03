@@ -312,7 +312,18 @@ namespace ALTEngine::Menu
             autoDoors.initialSelectedChild = FindChildIndexByLabel(autoDoors.children, autoDoorsEffective ? "On" : "Off");
             autoDoors.isSettingsList = true;
 
-            return List("Modern", StringId::Modern, { std::move(enableAll), std::move(autoDoors) });
+            MenuNode keepItems = List("Keep Items", StringId::KeepItems, {
+                Action("Off", StringId::Off),
+                Action("On", StringId::On),
+            });
+            bool keepItemsEffective =
+                mode == ALTEngine::Bootstrap::ModernMode::On ? true
+                : mode == ALTEngine::Bootstrap::ModernMode::Off ? false
+                : modern.FeatureSetting(ALTEngine::Bootstrap::ModernFeature::KeepItems);
+            keepItems.initialSelectedChild = FindChildIndexByLabel(keepItems.children, keepItemsEffective ? "On" : "Off");
+            keepItems.isSettingsList = true;
+
+            return List("Modern", StringId::Modern, { std::move(enableAll), std::move(autoDoors), std::move(keepItems) });
         }
 
         MenuNode Options(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,

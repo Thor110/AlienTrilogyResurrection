@@ -118,6 +118,7 @@ namespace ALTEngine::Bootstrap
             "Enable All",
             "Automatic Doors",
             "Custom",
+            "Keep Items",
         };
         return table;
     }

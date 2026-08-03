@@ -129,6 +129,7 @@ namespace ALTEngine::Bootstrap
         EnableAll,
         AutomaticDoors,
         Custom,
+        KeepItems,
 
         Count, // sentinel - not a real string, gives the tables their size
     };

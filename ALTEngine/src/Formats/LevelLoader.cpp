@@ -325,6 +325,11 @@ namespace ALTEngine::Formats
         // blocking test rather than a door special case.
         if (cell.ceilingHeight <= cell.floorHeight) { return true; }
 
+        // Occupancy (byte 12) blocks: crates, switches and monsters stamp
+        // their type here at spawn. 0xFF is the player's own marker and is
+        // ignored, otherwise you would be unable to move at all.
+        if (cell.unknown13 != 0 && cell.unknown13 != 0xFF) { return true; }
+
         // Attribute band 0x14-0x2c blocks. 0x2d and above are the stair
         // and ramp attributes, which are walkable - their height change
         // is handled by FindFloorHeightGridSpace and gated by the

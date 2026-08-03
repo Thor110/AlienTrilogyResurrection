@@ -24,6 +24,7 @@ namespace ALTEngine::Bootstrap
     enum class ModernFeature
     {
         AutoOpenDoors, // doors open by walking onto their trigger cell rather than needing a deliberate use action
+        KeepItems,     // carry weapons and ammo between levels instead of restarting each level with the pistol
     };
 
     class ModernSettings
@@ -69,6 +70,7 @@ namespace ALTEngine::Bootstrap
             switch (feature)
             {
             case ModernFeature::AutoOpenDoors: return "ModernAutoOpenDoors";
+            case ModernFeature::KeepItems: return "ModernKeepItems";
             }
             return "ModernUnknown";
         }

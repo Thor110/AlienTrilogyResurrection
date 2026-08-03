@@ -115,6 +115,7 @@ namespace ALTEngine::Bootstrap
         case StringId::EnableAll: return "EnableAll";
         case StringId::AutomaticDoors: return "AutomaticDoors";
         case StringId::Custom: return "Custom";
+        case StringId::KeepItems: return "KeepItems";
         default: return "";
         }
     }
@@ -217,6 +218,7 @@ namespace ALTEngine::Bootstrap
         if (name == "EnableAll") { return StringId::EnableAll; }
         if (name == "AutomaticDoors") { return StringId::AutomaticDoors; }
         if (name == "Custom") { return StringId::Custom; }
+        if (name == "KeepItems") { return StringId::KeepItems; }
         return std::nullopt;
     }
 }

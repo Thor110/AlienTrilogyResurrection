@@ -90,3 +90,4 @@ Modern=Moderne
 EnableAll=Tout Activer
 AutomaticDoors=Portes Automatiques
 Custom=Personnalisé
+KeepItems=Garder Les Objets

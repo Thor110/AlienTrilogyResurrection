@@ -342,12 +342,21 @@ namespace ALTEngine::Menu
                         selectByLabel(node, mode == ModernMode::On ? "On"
                                           : mode == ModernMode::Custom ? "Custom" : "Off");
                     }
-                    else if (node.label == "Automatic Doors")
+                    else
                     {
-                        bool effective = mode == ModernMode::On ? true
-                                       : mode == ModernMode::Off ? false
-                                       : modern.FeatureSetting(ModernFeature::AutoOpenDoors);
-                        selectByLabel(node, effective ? "On" : "Off");
+                        ModernFeature feature = ModernFeature::AutoOpenDoors;
+                        bool known = true;
+                        if (node.label == "Automatic Doors") { feature = ModernFeature::AutoOpenDoors; }
+                        else if (node.label == "Keep Items") { feature = ModernFeature::KeepItems; }
+                        else { known = false; }
+
+                        if (known)
+                        {
+                            bool effective = mode == ModernMode::On ? true
+                                           : mode == ModernMode::Off ? false
+                                           : modern.FeatureSetting(feature);
+                            selectByLabel(node, effective ? "On" : "Off");
+                        }
                     }
                 }
             }
@@ -385,7 +394,7 @@ namespace ALTEngine::Menu
                     if (ok) { resolutionSettings.Set(width, height); }
                 }
             }
-            else if (parentLabel == "Enable All" || parentLabel == "Automatic Doors")
+            else if (parentLabel == "Enable All" || parentLabel == "Automatic Doors" || parentLabel == "Keep Items")
             {
                 ALTEngine::Bootstrap::Config modernConfig;
                 ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
@@ -397,7 +406,10 @@ namespace ALTEngine::Menu
                 }
                 else
                 {
-                    modern.SetFeature(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors, leafLabel == "On");
+                    auto feature = parentLabel == "Keep Items"
+                                 ? ALTEngine::Bootstrap::ModernFeature::KeepItems
+                                 : ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors;
+                    modern.SetFeature(feature, leafLabel == "On");
                     // Touching an individual toggle only has meaning under
                     // Custom, so switch to it rather than silently ignoring
                     // the change.
@@ -779,7 +791,7 @@ namespace ALTEngine::Menu
 
                         // Modern entries depend on each other, so refresh
                         // the whole group rather than just the one changed.
-                        if (parentLabel == "Enable All" || parentLabel == "Automatic Doors")
+                        if (parentLabel == "Enable All" || parentLabel == "Automatic Doors" || parentLabel == "Keep Items")
                         {
                             RefreshModernSelections(optionsRoot);
                         }

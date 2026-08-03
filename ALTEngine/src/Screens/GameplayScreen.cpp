@@ -225,6 +225,10 @@ namespace ALTEngine::Screens
             float worldX = 0.0f, worldZ = 0.0f, baseY = 0.0f;
         };
         std::vector<DoorState> doorStates;
+        // Pickups spin in place. The original advances their angle by 0x10
+        // per tick in a 4096-step space.
+        std::vector<size_t> pickupPlaced;
+        float pickupAngle = 0.0f;
         // Read once here rather than threaded through Run's already long
         // settings chain - worth tidying if more of these appear.
         bool autoOpenDoors = false;
@@ -391,6 +395,15 @@ namespace ALTEngine::Screens
                         placed.scaleY = 0.849609375f;
                         placed.scaleZ = 0.75f;
                         placedObjects.push_back(placed);
+
+                        // Occupancy, as the original's object spawn does:
+                        // byte 12 takes the type, byte 4 the record index.
+                        size_t crateCell = static_cast<size_t>(crate.y) * level.header.mapLength + static_cast<size_t>(crate.x);
+                        if (crateCell < level.collisionGrid.size())
+                        {
+                            level.collisionGrid[crateCell].unknown13 = crate.type;
+                            level.collisionGrid[crateCell].unknown5 = static_cast<uint8_t>(&crate - level.crates.data());
+                        }
                     }
 
                     // Doors. Their meshes live in this same .MAP under
@@ -511,6 +524,47 @@ namespace ALTEngine::Screens
                     catch (const std::exception& e)
                     {
                         SDL_Log("GameplayScreen: door setup failed: %s", e.what());
+                    }
+
+                    // Pickups. Type maps straight onto a PICKMOD mesh number
+                    // - the BND has a gap where type 5 would be, so the
+                    // indices line up without adjustment.
+                    try
+                    {
+                        auto pickModPath = FindInSectFolders(cdDirectory, "PICKMOD.BND");
+                        auto pickGfxPath = FindInSectFolders(cdDirectory, "PICKGFX.BND");
+                        if (pickModPath.has_value() && pickGfxPath.has_value())
+                        {
+                            std::vector<ALTEngine::Renderer::PreloadRequest> requests;
+                            std::vector<bool> seen(64, false);
+                            for (const auto& pickup : level.pickups)
+                            {
+                                if (pickup.type >= seen.size() || seen[pickup.type]) { continue; }
+                                seen[pickup.type] = true;
+                                ALTEngine::Renderer::PreloadRequest req;
+                                req.cacheKey = { ALTEngine::Renderer::ModelCatalog::Pickmod, pickup.type };
+                                req.meshNumber = pickup.type;
+                                req.objBndPath = *pickModPath;
+                                req.gfxBndPath = *pickGfxPath;
+                                requests.push_back(req);
+                            }
+                            ModelRenderer::PreloadBatch(requests);
+
+                            for (const auto& pickup : level.pickups)
+                            {
+                                ALTEngine::Renderer::PlacedObject placed;
+                                placed.cacheKey = { ALTEngine::Renderer::ModelCatalog::Pickmod, pickup.type };
+                                placed.x = static_cast<float>(pickup.x) * GRID_CELL_TO_WORLD_UNITS + 256.0f - originX;
+                                placed.z = static_cast<float>(pickup.y) * GRID_CELL_TO_WORLD_UNITS + 256.0f - originZ;
+                                placed.y = ALTEngine::Formats::FindFloorHeight(level, pickup.x, pickup.y);
+                                pickupPlaced.push_back(placedObjects.size());
+                                placedObjects.push_back(placed);
+                            }
+                        }
+                    }
+                    catch (const std::exception& e)
+                    {
+                        SDL_Log("GameplayScreen: pickup setup failed: %s", e.what());
                     }
                 }
                 catch (const std::exception& e)
@@ -745,6 +799,13 @@ namespace ALTEngine::Screens
                     while (tickAccumulator >= 1.0f / 60.0f)
                     {
                         tickAccumulator -= 1.0f / 60.0f;
+                        // 0x10 of a 4096-step turn per tick.
+                        pickupAngle += 6.28318531f * 16.0f / 4096.0f;
+                        for (size_t pi : pickupPlaced)
+                        {
+                            if (pi < placedObjects.size()) { placedObjects[pi].rotationRadians = pickupAngle; }
+                        }
+
                         for (auto& ds : doorStates)
                         {
                             switch (ds.phase)
