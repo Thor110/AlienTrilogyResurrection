@@ -216,7 +216,9 @@ namespace ALTEngine::Formats
         return result;
     }
 
-    std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level, const std::vector<BxRectangle>& uvRects)
+    std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level,
+                                                            const std::vector<BxRectangle>& uvRects,
+                                                            const std::vector<FaceUvRotation>& uvRotations)
     {
         std::array<RenderMesh, 5> result;
 
@@ -228,7 +230,31 @@ namespace ALTEngine::Formats
             // group directly - not a computed/cumulative index. Fallback
             // (out-of-range texIndex) -> group 0, see header comment.
             int group = (resolved.groupIndex >= 0 && resolved.groupIndex < 5) ? resolved.groupIndex : 0;
-            EmitQuad(result[static_cast<size_t>(group)], level.vertices, q, ComputeLevelQuadUvs(q, uvRects));
+
+            std::array<Uv, 4> uvs = ComputeLevelQuadUvs(q, uvRects);
+
+            // Per-face UV override, matched on the vertex indices. A
+            // triangle rotates within its first three corners; a quad
+            // rotates all four.
+            for (const auto& rot : uvRotations)
+            {
+                if (rot.vertices[0] != q.a || rot.vertices[1] != q.b
+                    || rot.vertices[2] != q.c || rot.vertices[3] != q.d) { continue; }
+
+                int corners = (q.d == -1) ? 3 : 4;
+                int steps = ((rot.steps % corners) + corners) % corners;
+                if (steps == 0) { break; }
+
+                std::array<Uv, 4> rotated = uvs;
+                for (int i = 0; i < corners; ++i)
+                {
+                    rotated[static_cast<size_t>(i)] = uvs[static_cast<size_t>((i - steps + corners) % corners)];
+                }
+                uvs = rotated;
+                break;
+            }
+
+            EmitQuad(result[static_cast<size_t>(group)], level.vertices, q, uvs);
         }
         return result;
     }

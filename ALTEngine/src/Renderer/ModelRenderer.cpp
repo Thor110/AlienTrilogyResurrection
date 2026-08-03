@@ -977,7 +977,17 @@ namespace ALTEngine::Renderer
             return false;
         }
 
-        auto perGroupMeshes = ALTEngine::Formats::BuildLevelRenderMeshPerGroup(level, textureSet.uvRects);
+        // Per-face UV overrides for mis-authored faces, matched on vertex
+        // indices. Optional - a missing manifest just yields none.
+        auto allRotations = ALTEngine::Formats::FaceUvPatchLoader::Load("data/Patches.json");
+        auto rotations = ALTEngine::Formats::FaceUvPatchLoader::ForLevelFile(
+            allRotations, mapPath.filename().string());
+        if (!rotations.empty())
+        {
+            SDL_Log("ModelRenderer::LoadLevel(%s): applying %zu face UV override(s)", cacheKey.c_str(), rotations.size());
+        }
+
+        auto perGroupMeshes = ALTEngine::Formats::BuildLevelRenderMeshPerGroup(level, textureSet.uvRects, rotations);
 
         LoadedLevel loadedLevel;
         bool anyGroupUsed = false;

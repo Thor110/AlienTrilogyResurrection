@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "BxParser.h"
+#include "FaceUvPatches.h"
 #include "LevelLoader.h"
 #include "ModelLoader.h"
 
@@ -122,6 +123,8 @@ namespace ALTEngine::Formats
     // single mesh.
     std::array<RenderMesh, 5> BuildRenderMeshPerGroup(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects);
 
-    std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level, const std::vector<BxRectangle>& uvDescriptors);
+    std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level,
+                                                            const std::vector<BxRectangle>& uvDescriptors,
+                                                            const std::vector<FaceUvRotation>& uvRotations = {});
 }
 

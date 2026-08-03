@@ -4,6 +4,7 @@
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/LevelLoader.h"
 #include "../Bootstrap/ModernSettings.h"
+#include "../Renderer/ModelPreview.h"
 #include "../Formats/ModelIndices.h"
 #include "../Formats/ModelLoader.h"
 #include "../Formats/BndTextureLoader.h"
@@ -526,45 +527,52 @@ namespace ALTEngine::Screens
                         SDL_Log("GameplayScreen: door setup failed: %s", e.what());
                     }
 
-                    // Pickups. Type maps straight onto a PICKMOD mesh number
-                    // - the BND has a gap where type 5 would be, so the
-                    // indices line up without adjustment.
-                    try
+                    // Pickups. PICKMOD.BND lives in CD/GFX, not a SECT
+                    // folder, and MissionBriefingScreen has already preloaded
+                    // all 28 slots into the shared model cache by the time we
+                    // get here - so this only needs to place them, using the
+                    // same cache keys that preload used.
                     {
-                        auto pickModPath = FindInSectFolders(cdDirectory, "PICKMOD.BND");
-                        auto pickGfxPath = FindInSectFolders(cdDirectory, "PICKGFX.BND");
-                        if (pickModPath.has_value() && pickGfxPath.has_value())
+                        int spawned = 0;
+                        for (const auto& pickup : level.pickups)
                         {
-                            std::vector<ALTEngine::Renderer::PreloadRequest> requests;
-                            std::vector<bool> seen(64, false);
-                            for (const auto& pickup : level.pickups)
-                            {
-                                if (pickup.type >= seen.size() || seen[pickup.type]) { continue; }
-                                seen[pickup.type] = true;
-                                ALTEngine::Renderer::PreloadRequest req;
-                                req.cacheKey = { ALTEngine::Renderer::ModelCatalog::Pickmod, pickup.type };
-                                req.meshNumber = pickup.type;
-                                req.objBndPath = *pickModPath;
-                                req.gfxBndPath = *pickGfxPath;
-                                requests.push_back(req);
-                            }
-                            ModelRenderer::PreloadBatch(requests);
+                            // Record byte 6 gates level-start spawning:
+                            // non-zero means the pickup only appears once a
+                            // script fires SpawnPickup.
+                            if (pickup.z != 0) { continue; }
 
-                            for (const auto& pickup : level.pickups)
-                            {
-                                ALTEngine::Renderer::PlacedObject placed;
-                                placed.cacheKey = { ALTEngine::Renderer::ModelCatalog::Pickmod, pickup.type };
-                                placed.x = static_cast<float>(pickup.x) * GRID_CELL_TO_WORLD_UNITS + 256.0f - originX;
-                                placed.z = static_cast<float>(pickup.y) * GRID_CELL_TO_WORLD_UNITS + 256.0f - originZ;
-                                placed.y = ALTEngine::Formats::FindFloorHeight(level, pickup.x, pickup.y);
-                                pickupPlaced.push_back(placedObjects.size());
-                                placedObjects.push_back(placed);
-                            }
+                            // Type 24 is remapped to 21 for both model and
+                            // scale lookup.
+                            int type = (pickup.type == 0x18) ? 0x15 : pickup.type;
+
+                            ALTEngine::Renderer::PlacedObject placed;
+                            placed.cacheKey = ALTEngine::Renderer::ModelPreviewSource::ForPickmod(cdDirectory, type).CacheKey();
+                            placed.x = static_cast<float>(pickup.x) * GRID_CELL_TO_WORLD_UNITS + 256.0f - originX;
+                            placed.z = static_cast<float>(pickup.y) * GRID_CELL_TO_WORLD_UNITS + 256.0f - originZ;
+
+                            // Height offset table: 96 for type 20, 64 for
+                            // everything else in the range we spawn.
+                            float heightOffset = (type == 20) ? 96.0f : 64.0f;
+                            placed.y = ALTEngine::Formats::FindFloorHeight(level, pickup.x, pickup.y) + heightOffset;
+
+                            // Scale table, 12.12 fixed point, indexed by type.
+                            // Only 16 rows exist, so higher types are clamped
+                            // rather than read past the end.
+                            static const float PICKUP_SCALE[16] = {
+                                1.0f, 1.0f, 1.0f, 1.0f, 1.25f, 0.25f,
+                                1.75f, 1.75f, 1.75f, 1.75f, 1.75f, 1.75f, 1.75f, 1.75f, 1.75f, 1.75f
+                            };
+                            float scale = PICKUP_SCALE[type < 16 ? type : 15];
+                            placed.scaleX = scale;
+                            placed.scaleY = scale;
+                            placed.scaleZ = scale;
+
+                            pickupPlaced.push_back(placedObjects.size());
+                            placedObjects.push_back(placed);
+                            spawned++;
                         }
-                    }
-                    catch (const std::exception& e)
-                    {
-                        SDL_Log("GameplayScreen: pickup setup failed: %s", e.what());
+                        SDL_Log("GameplayScreen: %d of %zu pickups placed (rest are script-spawned)",
+                                spawned, level.pickups.size());
                     }
                 }
                 catch (const std::exception& e)
