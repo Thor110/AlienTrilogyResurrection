@@ -22001,6 +22001,18 @@
           ]
         }
       ]
+    },
+    {
+      "target": "SECT11/L111LEV.MAP",
+      "note": "L111LEV.MAP - incorrect texture index on one face",
+      "edits": [
+        {
+          "offset": "0x46DC4",
+          "bytes": [
+            "0x38"
+          ]
+        }
+      ]
     }
   ]
 }
