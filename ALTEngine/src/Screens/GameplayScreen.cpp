@@ -254,6 +254,10 @@ namespace ALTEngine::Screens
             bool collected = false;
         };
         std::vector<LivePickup> livePickups;
+        // Switch/object state, indexed by object record. Non-zero means
+        // already thrown - the original latches on this and fails, which
+        // aborts the whole command chain rather than re-running it.
+        std::vector<uint8_t> objectState;
         // Read once here rather than threaded through Run's already long
         // settings chain - worth tidying if more of these appear.
         bool autoOpenDoors = false;
@@ -606,6 +610,7 @@ namespace ALTEngine::Screens
                         }
                         SDL_Log("GameplayScreen: %d of %zu pickups placed (rest are script-spawned)",
                                 spawned, level.pickups.size());
+                        objectState.assign(level.crates.size(), 0);
                     }
                 }
                 catch (const std::exception& e)
@@ -814,13 +819,36 @@ namespace ALTEngine::Screens
                                 // original either, so continuing is correct.
                                 break;
                             case 4: // Activate Object
+                            {
                                 // Pressing use on the cell is what activates
-                                // the switch. Walking onto it is not, so the
-                                // chain stops there and whatever the switch
-                                // controls stays shut.
-                                if (!viaInteract) { cmd = 0xFF; }
-                                else { sawActivateObject = true; }
+                                // the switch. Walking onto it is not.
+                                if (!viaInteract) { cmd = 0xFF; break; }
+
+                                size_t oi = c.objectIndex;
+                                if (oi >= level.crates.size() || oi >= objectState.size()) { cmd = 0xFF; break; }
+
+                                // Latches: a thrown switch fails, and the
+                                // chain aborts on the failure.
+                                if (objectState[oi] != 0) { cmd = 0xFF; break; }
+
+                                // Types 22 and 26 need a battery and consume
+                                // one; type 24 is exempt.
+                                uint8_t type = level.crates[oi].type;
+                                if (type == 22 || type == 26)
+                                {
+                                    if (!inventory.HasBatteries())
+                                    {
+                                        SDL_Log("GameplayScreen: switch %zu needs a battery", oi);
+                                        cmd = 0xFF;
+                                        break;
+                                    }
+                                    inventory.batteries--;
+                                }
+
+                                objectState[oi] = 1;
+                                sawActivateObject = true;
                                 break;
+                            }
                             default:
                                 // Lift commands (5, 7) also gate the chain on
                                 // their result. Unimplemented, so stop here.
@@ -895,7 +923,7 @@ namespace ALTEngine::Screens
                         case 2:  inventory.pulseRifle.available = true;   inventory.pulseRifle.ammo += amount;   break;
                         case 3:  inventory.flamethrower.available = true; inventory.flamethrower.ammo += amount; break;
                         case 4:  inventory.smartGun.available = true;     inventory.smartGun.ammo += amount;     break;
-                        case 7:  inventory.hasBatteries = true;   break;
+                        case 7:  inventory.batteries += (amount > 0 ? amount : 1); break;
                         case 9:  inventory.pistol.ammo += amount;       break;
                         case 10: inventory.shotgun.ammo += amount;      break;
                         case 11: inventory.pulseRifle.ammo += amount;   break;

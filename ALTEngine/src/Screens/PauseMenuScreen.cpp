@@ -526,7 +526,7 @@ namespace ALTEngine::Screens
                 const MenuNode& node = root.children[static_cast<size_t>(path[0])];
                 bool owned = (topLabel == "Auto Mapper" && inventory.hasAutoMapper) ||
                              (topLabel == "Shoulder Lamp" && inventory.hasShoulderLamp) ||
-                             (topLabel == "Batteries" && inventory.hasBatteries);
+                             (topLabel == "Batteries" && inventory.HasBatteries());
                 DrawPickModModel(renderer, cdDirectory, node.modelIndex, panelX, panelY, 260, 200, scale, rotationAngle);
                 if (!owned) { DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::NotAvailable, language), panelX, panelY + 220, scale, COLOR_STATUS); }
             }

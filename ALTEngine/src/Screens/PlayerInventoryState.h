@@ -22,7 +22,10 @@ namespace ALTEngine::Screens
     {
         bool hasAutoMapper = false;
         bool hasShoulderLamp = false;
-        bool hasBatteries = false;
+        // A count, not a flag: battery-operated switches consume one each,
+        // so more than one can be carried and running out matters.
+        int batteries = 0;
+        bool HasBatteries() const { return batteries > 0; }
 
         WeaponState pistol{ true, true, 45 };
         WeaponState shotgun{};

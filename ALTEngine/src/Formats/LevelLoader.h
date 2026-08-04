@@ -38,23 +38,33 @@ namespace ALTEngine::Formats
         uint16_t ventTypes = 0;           // bitmask - per MapViewer.cs, likely unused leftover editor metadata
     };
 
-    // 28 bytes. Indexed directly by a quad's flags byte (& 0x7f) - a
-    // flag-8 quad uses light record 8. The game stamps these UVs into
-    // the render descriptor once at level load, which is the link
-    // between the "lights" section and the flag-8 quads that had no
-    // sensible texture.
+    // 28 bytes, indexed directly by a quad's flags byte (& 0x7f) - a
+    // flag-8 quad uses light record 8. Supplies the quad's VERTEX COLOUR,
+    // not its UVs: texture selection comes from texIndex as normal, and
+    // this is the shading on top. Every quad in a level takes a colour
+    // this way, so without it the whole level renders over-bright.
     struct LightRecord
     {
-        uint8_t defaultUv[3]{};   // +0x00 u, v, pad
-        uint8_t alternateUv[3]{}; // +0x04 u, v, pad - also reads as an RGB ramp
-        uint8_t corner2[3]{};     // +0x08 used when mode4 == 4
-        uint8_t corner3[3]{};     // +0x0c used when mode4 == 4
-        uint16_t extra[4]{};      // +0x10
-        uint8_t mode4 = 0;        // +0x18 - 4 = full four-corner override, with u0/u1 swapped
-        uint8_t modeAlt = 0;      // +0x19 - 1 = use the alternate triple
-        uint8_t variant = 0;      // +0x1a - advanced by ToggleLight, clamped to variantMax
-        uint8_t variantMax = 0;   // +0x1b
+        uint8_t unlit[3]{};     // +0x00 RGB used during the off phase
+        uint8_t lit[3]{};       // +0x04 RGB used during the on phase
+        uint8_t corner2[3]{};   // +0x08 RGB for vertex 2, mode 4 only
+        uint8_t corner3[3]{};   // +0x0c RGB for vertex 3, mode 4 only
+        uint16_t blinkCountdown = 0; // +0x10 runtime
+        uint16_t blinkRepeats = 0;   // +0x12 runtime, decrements per off phase
+        uint16_t onDuration = 0;     // +0x14 base ticks, jittered at reload
+        uint16_t offDuration = 0;    // +0x16 base ticks, jittered at reload
+        uint8_t mode = 0;            // +0x18 0-5: 0 flat, 1 blink, 3 second variant, 4 gouraud
+        uint8_t on = 0;              // +0x19 runtime on/off state
+        uint8_t variant = 0;         // +0x1a advanced by ToggleLight
+        uint8_t variantMax = 0;      // +0x1b blink only runs once variant reaches this
     };
+
+    // Global light multiplier, 12.12-ish fixed point over 0xc00. The
+    // brighter entry is a one-shot flash (weapon fire, explosion) that the
+    // updater clears each pass.
+    constexpr int LIGHT_GLOBAL_NORMAL = 3840; // x1.25
+    constexpr int LIGHT_GLOBAL_FLASH  = 8192; // x2.667
+    constexpr int LIGHT_GLOBAL_DIVISOR = 0xc00;
 
     struct LevelGeometry
     {

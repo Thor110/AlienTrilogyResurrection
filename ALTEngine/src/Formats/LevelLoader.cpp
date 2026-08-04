@@ -269,17 +269,18 @@ namespace ALTEngine::Formats
             LightRecord light;
             for (int c = 0; c < 3; ++c)
             {
-                light.defaultUv[c]   = data[pos + 0 + c];
-                light.alternateUv[c] = data[pos + 4 + c];
-                light.corner2[c]     = data[pos + 8 + c];
-                light.corner3[c]     = data[pos + 12 + c];
+                light.unlit[c]   = data[pos + 0 + c];
+                light.lit[c]     = data[pos + 4 + c];
+                light.corner2[c] = data[pos + 8 + c];
+                light.corner3[c] = data[pos + 12 + c];
             }
-            for (int e = 0; e < 4; ++e)
-            {
-                light.extra[e] = static_cast<uint16_t>(data[pos + 16 + e * 2] | (data[pos + 17 + e * 2] << 8));
-            }
-            light.mode4 = data[pos + 24];
-            light.modeAlt = data[pos + 25];
+            auto u16at = [&](size_t off) { return static_cast<uint16_t>(data[pos + off] | (data[pos + off + 1] << 8)); };
+            light.blinkCountdown = u16at(16);
+            light.blinkRepeats   = u16at(18);
+            light.onDuration     = u16at(20);
+            light.offDuration    = u16at(22);
+            light.mode = data[pos + 24];
+            light.on = data[pos + 25];
             light.variant = data[pos + 26];
             light.variantMax = data[pos + 27];
             pos += 28;
