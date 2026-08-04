@@ -1081,6 +1081,7 @@ namespace ALTEngine::Renderer
         // than failing the whole level render over one missing model.
         for (const auto& object : objects)
         {
+            if (!object.visible) { continue; }
             auto modelIt = loadedModels.find(object.cacheKey);
             if (modelIt == loadedModels.end()) { continue; }
             const LoadedModel& model = modelIt->second;

@@ -259,6 +259,46 @@ namespace ALTEngine::Formats
             result.logics.push_back(l);
         }
 
+        // Lights: 128 records of 28 bytes. The stride matters - at 24 the
+        // following lists land 4 bytes further out per row, which is what
+        // made the tail look like it had a spare 512-byte block.
+        needBytes(128 * 28, "lights");
+        result.lights.reserve(128);
+        for (int i = 0; i < 128; ++i)
+        {
+            LightRecord light;
+            for (int c = 0; c < 3; ++c)
+            {
+                light.defaultUv[c]   = data[pos + 0 + c];
+                light.alternateUv[c] = data[pos + 4 + c];
+                light.corner2[c]     = data[pos + 8 + c];
+                light.corner3[c]     = data[pos + 12 + c];
+            }
+            for (int e = 0; e < 4; ++e)
+            {
+                light.extra[e] = static_cast<uint16_t>(data[pos + 16 + e * 2] | (data[pos + 17 + e * 2] << 8));
+            }
+            light.mode4 = data[pos + 24];
+            light.modeAlt = data[pos + 25];
+            light.variant = data[pos + 26];
+            light.variantMax = data[pos + 27];
+            pos += 28;
+            result.lights.push_back(light);
+        }
+
+        auto readList = [&](uint16_t count, std::vector<uint32_t>& out, const char* what) {
+            needBytes(static_cast<size_t>(count) * 4, what);
+            out.reserve(count);
+            for (uint16_t i = 0; i < count; ++i)
+            {
+                out.push_back(static_cast<uint32_t>(data[pos] | (data[pos + 1] << 8)
+                                                    | (data[pos + 2] << 16) | (static_cast<uint32_t>(data[pos + 3]) << 24)));
+                pos += 4;
+            }
+        };
+        readList(result.header.unknownBlockA, result.unknownListA, "unknown list A");
+        readList(result.header.unknownBlockB, result.unknownListB, "unknown list B");
+
         return result;
     }
 

@@ -130,6 +130,15 @@ namespace ALTEngine::Bootstrap
         AutomaticDoors,
         Custom,
         KeepItems,
+        SkipEndLevelScreen,
+        PlayerJumping,
+        StunnedEnemies,
+        DescEnableAll,
+        DescAutomaticDoors,
+        DescKeepItems,
+        DescSkipEndLevel,
+        DescPlayerJumping,
+        DescStunnedEnemies,
 
         Count, // sentinel - not a real string, gives the tables their size
     };

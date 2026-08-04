@@ -348,6 +348,9 @@ namespace ALTEngine::Menu
                         bool known = true;
                         if (node.label == "Automatic Doors") { feature = ModernFeature::AutoOpenDoors; }
                         else if (node.label == "Keep Items") { feature = ModernFeature::KeepItems; }
+                        else if (node.label == "Skip End Level Screen") { feature = ModernFeature::SkipEndLevelScreen; }
+                        else if (node.label == "Player Jumping") { feature = ModernFeature::PlayerJumping; }
+                        else if (node.label == "Stunned Enemies") { feature = ModernFeature::StunnedEnemies; }
                         else { known = false; }
 
                         if (known)
@@ -394,7 +397,8 @@ namespace ALTEngine::Menu
                     if (ok) { resolutionSettings.Set(width, height); }
                 }
             }
-            else if (parentLabel == "Enable All" || parentLabel == "Automatic Doors" || parentLabel == "Keep Items")
+            else if (parentLabel == "Enable All" || parentLabel == "Automatic Doors" || parentLabel == "Keep Items"
+                     || parentLabel == "Skip End Level Screen" || parentLabel == "Player Jumping" || parentLabel == "Stunned Enemies")
             {
                 ALTEngine::Bootstrap::Config modernConfig;
                 ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
@@ -406,9 +410,11 @@ namespace ALTEngine::Menu
                 }
                 else
                 {
-                    auto feature = parentLabel == "Keep Items"
-                                 ? ALTEngine::Bootstrap::ModernFeature::KeepItems
-                                 : ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors;
+                    auto feature = ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors;
+                    if (parentLabel == "Keep Items") { feature = ALTEngine::Bootstrap::ModernFeature::KeepItems; }
+                    else if (parentLabel == "Skip End Level Screen") { feature = ALTEngine::Bootstrap::ModernFeature::SkipEndLevelScreen; }
+                    else if (parentLabel == "Player Jumping") { feature = ALTEngine::Bootstrap::ModernFeature::PlayerJumping; }
+                    else if (parentLabel == "Stunned Enemies") { feature = ALTEngine::Bootstrap::ModernFeature::StunnedEnemies; }
                     modern.SetFeature(feature, leafLabel == "On");
                     // Touching an individual toggle only has meaning under
                     // Custom, so switch to it rather than silently ignoring
@@ -791,7 +797,8 @@ namespace ALTEngine::Menu
 
                         // Modern entries depend on each other, so refresh
                         // the whole group rather than just the one changed.
-                        if (parentLabel == "Enable All" || parentLabel == "Automatic Doors" || parentLabel == "Keep Items")
+                        if (parentLabel == "Enable All" || parentLabel == "Automatic Doors" || parentLabel == "Keep Items"
+                     || parentLabel == "Skip End Level Screen" || parentLabel == "Player Jumping" || parentLabel == "Stunned Enemies")
                         {
                             RefreshModernSelections(optionsRoot);
                         }
@@ -1066,6 +1073,29 @@ namespace ALTEngine::Menu
 
                 DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::PressEscToGoBack, language),
                                 (windowW - TextWidth(ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::PressEscToGoBack, language), scale)) / 2, windowH - rowHeight * 2, scale, COLOR_GREEN);
+
+                // Description for the highlighted entry, two rows above the
+                // Esc prompt. Only entries that carry one show anything, so
+                // it clears itself as soon as the cursor leaves the Modern
+                // list - no explicit reset needed.
+                {
+                    const MenuNode* highlighted = &optionsRoot;
+                    for (size_t depth = 0; depth < optionsPath.size(); ++depth)
+                    {
+                        int childIndex = optionsPath[depth];
+                        if (childIndex < 0 || static_cast<size_t>(childIndex) >= highlighted->children.size()) { highlighted = nullptr; break; }
+                        highlighted = &highlighted->children[static_cast<size_t>(childIndex)];
+                    }
+
+                    if (highlighted && highlighted->descriptionStringId >= 0)
+                    {
+                        std::string description = ALTEngine::Bootstrap::Tr(
+                            static_cast<ALTEngine::Bootstrap::StringId>(highlighted->descriptionStringId), language);
+                        DrawBitmapText(renderer, description,
+                                        (windowW - TextWidth(description, scale)) / 2,
+                                        windowH - rowHeight * 4, scale, COLOR_GREEN_DIM);
+                    }
+                }
                 DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::PressEnterToSelect, language),
                                 (windowW - TextWidth(ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::PressEnterToSelect, language), scale)) / 2, windowH - rowHeight, scale, COLOR_GREEN);
 

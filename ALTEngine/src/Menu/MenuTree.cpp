@@ -323,7 +323,36 @@ namespace ALTEngine::Menu
             keepItems.initialSelectedChild = FindChildIndexByLabel(keepItems.children, keepItemsEffective ? "On" : "Off");
             keepItems.isSettingsList = true;
 
-            return List("Modern", StringId::Modern, { std::move(enableAll), std::move(autoDoors), std::move(keepItems) });
+            auto featureNode = [&](const char* label, StringId title, StringId description,
+                                   ALTEngine::Bootstrap::ModernFeature feature) {
+                MenuNode node = List(label, title, {
+                    Action("Off", StringId::Off),
+                    Action("On", StringId::On),
+                });
+                bool effective = mode == ALTEngine::Bootstrap::ModernMode::On ? true
+                               : mode == ALTEngine::Bootstrap::ModernMode::Off ? false
+                               : modern.FeatureSetting(feature);
+                node.initialSelectedChild = FindChildIndexByLabel(node.children, effective ? "On" : "Off");
+                node.isSettingsList = true;
+                node.descriptionStringId = static_cast<int>(description);
+                return node;
+            };
+
+            enableAll.descriptionStringId = static_cast<int>(StringId::DescEnableAll);
+            autoDoors.descriptionStringId = static_cast<int>(StringId::DescAutomaticDoors);
+            keepItems.descriptionStringId = static_cast<int>(StringId::DescKeepItems);
+
+            return List("Modern", StringId::Modern, {
+                std::move(enableAll),
+                std::move(autoDoors),
+                std::move(keepItems),
+                featureNode("Skip End Level Screen", StringId::SkipEndLevelScreen, StringId::DescSkipEndLevel,
+                            ALTEngine::Bootstrap::ModernFeature::SkipEndLevelScreen),
+                featureNode("Player Jumping", StringId::PlayerJumping, StringId::DescPlayerJumping,
+                            ALTEngine::Bootstrap::ModernFeature::PlayerJumping),
+                featureNode("Stunned Enemies", StringId::StunnedEnemies, StringId::DescStunnedEnemies,
+                            ALTEngine::Bootstrap::ModernFeature::StunnedEnemies),
+            });
         }
 
         MenuNode Options(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,

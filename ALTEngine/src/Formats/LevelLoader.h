@@ -38,6 +38,24 @@ namespace ALTEngine::Formats
         uint16_t ventTypes = 0;           // bitmask - per MapViewer.cs, likely unused leftover editor metadata
     };
 
+    // 28 bytes. Indexed directly by a quad's flags byte (& 0x7f) - a
+    // flag-8 quad uses light record 8. The game stamps these UVs into
+    // the render descriptor once at level load, which is the link
+    // between the "lights" section and the flag-8 quads that had no
+    // sensible texture.
+    struct LightRecord
+    {
+        uint8_t defaultUv[3]{};   // +0x00 u, v, pad
+        uint8_t alternateUv[3]{}; // +0x04 u, v, pad - also reads as an RGB ramp
+        uint8_t corner2[3]{};     // +0x08 used when mode4 == 4
+        uint8_t corner3[3]{};     // +0x0c used when mode4 == 4
+        uint16_t extra[4]{};      // +0x10
+        uint8_t mode4 = 0;        // +0x18 - 4 = full four-corner override, with u0/u1 swapped
+        uint8_t modeAlt = 0;      // +0x19 - 1 = use the alternate triple
+        uint8_t variant = 0;      // +0x1a - advanced by ToggleLight, clamped to variantMax
+        uint8_t variantMax = 0;   // +0x1b
+    };
+
     struct LevelGeometry
     {
         LevelHeader header;
@@ -52,6 +70,9 @@ namespace ALTEngine::Formats
         std::vector<struct Lift> lifts;
         std::vector<struct ActionGroup> actions;  // always exactly 64, unfiltered - a cell's action byte indexes this directly
         std::vector<struct LogicGroup> logics;    // always exactly 64 entries
+        std::vector<LightRecord> lights;          // 128 entries of 28 bytes
+        std::vector<uint32_t> unknownListA;       // header unknownBlockA entries of 4 bytes
+        std::vector<uint32_t> unknownListB;       // header unknownBlockB entries of 4 bytes - the texture-animation frame lists
     };
 
     // 16 bytes. One per grid cell, mapLength*mapWidth of them, row-major -

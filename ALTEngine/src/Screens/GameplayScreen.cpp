@@ -218,17 +218,18 @@ namespace ALTEngine::Screens
             // whose unlock progress is kept (staysUnlocked) re-opens the
             // instant it finishes closing, forever - reaching the threshold
             // is what unlocks it, but a fresh trigger is what opens it.
-            bool openRequested = false;
             // Doors opened by throwing a switch stay open; only doors you
             // open by walking up to them close behind you. NOT derived from
             // the disassembly - the dumped Open state has a single
             // distance check with no such distinction - so this is
             // behavioural until that is traced.
             bool switchOperated = false;
-            // NOT a timer: the original stores this and never decrements
-            // it. Zero means unlock progress resets each cycle (the door
-            // re-locks); non-zero means it stays unlocked for the level.
-            bool staysUnlocked = false;
+            // Unlock progress is reset when the door finishes closing in
+            // both ordinary branches. Only doors with flag 0x40 keep it,
+            // and those go through a cooldown counted in hold ticks.
+            bool keepsUnlockOnClose = false;
+            int holdTicks = 0;
+            int cooldown = 0;
             Phase phase = Phase::Idle;
             std::array<size_t, 4> cells{};
             int cellCount = 0;
@@ -241,6 +242,18 @@ namespace ALTEngine::Screens
         // per tick in a 4096-step space.
         std::vector<size_t> pickupPlaced;
         float pickupAngle = 0.0f;
+
+        // Live pickups, for walk-over collection.
+        struct LivePickup
+        {
+            size_t placedIndex = 0;
+            int cellIndex = -1;
+            uint8_t type = 0;
+            uint8_t amount = 0;
+            uint8_t multiplier = 0;
+            bool collected = false;
+        };
+        std::vector<LivePickup> livePickups;
         // Read once here rather than threaded through Run's already long
         // settings chain - worth tidying if more of these appear.
         bool autoOpenDoors = false;
@@ -500,7 +513,8 @@ namespace ALTEngine::Screens
                             ds.progress = startsOpen ? doorTravel : 0;
                             ds.threshold = door.lockState == 0 ? 1 : door.lockState;
                             ds.unlockProgress = 0;
-                            ds.staysUnlocked = (door.time != 0);
+                            ds.keepsUnlockOnClose = (door.unknown & 0x40) != 0;
+                            ds.holdTicks = static_cast<int>(door.time) * 4;
                             ds.phase = startsOpen ? DoorState::Phase::Open : DoorState::Phase::Idle;
                             ds.worldX = worldX;
                             ds.worldZ = worldZ;
@@ -577,6 +591,14 @@ namespace ALTEngine::Screens
                             placed.scaleX = scale;
                             placed.scaleY = scale;
                             placed.scaleZ = scale;
+
+                            LivePickup live;
+                            live.placedIndex = placedObjects.size();
+                            live.cellIndex = static_cast<int>(pickup.y) * level.header.mapLength + static_cast<int>(pickup.x);
+                            live.type = pickup.type;
+                            live.amount = pickup.amount;
+                            live.multiplier = pickup.multiplier;
+                            livePickups.push_back(live);
 
                             pickupPlaced.push_back(placedObjects.size());
                             placedObjects.push_back(placed);
@@ -778,7 +800,7 @@ namespace ALTEngine::Screens
 
                                     if (sawActivateObject) { ds.switchOperated = true; }
                                     ds.unlockProgress = static_cast<uint8_t>(ds.unlockProgress + c.modifier);
-                                    if (ds.unlockProgress >= ds.threshold) { ds.openRequested = true; }
+
                                 }
                                 break;
                             case 8: // End Level
@@ -855,17 +877,72 @@ namespace ALTEngine::Screens
                         }
                     }
 
+                    // Walk-over collection. Applied on whichever cell the
+                    // player is standing in, checked every frame rather than
+                    // only on cell change so a pickup spawned underfoot by a
+                    // script is still picked up.
+                    for (auto& live : livePickups)
+                    {
+                        if (live.collected || live.cellIndex != cellIndex) { continue; }
+                        live.collected = true;
+                        if (live.placedIndex < placedObjects.size()) { placedObjects[live.placedIndex].visible = false; }
+
+                        int amount = static_cast<int>(live.amount) * (live.multiplier == 0 ? 1 : live.multiplier);
+                        switch (live.type)
+                        {
+                        case 0:  inventory.pistol.available = true;       inventory.pistol.ammo += amount;       break;
+                        case 1:  inventory.shotgun.available = true;      inventory.shotgun.ammo += amount;      break;
+                        case 2:  inventory.pulseRifle.available = true;   inventory.pulseRifle.ammo += amount;   break;
+                        case 3:  inventory.flamethrower.available = true; inventory.flamethrower.ammo += amount; break;
+                        case 4:  inventory.smartGun.available = true;     inventory.smartGun.ammo += amount;     break;
+                        case 7:  inventory.hasBatteries = true;   break;
+                        case 9:  inventory.pistol.ammo += amount;       break;
+                        case 10: inventory.shotgun.ammo += amount;      break;
+                        case 11: inventory.pulseRifle.ammo += amount;   break;
+                        case 13: inventory.flamethrower.ammo += amount; break;
+                        case 14: inventory.smartGun.ammo += amount;     break;
+                        case 16: inventory.hasAutoMapper = true;  break;
+                        case 25: inventory.hasShoulderLamp = true; break;
+                        default: break; // health, armour and the rest need player stats we do not have yet
+                        }
+                        SDL_Log("GameplayScreen: collected pickup type %d (amount %d)", live.type, amount);
+                    }
+
                     // Interact key - the original's way of opening a door.
                     // Fires on the press edge for whatever trigger cell the
                     // player is standing on, independent of the automatic
                     // path's latch, so it works whether or not Automatic
                     // Doors is enabled and can be pressed repeatedly.
                     bool useHeld = keys[keyBindings.GetKey(InputAction::Use)];
-                    if (useHeld && !prevUseHeld && cellIndex >= 0
-                        && static_cast<size_t>(cellIndex) < level.collisionGrid.size())
+                    if (useHeld && !prevUseHeld)
                     {
-                        int useAction = level.collisionGrid[static_cast<size_t>(cellIndex)].scriptAction;
-                        if (useAction != 0) { runTriggerChain(useAction, true); }
+                        // The original tests only the cell the player stands
+                        // in - confirmed, there is no neighbourhood or facing
+                        // test anywhere in the trigger paths. We additionally
+                        // test the cell directly ahead, so a door can be used
+                        // from the side its trigger cells are not on. That is
+                        // a deliberate departure, limited to the interact key:
+                        // one cell cannot reach through a wall.
+                        // Two cells ahead, not one: a door occupies a cell of
+                        // its own, so from the far side the first cell ahead
+                        // is the door itself and its trigger sits beyond that.
+                        int probes[3] = { cellIndex, -1, -1 };
+                        for (int step = 1; step <= 2; ++step)
+                        {
+                            int ax = (pgx + static_cast<int>(forwardX * 512.0f * step)) >> 9;
+                            int az = (pgz + static_cast<int>(forwardZ * 512.0f * step)) >> 9;
+                            if (ax >= 0 && az >= 0 && ax < level.header.mapLength && az < level.header.mapWidth)
+                            {
+                                probes[step] = az * level.header.mapLength + ax;
+                            }
+                        }
+
+                        for (int probe : probes)
+                        {
+                            if (probe < 0 || static_cast<size_t>(probe) >= level.collisionGrid.size()) { continue; }
+                            int useAction = level.collisionGrid[static_cast<size_t>(probe)].scriptAction;
+                            if (useAction != 0) { runTriggerChain(useAction, true); break; }
+                        }
                     }
                     prevUseHeld = useHeld;
 
@@ -889,11 +966,11 @@ namespace ALTEngine::Screens
                             switch (ds.phase)
                             {
                             case DoorState::Phase::Idle:
-                                if (ds.openRequested && ds.unlockProgress >= ds.threshold)
-                                {
-                                    ds.openRequested = false;
-                                    ds.phase = DoorState::Phase::Opening;
-                                }
+                                // Re-checked every tick against the counter
+                                // alone - the original needs no fresh trigger
+                                // here, because closing resets the counter.
+                                if (ds.cooldown > 0) { ds.cooldown--; }
+                                else if (ds.unlockProgress >= ds.threshold) { ds.phase = DoorState::Phase::Opening; }
                                 break;
                             case DoorState::Phase::Opening:
                                 ds.progress++;
@@ -921,7 +998,8 @@ namespace ALTEngine::Screens
                                 {
                                     ds.progress = 0;
                                     ds.phase = DoorState::Phase::Idle;
-                                    if (!ds.staysUnlocked) { ds.unlockProgress = 0; }
+                                    if (ds.keepsUnlockOnClose) { ds.cooldown = ds.holdTicks; }
+                                    else { ds.unlockProgress = 0; }
                                 }
                                 break;
                             }

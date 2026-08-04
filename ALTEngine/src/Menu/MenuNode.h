@@ -115,6 +115,7 @@ namespace ALTEngine::Menu
         // "{action}: {binding}" labels) (Edward, 2026: "lay the
         // foundations for a language system").
         int stringId = -1;
+        int descriptionStringId = -1; // shown while this entry is highlighted, -1 for none
 
         // For Slider leaves: 0-10, matching the ~8/10 filled-bar look in
         // the reference images. Purely cosmetic placeholder for now - not

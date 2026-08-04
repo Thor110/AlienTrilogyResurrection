@@ -116,6 +116,15 @@ namespace ALTEngine::Bootstrap
         case StringId::AutomaticDoors: return "AutomaticDoors";
         case StringId::Custom: return "Custom";
         case StringId::KeepItems: return "KeepItems";
+        case StringId::SkipEndLevelScreen: return "SkipEndLevelScreen";
+        case StringId::PlayerJumping: return "PlayerJumping";
+        case StringId::StunnedEnemies: return "StunnedEnemies";
+        case StringId::DescEnableAll: return "DescEnableAll";
+        case StringId::DescAutomaticDoors: return "DescAutomaticDoors";
+        case StringId::DescKeepItems: return "DescKeepItems";
+        case StringId::DescSkipEndLevel: return "DescSkipEndLevel";
+        case StringId::DescPlayerJumping: return "DescPlayerJumping";
+        case StringId::DescStunnedEnemies: return "DescStunnedEnemies";
         default: return "";
         }
     }
@@ -219,6 +228,15 @@ namespace ALTEngine::Bootstrap
         if (name == "AutomaticDoors") { return StringId::AutomaticDoors; }
         if (name == "Custom") { return StringId::Custom; }
         if (name == "KeepItems") { return StringId::KeepItems; }
+        if (name == "SkipEndLevelScreen") { return StringId::SkipEndLevelScreen; }
+        if (name == "PlayerJumping") { return StringId::PlayerJumping; }
+        if (name == "StunnedEnemies") { return StringId::StunnedEnemies; }
+        if (name == "DescEnableAll") { return StringId::DescEnableAll; }
+        if (name == "DescAutomaticDoors") { return StringId::DescAutomaticDoors; }
+        if (name == "DescKeepItems") { return StringId::DescKeepItems; }
+        if (name == "DescSkipEndLevel") { return StringId::DescSkipEndLevel; }
+        if (name == "DescPlayerJumping") { return StringId::DescPlayerJumping; }
+        if (name == "DescStunnedEnemies") { return StringId::DescStunnedEnemies; }
         return std::nullopt;
     }
 }

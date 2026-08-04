@@ -119,6 +119,15 @@ namespace ALTEngine::Bootstrap
             "Automatic Doors",
             "Custom",
             "Keep Items",
+            "Skip End Level Screen",
+            "Player Jumping",
+            "Stunned Enemies",
+            "Turn every modern feature on or off, or set each below",
+            "Doors open by walking up to them, without pressing use",
+            "Carry weapons and ammo between levels",
+            "Skip the end of level screen and continue straight on",
+            "Adds a jump action, and a control binding for it",
+            "Enemies can be damaged repeatedly without being stunned",
         };
         return table;
     }

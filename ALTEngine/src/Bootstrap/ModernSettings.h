@@ -24,7 +24,10 @@ namespace ALTEngine::Bootstrap
     enum class ModernFeature
     {
         AutoOpenDoors, // doors open by walking onto their trigger cell rather than needing a deliberate use action
-        KeepItems,     // carry weapons and ammo between levels instead of restarting each level with the pistol
+        KeepItems,          // carry weapons and ammo between levels instead of restarting each level with the pistol
+        SkipEndLevelScreen, // go straight on rather than showing the end-of-level prompt
+        PlayerJumping,      // enable a jump action, and the extra control binding it needs
+        StunnedEnemies,     // disable enemy stun-lock so they can be damaged repeatedly
     };
 
     class ModernSettings
@@ -71,6 +74,9 @@ namespace ALTEngine::Bootstrap
             {
             case ModernFeature::AutoOpenDoors: return "ModernAutoOpenDoors";
             case ModernFeature::KeepItems: return "ModernKeepItems";
+            case ModernFeature::SkipEndLevelScreen: return "ModernSkipEndLevelScreen";
+            case ModernFeature::PlayerJumping: return "ModernPlayerJumping";
+            case ModernFeature::StunnedEnemies: return "ModernStunnedEnemies";
             }
             return "ModernUnknown";
         }

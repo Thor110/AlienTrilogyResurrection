@@ -107,6 +107,7 @@ namespace ALTEngine::Renderer
         // vertices. Objects (crates, switches) are drawn at 0.75/0.85/0.75
         // in the original; doors are drawn 1:1.
         float scaleX = 1.0f, scaleY = 1.0f, scaleZ = 1.0f;
+        bool visible = true; // cleared when a pickup is collected, rather than rebuilding the list
     };
 
     class ModelRenderer
