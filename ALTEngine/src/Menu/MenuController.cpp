@@ -372,7 +372,12 @@ namespace ALTEngine::Menu
         {
             if (parentLabel == "Quality")
             {
-                renderSettings.Set(leafLabel == "Smoothed" ? RenderFidelity::Smoothed : RenderFidelity::Original);
+                bool smoothed = (leafLabel == "Smoothed");
+                renderSettings.Set(smoothed ? RenderFidelity::Smoothed : RenderFidelity::Original);
+                // Apply it now as well as persisting it. Until this call
+                // existed the option was stored and then never read by
+                // anything, so choosing Original had no visible effect at all.
+                ALTEngine::Renderer::ModelRenderer::SetTextureSmoothing(smoothed);
             }
             else if (parentLabel == "Resolution")
             {
@@ -557,6 +562,10 @@ namespace ALTEngine::Menu
         // i.e. on the user's actual first visit to Options, which is
         // where the full cold-start cost was still landing.
         ALTEngine::Renderer::ModelRenderer::Initialize();
+        // Push the persisted Quality choice into the renderer at startup,
+        // otherwise it would only take effect after the user re-picked it.
+        ALTEngine::Renderer::ModelRenderer::SetTextureSmoothing(
+            renderSettings.Get() == RenderFidelity::Smoothed);
 
         std::vector<ALTEngine::Renderer::PreloadRequest> modelPreloadQueue;
         for (int i = 0; i < 14; i++)

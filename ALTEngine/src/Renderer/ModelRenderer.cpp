@@ -104,7 +104,12 @@ namespace ALTEngine::Renderer
         SDL_GPUDevice* device = nullptr;
         SDL_GPUGraphicsPipeline* pipeline = nullptr;           // cull_mode=BACK - correct for solid, opaque geometry
         SDL_GPUGraphicsPipeline* doubleSidedPipeline = nullptr; // cull_mode=NONE - see LoadModel's doc comment on why colour-key cutout models need this
-        SDL_GPUSampler* sampler = nullptr;
+        // Two samplers, chosen by the Graphics > Quality option. `sampler`
+        // points at whichever is active; every binding site uses it, so
+        // switching is a single pointer assignment with no pipeline rebuild.
+        SDL_GPUSampler* sampler = nullptr;         // active
+        SDL_GPUSampler* samplerLinear = nullptr;   // Smoothed
+        SDL_GPUSampler* samplerNearest = nullptr;  // Original - hard texel edges
         SDL_GPUTextureFormat depthFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
         std::unordered_map<ModelCacheKey, LoadedModel, ModelCacheKeyHash> loadedModels;
         std::unordered_map<std::string, LoadedLevel> loadedLevels;
@@ -524,9 +529,28 @@ namespace ALTEngine::Renderer
         samplerInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
         samplerInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
         samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-        sampler = SDL_CreateGPUSampler(device, &samplerInfo);
+        samplerLinear = SDL_CreateGPUSampler(device, &samplerInfo);
 
-        return sampler != nullptr;
+        // The Original counterpart: point sampling, so a magnified texel is a
+        // hard square rather than a gradient. Everything else about the
+        // sampler is identical, so the two differ ONLY in texel filtering -
+        // which keeps the comparison honest when judging which one matches a
+        // real screenshot.
+        //
+        // Note the reasoning above for LINEAR still stands on its own terms;
+        // this does not overturn it. It makes the choice the Graphics >
+        // Quality option's job instead of a hardcoded decision, which is what
+        // that option was always supposed to control (its enum documented
+        // "Original" as the authentic-hardware path but nothing read it).
+        samplerInfo.min_filter = SDL_GPU_FILTER_NEAREST;
+        samplerInfo.mag_filter = SDL_GPU_FILTER_NEAREST;
+        samplerNearest = SDL_CreateGPUSampler(device, &samplerInfo);
+
+        // Default to Original (blocky). RenderSettings::Get() defaults the
+        // same way, so an absent config key and an explicit "Original" agree.
+        sampler = samplerNearest;
+
+        return samplerLinear != nullptr && samplerNearest != nullptr;
     }
 
     void ModelRenderer::UnloadLevels()
@@ -569,7 +593,9 @@ namespace ALTEngine::Renderer
         if (colorTarget) { SDL_ReleaseGPUTexture(device, colorTarget); colorTarget = nullptr; }
         if (depthTarget) { SDL_ReleaseGPUTexture(device, depthTarget); depthTarget = nullptr; }
         if (downloadBuffer) { SDL_ReleaseGPUTransferBuffer(device, downloadBuffer); downloadBuffer = nullptr; }
-        if (sampler) { SDL_ReleaseGPUSampler(device, sampler); sampler = nullptr; }
+        if (samplerLinear) { SDL_ReleaseGPUSampler(device, samplerLinear); samplerLinear = nullptr; }
+        if (samplerNearest) { SDL_ReleaseGPUSampler(device, samplerNearest); samplerNearest = nullptr; }
+        sampler = nullptr;
         if (pipeline) { SDL_ReleaseGPUGraphicsPipeline(device, pipeline); pipeline = nullptr; }
         if (doubleSidedPipeline) { SDL_ReleaseGPUGraphicsPipeline(device, doubleSidedPipeline); doubleSidedPipeline = nullptr; }
 
@@ -1096,6 +1122,17 @@ namespace ALTEngine::Renderer
 
         loadedLevels[cacheKey] = loadedLevel;
         return true;
+    }
+
+    void ModelRenderer::SetTextureSmoothing(bool smoothed)
+    {
+        if (!samplerLinear || !samplerNearest) { return; }
+        sampler = smoothed ? samplerLinear : samplerNearest;
+    }
+
+    bool ModelRenderer::TextureSmoothing()
+    {
+        return sampler == samplerLinear;
     }
 
     bool ModelRenderer::TickLevelLights(const std::string& cacheKey, int randomBits)

@@ -57,6 +57,38 @@ namespace ALTEngine::Screens
         // covers the clearest, most common cases and falls back to
         // SingleCrate for anything else, so an unrecognised type still
         // spawns *something* visible and positioned rather than nothing.
+        // The switch models come in families of FOUR consecutive meshes, and
+        // every family uses the same state order:
+        //   +0 red left light, +1 red right light, +2 both off, +3 both yellow
+        // (see ModelIndices.h - the pattern repeats for small, large,
+        // small+battery, large+battery and the four Boneship variants).
+        //
+        // That is the SAME sequence the level's animated control-panel faces
+        // run: animator group 3 plays descriptors 238 -> 239 -> 240, which
+        // dumped out as top-light red, lower-light red, then both lights
+        // yellow. So a switch object and a switch wall panel are the same
+        // state machine expressed two different ways - the panel by swapping
+        // texture, the object by swapping mesh. That is why the switches exist
+        // as individual models rather than one model with changing textures:
+        // OBJ3D meshes carry no animation channel, so a state change has to be
+        // a different mesh.
+        enum class SwitchState { RedLeft = 0, RedRight = 1, BothOff = 2, BothYellow = 3 };
+
+        // Base (RedLeft) mesh of the family a crate type belongs to, or -1 if
+        // the type is not a switch.
+        int SwitchFamilyBase(uint8_t type)
+        {
+            using namespace ALTEngine::Formats::ModelIndices;
+            switch (type)
+            {
+            case 22: return Obj3D::SwitchRedLeftLight;                    // small switch
+            case 24: return Obj3D::SwitchRedLeftLight;                    // small switch, "with animation"
+            case 26: return Obj3D::LargeSwitchBatteryRedLeftLight;        // wide, battery
+            case 27: return Obj3D::LargeSwitchBatteryRedLeftLight;        // wide, battery
+            default: return -1;
+            }
+        }
+
         int Obj3DIndexForCrateType(uint8_t type)
         {
             using namespace ALTEngine::Formats::ModelIndices;
@@ -258,6 +290,12 @@ namespace ALTEngine::Screens
         // already thrown - the original latches on this and fails, which
         // aborts the whole command chain rather than re-running it.
         std::vector<uint8_t> objectState;
+        // Switch objects that need their mesh swapped as their state changes.
+        // placedIndex -> crate record index, plus the family's base mesh.
+        struct SwitchVisual { size_t placedIndex; size_t crateIndex; int familyBase; };
+        std::vector<SwitchVisual> switchVisuals;
+        int switchBlinkTicks = 0;
+        bool switchBlinkPhase = false;
         // Read once here rather than threaded through Run's already long
         // settings chain - worth tidying if more of these appear.
         bool autoOpenDoors = false;
@@ -275,6 +313,13 @@ namespace ALTEngine::Screens
         {
             if (ModelRenderer::Initialize())
             {
+                // Apply the persisted Graphics > Quality choice here too -
+                // gameplay can be the first thing to initialise the renderer
+                // (loading straight into a level), in which case the menu
+                // never got a chance to push it.
+                ModelRenderer::SetTextureSmoothing(
+                    renderSettings.Get() == Bootstrap::RenderFidelity::Smoothed);
+
                 levelReady = ModelRenderer::LoadLevel(cacheKey, *mapPath, *gfxPath);
             }
 
@@ -321,12 +366,22 @@ namespace ALTEngine::Screens
                     // open/close animation state this static placement
                     // approach doesn't cover.
                     std::vector<ALTEngine::Renderer::PreloadRequest> crateRequests;
-                    for (int meshNumber : { ALTEngine::Formats::ModelIndices::Obj3D::ExplosiveBarrel,
-                                             ALTEngine::Formats::ModelIndices::Obj3D::SingleCrate,
-                                             ALTEngine::Formats::ModelIndices::Obj3D::DoubleCrate,
-                                             ALTEngine::Formats::ModelIndices::Obj3D::SteelCoil,
-                                             ALTEngine::Formats::ModelIndices::Obj3D::SwitchBothLightsOff,
-                                             ALTEngine::Formats::ModelIndices::Obj3D::LargeSwitchBatteryBothLightsOff })
+                    std::vector<int> meshesToLoad = {
+                        ALTEngine::Formats::ModelIndices::Obj3D::ExplosiveBarrel,
+                        ALTEngine::Formats::ModelIndices::Obj3D::SingleCrate,
+                        ALTEngine::Formats::ModelIndices::Obj3D::DoubleCrate,
+                        ALTEngine::Formats::ModelIndices::Obj3D::SteelCoil,
+                    };
+                    // All FOUR state meshes of every switch family, not just
+                    // the one shown at spawn. The renderer silently skips a
+                    // PlacedObject whose mesh was never loaded, so a switch
+                    // would vanish the moment it changed state otherwise.
+                    for (int base : { ALTEngine::Formats::ModelIndices::Obj3D::SwitchRedLeftLight,
+                                      ALTEngine::Formats::ModelIndices::Obj3D::LargeSwitchBatteryRedLeftLight })
+                    {
+                        for (int state = 0; state < 4; ++state) { meshesToLoad.push_back(base + state); }
+                    }
+                    for (int meshNumber : meshesToLoad)
                     {
                         auto obj3dPath = FindInSectFolders(cdDirectory, "OBJ3D.BND");
                         auto texPath = ALTEngine::Formats::ResolveObj3DTextureFile(cdDirectory, meshNumber, language);
@@ -381,8 +436,9 @@ namespace ALTEngine::Screens
                     // that was a heuristic guessing at something the real
                     // game reads from one byte plus a known scale; this is
                     // the actual formula. See LevelLoader::FindFloorHeight.
-                    for (const auto& crate : level.crates)
+                    for (size_t ci = 0; ci < level.crates.size(); ++ci)
                     {
+                        const auto& crate = level.crates[ci];
                         // Sub-cell placement, in world units (one cell =
                         // 512). X takes no offset, Z takes half a cell -
                         // both established against a known-good
@@ -414,15 +470,48 @@ namespace ALTEngine::Screens
                         // correct, both rot=0 (North) small switches were
                         // facing the wall.
                         placed.rotationRadians = 3.14159265f - static_cast<float>(crate.rotation) * (3.14159265f / 4.0f);
-                        // Hardcoded in the original's object draw path as a
-                        // 12.12 fixed-point triple (0xc00, 0xd98, 0xc00),
-                        // applied to the matrix for every object type alike.
-                        // A 512-unit crate becomes 384 in a 512 cell, which
-                        // is where the gaps between adjacent crates come
-                        // from. Doors do not go through this path.
-                        placed.scaleX = 0.75f;
-                        placed.scaleY = 0.849609375f;
-                        placed.scaleZ = 0.75f;
+                        // Object scale, 12.12 fixed point over 0x1000.
+                        //
+                        // CORRECTED: 0xe00 uniform = 0.875, not the
+                        // (0xc00, 0xd98, 0xc00) = 0.75/0.849609375/0.75 that
+                        // was here. That triple is real, but it belongs to a
+                        // DIFFERENT draw function. There are three sibling
+                        // entity draw routines in the original, and they do
+                        // not agree:
+                        //
+                        //   FUN_0003765c  0xe00 uniform, skipped entirely for
+                        //                 entity type 0x17 (scale 1.0)
+                        //   FUN_000377e4  0xc00 / 0xd98 / 0xc00, non-uniform
+                        //   FUN_00037930  no scale call at all
+                        //
+                        // The one that draws these objects is FUN_0003765c.
+                        // What settles it is which texture descriptor set each
+                        // one binds (Ghidra: FUN_00018bcc's call sites):
+                        //   DAT_00244608 <- resource 0x7d, the SAME on every
+                        //                   level: the object/pickup set.
+                        //   DAT_002408c0 <- resource 0x7f/0x83/0x84/0x85,
+                        //                   chosen per episode: enemy graphics.
+                        // FUN_0003765c binds DAT_00244608 for everything
+                        // except type 0x14 on levels 0x16-0x22; FUN_000377e4
+                        // binds DAT_002408c0 unconditionally. So the
+                        // non-uniform triple is the ENEMY scale, and objects
+                        // take 0.875 uniform.
+                        //
+                        // NOT YET HANDLED: type 0x17 gets no scale at all in
+                        // FUN_0003765c. Which crate type that maps to has not
+                        // been established, so it is not special-cased here -
+                        // if one crate looks 14% too small next to the others,
+                        // that is the one.
+                        placed.scaleX = 0.875f;
+                        placed.scaleY = 0.875f;
+                        placed.scaleZ = 0.875f;
+
+                        int familyBase = SwitchFamilyBase(crate.type);
+                        if (familyBase >= 0)
+                        {
+                            switchVisuals.push_back({ placedObjects.size(), ci, familyBase });
+                        }
+
                         placedObjects.push_back(placed);
 
                         // Occupancy, as the original's object spawn does:
@@ -1025,6 +1114,36 @@ namespace ALTEngine::Screens
                         // the (rand & 3) + 1 the original adds to each
                         // blink duration.
                         ModelRenderer::TickLevelLights(cacheKey, SDL_rand(256));
+
+                        // Switch objects. A switch that has not been thrown
+                        // alternates its two red lights; once thrown it holds
+                        // both-yellow. Same states and same 16-tick cadence as
+                        // the animated control-panel FACES (animator group 3
+                        // runs descriptors 238 -> 239 -> 240 on a speed-6
+                        // hold), because they are the same state machine - the
+                        // panel swaps texture, the object has to swap mesh.
+                        //
+                        // NOT VERIFIED: the cadence is taken from the texture
+                        // animator's opcode 6 rather than read out of an
+                        // object-animation path, and BothOff is never shown -
+                        // it is most likely the unpowered state for a
+                        // battery switch before its battery is fitted, but
+                        // nothing has been traced that selects it.
+                        switchBlinkTicks++;
+                        if (switchBlinkTicks >= 16)
+                        {
+                            switchBlinkTicks = 0;
+                            switchBlinkPhase = !switchBlinkPhase;
+                        }
+                        for (const SwitchVisual& sv : switchVisuals)
+                        {
+                            if (sv.placedIndex >= placedObjects.size()) { continue; }
+                            bool thrown = (sv.crateIndex < objectState.size()) && (objectState[sv.crateIndex] != 0);
+                            SwitchState state = thrown ? SwitchState::BothYellow
+                                                       : (switchBlinkPhase ? SwitchState::RedRight : SwitchState::RedLeft);
+                            placedObjects[sv.placedIndex].cacheKey.modelIndex =
+                                sv.familyBase + static_cast<int>(state);
+                        }
 
                         // 0x10 of a 4096-step turn per tick.
                         pickupAngle += 6.28318531f * 16.0f / 4096.0f;

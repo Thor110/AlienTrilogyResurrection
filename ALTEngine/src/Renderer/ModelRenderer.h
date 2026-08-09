@@ -104,8 +104,10 @@ namespace ALTEngine::Renderer
         float x = 0, y = 0, z = 0;
         float rotationRadians = 0.0f;
         // Non-uniform, and applied to the model matrix rather than the
-        // vertices. Objects (crates, switches) are drawn at 0.75/0.85/0.75
-        // in the original; doors are drawn 1:1.
+        // vertices. Objects (crates, switches) are drawn at 0.875 uniform in
+        // the original (Ghidra: FUN_0003765c); doors are drawn 1:1. The
+        // non-uniform 0.75/0.85/0.75 triple belongs to the enemy draw path
+        // (FUN_000377e4) - see the note at the object placement site.
         float scaleX = 1.0f, scaleY = 1.0f, scaleZ = 1.0f;
         bool visible = true; // cleared when a pickup is collected, rather than rebuilding the list
     };
@@ -142,6 +144,13 @@ namespace ALTEngine::Renderer
         // cache, which is cheap to keep around and expensive to reload
         // (Edward, 2026).
         static void UnloadLevels();
+
+        // Graphics > Quality. Smoothed = bilinear texel filtering; Original =
+        // point sampling, i.e. the original's hard square pixels. Takes effect
+        // on the next frame - no pipeline rebuild, just a sampler swap - so
+        // this is safe to call from the menu at any time.
+        static void SetTextureSmoothing(bool smoothed);
+        static bool TextureSmoothing();
 
         // Loads and GPU-uploads a model, cached under `cacheKey` (repeated
         // calls with the same key are cheap) - callers should use a
