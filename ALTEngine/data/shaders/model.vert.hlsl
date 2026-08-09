@@ -15,12 +15,14 @@ struct Input
 {
     float3 Position : TEXCOORD0;
     float2 UV : TEXCOORD1;
+    float3 Colour : TEXCOORD2;
 };
 
 struct Output
 {
     float4 Position : SV_Position;
     float2 UV : TEXCOORD0;
+    float3 Colour : TEXCOORD1;
 };
 
 Output main(Input input)
@@ -28,5 +30,10 @@ Output main(Input input)
     Output output;
     output.Position = mul(mvp, float4(input.Position, 1.0f));
     output.UV = input.UV;
+    // Interpolated across the face, which is what makes light mode 4
+    // (gouraud) work - it gives each corner a different colour. Every
+    // other mode sets all four corners equal, so this interpolates to a
+    // constant and costs nothing.
+    output.Colour = input.Colour;
     return output;
 }

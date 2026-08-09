@@ -812,9 +812,45 @@ namespace ALTEngine::Screens
                                 SDL_Log("GameplayScreen: EndLevel trigger fired (action %d)", action);
                                 break;
                             case 0: // Toggle Light
+                                // Arms (or advances) a light record's
+                                // variant counter. This is what brings a
+                                // blink light to life: every one of L111's
+                                // 18 mode-1 records loads with
+                                // variant 0 / variantMax 1, so it is
+                                // completely static until this fires. The
+                                // 30 mode-3 records load already armed
+                                // (variantMax 0) and blink from the start.
+                                //
+                                // `modifier` is the delta, matching
+                                // FUN_00029d44's signed add-and-clamp.
+                                // Treated as signed: the original passes it
+                                // in a char.
+                                ModelRenderer::ToggleLevelLight(
+                                    cacheKey, static_cast<int>(c.objectIndex),
+                                    static_cast<int>(static_cast<int8_t>(c.modifier)));
+                                SDL_Log("GameplayScreen: ToggleLight light=%u delta=%d",
+                                        c.objectIndex, static_cast<int>(static_cast<int8_t>(c.modifier)));
+                                // Does not set the success flag in the
+                                // original either, so continuing is correct.
+                                break;
+                            case 9: // Change Texture
+                                // Arms (or advances) a texture animator, the
+                                // direct counterpart of command 0 on a light
+                                // record. This is what makes a control panel
+                                // change when its switch is thrown: L111's
+                                // animators 2-9 all load with
+                                // variant 0 / variantMax 1 and do nothing at
+                                // all until this fires at them.
+                                ModelRenderer::ChangeLevelTexture(
+                                    cacheKey, static_cast<int>(c.objectIndex),
+                                    static_cast<int>(static_cast<int8_t>(c.modifier)));
+                                SDL_Log("GameplayScreen: ChangeTexture animator=%u delta=%d",
+                                        c.objectIndex, static_cast<int>(static_cast<int8_t>(c.modifier)));
+                                // Does not set the success flag in the
+                                // original either, so continuing is correct.
+                                break;
                             case 2: // Spawn Pickup
                             case 3: // Spawn Monster
-                            case 9: // Change Texture
                                 // Do not set the success flag in the
                                 // original either, so continuing is correct.
                                 break;
@@ -982,6 +1018,14 @@ namespace ALTEngine::Screens
                     while (tickAccumulator >= 1.0f / 60.0f)
                     {
                         tickAccumulator -= 1.0f / 60.0f;
+
+                        // Level lights. Steps the blink state machines and
+                        // re-uploads vertex colours only when a light
+                        // actually changed state. The jitter argument is
+                        // the (rand & 3) + 1 the original adds to each
+                        // blink duration.
+                        ModelRenderer::TickLevelLights(cacheKey, SDL_rand(256));
+
                         // 0x10 of a 4096-step turn per tick.
                         pickupAngle += 6.28318531f * 16.0f / 4096.0f;
                         for (size_t pi : pickupPlaced)

@@ -18,8 +18,31 @@ namespace ALTEngine::Formats
     {
         int32_t a, b, c, d;  // vertex indices - d == -1 means triangle, not quad
         uint16_t texIndex;   // which TP frame (in the paired *GFX.B16/.BND) this face uses
-        uint8_t flags;       // UV winding/orientation variant (2 = triangle special order, 11 = flip 180, per ModelRenderer.cs)
-        uint8_t reserved;
+        // NOTE ON THESE TWO BYTES. The names are historical and are kept
+        // only because renaming them would touch the model paths too;
+        // what they actually hold for LEVEL quads is:
+        //
+        //   flags    = on-disk +0x12. For levels this is the DRAW ROUTINE
+        //              index - the original dispatches it through the
+        //              35-entry table at 0x000a7098 (Ghidra:
+        //              FUN_00025648, which rejects anything >= 0x23;
+        //              L111's values are 0,1,2,3,4,8, all well inside
+        //              that). The port approximates routines 0/1/2/11
+        //              with UV permutations, which is empirically right
+        //              for those, and falls back to identity UVs for 8.
+        //   reserved = on-disk +0x13. The LIGHT ID ("light id x // Kaiser"
+        //              in Edward's own ModelRenderer.cs). Low 7 bits index
+        //              the level's 128-entry light table; bit 0x80 is the
+        //              original's end-of-face-run marker (3885 of L111's
+        //              11264 quads have it, partitioning the array
+        //              exactly, with nothing left over).
+        //
+        // The runtime layout is this pair SWAPPED - the walker reads the
+        // light id from runtime +0x12 and the draw routine from runtime
+        // +0x13. That swap is why the light byte was misidentified for
+        // six rounds. Do not "fix" one to match the other.
+        uint8_t flags;       // level: draw routine index. model: UV variant (2 = triangle special order, 11 = flip 180, per ModelRenderer.cs)
+        uint8_t reserved;    // level: light id | 0x80 end-of-run. See above.
     };
 
     struct ModelMesh

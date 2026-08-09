@@ -109,7 +109,7 @@ namespace ALTEngine::Formats
             q.d = ReadInt32LE(data, pos + 12);
             q.texIndex = ReadUInt16LE(data, pos + 16);
             q.flags = data[pos + 18];
-            q.reserved = data[pos + 19]; // "light id" per ExportLevel's comment - not the same meaning as M0 models' reserved byte, kept as raw storage either way
+            q.reserved = data[pos + 19]; // THE LIGHT ID ("light id x // Kaiser" in ExportLevel). Low 7 bits index the 128-entry light table, bit 0x80 is the end-of-face-run marker. NOT interchangeable with `flags` - see ModelQuad in ModelLoader.h.
             pos += 20;
 
             // A trailing degenerate sentinel (a=b=c=d=-1, texIndex=0xFFFF)

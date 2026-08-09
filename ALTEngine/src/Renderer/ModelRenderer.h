@@ -233,7 +233,38 @@ namespace ALTEngine::Renderer
         // the way ModelRenderer's model path is trusted.
         static bool LoadLevel(const std::string& cacheKey, const std::filesystem::path& mapPath, const std::filesystem::path& gfxPath);
 
-        // Renders the level cached under `cacheKey` from `camera`'s
+        // Advances the level's light blink state machines by one tick and,
+        // if any light's resolved colour actually changed, rebuilds and
+        // re-uploads the level's vertex buffers.
+        //
+        // Call this once per gameplay tick, before RenderLevelToRgba.
+        // Cheap on the great majority of ticks: it steps 128 small state
+        // machines and compares 128 resolved entries, and only touches the
+        // GPU when one of them moved. `randomBits` supplies the timing
+        // jitter the original takes from its RNG - pass a real random
+        // value, or a fixed one for reproducible blink timing.
+        //
+        // Returns true if the buffers were rebuilt, which is useful mainly
+        // for logging and tests.
+        static bool TickLevelLights(const std::string& cacheKey, int randomBits);
+
+        // Applies script command 0 (ToggleLight) to one light record,
+        // which is what arms a blink record - a mode 1 or 3 light does
+        // nothing at all until its variant counter has been driven to its
+        // maximum. Takes effect on the next TickLevelLights.
+        static void ToggleLevelLight(const std::string& cacheKey, int lightIndex, int delta);
+
+        // Raises the one-shot global brightness flash (weapon fire,
+        // explosions). Cleared on the next tick.
+        static void FlashLevelLights(const std::string& cacheKey);
+
+        // Applies script command 9 (ChangeTexture) to one texture animator.
+        // This is what arms an animated face that only changes when something
+        // triggers it - L111's seven group-3 control panels each wait for
+        // their own switch this way. Takes effect on the next TickLevelLights.
+        static void ChangeLevelTexture(const std::string& cacheKey, int animatorIndex, int delta);
+
+
         // viewpoint. Unlike RenderToRgba's auto-framed single-model
         // camera, this uses a real explorable FPS camera and a fixed
         // FOV/near/far appropriate to the level's own coordinate scale

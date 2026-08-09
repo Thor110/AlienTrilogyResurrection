@@ -104,7 +104,45 @@ namespace ALTEngine::Formats
 
         // Shared vertex-emission + triangulation - identical between
         // model and level geometry, only the UV computation differs.
-        void EmitQuad(RenderMesh& result, const std::vector<ModelVertex>& vertices, const ModelQuad& q, const std::array<Uv, 4>& uvs)
+        // Four corner colours, 0-1. All four are equal except for light
+        // mode 4 (gouraud). WHITE is the neutral value - a face with no
+        // light record resolved renders exactly as it did before colour
+        // existed, so models and doors are unaffected.
+        struct QuadColours { float r[4]{1,1,1,1}, g[4]{1,1,1,1}, b[4]{1,1,1,1}; };
+
+        QuadColours WhiteColours() { return QuadColours{}; }
+
+        // A flag-8 face's texIndex is an ANIMATOR ORDINAL, not a descriptor
+        // index - see TextureAnimation.h for the evidence. Resolve it to the
+        // descriptor the animator is currently outputting. Anything else
+        // passes through untouched.
+        uint16_t ResolveAnimatedTexIndex(const ModelQuad& q, const TextureAnimator* animator)
+        {
+            if (!animator || q.flags != DRAW_ROUTINE_ANIMATED) { return q.texIndex; }
+            uint16_t resolved = 0;
+            if (!animator->CurrentTexture(static_cast<int>(q.texIndex), resolved)) { return q.texIndex; }
+            return resolved;
+        }
+
+        QuadColours LevelQuadColours(const ModelQuad& q, const LightTable* lights)
+        {
+            QuadColours out;
+            if (!lights) { return out; }
+
+            // q.reserved is the on-disk +0x13 byte - the light id. NOT
+            // q.flags. See the long note in LightTable.h.
+            const LightTable::Entry& e = lights->ColourFor(q.reserved);
+            for (int i = 0; i < 4; ++i)
+            {
+                out.r[i] = static_cast<float>(e.corner[i].r) / LIGHT_COLOUR_NEUTRAL;
+                out.g[i] = static_cast<float>(e.corner[i].g) / LIGHT_COLOUR_NEUTRAL;
+                out.b[i] = static_cast<float>(e.corner[i].b) / LIGHT_COLOUR_NEUTRAL;
+            }
+            return out;
+        }
+
+        void EmitQuad(RenderMesh& result, const std::vector<ModelVertex>& vertices, const ModelQuad& q, const std::array<Uv, 4>& uvs,
+                      const QuadColours& colours)
         {
             auto inBounds = [&](int32_t vertexIndex) {
                 return vertexIndex >= 0 && static_cast<size_t>(vertexIndex) < vertices.size();
@@ -132,11 +170,12 @@ namespace ALTEngine::Formats
                 }
             }
 
-            auto emitVertex = [&](int32_t vertexIndex, Uv uv) -> uint32_t {
+            auto emitVertex = [&](int32_t vertexIndex, Uv uv, int corner) -> uint32_t {
                 const ModelVertex& v = vertices[static_cast<size_t>(vertexIndex)];
                 result.vertices.push_back({
                     static_cast<float>(v.x), static_cast<float>(v.y), static_cast<float>(v.z),
-                    uv.first, uv.second
+                    uv.first, uv.second,
+                    colours.r[corner], colours.g[corner], colours.b[corner]
                 });
                 return static_cast<uint32_t>(result.vertices.size() - 1);
             };
@@ -149,9 +188,9 @@ namespace ALTEngine::Formats
             Uv uvB = rotateTriangleUvs ? effectiveUvs[0] : effectiveUvs[1];
             Uv uvC = rotateTriangleUvs ? effectiveUvs[1] : effectiveUvs[2];
 
-            uint32_t ia = emitVertex(a, uvA);
-            uint32_t ib = emitVertex(b, uvB);
-            uint32_t ic = emitVertex(c, uvC);
+            uint32_t ia = emitVertex(a, uvA, 0);
+            uint32_t ib = emitVertex(b, uvB, 1);
+            uint32_t ic = emitVertex(c, uvC, 2);
 
             if (isTriangle)
             {
@@ -161,7 +200,7 @@ namespace ALTEngine::Formats
             }
             else
             {
-                uint32_t id = emitVertex(d, effectiveUvs[3]);
+                uint32_t id = emitVertex(d, effectiveUvs[3], 3);
                 // Fan triangulation (A,B,C) + (A,C,D) - the one thing
                 // here with no OBJ-format precedent to follow exactly,
                 // since OBJ keeps quads as quads. Standard split, but
@@ -185,12 +224,13 @@ namespace ALTEngine::Formats
 
         for (const auto& q : mesh.quads)
         {
-            EmitQuad(result, mesh.vertices, q, ComputeQuadUvs(q, uvRects));
+            EmitQuad(result, mesh.vertices, q, ComputeQuadUvs(q, uvRects), WhiteColours());
         }
         return result;
     }
 
-    RenderMesh BuildLevelRenderMesh(const LevelGeometry& level, const std::vector<BxRectangle>& uvRects)
+    RenderMesh BuildLevelRenderMesh(const LevelGeometry& level, const std::vector<BxRectangle>& uvRects,
+                                    const LightTable* lights)
     {
         RenderMesh result;
         result.vertices.reserve(level.quads.size() * 4);
@@ -198,7 +238,7 @@ namespace ALTEngine::Formats
 
         for (const auto& q : level.quads)
         {
-            EmitQuad(result, level.vertices, q, ComputeLevelQuadUvs(q, uvRects));
+            EmitQuad(result, level.vertices, q, ComputeLevelQuadUvs(q, uvRects), LevelQuadColours(q, lights));
         }
         return result;
     }
@@ -211,19 +251,27 @@ namespace ALTEngine::Formats
         {
             ResolvedLevelTexture resolved = ResolveLevelTexture(q.texIndex, uvRects);
             int group = (resolved.groupIndex >= 0 && resolved.groupIndex < 5) ? resolved.groupIndex : 0;
-            EmitQuad(result[static_cast<size_t>(group)], mesh.vertices, q, ComputeQuadUvs(q, uvRects));
+            EmitQuad(result[static_cast<size_t>(group)], mesh.vertices, q, ComputeQuadUvs(q, uvRects), WhiteColours());
         }
         return result;
     }
 
     std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level,
                                                             const std::vector<BxRectangle>& uvRects,
-                                                            const std::vector<FaceUvRotation>& uvRotations)
+                                                            const std::vector<FaceUvRotation>& uvRotations,
+                                                            const LightTable* lights,
+                                                            const TextureAnimator* animator)
     {
         std::array<RenderMesh, 5> result;
 
-        for (const auto& q : level.quads)
+        for (const auto& original : level.quads)
         {
+            // Animated faces are redirected to the animator's current output
+            // before anything else looks at texIndex, so texture page
+            // selection and UV computation both see the real descriptor.
+            ModelQuad q = original;
+            q.texIndex = ResolveAnimatedTexIndex(original, animator);
+
             ResolvedLevelTexture resolved = ResolveLevelTexture(q.texIndex, uvRects);
             // Each descriptor's own page field (0-4, stamped at load time
             // from its BX chunk's own tag digits) selects the output
@@ -254,7 +302,7 @@ namespace ALTEngine::Formats
                 break;
             }
 
-            EmitQuad(result[static_cast<size_t>(group)], level.vertices, q, uvs);
+            EmitQuad(result[static_cast<size_t>(group)], level.vertices, q, uvs, LevelQuadColours(q, lights));
         }
         return result;
     }

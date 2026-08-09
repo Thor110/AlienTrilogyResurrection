@@ -69,6 +69,36 @@ namespace ALTEngine::Renderer
         struct LoadedLevel
         {
             std::array<LevelSubGroup, 5> groups;
+
+            // Retained so the light colours can be re-resolved and the
+            // vertex buffers rebuilt when a blink record changes state.
+            // The alternative would be storing the light colour in a
+            // uniform, but a draw call covers a whole texture page and
+            // therefore many different light records, so it genuinely has
+            // to live in the vertex data.
+            ALTEngine::Formats::LevelGeometry geometry;
+            std::vector<ALTEngine::Formats::BxRectangle> uvRects;
+            std::vector<ALTEngine::Formats::FaceUvRotation> rotations;
+            ALTEngine::Formats::LightTable lights;
+            ALTEngine::Formats::TextureAnimator animator;
+
+            // Last resolved entry table, to detect whether a tick
+            // actually changed anything. Blink countdowns are tens of
+            // ticks long, so the great majority of ticks change nothing
+            // and must not trigger a re-upload of ~45k vertices.
+            std::vector<ALTEngine::Formats::LightTable::Entry> lastEntries;
+
+            // Same idea for the texture animators: only rebuild when an
+            // animator's output descriptor actually changed.
+            std::vector<uint16_t> lastAnimatorOutputs;
+
+            // Vertex counts at load. An animated face redirected to a
+            // descriptor on a DIFFERENT page would move between per-page
+            // buffers and change these, which the in-place vertex re-upload
+            // cannot express. Every animator in L111 keeps all of its output
+            // frames on one page, so this does not happen there - but it is
+            // checked rather than assumed.
+            std::array<size_t, 5> groupVertexCounts{};
         };
 
         SDL_GPUDevice* device = nullptr;
@@ -136,12 +166,50 @@ namespace ALTEngine::Renderer
         // sequence a single model does). Returns a zeroed LevelSubGroup
         // (all nullptr) on failure - callers should check
         // texture/vertexBuffer/indexBuffer before trusting the result.
+        // Re-uploads ONLY a sub-group's vertex data, reusing the existing
+        // buffer. Used by the light tick: the geometry, indices and
+        // texture are unchanged, so recreating them would be wasted work.
+        // The vertex count cannot change (the same quads are rebuilt), so
+        // the existing buffer is always the right size.
+        bool ReuploadVertices(const LevelSubGroup& group, const RenderMesh& renderMesh)
+        {
+            if (!group.vertexBuffer || renderMesh.vertices.empty()) { return false; }
+
+            size_t vbSize = renderMesh.vertices.size() * sizeof(ALTEngine::Formats::RenderVertex);
+
+            SDL_GPUTransferBufferCreateInfo transferInfo{};
+            transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+            transferInfo.size = static_cast<Uint32>(vbSize);
+            SDL_GPUTransferBuffer* transfer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
+            if (!transfer) { return false; }
+
+            void* mapped = SDL_MapGPUTransferBuffer(device, transfer, false);
+            if (!mapped)
+            {
+                SDL_ReleaseGPUTransferBuffer(device, transfer);
+                return false;
+            }
+            std::memcpy(mapped, renderMesh.vertices.data(), vbSize);
+            SDL_UnmapGPUTransferBuffer(device, transfer);
+
+            SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
+            SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
+            SDL_GPUTransferBufferLocation src{ transfer, 0 };
+            SDL_GPUBufferRegion dst{ group.vertexBuffer, 0, static_cast<Uint32>(vbSize) };
+            SDL_UploadToGPUBuffer(copyPass, &src, &dst, false);
+            SDL_EndGPUCopyPass(copyPass);
+            SDL_SubmitGPUCommandBuffer(cmd);
+
+            SDL_ReleaseGPUTransferBuffer(device, transfer);
+            return true;
+        }
+
         LevelSubGroup UploadMeshWithTexture(const RenderMesh& renderMesh, const ALTEngine::Formats::BndTexture& tex)
         {
             LevelSubGroup group;
             if (renderMesh.vertices.empty() || renderMesh.indices.empty()) { return group; }
 
-            size_t vbSize = renderMesh.vertices.size() * sizeof(float) * 5;
+            size_t vbSize = renderMesh.vertices.size() * sizeof(ALTEngine::Formats::RenderVertex);
             size_t ibSize = renderMesh.indices.size() * sizeof(uint32_t);
             size_t texSize = static_cast<size_t>(tex.width) * tex.height * 4;
 
@@ -340,12 +408,17 @@ namespace ALTEngine::Renderer
 
         SDL_GPUVertexBufferDescription vbDesc{};
         vbDesc.slot = 0;
-        vbDesc.pitch = sizeof(float) * 5; // x,y,z,u,v
+        vbDesc.pitch = sizeof(float) * 8; // x,y,z,u,v,r,g,b
         vbDesc.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
 
-        SDL_GPUVertexAttribute attrs[2]{};
+        // Attribute 2 is the per-vertex light colour (see RenderVertex).
+        // Kept as FLOAT3 rather than a packed UNORM byte triple: the
+        // vertex buffers here are rebuilt rarely and small enough that
+        // the 4 bytes per vertex saved are not worth the packing code.
+        SDL_GPUVertexAttribute attrs[3]{};
         attrs[0] = { 0, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, 0 };
         attrs[1] = { 1, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, sizeof(float) * 3 };
+        attrs[2] = { 2, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, sizeof(float) * 5 };
 
         SDL_GPUColorTargetDescription colorDesc{};
         colorDesc.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
@@ -356,7 +429,7 @@ namespace ALTEngine::Renderer
         pipelineInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
         pipelineInfo.vertex_input_state.num_vertex_buffers = 1;
         pipelineInfo.vertex_input_state.vertex_buffer_descriptions = &vbDesc;
-        pipelineInfo.vertex_input_state.num_vertex_attributes = 2;
+        pipelineInfo.vertex_input_state.num_vertex_attributes = 3;
         pipelineInfo.vertex_input_state.vertex_attributes = attrs;
         pipelineInfo.target_info.num_color_targets = 1;
         pipelineInfo.target_info.color_target_descriptions = &colorDesc;
@@ -743,7 +816,7 @@ namespace ALTEngine::Renderer
             up.centerX = cx; up.centerY = cy; up.centerZ = cz; up.radius = radius;
             up.baseRotationRadians = req.baseRotationRadians;
             up.useDoubleSided = req.transparentRgb.has_value();
-            up.vbSize = renderMesh.vertices.size() * sizeof(float) * 5;
+            up.vbSize = renderMesh.vertices.size() * sizeof(ALTEngine::Formats::RenderVertex);
             up.ibSize = renderMesh.indices.size() * sizeof(uint32_t);
             up.texSize = static_cast<size_t>(up.textureWidth) * up.textureHeight * 4;
             up.renderMesh = std::move(renderMesh);
@@ -987,9 +1060,26 @@ namespace ALTEngine::Renderer
             SDL_Log("ModelRenderer::LoadLevel(%s): applying %zu face UV override(s)", cacheKey.c_str(), rotations.size());
         }
 
-        auto perGroupMeshes = ALTEngine::Formats::BuildLevelRenderMeshPerGroup(level, textureSet.uvRects, rotations);
-
         LoadedLevel loadedLevel;
+
+        // Lights must be resolved BEFORE the mesh is built - the vertex
+        // colours are baked into the vertex buffer.
+        loadedLevel.geometry = level;
+        loadedLevel.uvRects = textureSet.uvRects;
+        loadedLevel.rotations = rotations;
+        loadedLevel.lights.Reset(level.lights);
+        loadedLevel.lastEntries = loadedLevel.lights.Entries();
+        loadedLevel.animator.Reset(level);
+        loadedLevel.lastAnimatorOutputs = loadedLevel.animator.OutputSnapshot();
+
+        SDL_Log("ModelRenderer::LoadLevel(%s): %zu texture animators, %zu light records",
+                cacheKey.c_str(), loadedLevel.animator.Count(), level.lights.size());
+
+        auto perGroupMeshes = ALTEngine::Formats::BuildLevelRenderMeshPerGroup(
+            level, textureSet.uvRects, rotations, &loadedLevel.lights, &loadedLevel.animator);
+
+        for (size_t i = 0; i < 5; ++i) { loadedLevel.groupVertexCounts[i] = perGroupMeshes[i].vertices.size(); }
+
         bool anyGroupUsed = false;
         for (size_t i = 0; i < 5; ++i)
         {
@@ -1006,6 +1096,75 @@ namespace ALTEngine::Renderer
 
         loadedLevels[cacheKey] = loadedLevel;
         return true;
+    }
+
+    bool ModelRenderer::TickLevelLights(const std::string& cacheKey, int randomBits)
+    {
+        if (!device) { return false; }
+        auto it = loadedLevels.find(cacheKey);
+        if (it == loadedLevels.end()) { return false; }
+        LoadedLevel& level = it->second;
+
+        level.lights.Tick(randomBits);
+        level.animator.Tick(randomBits);
+
+        // Nothing to do unless a resolved light colour or an animator's output
+        // descriptor actually moved. That is the common case by a wide margin -
+        // blink durations and frame holds are both tens of ticks - and skipping
+        // it here is what keeps this cheap enough to call every tick.
+        bool lightsMoved = !(level.lights.Entries() == level.lastEntries);
+        std::vector<uint16_t> outputs = level.animator.OutputSnapshot();
+        bool animatorsMoved = (outputs != level.lastAnimatorOutputs);
+        if (!lightsMoved && !animatorsMoved) { return false; }
+
+        level.lastEntries = level.lights.Entries();
+        level.lastAnimatorOutputs = outputs;
+
+        auto perGroupMeshes = ALTEngine::Formats::BuildLevelRenderMeshPerGroup(
+            level.geometry, level.uvRects, level.rotations, &level.lights, &level.animator);
+
+        for (size_t i = 0; i < 5; ++i)
+        {
+            if (!level.groups[i].vertexBuffer) { continue; }
+
+            // An animated face whose new descriptor sits on a different page
+            // would migrate between per-page buffers. The in-place re-upload
+            // cannot express that, so bail loudly rather than corrupt the
+            // buffer with a mismatched size.
+            if (perGroupMeshes[i].vertices.size() != level.groupVertexCounts[i])
+            {
+                SDL_Log("ModelRenderer::TickLevelLights(%s): group %zu vertex count changed "
+                        "(%zu -> %zu) - an animated face crossed texture pages, which the "
+                        "in-place re-upload does not support. Skipping.",
+                        cacheKey.c_str(), i, level.groupVertexCounts[i], perGroupMeshes[i].vertices.size());
+                continue;
+            }
+            ReuploadVertices(level.groups[i], perGroupMeshes[i]);
+        }
+        return true;
+    }
+
+    void ModelRenderer::ToggleLevelLight(const std::string& cacheKey, int lightIndex, int delta)
+    {
+        auto it = loadedLevels.find(cacheKey);
+        if (it == loadedLevels.end()) { return; }
+        if (lightIndex < 0) { return; }
+        it->second.lights.ToggleLight(static_cast<size_t>(lightIndex), delta);
+    }
+
+    void ModelRenderer::FlashLevelLights(const std::string& cacheKey)
+    {
+        auto it = loadedLevels.find(cacheKey);
+        if (it == loadedLevels.end()) { return; }
+        it->second.lights.RequestFlash();
+    }
+
+    void ModelRenderer::ChangeLevelTexture(const std::string& cacheKey, int animatorIndex, int delta)
+    {
+        auto it = loadedLevels.find(cacheKey);
+        if (it == loadedLevels.end()) { return; }
+        if (animatorIndex < 0) { return; }
+        it->second.animator.ChangeTexture(static_cast<size_t>(animatorIndex), delta);
     }
 
     std::vector<uint8_t> ModelRenderer::RenderLevelToRgba(const std::string& cacheKey, const FpsCamera& camera, int width, int height,

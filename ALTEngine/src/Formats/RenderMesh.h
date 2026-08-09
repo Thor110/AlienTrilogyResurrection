@@ -7,14 +7,29 @@
 #include "BxParser.h"
 #include "FaceUvPatches.h"
 #include "LevelLoader.h"
+#include "LightTable.h"
+#include "TextureAnimation.h"
 #include "ModelLoader.h"
 
 namespace ALTEngine::Formats
 {
+    // r/g/b are the quad's LIGHT COLOUR, 0-1, resolved from the level's
+    // light table (see LightTable.h). Per-vertex rather than per-quad
+    // because light mode 4 is gouraud: it gives each of the four corners
+    // its own colour. Every other mode writes the same colour to all
+    // four, which is why the original engine passes one 16-byte LUT
+    // entry per face and lets the rasterizer decide how many of its
+    // four triples to read (Ghidra: FUN_00025648 hands the entry to the
+    // draw routine; FUN_00029be0 builds it).
+    //
+    // Models and doors currently emit 1,1,1 - they are lit from the
+    // entity's own light lookup, not a level light record, and that path
+    // is not traced yet.
     struct RenderVertex
     {
         float x, y, z;
         float u, v;
+        float r, g, b;
     };
 
     struct RenderMesh
@@ -96,7 +111,8 @@ namespace ALTEngine::Formats
     // capable of catching "resolves to a plausible-looking but wrong
     // page" on its own. Re-verification against the new flat-index
     // scheme is still pending actual visual confirmation.
-    RenderMesh BuildLevelRenderMesh(const LevelGeometry& level, const std::vector<BxRectangle>& uvDescriptors);
+    RenderMesh BuildLevelRenderMesh(const LevelGeometry& level, const std::vector<BxRectangle>& uvDescriptors,
+                                    const LightTable* lights = nullptr);
 
     // Same UV/texture resolution as BuildLevelRenderMesh, but partitions
     // the output by which TEXTURE PAGE each quad's resolved descriptor
@@ -123,8 +139,13 @@ namespace ALTEngine::Formats
     // single mesh.
     std::array<RenderMesh, 5> BuildRenderMeshPerGroup(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects);
 
+    // `lights` supplies each quad's colour. Passing nullptr emits white
+    // for everything, i.e. the pre-lighting behaviour, which is what the
+    // model-preview and any non-gameplay caller wants.
     std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level,
                                                             const std::vector<BxRectangle>& uvDescriptors,
-                                                            const std::vector<FaceUvRotation>& uvRotations = {});
+                                                            const std::vector<FaceUvRotation>& uvRotations = {},
+                                                            const LightTable* lights = nullptr,
+                                                            const TextureAnimator* animator = nullptr);
 }
 

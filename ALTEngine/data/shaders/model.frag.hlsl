@@ -11,6 +11,7 @@ struct Input
 {
     float4 Position : SV_Position;
     float2 UV : TEXCOORD0;
+    float3 Colour : TEXCOORD1;
 };
 
 float4 main(Input input) : SV_Target0
@@ -27,6 +28,12 @@ float4 main(Input input) : SV_Target0
     // background, but covers the model behind it with the background
     // as it spins around" - exactly this symptom.
     clip(color.a - 0.5);
+
+    // Level light modulate. The light table's RGB scales the texel; see
+    // LIGHT_COLOUR_NEUTRAL in LightTable.h for the scale this assumes.
+    // Model and door geometry emits 1,1,1 and so passes through
+    // unchanged.
+    color.rgb *= input.Colour;
 
     return color;
 }
