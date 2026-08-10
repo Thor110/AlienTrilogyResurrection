@@ -366,7 +366,8 @@ int main(int, char**)
         // TEMPORARY level select - jump straight into any level for testing.
         // To remove: delete this block, the levelSelectLabels plumbing in
         // MenuController, the list in MenuTree, and MenuResult::levelCode.
-        if (menuResult.action == "Level Select" && !menuResult.levelCode.empty())
+        if (menuResult.action == "Level Select" && !menuResult.levelCode.empty()
+            && menuResult.levelCode.find_first_of("0123456789") != std::string::npos)
         {
             std::cout << "Level Select: " << menuResult.levelCode << "\n";
             GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, menuResult.levelCode, keyBindings, audioSettings,

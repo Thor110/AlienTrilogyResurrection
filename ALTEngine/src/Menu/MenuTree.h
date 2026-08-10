@@ -14,6 +14,16 @@
 
 namespace ALTEngine::Menu
 {
+    // Internal label of the main-menu level list.
+    //
+    // Deliberately NOT "Level Select": the Modern feature toggle uses that, and
+    // `label` is what every comparison in MenuController keys on. While both
+    // carried it, choosing "On" for the toggle matched the level-start handler
+    // and the engine tried to load a level called "On" (Edward, 2026). Shared as
+    // a constant so the two places that must agree cannot drift again - they
+    // already did once, as two separate string literals.
+    inline constexpr const char* LEVEL_SELECT_LIST_LABEL = "Level Select List";
+
     // OPTOBJ.BND model indices - CONFIRMED against the real OPTOBJ.BND
     // (Edward, 2026): all 14 sections' identifier bytes match this list
     // exactly, in exact section order (M000-M013 = index 0-13). Also

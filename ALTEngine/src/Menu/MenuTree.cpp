@@ -342,7 +342,7 @@ namespace ALTEngine::Menu
             autoDoors.descriptionStringId = static_cast<int>(StringId::DescAutomaticDoors);
             keepItems.descriptionStringId = static_cast<int>(StringId::DescKeepItems);
 
-            return List("Modern", StringId::Modern, {
+            std::vector<MenuNode> entries = {
                 std::move(enableAll),
                 std::move(autoDoors),
                 std::move(keepItems),
@@ -361,7 +361,12 @@ namespace ALTEngine::Menu
                 featureNode(ALTEngine::Bootstrap::ModernSettings::MenuLabel(ALTEngine::Bootstrap::ModernFeature::RenderDistance),
                             StringId::RenderDistance, StringId::DescRenderDistance,
                             ALTEngine::Bootstrap::ModernFeature::RenderDistance),
-            });
+                featureNode(ALTEngine::Bootstrap::ModernSettings::MenuLabel(ALTEngine::Bootstrap::ModernFeature::LevelSelect),
+                            StringId::LevelSelect, StringId::DescLevelSelect,
+                            ALTEngine::Bootstrap::ModernFeature::LevelSelect),
+            };
+
+            return List("Modern", StringId::Modern, std::move(entries));
         }
 
         MenuNode Options(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
@@ -398,27 +403,26 @@ namespace ALTEngine::Menu
     {
         using ALTEngine::Bootstrap::StringId;
 
-        // TEMPORARY level select - see the note on this function's declaration.
-        //
-        // Rows carry NO StringId. They are level codes, not translatable text,
-        // and the two-argument Action() overload leaves stringId at -1 which is
-        // what tells the renderer to display `label` verbatim.
-        //
-        // Passing StringId::Count here (as an earlier version did) crashed the
-        // moment the list was opened: Count is one PAST the end of the string
-        // table, so Tr() indexed the array out of bounds - fatal in a debug
-        // build (Edward, 2026).
-        std::vector<MenuNode> rows;
-        for (const std::string& label : levelSelectLabels)
-        {
-            rows.push_back(Action(label));
-        }
-
+        // Level Select, above Start Game, when the Modern feature is on - the
+        // caller passes rows only in that case. Rows carry NO StringId: a level
+        // code is not translatable, and stringId = -1 is what makes
+        // DisplayLabel show the label verbatim. StringId::Count is one PAST the
+        // end of the table and crashes on open.
         std::vector<MenuNode> top;
-        if (!rows.empty())
+        if (!levelSelectLabels.empty())
         {
-            MenuNode levelSelect = List("Level Select", rows);
-            top.push_back(levelSelect);
+            std::vector<MenuNode> rows;
+            for (const std::string& label : levelSelectLabels)
+            {
+                rows.push_back(Action(label));
+            }
+            // Internal label is deliberately NOT "Level Select": the Modern
+            // feature toggle already uses that, and two nodes sharing a label
+            // made the row handler fire when the TOGGLE was set to On - it saw
+            // parent "Level Select" with leaf "On" and passed "On" along as a
+            // level code (Edward, 2026). `label` is the internal identifier;
+            // the StringId is what gets displayed, so this is invisible.
+            top.push_back(List(LEVEL_SELECT_LIST_LABEL, StringId::LevelSelect, std::move(rows)));
         }
         top.push_back(Action("Start Game", StringId::StartGame));
         top.push_back(Action("Multiplayer", StringId::Multiplayer));

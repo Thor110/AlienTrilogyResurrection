@@ -405,13 +405,26 @@ namespace ALTEngine::Screens
                                    ToGridSpaceZ(camera.z, originZ))
                                + STAND_OFFSET + EYE_HEIGHT;
 
-                    // playerStartAngle is 2 for L111, which fits the same
-                    // 8-step facing scheme the crates use (0=N, 2=E, 4=S,
-                    // 6=W) rather than the 4096-step space used for
-                    // entity angles elsewhere. Mirrored the same way crate
-                    // facing is. Unverified - position can be checked
-                    // independently of which way you end up looking.
-                    camera.yaw = 3.14159265f - static_cast<float>(level.header.playerStartAngle) * (3.14159265f / 4.0f);
+                    // playerStartAngle uses the same 8-step compass the crates
+                    // do (0=N, 2=E, 4=S, 6=W), not the 4096-step space entity
+                    // angles use.
+                    //
+                    // CORRECTED: this previously mirrored the angle the way
+                    // crate facing is mirrored - `pi - angle * pi/4`. That is
+                    // right for a crate, whose value rotates a MODEL whose
+                    // local axes are mirrored relative to the world, and wrong
+                    // for a camera yaw, which is a direction.
+                    //
+                    // With this camera's convention, forward = (sin yaw,
+                    // -cos yaw) and grid +X east / +Z south, the direct mapping
+                    // gives 0=North, 2=East, 4=South, 6=West as intended. The
+                    // mirrored one swapped North and South while still agreeing
+                    // on East and West - and L111's angle is 2, i.e. East, one
+                    // of the exact two values where the two formulas cannot be
+                    // told apart. That is why it survived: the only level with
+                    // data to hand could not distinguish them (Edward, 2026 -
+                    // spawned facing the wrong way in another level).
+                    camera.yaw = static_cast<float>(level.header.playerStartAngle) * (3.14159265f / 4.0f);
 
                     // Object spawning (Edward, 2026: "all of the level
                     // objects spawning") - crates/barrels/switches first,

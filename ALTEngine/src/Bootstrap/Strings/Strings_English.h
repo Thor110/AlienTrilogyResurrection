@@ -132,6 +132,8 @@ namespace ALTEngine::Bootstrap
             "Look freely with the mouse instead of the original's automatic pitch",
             "Render Distance",
             "See the whole level at once. Off restores the original's darkness, which fades distant walls to black",
+            "Level Select",
+            "Jump straight to any level, including the multiplayer maps",
         };
         return table;
     }

@@ -42,6 +42,11 @@ namespace ALTEngine::Bootstrap
         // what it drew, which is why its corridors read as pitch dark a couple
         // of rooms away. Off restores that fade; On shows the whole level.
         RenderDistance,
+
+        // Adds a Level Select entry to the main menu, letting any level be
+        // started directly. The original had no such thing - levels only
+        // progressed - so it is a modern convenience like the rest of these.
+        LevelSelect,
     };
 
     class ModernSettings
@@ -73,6 +78,7 @@ namespace ALTEngine::Bootstrap
             ModernFeature::StunnedEnemies,
             ModernFeature::FreeLook,
             ModernFeature::RenderDistance,
+            ModernFeature::LevelSelect,
         };
 
         // The individual toggle's own stored value, ignoring the mode.
@@ -132,6 +138,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::StunnedEnemies: return "Stunned Enemies";
             case ModernFeature::FreeLook: return "Free Look";
             case ModernFeature::RenderDistance: return "Render Distance";
+            case ModernFeature::LevelSelect: return "Level Select";
             }
             return "";
         }
@@ -147,6 +154,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::StunnedEnemies: return "ModernStunnedEnemies";
             case ModernFeature::FreeLook: return "ModernFreeLook";
             case ModernFeature::RenderDistance: return "ModernRenderDistance";
+            case ModernFeature::LevelSelect: return "ModernLevelSelect";
             }
             return "ModernUnknown";
         }

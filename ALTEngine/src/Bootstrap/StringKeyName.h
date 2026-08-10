@@ -129,6 +129,8 @@ namespace ALTEngine::Bootstrap
         case StringId::DescFreeLook: return "DescFreeLook";
         case StringId::RenderDistance: return "RenderDistance";
         case StringId::DescRenderDistance: return "DescRenderDistance";
+        case StringId::LevelSelect: return "LevelSelect";
+        case StringId::DescLevelSelect: return "DescLevelSelect";
         default: return "";
         }
     }
@@ -245,6 +247,8 @@ namespace ALTEngine::Bootstrap
         if (name == "DescFreeLook") { return StringId::DescFreeLook; }
         if (name == "RenderDistance") { return StringId::RenderDistance; }
         if (name == "DescRenderDistance") { return StringId::DescRenderDistance; }
+        if (name == "LevelSelect") { return StringId::LevelSelect; }
+        if (name == "DescLevelSelect") { return StringId::DescLevelSelect; }
         return std::nullopt;
     }
 }

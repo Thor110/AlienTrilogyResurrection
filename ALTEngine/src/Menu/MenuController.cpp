@@ -208,8 +208,31 @@ namespace ALTEngine::Menu
         // cursor column) or stays a static light green (false - a
         // settings-list preview column showing its current value one
         // column ahead of actually entering it).
+        // Scrolling for lists too long to fit. Returns the index of the first
+        // visible row and how many to draw, keeping the selection roughly
+        // centred but never scrolling past either end.
+        //
+        // Needed once the level select existed: 46 rows do not fit on any
+        // sensible window, and without this the rows past the bottom were drawn
+        // off-screen and simply unreachable to look at even though navigation
+        // could still reach them.
+        struct ScrollWindow { int first; int count; bool moreAbove; bool moreBelow; };
+
+        ScrollWindow ComputeScrollWindow(int itemCount, int selectedIndex, int maxVisibleRows)
+        {
+            if (maxVisibleRows <= 0 || itemCount <= maxVisibleRows)
+            {
+                return { 0, itemCount, false, false };
+            }
+            int first = selectedIndex - maxVisibleRows / 2;
+            int lastPossibleFirst = itemCount - maxVisibleRows;
+            if (first < 0) { first = 0; }
+            if (first > lastPossibleFirst) { first = lastPossibleFirst; }
+            return { first, maxVisibleRows, first > 0, first + maxVisibleRows < itemCount };
+        }
+
         int DrawColumn(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int selectedIndex, bool pulseSelected,
-                        int x, int y, int rowHeight, int scale, Language language)
+                        int x, int y, int rowHeight, int scale, Language language, int maxVisibleRows = 0)
         {
             // Music/SFX volume and Mouse Sensitivity (Edward, 2026:
             // "keep the design of the slider which now only resides in
@@ -234,10 +257,12 @@ namespace ALTEngine::Menu
 
             float pulse = pulseSelected ? PulsePhase() : 1.0f;
 
-            for (size_t i = 0; i < items.size(); ++i)
+            ScrollWindow window = ComputeScrollWindow(static_cast<int>(items.size()), selectedIndex, maxVisibleRows);
+
+            for (int i = window.first; i < window.first + window.count; ++i)
             {
-                int rowY = y + static_cast<int>(i) * rowHeight;
-                bool isSelected = (static_cast<int>(i) == selectedIndex);
+                int rowY = y + (i - window.first) * rowHeight;
+                bool isSelected = (i == selectedIndex);
                 bool enabled = items[i].enabled;
 
                 // Every row gets a box now (Edward, 2026: "a disabled
@@ -282,6 +307,30 @@ namespace ALTEngine::Menu
                 }
             }
 
+            // Tell the player the list continues. Drawn in the row gutter just
+            // outside the boxes so they never overlap a label, and with the
+            // position count so a long list is navigable rather than a mystery.
+            if (window.moreAbove || window.moreBelow)
+            {
+                char position[32];
+                std::snprintf(position, sizeof(position), "%d/%d", selectedIndex + 1, static_cast<int>(items.size()));
+                if (window.moreAbove)
+                {
+                    DrawBitmapText(renderer, "^", x + width + scale * 2, y, scale, COLOR_GREEN_DIM);
+                }
+                if (window.moreBelow)
+                {
+                    int lastRowY = y + (window.count - 1) * rowHeight;
+                    DrawBitmapText(renderer, "v", x + width + scale * 2, lastRowY, scale, COLOR_GREEN_DIM);
+                    DrawBitmapText(renderer, position, x + width + scale * 2, lastRowY - rowHeight, scale, COLOR_GREEN_DIM);
+                }
+                else
+                {
+                    DrawBitmapText(renderer, position, x + width + scale * 2,
+                                    y + window.count * rowHeight, scale, COLOR_GREEN_DIM);
+                }
+            }
+
             return width;
         }
 
@@ -289,13 +338,14 @@ namespace ALTEngine::Menu
         // green by default, white when selected. Distinct from DrawColumn
         // (used for Options, which keeps its filled-bar highlight).
         void DrawMainMenuList(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int selectedIndex,
-            int windowW, int y, int rowHeight, int scale, Language language)
+            int windowW, int y, int rowHeight, int scale, Language language, int maxVisibleRows = 0)
         {
             float pulse = PulsePhase();
-            for (size_t i = 0; i < items.size(); ++i)
+            ScrollWindow window = ComputeScrollWindow(static_cast<int>(items.size()), selectedIndex, maxVisibleRows);
+            for (int i = window.first; i < window.first + window.count; ++i)
             {
-                int rowY = y + static_cast<int>(i) * rowHeight;
-                bool isSelected = (static_cast<int>(i) == selectedIndex);
+                int rowY = y + (i - window.first) * rowHeight;
+                bool isSelected = (i == selectedIndex);
                 Color textColor = isSelected ? LerpColor(COLOR_GREEN, COLOR_WHITE, pulse) : COLOR_GREEN;
 
                 std::string text = DisplayLabel(items[i], language);
@@ -602,18 +652,27 @@ namespace ALTEngine::Menu
 
         // TEMPORARY level select rows, one per level from LevelManifest.json.
         // Empty vector = the list is omitted entirely.
-        std::vector<std::string> levelSelectLabels;
-        for (const auto& level : ALTEngine::Formats::LoadLevelList("data/LevelManifest.json"))
-        {
-            levelSelectLabels.push_back(level.label);
-        }
+        // Rows are supplied only when Modern > Level Select is on; an empty
+        // vector omits the main-menu entry entirely. Rebuilt whenever the
+        // feature is toggled, since the main menu's contents change.
+        auto buildLevelSelectLabels = []() {
+            std::vector<std::string> labels;
+            ALTEngine::Bootstrap::Config config;
+            ALTEngine::Bootstrap::ModernSettings modern(config);
+            if (!modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LevelSelect)) { return labels; }
+            for (const auto& level : ALTEngine::Formats::LoadLevelList("data/LevelManifest.json"))
+            {
+                labels.push_back(level.label);
+            }
+            return labels;
+        };
+        std::vector<std::string> levelSelectLabels = buildLevelSelectLabels();
 
         MenuNode root = BuildMainMenuTree(resolutionLabels, settingsSnapshot, keyBindings, audioSettings,
                                           /*includeCredits=*/!startInOptionsOnly, levelSelectLabels);
-        // The subtree the Options screen is currently showing. Normally the
-        // Options list; the temporary level select reuses the same screen by
-        // pointing this at its own list instead, which is why it is a pointer
-        // rather than a reference.
+        // The Options subtree. Found by LABEL rather than the hardcoded
+        // root.children[3] it used to be - that index silently pointed at the
+        // wrong node the moment anything was inserted above it in the main menu.
         MenuNode* optionsRootPtr = FindTopLevel(root, "Options");
         if (!optionsRootPtr) { return MenuResult{}; }
 
@@ -802,14 +861,15 @@ namespace ALTEngine::Menu
                     }
                     else if (!chosen.children.empty())
                     {
-                        // Any other main-menu entry that is a LIST rather than
-                        // an action - currently just the temporary Level Select
-                        // - reuses the Options screen by pointing it at that
-                        // subtree. The main menu itself only ever renders
-                        // root.children, so it cannot show a nested list.
-                        optionsRootPtr = FindTopLevel(root, chosen.label);
-                        if (optionsRootPtr)
+                        // A main-menu entry that is a LIST rather than an action
+                        // - currently just Level Select - reuses the Options
+                        // screen by pointing it at that subtree. The main menu
+                        // only ever renders root.children, so it cannot show a
+                        // nested list itself.
+                        MenuNode* sub = FindTopLevel(root, chosen.label);
+                        if (sub)
                         {
+                            optionsRootPtr = sub;
                             screen = Screen::Options;
                             optionsPath = { 0 };
                         }
@@ -828,14 +888,39 @@ namespace ALTEngine::Menu
                     std::string parentLabel = parent.label;
                     MenuNode& leaf = WalkPath((*optionsRootPtr), optionsPath);
 
-                    // TEMPORARY level select. Its rows are leaves whose label
-                    // begins with the dotted code ("1.5.4  L154LEV"), which is
-                    // exactly the form the briefing and gameplay screens take.
-                    if ((*optionsRootPtr).label == "Level Select" && leaf.children.empty())
+                    // Level Select, under Options > Modern. Its rows are leaves
+                    // whose label begins with the dotted code ("1.5.4
+                    // L154LEV"), which is exactly the form the briefing and
+                    // gameplay screens take. Matched on the PARENT because the
+                    // screen root is the Options subtree, not this list.
+                    // Only when the screen root IS the level list. Matching on
+                    // the parent label as well used to also catch the Modern
+                    // feature toggle, whose parent carries the same display
+                    // name - see the note in MenuTree.
+                    if ((*optionsRootPtr).label == LEVEL_SELECT_LIST_LABEL && leaf.children.empty())
                     {
-                        result.action = "Level Select";
-                        result.levelCode = leaf.label.substr(0, leaf.label.find(' '));
-                        running = false;
+                        // Guard the code before handing it on. A row label
+                        // always starts with the dotted digits, but validating
+                        // here means a label that ever stops looking like one
+                        // fails visibly at the source instead of arriving at
+                        // GameplayScreen as an unloadable level.
+                        std::string code = leaf.label.substr(0, leaf.label.find(' '));
+                        bool looksLikeCode = !code.empty();
+                        for (char c : code)
+                        {
+                            if (!((c >= '0' && c <= '9') || c == '.')) { looksLikeCode = false; break; }
+                        }
+                        if (!looksLikeCode)
+                        {
+                            SDL_Log("MenuController: Level Select row '%s' does not begin with a level code - ignored",
+                                    leaf.label.c_str());
+                        }
+                        else
+                        {
+                            result.action = "Level Select";
+                            result.levelCode = code;
+                            running = false;
+                        }
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         return;
                     }
@@ -927,6 +1012,42 @@ namespace ALTEngine::Menu
                         if (parentLabel == "Quality" || parentLabel == "VSync" || parentLabel == "Display Mode")
                         {
                             RefreshGraphicsSelections((*optionsRootPtr));
+                        }
+
+                        // Level Select changes what the MAIN MENU contains, so
+                        // the tree has to be rebuilt rather than just
+                        // re-selected.
+                        //
+                        // DELIBERATELY LAST in this block. `parent` and `leaf`
+                        // above are references into the tree and every refresh
+                        // goes through optionsRootPtr, so rebuilding earlier
+                        // would leave all of them dangling. Nothing below this
+                        // point touches the old tree.
+                        if (parentLabel == ALTEngine::Bootstrap::ModernSettings::MenuLabel(
+                                               ALTEngine::Bootstrap::ModernFeature::LevelSelect)
+                            || parentLabel == "Enable All")
+                        {
+                            levelSelectLabels = buildLevelSelectLabels();
+                            root = BuildMainMenuTree(resolutionLabels, settingsSnapshot, keyBindings, audioSettings,
+                                                     /*includeCredits=*/!startInOptionsOnly, levelSelectLabels);
+
+                            // BuildMainMenuTree always includes Options, so this
+                            // cannot fail - but do not dereference null if it
+                            // ever does.
+                            if (MenuNode* rebuiltOptions = FindTopLevel(root, "Options"))
+                            {
+                                optionsRootPtr = rebuiltOptions;
+                                RefreshModernSelections((*optionsRootPtr));
+                                RefreshGraphicsSelections((*optionsRootPtr));
+                            }
+
+                            // The main menu may have gained or lost its first
+                            // entry, so a stale index could now point past the
+                            // end or at the wrong row.
+                            if (mainPath.empty() || mainPath[0] >= static_cast<int>(root.children.size()))
+                            {
+                                mainPath = { 0 };
+                            }
                         }
                     }
                     if (r != EnterResult::NoOp) { SfxPlayer::Play(SfxId::MenuSelect, cdDirectory); }
@@ -1136,7 +1257,12 @@ namespace ALTEngine::Menu
                 DrawMenuBackground(renderer, mainBg, mainBgW, mainBgH);
                 int windowW = 0, windowH = 0;
                 SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-                DrawMainMenuList(renderer, root.children, mainPath[0], windowW, windowH * 2 / 3, rowHeight, scale, language);
+                {
+                    int listTop = windowH * 2 / 3;
+                    int maxRows = (windowH - rowHeight * 2 - listTop) / rowHeight;
+                    if (maxRows < 3) { maxRows = 3; }
+                    DrawMainMenuList(renderer, root.children, mainPath[0], windowW, listTop, rowHeight, scale, language, maxRows);
+                }
             }
             else if (screen == Screen::Options)
             {
@@ -1189,7 +1315,15 @@ namespace ALTEngine::Menu
                         pulseHere = false;
                     }
 
-                    int columnWidth = DrawColumn(renderer, node->children, selectedHere, pulseHere, columnX, columnTop, rowHeight, scale, language);
+                    // Row budget: everything between the top of the column and the
+                    // description block, which grows upward from
+                    // windowH - rowHeight * 4. One row held back for the
+                    // position counter the scroll indicators draw.
+                    int availableHeight = (windowH - rowHeight * 5) - columnTop;
+                    int maxRows = availableHeight / rowHeight;
+                    if (maxRows < 3) { maxRows = 3; }
+
+                    int columnWidth = DrawColumn(renderer, node->children, selectedHere, pulseHere, columnX, columnTop, rowHeight, scale, language, maxRows);
                     columnX += columnWidth + scale * 4; // Edward, 2026: needs a visible gap between adjacent columns too, not just between stacked rows within one
 
                     if (depth >= optionsPath.size()) { break; }
