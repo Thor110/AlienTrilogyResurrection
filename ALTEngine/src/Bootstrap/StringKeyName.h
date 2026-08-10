@@ -131,6 +131,14 @@ namespace ALTEngine::Bootstrap
         case StringId::DescRenderDistance: return "DescRenderDistance";
         case StringId::LevelSelect: return "LevelSelect";
         case StringId::DescLevelSelect: return "DescLevelSelect";
+        case StringId::LiveMinimap: return "LiveMinimap";
+        case StringId::DescLiveMinimap: return "DescLiveMinimap";
+        case StringId::PresetConvenience: return "PresetConvenience";
+        case StringId::DescPresetConvenience: return "DescPresetConvenience";
+        case StringId::PresetModernised: return "PresetModernised";
+        case StringId::DescPresetModernised: return "DescPresetModernised";
+        case StringId::PresetTesting: return "PresetTesting";
+        case StringId::DescPresetTesting: return "DescPresetTesting";
         default: return "";
         }
     }
@@ -249,6 +257,14 @@ namespace ALTEngine::Bootstrap
         if (name == "DescRenderDistance") { return StringId::DescRenderDistance; }
         if (name == "LevelSelect") { return StringId::LevelSelect; }
         if (name == "DescLevelSelect") { return StringId::DescLevelSelect; }
+        if (name == "LiveMinimap") { return StringId::LiveMinimap; }
+        if (name == "DescLiveMinimap") { return StringId::DescLiveMinimap; }
+        if (name == "PresetConvenience") { return StringId::PresetConvenience; }
+        if (name == "DescPresetConvenience") { return StringId::DescPresetConvenience; }
+        if (name == "PresetModernised") { return StringId::PresetModernised; }
+        if (name == "DescPresetModernised") { return StringId::DescPresetModernised; }
+        if (name == "PresetTesting") { return StringId::PresetTesting; }
+        if (name == "DescPresetTesting") { return StringId::DescPresetTesting; }
         return std::nullopt;
     }
 }

@@ -19,6 +19,11 @@ namespace ALTEngine::Bootstrap
         Off,
         Custom,
         On,
+
+        // A named bundle of feature states - see ModernPresets.h. Which one is
+        // stored separately, under "ModernPreset", so the mode and the choice
+        // do not have to share one config value.
+        Preset,
     };
 
     enum class ModernFeature
@@ -47,6 +52,11 @@ namespace ALTEngine::Bootstrap
         // started directly. The original had no such thing - levels only
         // progressed - so it is a modern convenience like the rest of these.
         LevelSelect,
+
+        // Draws the pause menu's map in the corner of the screen during play.
+        // The original only ever showed a map when paused, so having it live is
+        // a departure and belongs here.
+        LiveMinimap,
     };
 
     class ModernSettings
@@ -60,12 +70,15 @@ namespace ALTEngine::Bootstrap
             if (!value.has_value()) { return ModernMode::Off; }
             if (*value == "On") { return ModernMode::On; }
             if (*value == "Custom") { return ModernMode::Custom; }
+            if (*value == "Preset") { return ModernMode::Preset; }
             return ModernMode::Off;
         }
 
         void SetMode(ModernMode mode)
         {
-            const char* value = mode == ModernMode::On ? "On" : mode == ModernMode::Custom ? "Custom" : "Off";
+            const char* value = mode == ModernMode::On ? "On"
+                              : mode == ModernMode::Custom ? "Custom"
+                              : mode == ModernMode::Preset ? "Preset" : "Off";
             config.Set("ModernMode", value);
         }
 
@@ -79,6 +92,7 @@ namespace ALTEngine::Bootstrap
             ModernFeature::FreeLook,
             ModernFeature::RenderDistance,
             ModernFeature::LevelSelect,
+            ModernFeature::LiveMinimap,
         };
 
         // The individual toggle's own stored value, ignoring the mode.
@@ -101,11 +115,24 @@ namespace ALTEngine::Bootstrap
         {
             if (Mode() != ModernMode::Custom)
             {
-                bool effective = (Mode() == ModernMode::On);
+                // Materialise each other feature's currently EFFECTIVE state,
+                // read through IsActive rather than derived from the mode.
+                //
+                // This used to be `bool effective = (Mode() == On)`, which was
+                // right for On and Off but wrong for a Preset: leaving a preset
+                // by turning one feature off wrote false over every other
+                // feature, so the whole preset collapsed instead of becoming an
+                // editable copy of itself.
+                bool effective[sizeof(AllFeatures) / sizeof(AllFeatures[0])]{};
+                size_t index = 0;
+                for (ModernFeature other : AllFeatures) { effective[index++] = IsActive(other); }
+
+                index = 0;
                 for (ModernFeature other : AllFeatures)
                 {
+                    bool value = effective[index++];
                     if (other == feature) { continue; }
-                    Write(KeyFor(other), effective);
+                    Write(KeyFor(other), value);
                 }
             }
             Write(KeyFor(feature), enabled);
@@ -113,12 +140,32 @@ namespace ALTEngine::Bootstrap
         }
 
         // What the game should actually do.
+        // Which preset is selected. Empty when none has ever been chosen.
+        std::string PresetKey() const
+        {
+            auto value = config.Get("ModernPreset");
+            return value.has_value() ? *value : std::string();
+        }
+
+        // Selects a preset AND switches to Preset mode, since choosing one
+        // without switching would store a choice that does nothing.
+        void SetPreset(const std::string& key)
+        {
+            config.Set("ModernPreset", key);
+            SetMode(ModernMode::Preset);
+        }
+
+        // Defined out of line in ModernPresets.h's translation-unit-free way -
+        // see the note there. Declared here so IsActive can use it.
+        bool PresetEnables(ModernFeature feature) const;
+
         bool IsActive(ModernFeature feature) const
         {
             switch (Mode())
             {
             case ModernMode::On:     return true;
             case ModernMode::Custom: return FeatureSetting(feature);
+            case ModernMode::Preset: return PresetEnables(feature);
             case ModernMode::Off:
             default:                 return false;
             }
@@ -139,6 +186,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::FreeLook: return "Free Look";
             case ModernFeature::RenderDistance: return "Render Distance";
             case ModernFeature::LevelSelect: return "Level Select";
+            case ModernFeature::LiveMinimap: return "Live Minimap";
             }
             return "";
         }
@@ -155,6 +203,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::FreeLook: return "ModernFreeLook";
             case ModernFeature::RenderDistance: return "ModernRenderDistance";
             case ModernFeature::LevelSelect: return "ModernLevelSelect";
+            case ModernFeature::LiveMinimap: return "ModernLiveMinimap";
             }
             return "ModernUnknown";
         }

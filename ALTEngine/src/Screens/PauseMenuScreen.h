@@ -5,6 +5,7 @@
 #include "../Bootstrap/AudioSettings.h"
 #include "../Bootstrap/GameplaySettings.h"
 #include "../Bootstrap/KeyBindings.h"
+#include "../Formats/LevelLoader.h"
 #include "../Bootstrap/Localization.h"
 #include "../Bootstrap/RenderSettings.h"
 #include "../Bootstrap/ResolutionSettings.h"
@@ -45,6 +46,15 @@ namespace ALTEngine::Screens
             ALTEngine::Bootstrap::DifficultySettings& difficultySettings,
             ALTEngine::Bootstrap::CameraSwaySettings& cameraSwaySettings,
             ALTEngine::Bootstrap::LanguageSettings& languageSettings,
-            ALTEngine::Bootstrap::KeyBindings& keyBindings);
+            ALTEngine::Bootstrap::KeyBindings& keyBindings,
+            // Level and player state for the pause map. nullptr draws no map,
+            // which is what any caller without a loaded level wants.
+            const ALTEngine::Formats::LevelGeometry* level = nullptr,
+            float playerGridX = 0.0f,
+            float playerGridZ = 0.0f,
+            float playerYaw = 0.0f,
+            // Seen cells for the map's fog of war; nullptr reveals everything,
+            // which is what an Auto Mapper does.
+            const std::vector<uint8_t>* minimapVisited = nullptr);
     };
 }

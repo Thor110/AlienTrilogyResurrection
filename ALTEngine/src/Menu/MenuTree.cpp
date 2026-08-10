@@ -1,4 +1,5 @@
 #include "MenuTree.h"
+#include "../Bootstrap/ModernPresets.h"
 #include "../Bootstrap/ModernSettings.h"
 
 #include <string>
@@ -285,16 +286,33 @@ namespace ALTEngine::Menu
             ALTEngine::Bootstrap::Config config;
             ALTEngine::Bootstrap::ModernSettings modern(config);
 
-            MenuNode enableAll = List("Enable All", StringId::EnableAll, {
+            // Off / Custom / On, then one row per preset. Presets come from
+            // the single table in ModernPresets.h, so adding one needs no change
+            // here - and each row's displayed name and description come from its
+            // StringIds, so they translate like everything else.
+            std::vector<MenuNode> modeRows = {
                 Action("Off", StringId::Off),
                 Action("Custom", StringId::Custom),
                 Action("On", StringId::On),
-            });
+            };
+            for (const auto& preset : ALTEngine::Bootstrap::PRESETS)
+            {
+                // The internal label is the preset KEY, which is what the
+                // controller matches on and what gets persisted; the visible
+                // text is the translated name.
+                MenuNode row = Action(std::string(preset.key), preset.nameId);
+                row.descriptionStringId = static_cast<int>(preset.descriptionId);
+                modeRows.push_back(std::move(row));
+            }
+
+            MenuNode enableAll = List("Enable All", StringId::EnableAll, std::move(modeRows));
             auto mode = modern.Mode();
             enableAll.initialSelectedChild = FindChildIndexByLabel(
                 enableAll.children,
                 mode == ALTEngine::Bootstrap::ModernMode::On ? "On"
-                    : mode == ALTEngine::Bootstrap::ModernMode::Custom ? "Custom" : "Off");
+                    : mode == ALTEngine::Bootstrap::ModernMode::Custom ? "Custom"
+                    : mode == ALTEngine::Bootstrap::ModernMode::Preset ? modern.PresetKey().c_str()
+                    : "Off");
             enableAll.isSettingsList = true;
 
             MenuNode autoDoors = List("Automatic Doors", StringId::AutomaticDoors, {
@@ -306,9 +324,7 @@ namespace ALTEngine::Menu
             // displaying the stale stored value reads as the setting having
             // been ignored. The stored value is still what Custom returns to.
             bool autoDoorsEffective =
-                mode == ALTEngine::Bootstrap::ModernMode::On ? true
-                : mode == ALTEngine::Bootstrap::ModernMode::Off ? false
-                : modern.FeatureSetting(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
+                modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
             autoDoors.initialSelectedChild = FindChildIndexByLabel(autoDoors.children, autoDoorsEffective ? "On" : "Off");
             autoDoors.isSettingsList = true;
 
@@ -329,9 +345,9 @@ namespace ALTEngine::Menu
                     Action("Off", StringId::Off),
                     Action("On", StringId::On),
                 });
-                bool effective = mode == ALTEngine::Bootstrap::ModernMode::On ? true
-                               : mode == ALTEngine::Bootstrap::ModernMode::Off ? false
-                               : modern.FeatureSetting(feature);
+                // Read through IsActive so Preset mode displays what the preset
+                // actually does, not the stale stored toggle underneath it.
+                bool effective = modern.IsActive(feature);
                 node.initialSelectedChild = FindChildIndexByLabel(node.children, effective ? "On" : "Off");
                 node.isSettingsList = true;
                 node.descriptionStringId = static_cast<int>(description);
@@ -364,6 +380,9 @@ namespace ALTEngine::Menu
                 featureNode(ALTEngine::Bootstrap::ModernSettings::MenuLabel(ALTEngine::Bootstrap::ModernFeature::LevelSelect),
                             StringId::LevelSelect, StringId::DescLevelSelect,
                             ALTEngine::Bootstrap::ModernFeature::LevelSelect),
+                featureNode(ALTEngine::Bootstrap::ModernSettings::MenuLabel(ALTEngine::Bootstrap::ModernFeature::LiveMinimap),
+                            StringId::LiveMinimap, StringId::DescLiveMinimap,
+                            ALTEngine::Bootstrap::ModernFeature::LiveMinimap),
             };
 
             return List("Modern", StringId::Modern, std::move(entries));

@@ -2,6 +2,7 @@
 #include "../Bootstrap/ModernSettings.h"
 #include "MenuTree.h"
 #include "../Formats/LevelList.h"
+#include "../Bootstrap/ModernPresets.h"
 #include "MenuNavigation.h"
 #include "../Audio/MusicPlayer.h"
 #include "../Audio/SfxPlayer.h"
@@ -469,8 +470,12 @@ namespace ALTEngine::Menu
                 {
                     if (node.label == "Enable All")
                     {
+                        // Preset mode selects the row whose label is the stored
+                        // preset key.
                         selectByLabel(node, mode == ModernMode::On ? "On"
-                                          : mode == ModernMode::Custom ? "Custom" : "Off");
+                                          : mode == ModernMode::Custom ? "Custom"
+                                          : mode == ModernMode::Preset ? modern.PresetKey()
+                                          : "Off");
                     }
                     else
                     {
@@ -479,9 +484,9 @@ namespace ALTEngine::Menu
 
                         if (known)
                         {
-                            bool effective = mode == ModernMode::On ? true
-                                           : mode == ModernMode::Off ? false
-                                           : modern.FeatureSetting(feature);
+                            // Effective, not the stored toggle - otherwise a
+                            // preset's rows show whatever Custom last held.
+                            bool effective = modern.IsActive(feature);
                             selectByLabel(node, effective ? "On" : "Off");
                         }
                     }
@@ -532,9 +537,19 @@ namespace ALTEngine::Menu
                 ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
                 if (parentLabel == "Enable All")
                 {
-                    modern.SetMode(leafLabel == "On" ? ALTEngine::Bootstrap::ModernMode::On
-                                  : leafLabel == "Custom" ? ALTEngine::Bootstrap::ModernMode::Custom
-                                  : ALTEngine::Bootstrap::ModernMode::Off);
+                    // A row whose label is a preset KEY selects that preset;
+                    // the three fixed rows set the mode directly. Matching by
+                    // key means adding a preset needs no change here.
+                    if (ALTEngine::Bootstrap::FindPreset(leafLabel))
+                    {
+                        modern.SetPreset(leafLabel);
+                    }
+                    else
+                    {
+                        modern.SetMode(leafLabel == "On" ? ALTEngine::Bootstrap::ModernMode::On
+                                      : leafLabel == "Custom" ? ALTEngine::Bootstrap::ModernMode::Custom
+                                      : ALTEngine::Bootstrap::ModernMode::Off);
+                    }
                 }
                 else
                 {

@@ -134,6 +134,14 @@ namespace ALTEngine::Bootstrap
             "See the whole level at once. Off restores the original's darkness, which fades distant walls to black",
             "Level Select",
             "Jump straight to any level, including the multiplayer maps",
+            "Live Minimap",
+            "Keep the map on screen while playing, instead of only in the pause menu",
+            "Convenience",
+            "Removes friction without changing how the game plays or what you can see",
+            "Modernised",
+            "Convenience plus free mouse look and unlimited draw distance",
+            "Testing",
+            "Level select, live map, free look and full draw distance, for testing the port",
         };
         return table;
     }

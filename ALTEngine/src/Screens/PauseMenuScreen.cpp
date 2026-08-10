@@ -1,4 +1,7 @@
 #include "PauseMenuScreen.h"
+
+#include "../Renderer/Minimap.h"
+#include "../Bootstrap/ModernSettings.h"
 #include "PauseMenuTree.h"
 #include "SaveSlotScreen.h"
 #include "../Audio/SfxPlayer.h"
@@ -249,7 +252,12 @@ namespace ALTEngine::Screens
         DifficultySettings& difficultySettings,
         CameraSwaySettings& cameraSwaySettings,
         LanguageSettings& languageSettings,
-        KeyBindings& keyBindings)
+        KeyBindings& keyBindings,
+        const ALTEngine::Formats::LevelGeometry* level,
+        float playerGridX,
+        float playerGridZ,
+        float playerYaw,
+        const std::vector<uint8_t>* minimapVisited)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
@@ -527,8 +535,71 @@ namespace ALTEngine::Screens
                 bool owned = (topLabel == "Auto Mapper" && inventory.hasAutoMapper) ||
                              (topLabel == "Shoulder Lamp" && inventory.hasShoulderLamp) ||
                              (topLabel == "Batteries" && inventory.HasBatteries());
-                DrawPickModModel(renderer, cdDirectory, node.modelIndex, panelX, panelY, 260, 200, scale, rotationAngle);
-                if (!owned) { DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::NotAvailable, language), panelX, panelY + 220, scale, COLOR_STATUS); }
+                // The Auto Mapper IS the map, so when the player has one, show
+                // the level rather than a spinning model of the device. This is
+                // where the original put the map - it is an inventory item, not
+                // a separate screen - so it needs no new menu entry.
+                // Show the map when the player owns the device, OR when the
+                // Live Minimap option is on - otherwise the pause map is
+                // unreachable until an Auto Mapper pickup is found, which made
+                // it look like it was not implemented.
+                bool mapAllowed = owned;
+                if (!mapAllowed)
+                {
+                    ALTEngine::Bootstrap::Config modernConfig;
+                    ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
+                    mapAllowed = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
+                }
+
+                // Where the "not available" note goes. Moves below whatever was
+                // actually drawn: with the map now 400 tall, the old fixed
+                // panelY + 220 landed in the middle of it.
+                int notAvailableY = panelY + 220;
+
+                if (topLabel == "Auto Mapper" && mapAllowed && level != nullptr)
+                {
+                    // Twice the old 260x200, with the device's own model beneath
+                    // it - the map is the point of this panel, the model is the
+                    // item being described.
+                    //
+                    // Clamped to what is actually on screen rather than fixed at
+                    // 520x400: the panel starts after the left column, so a
+                    // small window or a wide inventory list would otherwise push
+                    // the map (and the model under it) off the edge.
+                    int windowW = 0, windowH = 0;
+                    SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+
+                    const int modelHeight = 150;
+                    const int gap = scale * 6;
+
+                    int mapW = std::min(520, windowW - panelX - margin);
+                    int mapH = std::min(400, windowH - panelY - margin - modelHeight - gap);
+                    if (mapW < 80) { mapW = 80; }
+                    if (mapH < 80) { mapH = 80; }
+
+                    ALTEngine::Renderer::MinimapStyle style;
+                    style.drawTriggers = true; // room to be informative here
+                    SDL_FRect mapRect{ static_cast<float>(panelX), static_cast<float>(panelY),
+                                       static_cast<float>(mapW), static_cast<float>(mapH) };
+                    // `owned` here means the player has the Auto Mapper, which
+                    // reveals the level; otherwise only visited cells show.
+                    ALTEngine::Renderer::DrawMinimap(renderer, *level, mapRect,
+                                                     playerGridX, playerGridZ, playerYaw, style,
+                                                     owned ? nullptr : minimapVisited);
+
+                    DrawPickModModel(renderer, cdDirectory, node.modelIndex,
+                                     panelX, panelY + mapH + gap, 260, modelHeight, scale, rotationAngle);
+                    notAvailableY = panelY + mapH + gap + modelHeight + gap;
+                }
+                else
+                {
+                    DrawPickModModel(renderer, cdDirectory, node.modelIndex, panelX, panelY, 260, 200, scale, rotationAngle);
+                }
+                if (!owned)
+                {
+                    DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::NotAvailable, language),
+                                   panelX, notAvailableY, scale, COLOR_STATUS);
+                }
             }
 
             SDL_RenderPresent(renderer);

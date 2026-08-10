@@ -145,6 +145,14 @@ namespace ALTEngine::Bootstrap
         DescRenderDistance,
         LevelSelect,
         DescLevelSelect,
+        LiveMinimap,
+        DescLiveMinimap,
+        PresetConvenience,
+        DescPresetConvenience,
+        PresetModernised,
+        DescPresetModernised,
+        PresetTesting,
+        DescPresetTesting,
 
         Count, // sentinel - not a real string, gives the tables their size
     };

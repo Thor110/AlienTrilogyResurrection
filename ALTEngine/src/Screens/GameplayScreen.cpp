@@ -3,6 +3,7 @@
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/LevelLoader.h"
+#include "../Renderer/Minimap.h"
 #include "../Audio/MusicPlayer.h"
 #include "../Bootstrap/ModernSettings.h"
 #include "../Renderer/ModelPreview.h"
@@ -341,11 +342,16 @@ namespace ALTEngine::Screens
         // once here and refreshed whenever the pause menu closes, so toggling
         // it mid-game takes effect without a restart.
         bool freeLook = false;
+        bool liveMinimap = false;
+        // Cells the player has seen, for the map's fog of war. One byte per
+        // cell, sized on first use. Owning an Auto Mapper bypasses it entirely.
+        std::vector<uint8_t> minimapVisited;
         {
             ALTEngine::Bootstrap::Config modernConfig;
             ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
             autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
             freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
+            liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
             // The feature is "unlimited render distance", so the original's
             // fade is the INVERSE of it.
             bool unlimited = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance);
@@ -808,7 +814,12 @@ namespace ALTEngine::Screens
                 {
                     SDL_SetWindowRelativeMouseMode(app.Window(), false);
                     PauseMenuResult pauseResult = PauseMenuScreen::Run(cdDirectory, language, missionLevelCode, inventory, audioSettings,
-                                                                        renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings, keyBindings);
+                                                                        renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings, keyBindings,
+                                                                      levelReady ? &level : nullptr,
+                                                                      ToGridSpaceX(camera.x, originX) / 512.0f,
+                                                                      ToGridSpaceZ(camera.z, originZ) / 512.0f,
+                                                                      camera.yaw,
+                                                                      inventory.hasAutoMapper ? nullptr : &minimapVisited);
                     // Re-read on return: the pause menu can reach the same
                     // Options screen the boot menu does, so this can have
                     // changed while paused. Reading it once at level load
@@ -818,6 +829,7 @@ namespace ALTEngine::Screens
                         ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
                         autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
                         freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
+                        liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
                         ModelRenderer::SetDrawDistanceFade(
                             !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance));
                     }
@@ -1211,6 +1223,17 @@ namespace ALTEngine::Screens
                         // blink duration.
                         ModelRenderer::TickLevelLights(cacheKey, SDL_rand(256));
 
+                        // Remember where the player has been, for the map's fog
+                        // of war. Without this the visited array stays empty and
+                        // the map draws nothing but the player marker.
+                        if (levelReady)
+                        {
+                            ALTEngine::Renderer::MarkMinimapVisited(
+                                level, minimapVisited,
+                                ToGridSpaceX(camera.x, originX) >> 9,
+                                ToGridSpaceZ(camera.z, originZ) >> 9);
+                        }
+
                         // Switch objects. A switch that has not been thrown
                         // alternates its two red lights; once thrown it holds
                         // both-yellow. Same states and same 16-tick cadence as
@@ -1366,6 +1389,37 @@ namespace ALTEngine::Screens
                     {
                         SDL_UpdateTexture(frameTexture, nullptr, pixels.data(), windowW * 4);
                         SDL_RenderTexture(renderer, frameTexture, nullptr, nullptr);
+
+                        // Live Minimap (Modern option). Drawn over the
+                        // presented world frame with SDL_Renderer, the same way
+                        // the pause menu draws - the 3D pass is already resolved
+                        // to a texture by this point, so a 2D overlay is free.
+                        //
+                        // NOT gated on owning an Auto Mapper. It was, and that
+                        // made the option look broken: hasAutoMapper is only set
+                        // by collecting pickup type 16, so on any level without
+                        // one - or before reaching it - turning the option on did
+                        // nothing at all and gave no clue why. Asking for a live
+                        // map IS the departure; requiring the pickup on top of it
+                        // just hides the feature (Edward, 2026).
+                        if (liveMinimap && levelReady)
+                        {
+                            float size = static_cast<float>(std::min(windowW, windowH)) * 0.22f;
+                            float margin = size * 0.08f;
+                            SDL_FRect mapRect{ static_cast<float>(windowW) - size - margin, margin, size, size };
+
+                            ALTEngine::Renderer::MinimapStyle style;
+                            style.alpha = 190;          // readable without hiding the world
+                            style.drawTriggers = false; // too noisy at this size
+                            // The Auto Mapper reveals everything; without it the
+                            // player only sees where they have been.
+                            const std::vector<uint8_t>* fog =
+                                inventory.hasAutoMapper ? nullptr : &minimapVisited;
+                            ALTEngine::Renderer::DrawMinimap(renderer, level, mapRect,
+                                                             ToGridSpaceX(camera.x, originX) / 512.0f,
+                                                             ToGridSpaceZ(camera.z, originZ) / 512.0f,
+                                                             camera.yaw, style, fog);
+                        }
                         SDL_DestroyTexture(frameTexture);
                     }
                 }
