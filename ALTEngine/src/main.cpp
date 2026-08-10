@@ -363,6 +363,25 @@ int main(int, char**)
             continue;
         }
 
+        // TEMPORARY level select - jump straight into any level for testing.
+        // To remove: delete this block, the levelSelectLabels plumbing in
+        // MenuController, the list in MenuTree, and MenuResult::levelCode.
+        if (menuResult.action == "Level Select" && !menuResult.levelCode.empty())
+        {
+            std::cout << "Level Select: " << menuResult.levelCode << "\n";
+            GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, menuResult.levelCode, keyBindings, audioSettings,
+                                                                  renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings);
+            if (gameplayResult.outcome == GameplayOutcome::WindowClosed)
+            {
+                std::cout << "Boot window closed. Aborting.\n";
+                ALTEngine::Renderer::ModelRenderer::Shutdown();
+                AppWindow::Instance().Shutdown();
+                PauseBeforeExit();
+                return 1;
+            }
+            continue;
+        }
+
         if (menuResult.action == "Start Game")
         {
             // Hardcoded to the first level for now - no level-select flow

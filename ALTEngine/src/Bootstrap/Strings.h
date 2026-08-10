@@ -86,6 +86,15 @@ namespace ALTEngine::Bootstrap
     // through the rest of the engine as a parameter, not a global.
     inline std::string Tr(StringId id, Language language)
     {
+        // Guard the range before anything indexes the table. StringId::Count is
+        // one past the end, and any node that ends up carrying it - or a bogus
+        // value cast from an int - would otherwise read out of bounds, which is
+        // a hard crash in a debug build rather than a quiet wrong string.
+        if (static_cast<std::size_t>(id) >= static_cast<std::size_t>(StringId::Count))
+        {
+            return "";
+        }
+
         std::string key = StringKeyName(id);
 
         if (const LanguagePack* pack = FindLanguagePack(LanguageFolderName(language)))

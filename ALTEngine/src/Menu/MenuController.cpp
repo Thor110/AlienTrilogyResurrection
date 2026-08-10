@@ -1,6 +1,7 @@
 #include "MenuController.h"
 #include "../Bootstrap/ModernSettings.h"
 #include "MenuTree.h"
+#include "../Formats/LevelList.h"
 #include "MenuNavigation.h"
 #include "../Audio/MusicPlayer.h"
 #include "../Audio/SfxPlayer.h"
@@ -343,6 +344,19 @@ namespace ALTEngine::Menu
             return label == "Enable All" || ModernFeatureForLabel(label, ignored);
         }
 
+        // Finds a top-level menu list by label. The Options subtree used to be
+        // reached as root.children[3], a hardcoded index that silently pointed
+        // at the wrong node the moment anything was inserted above it - which
+        // adding the level select did.
+        MenuNode* FindTopLevel(MenuNode& root, const std::string& label)
+        {
+            for (MenuNode& child : root.children)
+            {
+                if (child.label == label) { return &child; }
+            }
+            return nullptr;
+        }
+
         void RefreshGraphicsSelections(MenuNode& optionsRoot)
         {
             ALTEngine::Bootstrap::Config config;
@@ -586,8 +600,22 @@ namespace ALTEngine::Menu
         settingsSnapshot.cameraSwayOn = cameraSwaySettings.Get();
         settingsSnapshot.language = language;
 
-        MenuNode root = BuildMainMenuTree(resolutionLabels, settingsSnapshot, keyBindings, audioSettings, /*includeCredits=*/!startInOptionsOnly);
-        MenuNode& optionsRoot = root.children[3]; // "Options"
+        // TEMPORARY level select rows, one per level from LevelManifest.json.
+        // Empty vector = the list is omitted entirely.
+        std::vector<std::string> levelSelectLabels;
+        for (const auto& level : ALTEngine::Formats::LoadLevelList("data/LevelManifest.json"))
+        {
+            levelSelectLabels.push_back(level.label);
+        }
+
+        MenuNode root = BuildMainMenuTree(resolutionLabels, settingsSnapshot, keyBindings, audioSettings,
+                                          /*includeCredits=*/!startInOptionsOnly, levelSelectLabels);
+        // The subtree the Options screen is currently showing. Normally the
+        // Options list; the temporary level select reuses the same screen by
+        // pointing this at its own list instead, which is why it is a pointer
+        // rather than a reference.
+        MenuNode* optionsRootPtr = FindTopLevel(root, "Options");
+        if (!optionsRootPtr) { return MenuResult{}; }
 
         // OPTOBJ preload queue - built here, drained in a blocking
         // loading phase below (not incrementally inside the main menu
@@ -768,8 +796,23 @@ namespace ALTEngine::Menu
                     const MenuNode& chosen = WalkPath(root, mainPath);
                     if (chosen.label == "Options")
                     {
+                        optionsRootPtr = FindTopLevel(root, "Options");
                         screen = Screen::Options;
                         optionsPath = { 0 };
+                    }
+                    else if (!chosen.children.empty())
+                    {
+                        // Any other main-menu entry that is a LIST rather than
+                        // an action - currently just the temporary Level Select
+                        // - reuses the Options screen by pointing it at that
+                        // subtree. The main menu itself only ever renders
+                        // root.children, so it cannot show a nested list.
+                        optionsRootPtr = FindTopLevel(root, chosen.label);
+                        if (optionsRootPtr)
+                        {
+                            screen = Screen::Options;
+                            optionsPath = { 0 };
+                        }
                     }
                     else
                     {
@@ -781,9 +824,21 @@ namespace ALTEngine::Menu
                 else if (screen == Screen::Options)
                 {
                     std::vector<int> parentPath(optionsPath.begin(), optionsPath.end() - 1);
-                    MenuNode& parent = parentPath.empty() ? optionsRoot : WalkPath(optionsRoot, parentPath);
+                    MenuNode& parent = parentPath.empty() ? (*optionsRootPtr) : WalkPath((*optionsRootPtr), parentPath);
                     std::string parentLabel = parent.label;
-                    MenuNode& leaf = WalkPath(optionsRoot, optionsPath);
+                    MenuNode& leaf = WalkPath((*optionsRootPtr), optionsPath);
+
+                    // TEMPORARY level select. Its rows are leaves whose label
+                    // begins with the dotted code ("1.5.4  L154LEV"), which is
+                    // exactly the form the briefing and gameplay screens take.
+                    if ((*optionsRootPtr).label == "Level Select" && leaf.children.empty())
+                    {
+                        result.action = "Level Select";
+                        result.levelCode = leaf.label.substr(0, leaf.label.find(' '));
+                        running = false;
+                        SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                        return;
+                    }
 
                     // Redefine controls (Edward, 2026) - a leaf with a
                     // real inputActionIndex means "capture the next key/
@@ -823,7 +878,7 @@ namespace ALTEngine::Menu
                         keyBindings.ResetToDefaults(device);
 
                         std::vector<int> devicePath(optionsPath.begin(), optionsPath.end() - 2);
-                        MenuNode& redefineList = WalkPath(optionsRoot, devicePath).children[0];
+                        MenuNode& redefineList = WalkPath((*optionsRootPtr), devicePath).children[0];
                         for (auto& child : redefineList.children)
                         {
                             auto action = static_cast<ALTEngine::Bootstrap::InputAction>(child.inputActionIndex);
@@ -835,7 +890,7 @@ namespace ALTEngine::Menu
 
                     std::string leafLabel = leaf.label;
 
-                    EnterResult r = Enter(optionsRoot, optionsPath);
+                    EnterResult r = Enter((*optionsRootPtr), optionsPath);
                     if (r == EnterResult::EnteredCredits) { screen = Screen::Credits; }
                     else if (r == EnterResult::Toggled)
                     {
@@ -859,7 +914,7 @@ namespace ALTEngine::Menu
                         // the whole group rather than just the one changed.
                         if (IsModernMenuLabel(parentLabel))
                         {
-                            RefreshModernSelections(optionsRoot);
+                            RefreshModernSelections((*optionsRootPtr));
                         }
 
                         // Graphics settings had no live refresh at all. The
@@ -871,7 +926,7 @@ namespace ALTEngine::Menu
                         // display was stale (Edward, 2026).
                         if (parentLabel == "Quality" || parentLabel == "VSync" || parentLabel == "Display Mode")
                         {
-                            RefreshGraphicsSelections(optionsRoot);
+                            RefreshGraphicsSelections((*optionsRootPtr));
                         }
                     }
                     if (r != EnterResult::NoOp) { SfxPlayer::Play(SfxId::MenuSelect, cdDirectory); }
@@ -912,7 +967,7 @@ namespace ALTEngine::Menu
             // enter/escape behaviour.
             auto AdjustNumericSettingIfOnEntry = [&](int delta) {
                 if (screen != Screen::Options || optionsPath.empty()) { return false; }
-                MenuNode& leaf = WalkPath(optionsRoot, optionsPath);
+                MenuNode& leaf = WalkPath((*optionsRootPtr), optionsPath);
                 if (!IsSliderEntry(leaf)) { return false; }
 
                 if (leaf.inputActionIndex == -5) // Mouse Sensitivity
@@ -954,7 +1009,7 @@ namespace ALTEngine::Menu
             // enter behaviour.
             auto TryEnterSliderIfOnEntry = [&]() {
                 if (screen != Screen::Options || optionsPath.empty()) { return false; }
-                MenuNode& leaf = WalkPath(optionsRoot, optionsPath);
+                MenuNode& leaf = WalkPath((*optionsRootPtr), optionsPath);
                 if (!IsSliderEntry(leaf)) { return false; }
                 adjustingSlider = true;
                 SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
@@ -977,7 +1032,7 @@ namespace ALTEngine::Menu
                     {
                         auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
                         keyBindings.SetKey(action, event.key.scancode);
-                        WalkPath(optionsRoot, optionsPath).label = keyBindings.FormatBinding(rebindDevice, action, language);
+                        WalkPath((*optionsRootPtr), optionsPath).label = keyBindings.FormatBinding(rebindDevice, action, language);
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         awaitingRebind = false;
                     }
@@ -985,7 +1040,7 @@ namespace ALTEngine::Menu
                     {
                         auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
                         keyBindings.SetMouseButton(action, event.button.button);
-                        WalkPath(optionsRoot, optionsPath).label = keyBindings.FormatBinding(rebindDevice, action, language);
+                        WalkPath((*optionsRootPtr), optionsPath).label = keyBindings.FormatBinding(rebindDevice, action, language);
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         awaitingRebind = false;
                     }
@@ -993,7 +1048,7 @@ namespace ALTEngine::Menu
                     {
                         auto action = static_cast<ALTEngine::Bootstrap::InputAction>(rebindActionIndex);
                         keyBindings.SetMouseWheel(action, event.wheel.y > 0); // y>0 = scrolled away from the user (up), per SDL3's own docs
-                        WalkPath(optionsRoot, optionsPath).label = keyBindings.FormatBinding(rebindDevice, action, language);
+                        WalkPath((*optionsRootPtr), optionsPath).label = keyBindings.FormatBinding(rebindDevice, action, language);
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                         awaitingRebind = false;
                     }
@@ -1026,12 +1081,12 @@ namespace ALTEngine::Menu
                     {
                     case SDLK_UP:
                         if (screen == Screen::MainMenu) { MoveSelection(root, mainPath, -1); }
-                        else if (screen == Screen::Options) { MoveSelection(optionsRoot, optionsPath, -1); }
+                        else if (screen == Screen::Options) { MoveSelection((*optionsRootPtr), optionsPath, -1); }
                         SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
                         break;
                     case SDLK_DOWN:
                         if (screen == Screen::MainMenu) { MoveSelection(root, mainPath, 1); }
-                        else if (screen == Screen::Options) { MoveSelection(optionsRoot, optionsPath, 1); }
+                        else if (screen == Screen::Options) { MoveSelection((*optionsRootPtr), optionsPath, 1); }
                         SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
                         break;
                     case SDLK_RETURN:
@@ -1097,7 +1152,7 @@ namespace ALTEngine::Menu
                 // as you navigate into nested menus), so the model itself
                 // visibly jumped around and resized every time the column
                 // count changed - Edward, 2026.
-                int modelIndex = EffectiveModelIndex(optionsRoot, optionsPath);
+                int modelIndex = EffectiveModelIndex((*optionsRootPtr), optionsPath);
                 float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f; // 1 radian/sec - a slow, steady spin
                 DrawModel(renderer, cdDirectory, modelIndex, 0, 0, windowW, windowH, scale, rotationAngle);
 
@@ -1106,7 +1161,7 @@ namespace ALTEngine::Menu
 
                 int columnTop = scale * 20;
                 int columnX = scale * 6;
-                const MenuNode* node = &optionsRoot;
+                const MenuNode* node = &(*optionsRootPtr);
                 for (size_t depth = 0; depth <= optionsPath.size(); ++depth)
                 {
                     if (node->children.empty()) { break; }
@@ -1160,8 +1215,8 @@ namespace ALTEngine::Menu
                     // description visible means the explanation stays up for as
                     // long as you are anywhere inside that setting
                     // (Edward, 2026).
-                    const MenuNode* node = &optionsRoot;
-                    const MenuNode* described = (optionsRoot.descriptionStringId >= 0) ? &optionsRoot : nullptr;
+                    const MenuNode* node = &(*optionsRootPtr);
+                    const MenuNode* described = ((*optionsRootPtr).descriptionStringId >= 0) ? &(*optionsRootPtr) : nullptr;
                     for (size_t depth = 0; depth < optionsPath.size(); ++depth)
                     {
                         int childIndex = optionsPath[depth];

@@ -97,7 +97,16 @@ namespace ALTEngine::Menu
     // in Controls > Keyboard/Mouse > Redefine (Edward, 2026). Pass a
     // Config-backed KeyBindings from the caller; there's no meaningful
     // "default" for testing without one since it needs a real Config.
+    // `levelSelectLabels` adds a TEMPORARY "Level Select" list above Start
+    // Game, one row per level, for jumping straight into any level to test it.
+    // Pass an empty vector to leave it out entirely.
+    //
+    // TEMPORARY - the original had no level select and the shipped game should
+    // not either. To remove: drop this parameter, the LevelSelect() list in
+    // MenuTree.cpp, the "Level Select" branch in MenuController, and the block
+    // in main.cpp that acts on it.
     MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
                                 ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::AudioSettings& audioSettings,
-                                bool includeCredits = true);
+                                bool includeCredits = true,
+                                const std::vector<std::string>& levelSelectLabels = {});
 }

@@ -17,6 +17,10 @@ namespace ALTEngine::Menu
     {
         bool windowClosed = false;
         std::string action; // "Start Game" / "Multiplayer" / "Load Game" if one was chosen
+
+        // TEMPORARY: set alongside action == "Level Select" to the dotted level
+        // code the user picked, e.g. "1.5.4". See BuildMainMenuTree.
+        std::string levelCode;
     };
 
     // Runs the interactive main menu (and its Options subtree) until the

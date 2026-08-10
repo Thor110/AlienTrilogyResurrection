@@ -393,14 +393,37 @@ namespace ALTEngine::Menu
 
     MenuNode BuildMainMenuTree(const std::vector<std::string>& resolutionLabels, const MenuSettingsSnapshot& settings,
                                ALTEngine::Bootstrap::KeyBindings& keyBindings, ALTEngine::Bootstrap::AudioSettings& audioSettings,
-                               bool includeCredits)
+                               bool includeCredits,
+                               const std::vector<std::string>& levelSelectLabels)
     {
         using ALTEngine::Bootstrap::StringId;
-        return List("Main Menu", {
-            Action("Start Game", StringId::StartGame),
-            Action("Multiplayer", StringId::Multiplayer),
-            Action("Load Game", StringId::LoadGame),
-            Options(resolutionLabels, settings, keyBindings, audioSettings, includeCredits),
-        });
+
+        // TEMPORARY level select - see the note on this function's declaration.
+        //
+        // Rows carry NO StringId. They are level codes, not translatable text,
+        // and the two-argument Action() overload leaves stringId at -1 which is
+        // what tells the renderer to display `label` verbatim.
+        //
+        // Passing StringId::Count here (as an earlier version did) crashed the
+        // moment the list was opened: Count is one PAST the end of the string
+        // table, so Tr() indexed the array out of bounds - fatal in a debug
+        // build (Edward, 2026).
+        std::vector<MenuNode> rows;
+        for (const std::string& label : levelSelectLabels)
+        {
+            rows.push_back(Action(label));
+        }
+
+        std::vector<MenuNode> top;
+        if (!rows.empty())
+        {
+            MenuNode levelSelect = List("Level Select", rows);
+            top.push_back(levelSelect);
+        }
+        top.push_back(Action("Start Game", StringId::StartGame));
+        top.push_back(Action("Multiplayer", StringId::Multiplayer));
+        top.push_back(Action("Load Game", StringId::LoadGame));
+        top.push_back(Options(resolutionLabels, settings, keyBindings, audioSettings, includeCredits));
+        return List("Main Menu", top);
     }
 }
