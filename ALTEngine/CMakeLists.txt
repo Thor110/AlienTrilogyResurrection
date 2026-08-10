@@ -254,6 +254,17 @@ add_custom_command(TARGET ALTEngine POST_BUILD
         "$<TARGET_FILE_DIR:ALTEngine>/GameData/CD/LANGUAGE"
 )
 
+# OVERRIDE/ holds the override guide and the light manifest reference. Same
+# treatment as LANGUAGE: source tree is the source of truth, deployed to
+# GameData/CD/OVERRIDE so every build and every install carries the guide in
+# the folder it describes, and any example overrides sit where the engine
+# already looks for them (Edward, 2026).
+add_custom_command(TARGET ALTEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/OVERRIDE"
+        "$<TARGET_FILE_DIR:ALTEngine>/GameData/CD/OVERRIDE"
+)
+
 # ---------------------------------------------------------------------------
 # Third-party licenses. Every dependency we link against gets its license
 # text committed under third_party_licenses/<name>/ and shipped alongside
@@ -272,6 +283,8 @@ add_custom_command(TARGET ALTEngine POST_BUILD
 
 install(TARGETS ALTEngine RUNTIME DESTINATION bin)
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/data/" DESTINATION bin/data)
+
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/OVERRIDE/" DESTINATION bin/GameData/CD/OVERRIDE)
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/LANGUAGE/" DESTINATION bin/GameData/CD/LANGUAGE)
 install(FILES "${CMAKE_SOURCE_DIR}/third_party_licenses/SDL3/LICENSE.txt"
         DESTINATION bin/licenses/SDL3)

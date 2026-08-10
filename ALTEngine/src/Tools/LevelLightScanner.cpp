@@ -227,7 +227,11 @@ namespace ALTEngine::Tools
             {
                 nlohmann::json g;
                 g["lightId"] = key.lightId;
-                if (key.mode >= 0) { g["lightMode"] = ModeName(key.mode); }
+                if (key.mode >= 0)
+                {
+                    g["lightMode"] = ModeName(key.mode);
+                    if (std::string(ModeName(key.mode)) == "unknown") { g["lightModeRaw"] = key.mode; }
+                }
                 g["drawRoutine"] = key.drawRoutine;
                 if (key.animatorOrdinal >= 0)
                 {
@@ -247,6 +251,11 @@ namespace ALTEngine::Tools
                 groups.push_back(g);
             }
 
+            levelJson["catalogued"] = {
+                { "faces", [&]{ size_t n = 0; for (const auto& [k, v] : grouped) { (void)k; n += v.size(); } return n; }() },
+                { "animatedFaces", animatedCount },
+                { "groups", groups.size() }
+            };
             levelJson["faceGroups"] = groups;
 
             out["levels"].push_back(levelJson);
@@ -263,9 +272,9 @@ namespace ALTEngine::Tools
             result.message = "could not write " + outputPath.string();
             return result;
         }
-        // Compact: machine-generated and large. Readability is not worth
-        // multiplying the size by three.
-        file << out.dump();
+        // Indented: this is read by people replacing level models, not just by
+        // code. See OVERRIDE/LightManifestExample.json for the annotated form.
+        file << out.dump(2);
 
         result.ok = true;
         result.message = "scanned " + std::to_string(result.levelsScanned) + " level(s), "

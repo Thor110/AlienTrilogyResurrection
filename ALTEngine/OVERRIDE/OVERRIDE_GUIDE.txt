@@ -1,0 +1,52 @@
+In order to override any file in the game, simply drop an .obj or .png into this folder and the game will detect it.
+
+Naming conventions match the original files and frame counts for instances where multiple tiles are used to compose an image in the original game.
+
+Supported image filetypes : .png, .dds, .tga
+Supported video filetypes : any
+Supported model filetypes : .obj
+
+Examples Included :
+
+/GameData/CD/OVERRIDE/GFX/LEGAL_TP00_TP01.png
+/GameData/CD/OVERRIDE/GFX/LOGOSGFX_TP00_TP01.png
+/GameData/CD/OVERRIDE/GFX/LOGOSGFX_TP02_TP03.png
+/GameData/CD/OVERRIDE/GFX/COLONY_TP00_TP01.png
+/GameData/CD/OVERRIDE/GFX/PRISHOLD_TP00_TP01.png
+/GameData/CD/OVERRIDE/GFX/BONESHIP_TP00_TP01.png
+
+Level textures and sprites must be replaced on a frame by frame basis.
+
+Level Texture Examples
+
+/GameData/CD/OVERRIDE/SECT11/111GFX_TP00.png
+/GameData/CD/OVERRIDE/SECT11/111GFX_TP01.png
+/GameData/CD/OVERRIDE/SECT11/111GFX_TP02.png
+/GameData/CD/OVERRIDE/SECT11/111GFX_TP03.png
+/GameData/CD/OVERRIDE/SECT11/111GFX_TP04.png
+
+Enemy Sprite Examples
+
+/GameData/CD/OVERRIDE/NME/EGGS_F000_FRAME00.png
+etc
+
+Level Gap Examples
+
+Models and level gaps can be replaced with .obj/.mtl files.
+
+/GameData/CD/OVERRIDE/SECT11/L111LEV.obj
+/GameData/CD/OVERRIDE/SECT11/L111LEV.mtl
+/GameData/CD/OVERRIDE/SECT11/L111LEV-GAP.obj
+/GameData/CD/OVERRIDE/SECT11/L111LEV-GAP.mtl
+
+Level "gaps" are specifically designed covers to fill holes above doors across all levels.
+
+They are not required and won't be spawned if the "-GAP" files do not exist, for instances where the regular level override model already fixes this problem.
+
+Movies can either sit in OVERRIDE/AVI or they can be replaced directly in the AVI folder.
+
+This allows for a toggle option to enable swapping between high definition and low definition.
+
+Sound effects and music are not wired up to the override system and must be replaced directly in "GameData/CD/SFX" and "GameData/CD/MUSIC"
+
+To extract the original game files you can use ALTViewer.exe which is included with the release.

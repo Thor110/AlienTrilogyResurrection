@@ -3,6 +3,7 @@
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/LevelLoader.h"
+#include "../Audio/MusicPlayer.h"
 #include "../Bootstrap/ModernSettings.h"
 #include "../Renderer/ModelPreview.h"
 #include "../Formats/ModelIndices.h"
@@ -214,6 +215,43 @@ namespace ALTEngine::Screens
 
         // Resolve and load the level
         std::string digits = LevelDigitsFromCode(missionLevelCode);
+
+        // Level music. The original resolves this through one table indexed by
+        // its internal level id (Ghidra: FUN_0004263c -> FUN_0004258c); see
+        // MusicPlayer.h for the decoded table and the caveat on how a level CODE
+        // maps to that id. Nothing played music during gameplay at all before
+        // this, which is why levels were silent.
+        {
+            int levelId = ALTEngine::Audio::LevelIdForCode(digits);
+            int track = ALTEngine::Audio::LevelMusicTrack(levelId);
+            std::string fileName = ALTEngine::Audio::MusicTrackFileName(track);
+            if (fileName.empty())
+            {
+                SDL_Log("GameplayScreen: no music for level code '%s' (levelId=%d, track=%d) - silent",
+                        digits.c_str(), levelId, track);
+                ALTEngine::Audio::MusicPlayer::Stop();
+            }
+            else
+            {
+                std::filesystem::path musicPath = cdDirectory / "MUSIC" / fileName;
+                std::error_code musicEc;
+                if (!std::filesystem::is_regular_file(musicPath, musicEc))
+                {
+                    // Not an error: the tracks have to be ripped off the disc,
+                    // and a missing one should just mean silence.
+                    SDL_Log("GameplayScreen: level %s wants %s but it is not in CD/MUSIC - silent",
+                            digits.c_str(), fileName.c_str());
+                    ALTEngine::Audio::MusicPlayer::Stop();
+                }
+                else
+                {
+                    SDL_Log("GameplayScreen: level %s -> levelId %d -> CD track %d -> %s",
+                            digits.c_str(), levelId, track, fileName.c_str());
+                    ALTEngine::Audio::MusicPlayer::PlayLooped(musicPath);
+                    ALTEngine::Audio::MusicPlayer::SetVolume(audioSettings.MusicVolume());
+                }
+            }
+        }
         auto mapPath = FindInSectFolders(cdDirectory, "L" + digits + "LEV.MAP");
         auto gfxPath = FindInSectFolders(cdDirectory, digits + "GFX.B16");
 
@@ -795,6 +833,13 @@ namespace ALTEngine::Screens
             Uint64 nowTicks = SDL_GetTicks();
             float dt = static_cast<float>(nowTicks - lastTicks) / 1000.0f;
             lastTicks = nowTicks;
+
+            // Keep the music stream fed. PlayLooped only starts it; Update()
+            // pushes more audio and is what makes it loop. Deliberately here in
+            // the per-FRAME loop rather than inside the fixed 60Hz tick, so it
+            // keeps running while paused or while the tick is otherwise skipped
+            // - the menu does the same in its own loop.
+            ALTEngine::Audio::MusicPlayer::Update();
             dt = std::min(dt, 0.1f); // clamp so a stall/hitch doesn't teleport the camera
 
             if (levelReady)
