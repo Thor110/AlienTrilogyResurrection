@@ -1,0 +1,3 @@
+Delete-on-run marker. While this file exists, the next launch scans every level
+for light-bearing and animated faces and writes data/LightManifest.json, then
+deletes this file so it happens once. Re-create it to scan again.

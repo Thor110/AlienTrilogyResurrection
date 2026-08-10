@@ -28,6 +28,20 @@ namespace ALTEngine::Bootstrap
         SkipEndLevelScreen, // go straight on rather than showing the end-of-level prompt
         PlayerJumping,      // enable a jump action, and the extra control binding it needs
         StunnedEnemies,     // disable enemy stun-lock so they can be damaged repeatedly
+
+        // Mouse pitch control. The original had NO free look: the camera's
+        // pitch was driven entirely by the floor, panning up or down as the
+        // player walked stairs and ramps. Turning this off restores that, and
+        // is the reason the -GAP override geometry exists at all - with the
+        // original camera you can never see the holes above door frames,
+        // because you can never look up.
+        FreeLook,
+
+        // Unlimited draw distance. The original faded everything beyond a
+        // fixed range to black - not a cosmetic haze but the actual limit of
+        // what it drew, which is why its corridors read as pitch dark a couple
+        // of rooms away. Off restores that fade; On shows the whole level.
+        RenderDistance,
     };
 
     class ModernSettings
@@ -50,11 +64,47 @@ namespace ALTEngine::Bootstrap
             config.Set("ModernMode", value);
         }
 
+        // Every feature, for iteration. Must list all of them.
+        static constexpr ModernFeature AllFeatures[] = {
+            ModernFeature::AutoOpenDoors,
+            ModernFeature::KeepItems,
+            ModernFeature::SkipEndLevelScreen,
+            ModernFeature::PlayerJumping,
+            ModernFeature::StunnedEnemies,
+            ModernFeature::FreeLook,
+            ModernFeature::RenderDistance,
+        };
+
         // The individual toggle's own stored value, ignoring the mode.
         // Menus want this so a feature still shows the state it will
         // return to under Custom.
         bool FeatureSetting(ModernFeature feature) const { return Read(KeyFor(feature), false); }
-        void SetFeature(ModernFeature feature, bool enabled) { Write(KeyFor(feature), enabled); }
+
+        // Sets one feature and switches to Custom, which is the only mode in
+        // which an individual toggle means anything.
+        //
+        // Crucially it first writes every OTHER feature's currently EFFECTIVE
+        // value into storage. Without that step, changing one thing silently
+        // reset everything else: under On or Off the individual stored values
+        // are ignored, and they default to false, so the moment the mode
+        // flipped to Custom every feature the user had not explicitly touched
+        // read back as off. From the outside that looked like the individual
+        // toggles not working at all and only the global On/Off having any
+        // effect (Edward, 2026).
+        void SetFeature(ModernFeature feature, bool enabled)
+        {
+            if (Mode() != ModernMode::Custom)
+            {
+                bool effective = (Mode() == ModernMode::On);
+                for (ModernFeature other : AllFeatures)
+                {
+                    if (other == feature) { continue; }
+                    Write(KeyFor(other), effective);
+                }
+            }
+            Write(KeyFor(feature), enabled);
+            if (Mode() != ModernMode::Custom) { SetMode(ModernMode::Custom); }
+        }
 
         // What the game should actually do.
         bool IsActive(ModernFeature feature) const
@@ -68,6 +118,24 @@ namespace ALTEngine::Bootstrap
             }
         }
 
+        // The menu label for a feature. Lives next to the feature itself so
+        // MenuTree and MenuController cannot disagree about it - the menu node
+        // is built from this and every label comparison resolves through it.
+        static const char* MenuLabel(ModernFeature feature)
+        {
+            switch (feature)
+            {
+            case ModernFeature::AutoOpenDoors: return "Automatic Doors";
+            case ModernFeature::KeepItems: return "Keep Items";
+            case ModernFeature::SkipEndLevelScreen: return "Skip End Level Screen";
+            case ModernFeature::PlayerJumping: return "Player Jumping";
+            case ModernFeature::StunnedEnemies: return "Stunned Enemies";
+            case ModernFeature::FreeLook: return "Free Look";
+            case ModernFeature::RenderDistance: return "Render Distance";
+            }
+            return "";
+        }
+
         static const char* KeyFor(ModernFeature feature)
         {
             switch (feature)
@@ -77,6 +145,8 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::SkipEndLevelScreen: return "ModernSkipEndLevelScreen";
             case ModernFeature::PlayerJumping: return "ModernPlayerJumping";
             case ModernFeature::StunnedEnemies: return "ModernStunnedEnemies";
+            case ModernFeature::FreeLook: return "ModernFreeLook";
+            case ModernFeature::RenderDistance: return "ModernRenderDistance";
             }
             return "ModernUnknown";
         }

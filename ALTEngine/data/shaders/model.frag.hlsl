@@ -12,6 +12,16 @@ struct Input
     float4 Position : SV_Position;
     float2 UV : TEXCOORD0;
     float3 Colour : TEXCOORD1;
+    float Distance : TEXCOORD2;
+};
+
+// x = fade enable (0 or 1)
+// y = distance at which the fade starts, in world units
+// z = distance over which it reaches full black
+// w = reserved
+cbuffer FogParams : register(b0, space3)
+{
+    float4 fogParams;
 };
 
 float4 main(Input input) : SV_Target0
@@ -34,6 +44,25 @@ float4 main(Input input) : SV_Target0
     // Model and door geometry emits 1,1,1 and so passes through
     // unchanged.
     color.rgb *= input.Colour;
+
+    // Original draw-distance fade, transcribed from FUN_0004ecdc:
+    //
+    //   factor = 0xff - clamp(dist / 0x50 - 0xaa, 0, 0xff)
+    //   colour = colour * factor >> 8
+    //
+    // So nothing fades until dist/80 exceeds 170 (13,600 world units, about
+    // 26 cells), and it reaches full black 255 steps later at 34,000 units.
+    // Fades toward black rather than a fog colour, which is why the original's
+    // corridors go pitch dark rather than hazy.
+    if (fogParams.x > 0.5f)
+    {
+        // abs(): the distance comes from the clip-space W, and a projection
+        // convention that produced a negative W would otherwise clamp to zero
+        // and disable the fade everywhere with no visible symptom.
+        float d = abs(input.Distance);
+        float t = saturate((d - fogParams.y) / max(fogParams.z, 1.0f));
+        color.rgb *= (1.0f - t);
+    }
 
     return color;
 }

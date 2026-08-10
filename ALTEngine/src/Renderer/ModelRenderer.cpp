@@ -6,6 +6,9 @@
 #include "../Formats/LevelTransparency.h"
 #include "../Formats/ModelLoader.h"
 #include "../Formats/RenderMesh.h"
+#include "../Formats/ObjLoader.h"
+
+#include <cctype>
 
 #include <SDL3/SDL.h>
 #include <cmath>
@@ -99,6 +102,17 @@ namespace ALTEngine::Renderer
             // frames on one page, so this does not happen there - but it is
             // checked rather than assumed.
             std::array<size_t, 5> groupVertexCounts{};
+
+            // -GAP override geometry. Hand-made faces that fill holes the
+            // original level data leaves - most visibly the slit above a door
+            // frame, which the original could never show because it had no
+            // free look. One sub-group per texture page used.
+            std::array<LevelSubGroup, 5> gapGroups;
+
+            // Set when an override .obj replaced the level's geometry. The
+            // light tick must not rebuild vertex buffers in that case - the
+            // .MAP quads it would rebuild from are no longer what is on screen.
+            bool geometryOverridden = false;
         };
 
         SDL_GPUDevice* device = nullptr;
@@ -110,6 +124,37 @@ namespace ALTEngine::Renderer
         SDL_GPUSampler* sampler = nullptr;         // active
         SDL_GPUSampler* samplerLinear = nullptr;   // Smoothed
         SDL_GPUSampler* samplerNearest = nullptr;  // Original - hard texel edges
+
+        // Draw-distance fade enable, pushed to the fragment shader each pass.
+        // Default ON, i.e. the original's darkness, matching the Render
+        // Distance modern feature defaulting off.
+        float fogEnabled = 1.0f;
+
+        // Where the fade starts and how far it takes to reach black, in world
+        // units.
+        //
+        // The SHAPE is exactly FUN_0004ecdc's:
+        //     factor = 0xff - clamp(dist / 0x50 - 0xaa, 0, 0xff)
+        // a linear ramp beginning once dist/0x50 passes 0xaa and reaching full
+        // black 0xff steps later. So in the original's own distance units the
+        // ramp runs from 0xaa * 0x50 to (0xaa + 0xff) * 0x50.
+        //
+        // THE UNIT CONVERSION IS EMPIRICAL. Nothing traced shows what units
+        // feed that function. Taken as raw world units the ramp starts about 26
+        // cells out, which is further than you can see down any corridor - the
+        // fade was there but did nothing visible, which is why it looked
+        // completely inert.
+        //
+        // The divisor below was matched against a screenshot of the original
+        // (Edward, 2026): the corridor is fully black roughly 8-10 cells ahead.
+        // 8 lands the ramp at 3.3 cells to 8.3 cells, which fits, and being a
+        // power of two is what an engine would plausibly be doing to its
+        // distance value in the first place. Treat it as a good fit to a
+        // picture, not a derivation - if the real conversion turns up in the
+        // decompilation, this is the one number to change.
+        static constexpr float FOG_DISTANCE_DIVISOR = 8.0f;
+        float fogStart = (0xaa * 0x50) / FOG_DISTANCE_DIVISOR;          // 1700 units, ~3.3 cells
+        float fogRange = (0xff * 0x50) / FOG_DISTANCE_DIVISOR;          // 2550 units, black at ~8.3 cells
         SDL_GPUTextureFormat depthFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
         std::unordered_map<ModelCacheKey, LoadedModel, ModelCacheKeyHash> loadedModels;
         std::unordered_map<std::string, LoadedLevel> loadedLevels;
@@ -207,6 +252,146 @@ namespace ALTEngine::Renderer
 
             SDL_ReleaseGPUTransferBuffer(device, transfer);
             return true;
+        }
+
+        // Stamps a light record's resolved colour over every vertex of a mesh.
+        // lightId < 0 leaves the mesh alone (white, i.e. unlit).
+        void ApplyLightToMesh(ALTEngine::Formats::RenderMesh& mesh, int lightId,
+                              const ALTEngine::Formats::LightTable& lights)
+        {
+            if (lightId < 0) { return; }
+            const ALTEngine::Formats::LightTable::Entry& entry = lights.ColourFor(lightId);
+            // Corner 0 for all vertices: gouraud (mode 4) needs a per-corner
+            // assignment that an arbitrary OBJ triangle has no ordering for, so
+            // an override face is flat-lit. Worth revisiting if a replacement
+            // ever needs gouraud.
+            float r = static_cast<float>(entry.corner[0].r) / ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL;
+            float g = static_cast<float>(entry.corner[0].g) / ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL;
+            float b = static_cast<float>(entry.corner[0].b) / ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL;
+            for (ALTEngine::Formats::RenderVertex& v : mesh.vertices) { v.r = r; v.g = g; v.b = b; }
+        }
+
+        // Case-insensitive lookup of a child entry inside a directory.
+        // Returns an empty path when there is no match.
+        //
+        // The original game's folders are all upper case (CD, GFX, SECT11...)
+        // so OVERRIDE is written that way throughout, but Linux and any
+        // case-sensitive mount would otherwise turn a capitalisation slip into
+        // a silently missing override. Scanning the directory costs nothing at
+        // level load and makes the case genuinely not matter.
+        std::filesystem::path FindEntryCaseInsensitive(const std::filesystem::path& parent, const std::string& name)
+        {
+            std::error_code ec;
+            if (!std::filesystem::is_directory(parent, ec)) { return {}; }
+
+            // Exact hit first - no scan needed in the common case.
+            std::filesystem::path exact = parent / name;
+            if (std::filesystem::exists(exact, ec)) { return exact; }
+
+            auto lower = [](std::string v) {
+                for (char& c : v) { c = static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }
+                return v;
+            };
+            std::string wanted = lower(name);
+
+            for (const auto& entry : std::filesystem::directory_iterator(parent, ec))
+            {
+                if (lower(entry.path().filename().string()) == wanted) { return entry.path(); }
+            }
+            return {};
+        }
+
+        // Resolves an override .obj for a level file, following the convention
+        // Edward's real install tree uses: OVERRIDE lives INSIDE CD, and the
+        // category is the level's own section folder.
+        //
+        //   .../CD/SECT11/L111LEV.MAP  ->  .../CD/OVERRIDE/SECT11/L111LEV<suffix>.obj
+        //
+        // `suffix` is "-GAP" for gap fillers, or empty for a full replacement
+        // of the level geometry. Every path component is matched
+        // case-insensitively, so OVERRIDE / Override / override all work and
+        // so does any casing of the section folder and file name. Falls back to
+        // the level's own folder last, which is handy while authoring.
+        // Returns an empty path when nothing is there - the normal case.
+        std::filesystem::path FindOverrideObj(const std::filesystem::path& mapPath, const std::string& suffix)
+        {
+            std::string name = mapPath.stem().string() + suffix + ".obj";
+            std::string section = mapPath.parent_path().filename().string();
+            std::filesystem::path cdRoot = mapPath.parent_path().parent_path();
+
+            std::filesystem::path overrideDir = FindEntryCaseInsensitive(cdRoot, "OVERRIDE");
+            if (!overrideDir.empty())
+            {
+                std::filesystem::path sectionDir = FindEntryCaseInsensitive(overrideDir, section);
+                if (!sectionDir.empty())
+                {
+                    std::filesystem::path file = FindEntryCaseInsensitive(sectionDir, name);
+                    if (!file.empty() && ALTEngine::Formats::ObjLoader::Exists(file)) { return file; }
+                }
+            }
+
+            std::filesystem::path beside = FindEntryCaseInsensitive(mapPath.parent_path(), name);
+            if (!beside.empty() && ALTEngine::Formats::ObjLoader::Exists(beside)) { return beside; }
+
+            return {};
+        }
+
+        // Uploads a mesh's vertex/index buffers and nothing else. The caller
+        // supplies the texture, which for -GAP geometry is borrowed from the
+        // level's own pages rather than owned.
+        LevelSubGroup UploadMeshBuffersOnly(const RenderMesh& renderMesh)
+        {
+            LevelSubGroup group;
+            if (renderMesh.vertices.empty() || renderMesh.indices.empty()) { return group; }
+
+            size_t vbSize = renderMesh.vertices.size() * sizeof(ALTEngine::Formats::RenderVertex);
+            size_t ibSize = renderMesh.indices.size() * sizeof(uint32_t);
+
+            SDL_GPUBufferCreateInfo vbInfo{};
+            vbInfo.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
+            vbInfo.size = static_cast<Uint32>(vbSize);
+            group.vertexBuffer = SDL_CreateGPUBuffer(device, &vbInfo);
+
+            SDL_GPUBufferCreateInfo ibInfo{};
+            ibInfo.usage = SDL_GPU_BUFFERUSAGE_INDEX;
+            ibInfo.size = static_cast<Uint32>(ibSize);
+            group.indexBuffer = SDL_CreateGPUBuffer(device, &ibInfo);
+
+            if (!group.vertexBuffer || !group.indexBuffer)
+            {
+                if (group.vertexBuffer) { SDL_ReleaseGPUBuffer(device, group.vertexBuffer); group.vertexBuffer = nullptr; }
+                if (group.indexBuffer) { SDL_ReleaseGPUBuffer(device, group.indexBuffer); group.indexBuffer = nullptr; }
+                return group;
+            }
+
+            SDL_GPUTransferBufferCreateInfo transferInfo{};
+            transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+            transferInfo.size = static_cast<Uint32>(vbSize + ibSize);
+            SDL_GPUTransferBuffer* transfer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
+            if (!transfer) { return group; }
+
+            uint8_t* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, transfer, false));
+            if (mapped)
+            {
+                std::memcpy(mapped, renderMesh.vertices.data(), vbSize);
+                std::memcpy(mapped + vbSize, renderMesh.indices.data(), ibSize);
+                SDL_UnmapGPUTransferBuffer(device, transfer);
+
+                SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
+                SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
+                SDL_GPUTransferBufferLocation vSrc{ transfer, 0 };
+                SDL_GPUBufferRegion vDst{ group.vertexBuffer, 0, static_cast<Uint32>(vbSize) };
+                SDL_UploadToGPUBuffer(copyPass, &vSrc, &vDst, false);
+                SDL_GPUTransferBufferLocation iSrc{ transfer, static_cast<Uint32>(vbSize) };
+                SDL_GPUBufferRegion iDst{ group.indexBuffer, 0, static_cast<Uint32>(ibSize) };
+                SDL_UploadToGPUBuffer(copyPass, &iSrc, &iDst, false);
+                SDL_EndGPUCopyPass(copyPass);
+                SDL_SubmitGPUCommandBuffer(cmd);
+            }
+            SDL_ReleaseGPUTransferBuffer(device, transfer);
+
+            group.indexCount = static_cast<uint32_t>(renderMesh.indices.size());
+            return group;
         }
 
         LevelSubGroup UploadMeshWithTexture(const RenderMesh& renderMesh, const ALTEngine::Formats::BndTexture& tex)
@@ -392,7 +577,7 @@ namespace ALTEngine::Renderer
         std::string ext = (backendFormats & SDL_GPU_SHADERFORMAT_SPIRV) ? ".spv" : ".dxil";
 
         SDL_GPUShader* vertexShader = LoadShader(device, shaderDir / ("model.vert" + ext), SDL_GPU_SHADERSTAGE_VERTEX, 0, 1);
-        SDL_GPUShader* fragmentShader = LoadShader(device, shaderDir / ("model.frag" + ext), SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0);
+        SDL_GPUShader* fragmentShader = LoadShader(device, shaderDir / ("model.frag" + ext), SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 1);
         if (!vertexShader || !fragmentShader)
         {
             if (vertexShader) { SDL_ReleaseGPUShader(device, vertexShader); }
@@ -559,6 +744,16 @@ namespace ALTEngine::Renderer
 
         for (auto& [index, level] : loadedLevels)
         {
+            // -GAP buffers first. Their `texture` is BORROWED from
+            // level.groups and must not be released here, or the level's own
+            // page texture would be freed twice.
+            for (auto& group : level.gapGroups)
+            {
+                if (group.vertexBuffer) { SDL_ReleaseGPUBuffer(device, group.vertexBuffer); }
+                if (group.indexBuffer) { SDL_ReleaseGPUBuffer(device, group.indexBuffer); }
+                group.texture = nullptr;
+            }
+
             for (auto& group : level.groups)
             {
                 if (group.vertexBuffer) { SDL_ReleaseGPUBuffer(device, group.vertexBuffer); }
@@ -1031,6 +1226,10 @@ namespace ALTEngine::Renderer
         SDL_GPUTextureSamplerBinding texBinding{ model.texture, sampler };
         SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
         SDL_PushGPUVertexUniformData(cmd, 0, mvp.m.data(), sizeof(float) * 16);
+            {
+                float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
+                SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
+            }
         SDL_DrawGPUIndexedPrimitives(renderPass, model.indexCount, 1, 0, 0, 0);
 
         SDL_EndGPURenderPass(renderPass);
@@ -1106,6 +1305,196 @@ namespace ALTEngine::Renderer
 
         for (size_t i = 0; i < 5; ++i) { loadedLevel.groupVertexCounts[i] = perGroupMeshes[i].vertices.size(); }
 
+        // -GAP override, if the user has authored one. Sits beside the level
+        // .MAP under CD/OVERRIDE, e.g.
+        //   CD/OVERRIDE/SECT11/L111LEV-GAP.obj
+        // Absent is the normal case and is not an error.
+        //
+        // Material names select which of the level's own texture pages a face
+        // draws with: "page0" .. "page4". That keeps the override on the
+        // textures already uploaded for the level rather than needing its own,
+        // and means a gap filler can be authored purely in Blender with five
+        // materials named after the pages.
+        //
+        // NOTE FOR LATER: this is also where a higher-resolution replacement
+        // level model would arrive, and it is worth being explicit that the
+        // faceUvRotations patches in Patches.json do NOT reach it. Those
+        // patches are keyed on .MAP vertex indices and applied while building
+        // the .MAP's own mesh; an OBJ that replaces that geometry carries its
+        // own UVs and simply bypasses them. Any fix baked into a replacement
+        // model has to be baked into the model.
+        {
+            std::filesystem::path chosen = FindOverrideObj(mapPath, "-GAP");
+
+            if (!chosen.empty())
+            {
+                ALTEngine::Formats::ObjModel gap = ALTEngine::Formats::ObjLoader::Load(chosen);
+                for (const std::string& w : gap.warnings)
+                {
+                    SDL_Log("ModelRenderer::LoadLevel(%s): -GAP %s: %s",
+                            cacheKey.c_str(), chosen.filename().string().c_str(), w.c_str());
+                }
+
+                int uploaded = 0;
+                for (const ALTEngine::Formats::ObjFaceGroup& group : gap.groups)
+                {
+                    int page = -1;
+                    if (group.materialName.rfind("page", 0) == 0)
+                    {
+                        page = std::atoi(group.materialName.c_str() + 4);
+                    }
+                    if (page < 0 || page >= 5)
+                    {
+                        SDL_Log("ModelRenderer::LoadLevel(%s): -GAP material '%s' does not name a "
+                                "texture page (expected page0..page4) - %zu triangles skipped",
+                                cacheKey.c_str(), group.materialName.c_str(), group.indices.size() / 3);
+                        continue;
+                    }
+                    if (!loadedLevel.groups[static_cast<size_t>(page)].texture)
+                    {
+                        SDL_Log("ModelRenderer::LoadLevel(%s): -GAP wants page %d but the level does "
+                                "not use it - %zu triangles skipped",
+                                cacheKey.c_str(), page, group.indices.size() / 3);
+                        continue;
+                    }
+
+                    ALTEngine::Formats::RenderMesh mesh;
+                    mesh.vertices = group.vertices;
+                    mesh.indices = group.indices;
+
+                    // alt_light binds this face to one of the level's own light
+                    // records, so override geometry lights the same way the
+                    // .MAP's does. The loader leaves the vertices white; this
+                    // stamps the resolved colour over them.
+                    ApplyLightToMesh(mesh, group.lightId, loadedLevel.lights);
+
+                    LevelSubGroup sub = UploadMeshBuffersOnly(mesh);
+                    if (!sub.vertexBuffer) { continue; }
+                    // Borrows the level's page texture; not owned, so it must
+                    // NOT be released with this sub-group.
+                    sub.texture = loadedLevel.groups[static_cast<size_t>(page)].texture;
+                    loadedLevel.gapGroups[static_cast<size_t>(page)] = sub;
+                    uploaded += static_cast<int>(group.indices.size() / 3);
+                    if (group.animatorOrdinal >= 0)
+                    {
+                        SDL_Log("ModelRenderer::LoadLevel(%s): -GAP face group requests animator %d - "
+                                "animation of override geometry is not applied yet, it will draw its "
+                                "authored texture",
+                                cacheKey.c_str(), group.animatorOrdinal);
+                    }
+                }
+                SDL_Log("ModelRenderer::LoadLevel(%s): -GAP loaded from %s, %d triangle(s)",
+                        cacheKey.c_str(), chosen.string().c_str(), uploaded);
+            }
+        }
+
+        // Full level geometry override. Same convention as -GAP but without
+        // the suffix, e.g. CD/OVERRIDE/SECT11/L111LEV.obj, and it REPLACES the
+        // .MAP's render geometry rather than adding to it.
+        //
+        // Replaces rendering only. Collision, floor heights, triggers, doors,
+        // object placement and lighting all still come from the .MAP, because
+        // they are gameplay and an art replacement must not change them. That
+        // also means a replacement model has to keep the same shape as the
+        // level it replaces or the player will walk through walls that look
+        // solid.
+        //
+        // IMPORTANT: the faceUvRotations entries in Patches.json do NOT reach
+        // this geometry. They are keyed on .MAP vertex indices and applied
+        // while building the .MAP's mesh; an OBJ carries its own UVs and
+        // bypasses them entirely. Any such fix has to be baked into the
+        // replacement model.
+        {
+            std::filesystem::path levelObj = FindOverrideObj(mapPath, "");
+            if (!levelObj.empty())
+            {
+                ALTEngine::Formats::ObjModel model = ALTEngine::Formats::ObjLoader::Load(levelObj);
+                for (const std::string& w : model.warnings)
+                {
+                    SDL_Log("ModelRenderer::LoadLevel(%s): level override %s: %s",
+                            cacheKey.c_str(), levelObj.filename().string().c_str(), w.c_str());
+                }
+
+                if (model.Empty())
+                {
+                    SDL_Log("ModelRenderer::LoadLevel(%s): level override %s has no usable faces - "
+                            "keeping the original geometry",
+                            cacheKey.c_str(), levelObj.string().c_str());
+                }
+                else
+                {
+                    // Build the replacement first, and only swap once every
+                    // group has uploaded. A half-applied override would leave
+                    // the level partly invisible with no way back.
+                    std::array<LevelSubGroup, 5> replacement{};
+                    bool ok = true;
+                    int uploaded = 0;
+
+                    for (const ALTEngine::Formats::ObjFaceGroup& group : model.groups)
+                    {
+                        int page = -1;
+                        if (group.materialName.rfind("page", 0) == 0)
+                        {
+                            page = std::atoi(group.materialName.c_str() + 4);
+                        }
+                        if (page < 0 || page >= 5 || !loadedLevel.groups[static_cast<size_t>(page)].texture)
+                        {
+                            SDL_Log("ModelRenderer::LoadLevel(%s): level override material '%s' does not "
+                                    "name a usable texture page (expected page0..page4 that the level "
+                                    "uses) - %zu triangles skipped",
+                                    cacheKey.c_str(), group.materialName.c_str(), group.indices.size() / 3);
+                            continue;
+                        }
+
+                        ALTEngine::Formats::RenderMesh mesh;
+                        mesh.vertices = group.vertices;
+                        mesh.indices = group.indices;
+                        ApplyLightToMesh(mesh, group.lightId, loadedLevel.lights);
+
+                        LevelSubGroup sub = UploadMeshBuffersOnly(mesh);
+                        if (!sub.vertexBuffer) { ok = false; break; }
+                        sub.texture = loadedLevel.groups[static_cast<size_t>(page)].texture;
+                        replacement[static_cast<size_t>(page)] = sub;
+                        uploaded += static_cast<int>(group.indices.size() / 3);
+                    }
+
+                    if (!ok || uploaded == 0)
+                    {
+                        for (auto& sub : replacement)
+                        {
+                            if (sub.vertexBuffer) { SDL_ReleaseGPUBuffer(device, sub.vertexBuffer); }
+                            if (sub.indexBuffer) { SDL_ReleaseGPUBuffer(device, sub.indexBuffer); }
+                        }
+                        SDL_Log("ModelRenderer::LoadLevel(%s): level override upload failed - keeping "
+                                "the original geometry", cacheKey.c_str());
+                    }
+                    else
+                    {
+                        // Swap in. The page textures are shared, so release
+                        // only the original buffers and carry the textures
+                        // across onto the replacement's groups.
+                        for (size_t i = 0; i < 5; ++i)
+                        {
+                            SDL_GPUTexture* pageTexture = loadedLevel.groups[i].texture;
+                            if (loadedLevel.groups[i].vertexBuffer) { SDL_ReleaseGPUBuffer(device, loadedLevel.groups[i].vertexBuffer); }
+                            if (loadedLevel.groups[i].indexBuffer) { SDL_ReleaseGPUBuffer(device, loadedLevel.groups[i].indexBuffer); }
+
+                            loadedLevel.groups[i].vertexBuffer = replacement[i].vertexBuffer;
+                            loadedLevel.groups[i].indexBuffer = replacement[i].indexBuffer;
+                            loadedLevel.groups[i].indexCount = replacement[i].indexCount;
+                            loadedLevel.groups[i].texture = pageTexture;
+                            loadedLevel.groupVertexCounts[i] = 0;
+                        }
+                        loadedLevel.geometryOverridden = true;
+                        SDL_Log("ModelRenderer::LoadLevel(%s): level geometry replaced from %s, "
+                                "%d triangle(s). Lighting animation is disabled for this level - "
+                                "override geometry carries its own vertex colours.",
+                                cacheKey.c_str(), levelObj.string().c_str(), uploaded);
+                    }
+                }
+            }
+        }
+
         bool anyGroupUsed = false;
         for (size_t i = 0; i < 5; ++i)
         {
@@ -1122,6 +1511,11 @@ namespace ALTEngine::Renderer
 
         loadedLevels[cacheKey] = loadedLevel;
         return true;
+    }
+
+    void ModelRenderer::SetDrawDistanceFade(bool enabled)
+    {
+        fogEnabled = enabled ? 1.0f : 0.0f;
     }
 
     void ModelRenderer::SetTextureSmoothing(bool smoothed)
@@ -1149,6 +1543,11 @@ namespace ALTEngine::Renderer
         // descriptor actually moved. That is the common case by a wide margin -
         // blink durations and frame holds are both tens of ticks - and skipping
         // it here is what keeps this cheap enough to call every tick.
+        // An override .obj replaced the geometry, so there is nothing to
+        // rebuild from - the light machines still tick (scripts may read
+        // them) but no vertex data is touched.
+        if (level.geometryOverridden) { return false; }
+
         bool lightsMoved = !(level.lights.Entries() == level.lastEntries);
         std::vector<uint16_t> outputs = level.animator.OutputSnapshot();
         bool animatorsMoved = (outputs != level.lastAnimatorOutputs);
@@ -1265,6 +1664,32 @@ namespace ALTEngine::Renderer
             SDL_GPUTextureSamplerBinding texBinding{ group.texture, sampler };
             SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
             SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
+            {
+                float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
+                SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
+            }
+            SDL_DrawGPUIndexedPrimitives(renderPass, group.indexCount, 1, 0, 0, 0);
+        }
+
+        // -GAP override faces. Same pipeline and the level's own page
+        // textures; they are ordinary world geometry that simply came from an
+        // .obj instead of the .MAP. Drawn after the level so they sit on top
+        // where they overlap, which is what a hole filler wants.
+        for (const auto& group : level.gapGroups)
+        {
+            if (!group.vertexBuffer || group.indexCount == 0 || !group.texture) { continue; }
+
+            SDL_GPUBufferBinding vbBinding{ group.vertexBuffer, 0 };
+            SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
+            SDL_GPUBufferBinding ibBinding{ group.indexBuffer, 0 };
+            SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+            SDL_GPUTextureSamplerBinding texBinding{ group.texture, sampler };
+            SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
+            SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
+            {
+                float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
+                SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
+            }
             SDL_DrawGPUIndexedPrimitives(renderPass, group.indexCount, 1, 0, 0, 0);
         }
 
@@ -1297,6 +1722,10 @@ namespace ALTEngine::Renderer
             SDL_GPUTextureSamplerBinding texBinding{ model.texture, sampler };
             SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
             SDL_PushGPUVertexUniformData(cmd, 0, mvp.m.data(), sizeof(float) * 16);
+            {
+                float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
+                SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
+            }
             SDL_DrawGPUIndexedPrimitives(renderPass, model.indexCount, 1, 0, 0, 0);
         }
 

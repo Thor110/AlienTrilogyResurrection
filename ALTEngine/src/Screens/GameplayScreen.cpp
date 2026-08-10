@@ -299,10 +299,29 @@ namespace ALTEngine::Screens
         // Read once here rather than threaded through Run's already long
         // settings chain - worth tidying if more of these appear.
         bool autoOpenDoors = false;
+        // Free Look defaults OFF, i.e. the original's automatic pitch. Read
+        // once here and refreshed whenever the pause menu closes, so toggling
+        // it mid-game takes effect without a restart.
+        bool freeLook = false;
         {
             ALTEngine::Bootstrap::Config modernConfig;
             ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
             autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
+            freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
+            // The feature is "unlimited render distance", so the original's
+            // fade is the INVERSE of it.
+            bool unlimited = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance);
+            ModelRenderer::SetDrawDistanceFade(!unlimited);
+            // Diagnostic: prints exactly what was read from disk, so a
+            // "setting doesn't stick" report can be pinned to either the store
+            // or the menu display rather than guessed at.
+            SDL_Log("GameplayScreen: modern mode=%s freeLook=%d renderDistance=%d(stored %d) "
+                    "-> drawDistanceFade=%d, config=%s",
+                    modern.Mode() == ALTEngine::Bootstrap::ModernMode::On ? "On"
+                        : modern.Mode() == ALTEngine::Bootstrap::ModernMode::Custom ? "Custom" : "Off",
+                    (int)freeLook, (int)unlimited,
+                    (int)modern.FeatureSetting(ALTEngine::Bootstrap::ModernFeature::RenderDistance),
+                    (int)!unlimited, modernConfig.FilePath().string().c_str());
         }
         int lastTriggerAction = 0;
         bool prevUseHeld = false;
@@ -747,6 +766,9 @@ namespace ALTEngine::Screens
                         ALTEngine::Bootstrap::Config modernConfig;
                         ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
                         autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
+                        freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
+                        ModelRenderer::SetDrawDistanceFade(
+                            !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance));
                     }
 
                     if (pauseResult.outcome == PauseMenuOutcome::WindowClosed)
@@ -789,7 +811,23 @@ namespace ALTEngine::Screens
                 // who hasn't touched the setting.
                 float sensitivity = MOUSE_SENSITIVITY * (static_cast<float>(keyBindings.MouseSensitivity()) / 5.0f);
                 camera.yaw += mouseDx * sensitivity;
-                camera.pitch = std::clamp(camera.pitch - mouseDy * sensitivity, -MAX_PITCH, MAX_PITCH);
+
+                // Pitch. Yaw is always mouse-driven; pitch is not.
+                //
+                // The original game had no free look at all - the camera's
+                // pitch was a function of the ground, panning up or down as
+                // the player walked stairs and ramps, and the player could
+                // never deliberately look up or down. With Free Look off we
+                // reproduce that: mouse Y is ignored here and the pitch is
+                // driven from the floor slope in the fixed tick instead.
+                //
+                // This is also what makes the -GAP override geometry
+                // necessary: the holes above door frames are only visible if
+                // you can look up, which originally you could not.
+                if (freeLook)
+                {
+                    camera.pitch = std::clamp(camera.pitch - mouseDy * sensitivity, -MAX_PITCH, MAX_PITCH);
+                }
 
                 // Ground-plane movement (X/Z only) relative to yaw -
                 // matches typical FPS convention of not flying up/down
@@ -1221,6 +1259,39 @@ namespace ALTEngine::Screens
                         ToGridSpaceX(camera.x, originX),
                         ToGridSpaceZ(camera.z, originZ));
                     camera.y = floorY + STAND_OFFSET + EYE_HEIGHT;
+
+                    // Automatic pitch, when Free Look is off. Samples the
+                    // floor a short way ahead along the view direction and
+                    // pitches toward it, which is what produces the
+                    // original's pan up a staircase and back down the other
+                    // side. Eased rather than snapped so a step boundary
+                    // does not jolt the view.
+                    //
+                    // NOT DERIVED FROM THE ORIGINAL. The behaviour is
+                    // qualitatively right (pitch follows the ground, no
+                    // player control) but the look-ahead distance, the gain
+                    // and the easing rate are all chosen by feel - nothing in
+                    // the decompilation has been traced that sets pitch. If
+                    // the pan feels too strong or too slow, these three
+                    // numbers are the knobs.
+                    if (!freeLook)
+                    {
+                        constexpr float LOOK_AHEAD = 512.0f;  // one cell
+                        constexpr float PITCH_GAIN = 0.6f;
+                        constexpr float PITCH_EASE = 0.15f;
+
+                        float aheadX = camera.x + std::sin(camera.yaw) * LOOK_AHEAD;
+                        float aheadZ = camera.z - std::cos(camera.yaw) * LOOK_AHEAD;
+                        float aheadFloorY = ALTEngine::Formats::FindFloorHeightGridSpace(
+                            level,
+                            ToGridSpaceX(aheadX, originX),
+                            ToGridSpaceZ(aheadZ, originZ));
+
+                        float rise = aheadFloorY - floorY;
+                        float targetPitch = std::clamp(std::atan2(rise, LOOK_AHEAD) * PITCH_GAIN,
+                                                       -MAX_PITCH, MAX_PITCH);
+                        camera.pitch += (targetPitch - camera.pitch) * PITCH_EASE;
+                    }
                 }
             }
 

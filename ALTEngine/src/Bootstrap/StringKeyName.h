@@ -125,6 +125,10 @@ namespace ALTEngine::Bootstrap
         case StringId::DescSkipEndLevel: return "DescSkipEndLevel";
         case StringId::DescPlayerJumping: return "DescPlayerJumping";
         case StringId::DescStunnedEnemies: return "DescStunnedEnemies";
+        case StringId::FreeLook: return "FreeLook";
+        case StringId::DescFreeLook: return "DescFreeLook";
+        case StringId::RenderDistance: return "RenderDistance";
+        case StringId::DescRenderDistance: return "DescRenderDistance";
         default: return "";
         }
     }
@@ -237,6 +241,10 @@ namespace ALTEngine::Bootstrap
         if (name == "DescSkipEndLevel") { return StringId::DescSkipEndLevel; }
         if (name == "DescPlayerJumping") { return StringId::DescPlayerJumping; }
         if (name == "DescStunnedEnemies") { return StringId::DescStunnedEnemies; }
+        if (name == "FreeLook") { return StringId::FreeLook; }
+        if (name == "DescFreeLook") { return StringId::DescFreeLook; }
+        if (name == "RenderDistance") { return StringId::RenderDistance; }
+        if (name == "DescRenderDistance") { return StringId::DescRenderDistance; }
         return std::nullopt;
     }
 }

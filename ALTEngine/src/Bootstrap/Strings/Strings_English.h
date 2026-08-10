@@ -128,6 +128,10 @@ namespace ALTEngine::Bootstrap
             "Skip the end of level screen and continue straight on",
             "Adds a jump action, and a control binding for it",
             "Enemies can be damaged repeatedly without being stunned",
+            "Free Look",
+            "Look freely with the mouse instead of the original's automatic pitch",
+            "Render Distance",
+            "See the whole level at once. Off restores the original's darkness, which fades distant walls to black",
         };
         return table;
     }

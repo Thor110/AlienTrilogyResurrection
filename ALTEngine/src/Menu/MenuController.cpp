@@ -316,6 +316,72 @@ namespace ALTEngine::Menu
         // is otherwise only refreshed for the one node just changed, so
         // siblings kept showing whatever they read when the tree was
         // built at boot.
+        // Re-reads the persisted Graphics settings into the tree's selected
+        // children. Counterpart of RefreshModernSelections; see the note at
+        // its call site for why this is needed.
+        // Single source of truth for the Modern menu's label -> feature
+        // mapping. There were previously THREE independent copies of this: the
+        // display refresh, the leaf handler, and an outer `else if` gate that
+        // decided whether the handler ran at all. Adding a feature meant
+        // updating all three, and missing the gate meant the setting silently
+        // did nothing at all - which is exactly what happened to Free Look and
+        // Render Distance (Edward, 2026).
+        bool ModernFeatureForLabel(const std::string& label, ALTEngine::Bootstrap::ModernFeature& out)
+        {
+            using ALTEngine::Bootstrap::ModernFeature;
+            for (ModernFeature f : ALTEngine::Bootstrap::ModernSettings::AllFeatures)
+            {
+                if (label == ALTEngine::Bootstrap::ModernSettings::MenuLabel(f)) { out = f; return true; }
+            }
+            return false;
+        }
+
+        // True for any label the Modern group's leaf handler must run for.
+        bool IsModernMenuLabel(const std::string& label)
+        {
+            ALTEngine::Bootstrap::ModernFeature ignored{};
+            return label == "Enable All" || ModernFeatureForLabel(label, ignored);
+        }
+
+        void RefreshGraphicsSelections(MenuNode& optionsRoot)
+        {
+            ALTEngine::Bootstrap::Config config;
+            ALTEngine::Bootstrap::RenderSettings render(config);
+
+            auto selectByLabel = [](MenuNode& list, const std::string& label) {
+                for (size_t i = 0; i < list.children.size(); ++i)
+                {
+                    if (list.children[i].label == label) { list.initialSelectedChild = static_cast<int>(i); return; }
+                }
+            };
+
+            for (auto& group : optionsRoot.children)
+            {
+                if (group.label != "Graphics") { continue; }
+                for (auto& node : group.children)
+                {
+                    if (node.label == "Quality")
+                    {
+                        selectByLabel(node, render.Get() == ALTEngine::Bootstrap::RenderFidelity::Smoothed
+                                            ? "Smoothed" : "Original");
+                    }
+                    else if (node.label == "VSync")
+                    {
+                        selectByLabel(node, render.VSync() ? "On" : "Off");
+                    }
+                    else if (node.label == "Display Mode")
+                    {
+                        switch (render.GetDisplayMode())
+                        {
+                        case ALTEngine::Bootstrap::DisplayMode::Windowed:   selectByLabel(node, "Windowed"); break;
+                        case ALTEngine::Bootstrap::DisplayMode::Borderless: selectByLabel(node, "Borderless"); break;
+                        default:                                            selectByLabel(node, "Fullscreen"); break;
+                        }
+                    }
+                }
+            }
+        }
+
         void RefreshModernSelections(MenuNode& optionsRoot)
         {
             using ALTEngine::Bootstrap::ModernFeature;
@@ -345,13 +411,7 @@ namespace ALTEngine::Menu
                     else
                     {
                         ModernFeature feature = ModernFeature::AutoOpenDoors;
-                        bool known = true;
-                        if (node.label == "Automatic Doors") { feature = ModernFeature::AutoOpenDoors; }
-                        else if (node.label == "Keep Items") { feature = ModernFeature::KeepItems; }
-                        else if (node.label == "Skip End Level Screen") { feature = ModernFeature::SkipEndLevelScreen; }
-                        else if (node.label == "Player Jumping") { feature = ModernFeature::PlayerJumping; }
-                        else if (node.label == "Stunned Enemies") { feature = ModernFeature::StunnedEnemies; }
-                        else { known = false; }
+                        bool known = ModernFeatureForLabel(node.label, feature);
 
                         if (known)
                         {
@@ -402,8 +462,7 @@ namespace ALTEngine::Menu
                     if (ok) { resolutionSettings.Set(width, height); }
                 }
             }
-            else if (parentLabel == "Enable All" || parentLabel == "Automatic Doors" || parentLabel == "Keep Items"
-                     || parentLabel == "Skip End Level Screen" || parentLabel == "Player Jumping" || parentLabel == "Stunned Enemies")
+            else if (IsModernMenuLabel(parentLabel))
             {
                 ALTEngine::Bootstrap::Config modernConfig;
                 ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
@@ -416,18 +475,10 @@ namespace ALTEngine::Menu
                 else
                 {
                     auto feature = ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors;
-                    if (parentLabel == "Keep Items") { feature = ALTEngine::Bootstrap::ModernFeature::KeepItems; }
-                    else if (parentLabel == "Skip End Level Screen") { feature = ALTEngine::Bootstrap::ModernFeature::SkipEndLevelScreen; }
-                    else if (parentLabel == "Player Jumping") { feature = ALTEngine::Bootstrap::ModernFeature::PlayerJumping; }
-                    else if (parentLabel == "Stunned Enemies") { feature = ALTEngine::Bootstrap::ModernFeature::StunnedEnemies; }
+                    if (!ModernFeatureForLabel(parentLabel, feature)) { feature = ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors; }
+                    // SetFeature switches to Custom itself, and preserves
+                    // every other feature's effective state while doing so.
                     modern.SetFeature(feature, leafLabel == "On");
-                    // Touching an individual toggle only has meaning under
-                    // Custom, so switch to it rather than silently ignoring
-                    // the change.
-                    if (modern.Mode() != ALTEngine::Bootstrap::ModernMode::Custom)
-                    {
-                        modern.SetMode(ALTEngine::Bootstrap::ModernMode::Custom);
-                    }
                 }
             }
             else if (parentLabel == "VSync")
@@ -806,10 +857,21 @@ namespace ALTEngine::Menu
 
                         // Modern entries depend on each other, so refresh
                         // the whole group rather than just the one changed.
-                        if (parentLabel == "Enable All" || parentLabel == "Automatic Doors" || parentLabel == "Keep Items"
-                     || parentLabel == "Skip End Level Screen" || parentLabel == "Player Jumping" || parentLabel == "Stunned Enemies")
+                        if (IsModernMenuLabel(parentLabel))
                         {
                             RefreshModernSelections(optionsRoot);
+                        }
+
+                        // Graphics settings had no live refresh at all. The
+                        // tree is built once on entry, so a list re-entered
+                        // later still showed its build-time value - which for
+                        // Quality meant it always read back as "Original"
+                        // however it had actually been set. The value itself
+                        // was being stored correctly the whole time; only the
+                        // display was stale (Edward, 2026).
+                        if (parentLabel == "Quality" || parentLabel == "VSync" || parentLabel == "Display Mode")
+                        {
+                            RefreshGraphicsSelections(optionsRoot);
                         }
                     }
                     if (r != EnterResult::NoOp) { SfxPlayer::Play(SfxId::MenuSelect, cdDirectory); }
@@ -1088,21 +1150,73 @@ namespace ALTEngine::Menu
                 // it clears itself as soon as the cursor leaves the Modern
                 // list - no explicit reset needed.
                 {
-                    const MenuNode* highlighted = &optionsRoot;
+                    // Walk the path, remembering the DEEPEST node that carries
+                    // a description rather than only looking at the leaf.
+                    //
+                    // Descending into a feature's Off/On list used to blank the
+                    // description, because those leaves carry none - so the
+                    // moment you went to actually change a setting, the text
+                    // explaining it disappeared. Keeping the nearest ancestor's
+                    // description visible means the explanation stays up for as
+                    // long as you are anywhere inside that setting
+                    // (Edward, 2026).
+                    const MenuNode* node = &optionsRoot;
+                    const MenuNode* described = (optionsRoot.descriptionStringId >= 0) ? &optionsRoot : nullptr;
                     for (size_t depth = 0; depth < optionsPath.size(); ++depth)
                     {
                         int childIndex = optionsPath[depth];
-                        if (childIndex < 0 || static_cast<size_t>(childIndex) >= highlighted->children.size()) { highlighted = nullptr; break; }
-                        highlighted = &highlighted->children[static_cast<size_t>(childIndex)];
+                        if (childIndex < 0 || static_cast<size_t>(childIndex) >= node->children.size()) { break; }
+                        node = &node->children[static_cast<size_t>(childIndex)];
+                        if (node->descriptionStringId >= 0) { described = node; }
                     }
 
-                    if (highlighted && highlighted->descriptionStringId >= 0)
+                    if (described)
                     {
                         std::string description = ALTEngine::Bootstrap::Tr(
-                            static_cast<ALTEngine::Bootstrap::StringId>(highlighted->descriptionStringId), language);
-                        DrawBitmapText(renderer, description,
-                                        (windowW - TextWidth(description, scale)) / 2,
-                                        windowH - rowHeight * 4, scale, COLOR_GREEN_DIM);
+                            static_cast<ALTEngine::Bootstrap::StringId>(described->descriptionStringId), language);
+
+                        // Wrap to the window rather than running off both
+                        // edges. Greedy word wrap measured with the same
+                        // TextWidth the drawing uses, so it is exact for this
+                        // bitmap font; a single word longer than the line is
+                        // left to overflow rather than being broken mid-word.
+                        int maxWidth = windowW - scale * 32;
+                        if (maxWidth < scale * 64) { maxWidth = windowW; }
+
+                        std::vector<std::string> lines;
+                        {
+                            std::string line;
+                            size_t pos = 0;
+                            while (pos <= description.size())
+                            {
+                                size_t space = description.find(' ', pos);
+                                std::string word = description.substr(pos, space == std::string::npos ? std::string::npos : space - pos);
+                                std::string candidate = line.empty() ? word : line + " " + word;
+                                if (!line.empty() && TextWidth(candidate, scale) > maxWidth)
+                                {
+                                    lines.push_back(line);
+                                    line = word;
+                                }
+                                else
+                                {
+                                    line = candidate;
+                                }
+                                if (space == std::string::npos) { break; }
+                                pos = space + 1;
+                            }
+                            if (!line.empty()) { lines.push_back(line); }
+                        }
+
+                        // Sits above the Esc/Enter prompts with a clear gap,
+                        // and grows upward so extra lines never push into them.
+                        int bottom = windowH - rowHeight * 4;
+                        int top = bottom - rowHeight * static_cast<int>(lines.size());
+                        for (size_t i = 0; i < lines.size(); ++i)
+                        {
+                            DrawBitmapText(renderer, lines[i],
+                                            (windowW - TextWidth(lines[i], scale)) / 2,
+                                            top + rowHeight * static_cast<int>(i), scale, COLOR_GREEN_DIM);
+                        }
                     }
                 }
                 DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::PressEnterToSelect, language),

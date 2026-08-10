@@ -36,6 +36,8 @@ add_library(ALTFormats STATIC
     src/Formats/CddaRipper.cpp
     src/Formats/OverrideImage.cpp
     src/Formats/ModelLoader.cpp
+    src/Tools/LevelLightScanner.cpp
+    src/Formats/ObjLoader.cpp
     src/Formats/RenderMesh.cpp
     src/Formats/LevelLoader.cpp
     src/Formats/BinaryReadLE.h

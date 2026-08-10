@@ -23,6 +23,10 @@ struct Output
     float4 Position : SV_Position;
     float2 UV : TEXCOORD0;
     float3 Colour : TEXCOORD1;
+    // Distance from the camera in world units, for the original's
+    // draw-distance fade. Taken from the clip-space W, which for a standard
+    // perspective projection is exactly the view-space depth.
+    float Distance : TEXCOORD2;
 };
 
 Output main(Input input)
@@ -35,5 +39,6 @@ Output main(Input input)
     // other mode sets all four corners equal, so this interpolates to a
     // constant and costs nothing.
     output.Colour = input.Colour;
+    output.Distance = output.Position.w;
     return output;
 }

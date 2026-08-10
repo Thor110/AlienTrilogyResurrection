@@ -1,6 +1,7 @@
 #include <iostream>
 #include <optional>
 
+#include "Tools/LevelLightScanner.h"
 #include "Bootstrap/AppWindow.h"
 #include "Bootstrap/Config.h"
 #include "Bootstrap/DiscLocator.h"
@@ -179,6 +180,32 @@ int main(int, char**)
     // (Edward, 2026: "move the LANGUAGE folder to GameData\CD\LANGUAGE
     // so that it sits alongside the original language files").
     ALTEngine::Bootstrap::SetLanguagePackDirectory(cdDirectory);
+
+    // ---- ONE-SHOT LIGHT/ANIMATION SCAN - delete this whole block when done --
+    //
+    // Runs only when data/ScanLights.flag exists, and deletes the flag itself
+    // afterwards, so it happens exactly once and cannot slow down or surprise a
+    // normal launch. Writes data/LightManifest.json - a catalogue of every face
+    // in every level (campaign and multiplayer) that carries a light or an
+    // animation, which is what the OBJ replacement system's alt_light/alt_anim
+    // tags are authored against.
+    //
+    // TO REMOVE: delete this block, src/Tools/LevelLightScanner.{h,cpp}, the
+    // CMakeLists entry for it, and the include below. Nothing else uses it.
+    {
+        std::filesystem::path flag = "data/ScanLights.flag";
+        std::error_code flagEc;
+        if (std::filesystem::exists(flag, flagEc))
+        {
+            ALTEngine::Tools::ScanResult scan = ALTEngine::Tools::ScanAllLevelsForLights(
+                cdDirectory, "data/LevelManifest.json", "data/LightManifest.json");
+            SDL_Log("LevelLightScanner: %s%s", scan.ok ? "" : "FAILED - ", scan.message.c_str());
+            // Remove the flag whether or not it worked, so a failure does not
+            // re-run on every launch. Re-create the file to scan again.
+            std::filesystem::remove(flag, flagEc);
+        }
+    }
+    // ---- end one-shot scan -------------------------------------------------
 
     if (!ShowLegalSplash(cdDirectory))
     {

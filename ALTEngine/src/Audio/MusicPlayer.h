@@ -1,3 +1,31 @@
+// ORIGINAL MUSIC SELECTION - decoded from the executable.
+//
+// Every piece of music in the original resolves through ONE number, which is
+// why menu and level music are the same mechanism rather than two:
+//
+//   FUN_0004263c(id)      the only entry point. Clamps id to <= 0x2c, looks the
+//                         track up in the table at DAT_000acefa and hands it to
+//                         FUN_0004258c.
+//   FUN_0004258c(track)   plays it. Returns immediately if -nocd was given
+//                         (DAT_000b0cee). track == -1 means stop
+//                         (FUN_00057d70); otherwise FUN_000581a8 starts it and
+//                         the current track is kept in DAT_000acf54+2.
+//   FUN_000425fc()        stop: writes 0xffff over the current-track slot.
+//
+// The single call site passes DAT_000b0ca8 - the CURRENT LEVEL ID, the same
+// variable behind the episode texture sets and the 0x16-0x22 draw branch.
+//
+// THE LOOKUP IS OFFSET BY ONE WORD. The original reads a 32-BIT int at
+// base + id*2 and shifts it right by 0x10, which takes the HIGH half - so the
+// track for id N is the word at index N+1, not N. That is why the table's first
+// word is 0 and never used. Getting this wrong would shift every level's music
+// by one and still look plausible.
+//
+// The 45 words at 0x000acefa decode to tracks 2..17 - sixteen audio tracks,
+// with track 1 being the data track. That is exactly how a mixed-mode disc is
+// laid out, which is the strongest confirmation the offset reading is right.
+//
+
 #pragma once
 
 #include <cstddef>
@@ -6,6 +34,29 @@
 
 namespace ALTEngine::Audio
 {
+    // CD audio track for a level id, transcribed from the table at
+    // 0x000acefa. Returns -1 for "stop"/unknown, matching the original's own
+    // sentinel.
+    //
+    // Level 44 is reachable through the original's clamp but reads one word
+    // PAST the table, straight into DAT_000acf54 (the current-track slot) - an
+    // off-by-one in the original that no real level appears to hit. Reported as
+    // -1 here rather than reproducing a garbage read.
+    inline int LevelMusicTrack(int levelId)
+    {
+        // Index N holds the track for level N, already un-shifted from the
+        // original's high-word read.
+        static constexpr int TRACKS[44] = {
+             6, 10,  2, 13,  9,  2,  8,  2,  7,  2,
+            11, 12,  6, 13, 10,  7,  8, 13, 11,  8,
+             4, 12, 10,  5,  3,  5,  9,  4,  5,  8,
+             3,  5, 11,  5, 12, 14, 15, 16, 17, 14,
+            15, 16, 17, 14
+        };
+        if (levelId < 0 || levelId >= 44) { return -1; }
+        return TRACKS[levelId];
+    }
+
     struct FeedChunk
     {
         size_t sourceOffset;

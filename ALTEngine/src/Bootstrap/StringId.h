@@ -139,6 +139,10 @@ namespace ALTEngine::Bootstrap
         DescSkipEndLevel,
         DescPlayerJumping,
         DescStunnedEnemies,
+        FreeLook,
+        DescFreeLook,
+        RenderDistance,
+        DescRenderDistance,
 
         Count, // sentinel - not a real string, gives the tables their size
     };

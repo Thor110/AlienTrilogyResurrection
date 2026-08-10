@@ -152,6 +152,12 @@ namespace ALTEngine::Renderer
         static void SetTextureSmoothing(bool smoothed);
         static bool TextureSmoothing();
 
+        // The original's draw-distance fade to black. Enabled = original
+        // behaviour; disabled = unlimited draw distance. Driven by the
+        // Modern > Render Distance feature (which is the inverse: the feature
+        // ON means the fade OFF).
+        static void SetDrawDistanceFade(bool enabled);
+
         // Loads and GPU-uploads a model, cached under `cacheKey` (repeated
         // calls with the same key are cheap) - callers should use a
         // catalog-prefixed key (e.g. "OPTOBJ:9", "PICKMOD:6") since the
