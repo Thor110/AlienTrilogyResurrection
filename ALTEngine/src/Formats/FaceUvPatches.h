@@ -27,6 +27,18 @@ namespace ALTEngine::Formats
         std::string targetFile;            // e.g. "SECT11/L111LEV.MAP"
         std::array<int32_t, 4> vertices{}; // a, b, c, d - d is -1 for triangles
         int steps = 0;                     // rotate the UV assignment right by this many corners
+
+        // Mirror the face horizontally - swaps corners 0<->1 and 2<->3,
+        // which is exactly what draw routine 2 does relative to routine 0.
+        // Applied BEFORE `steps`, so a face needing both reads as
+        // "flip it, then rotate".
+        //
+        // This is the involutive counterpart of the existing byte patches
+        // that write 0x00/0x02 into a face's draw-routine byte: it toggles
+        // the mirror rather than setting it, so it corrects a face that is
+        // wrong in either direction without needing to know which value is
+        // currently on disk.
+        bool flip = false;
     };
 
     class FaceUvPatchLoader

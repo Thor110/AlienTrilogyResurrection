@@ -1,5 +1,7 @@
 #include "RenderMesh.h"
 
+#include <algorithm>
+
 #include <array>
 #include <stdexcept>
 #include <utility>
@@ -73,6 +75,18 @@ namespace ALTEngine::Formats
         // against his own tool with the level's faces colour-coded by
         // flag in Blender - every face except lights (flag 8) and
         // breakable glass now matches.
+        // True when a patch entry names the same four (or three) vertices as
+        // this face, in any order. Triangles carry -1 in the fourth slot on
+        // both sides, so they compare correctly without a special case.
+        bool SameVertexSet(const std::array<int32_t, 4>& patch, const ModelQuad& q)
+        {
+            std::array<int32_t, 4> a = patch;
+            std::array<int32_t, 4> b = { q.a, q.b, q.c, q.d };
+            std::sort(a.begin(), a.end());
+            std::sort(b.begin(), b.end());
+            return a == b;
+        }
+
         std::array<Uv, 4> ComputeLevelQuadUvs(const ModelQuad& q, const std::vector<BxRectangle>& uvRects)
         {
             ResolvedLevelTexture resolved = ResolveLevelTexture(q.texIndex, uvRects);
@@ -90,6 +104,46 @@ namespace ALTEngine::Formats
             float y0 = rect->y / TEX_SIZE;
             float x1 = (rect->x + rect->width) / TEX_SIZE;
             float y1 = (rect->y + rect->height) / TEX_SIZE;
+
+            // TRIANGLES. Draw routines 1 and 3 are the triangle rasterizers -
+            // in L111 they are the ONLY flag values that ever produce a
+            // three-cornered face, and 0/2/4/8 are exclusively quads:
+            //
+            //   flag |  d == -1  |  quads
+            //      0 |      0    |   8755
+            //      1 |    285    |      0
+            //      2 |      0    |   1902
+            //      3 |      1    |      0
+            //      4 |      0    |    171
+            //      8 |      0    |    150
+            //
+            // A triangle needs three of the descriptor's four UV corners, and
+            // WHICH three is not a free choice. The runtime descriptor built
+            // by FUN_00018bcc lays its four corners out in Z order, not
+            // winding order:
+            //
+            //   corner 0 = (x,     y    )   top-left
+            //   corner 1 = (x + w, y    )   top-right
+            //   corner 2 = (x,     y + h)   bottom-left
+            //   corner 3 = (x + w, y + h)   bottom-right
+            //
+            // so the triangle routine's three corners are top-left,
+            // top-right, bottom-left.
+            //
+            // What was here before rotated the WINDING order by one step and
+            // came out with top-right, bottom-left, bottom-right - the wrong
+            // three corners entirely, including bottom-right and omitting
+            // top-left. That is why corner faces at hallway intersections
+            // showed the wrong part of their tile (Edward, 2026). The old
+            // rotation came from ModelRenderer.cs's OBJ exporter, which is
+            // Edward's own tool rather than the game, and OBJ export never had
+            // to agree with the original rasterizer about corner ordering.
+            if (q.d == -1)
+            {
+                // Fourth entry repeats the third; nothing reads it for a
+                // triangle, but leaving it defined keeps the array honest.
+                return { Uv{x0, y0}, Uv{x1, y0}, Uv{x0, y1}, Uv{x0, y1} };
+            }
 
             switch (q.flags)
             {
@@ -141,8 +195,14 @@ namespace ALTEngine::Formats
             return out;
         }
 
+        // `uvsAlreadyOrdered` means uvs[0..2] are already the correct
+        // per-vertex UVs for a triangle and must not be permuted again. The
+        // level path sets it (ComputeLevelQuadUvs now handles triangles
+        // itself); the model path leaves it false so its own long-standing
+        // flag-1 rotation is untouched - model and door geometry renders
+        // correctly today and this change is not about it.
         void EmitQuad(RenderMesh& result, const std::vector<ModelVertex>& vertices, const ModelQuad& q, const std::array<Uv, 4>& uvs,
-                      const QuadColours& colours)
+                      const QuadColours& colours, bool uvsAlreadyOrdered = false)
         {
             auto inBounds = [&](int32_t vertexIndex) {
                 return vertexIndex >= 0 && static_cast<size_t>(vertexIndex) < vertices.size();
@@ -180,10 +240,15 @@ namespace ALTEngine::Formats
                 return static_cast<uint32_t>(result.vertices.size() - 1);
             };
 
-            // Genuine flag-1 triangles need their UVs rotated one step
-            // clockwise (ABC -> CAB). Excludes the degenerate-quad
-            // fallback above, which already forces isTriangle = false.
-            bool rotateTriangleUvs = isTriangle && (q.flags == 1);
+            // MODEL PATH ONLY. Model flag-1 triangles keep the one-step
+            // rotation (ABC -> CAB) they have always had; models and doors
+            // render correctly and nothing here changes that. LEVEL faces
+            // arrive with uvsAlreadyOrdered set, because ComputeLevelQuadUvs
+            // now picks the descriptor's real triangle corners (top-left,
+            // top-right, bottom-left) itself - see the long note there.
+            // Excludes the degenerate-quad fallback above, which already
+            // forces isTriangle = false.
+            bool rotateTriangleUvs = isTriangle && (q.flags == 1) && !uvsAlreadyOrdered;
             Uv uvA = rotateTriangleUvs ? effectiveUvs[2] : effectiveUvs[0];
             Uv uvB = rotateTriangleUvs ? effectiveUvs[0] : effectiveUvs[1];
             Uv uvC = rotateTriangleUvs ? effectiveUvs[1] : effectiveUvs[2];
@@ -238,7 +303,7 @@ namespace ALTEngine::Formats
 
         for (const auto& q : level.quads)
         {
-            EmitQuad(result, level.vertices, q, ComputeLevelQuadUvs(q, uvRects), LevelQuadColours(q, lights));
+            EmitQuad(result, level.vertices, q, ComputeLevelQuadUvs(q, uvRects), LevelQuadColours(q, lights), true);
         }
         return result;
     }
@@ -286,23 +351,45 @@ namespace ALTEngine::Formats
             // rotates all four.
             for (const auto& rot : uvRotations)
             {
-                if (rot.vertices[0] != q.a || rot.vertices[1] != q.b
-                    || rot.vertices[2] != q.c || rot.vertices[3] != q.d) { continue; }
+                // Match on the vertex SET, not the exact a/b/c/d order.
+                //
+                // The manifest's whole premise is that a face's vertex list
+                // is its stable identity, but requiring the same starting
+                // corner quietly broke that: the same face read out of a
+                // viewer can list its corners from a different start point
+                // or winding than the .MAP stores them, and the entry then
+                // matched nothing and did nothing, silently. Face 10207 of
+                // L111 is on disk as (10759,10760,10756,10755) and was
+                // reported as (10756,10755,10760,10759) - same face, same
+                // four vertices, no match under an ordered compare.
+                if (!SameVertexSet(rot.vertices, q)) { continue; }
 
                 int corners = (q.d == -1) ? 3 : 4;
-                int steps = ((rot.steps % corners) + corners) % corners;
-                if (steps == 0) { break; }
 
-                std::array<Uv, 4> rotated = uvs;
-                for (int i = 0; i < corners; ++i)
+                // Flip first, then rotate - see FaceUvRotation's comment.
+                // The swap pairs are corners 0<->1 and 2<->3, matching what
+                // draw routine 2 does relative to routine 0. On a triangle
+                // only the first pair exists to swap.
+                if (rot.flip)
                 {
-                    rotated[static_cast<size_t>(i)] = uvs[static_cast<size_t>((i - steps + corners) % corners)];
+                    std::swap(uvs[0], uvs[1]);
+                    if (corners == 4) { std::swap(uvs[2], uvs[3]); }
                 }
-                uvs = rotated;
+
+                int steps = ((rot.steps % corners) + corners) % corners;
+                if (steps != 0)
+                {
+                    std::array<Uv, 4> rotated = uvs;
+                    for (int i = 0; i < corners; ++i)
+                    {
+                        rotated[static_cast<size_t>(i)] = uvs[static_cast<size_t>((i - steps + corners) % corners)];
+                    }
+                    uvs = rotated;
+                }
                 break;
             }
 
-            EmitQuad(result[static_cast<size_t>(group)], level.vertices, q, uvs, LevelQuadColours(q, lights));
+            EmitQuad(result[static_cast<size_t>(group)], level.vertices, q, uvs, LevelQuadColours(q, lights), true);
         }
         return result;
     }

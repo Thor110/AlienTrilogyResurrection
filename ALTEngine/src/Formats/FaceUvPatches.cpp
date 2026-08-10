@@ -24,7 +24,8 @@ namespace ALTEngine::Formats
 
             FaceUvRotation rotation;
             rotation.targetFile = entry["target"].get<std::string>();
-            rotation.steps = entry.value("steps", 1);
+            rotation.steps = entry.value("steps", 0);
+            rotation.flip = entry.value("flip", false);
 
             const auto& verts = entry["vertices"];
             if (!verts.is_array() || verts.size() < 3) { continue; }

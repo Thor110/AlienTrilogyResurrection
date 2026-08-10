@@ -22026,6 +22026,17 @@
         -1
       ],
       "steps": 1
+    },
+    {
+      "target": "SECT11/L111LEV.MAP",
+      "note": "face 10208 - wrong orientation, needs mirroring (Edward, 2026)",
+      "vertices": [
+        10756,
+        10755,
+        10760,
+        10759
+      ],
+      "flip": true
     }
   ]
 }
