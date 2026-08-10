@@ -1463,7 +1463,14 @@ namespace ALTEngine::Menu
             SDL_RenderPresent(renderer);
         }
 
-        MusicPlayer::Stop();
+        // Only stop what this screen started. The PlayLooped above is already
+        // skipped when opened from the pause menu, but this Stop() was not - so
+        // visiting Options mid-game killed the LEVEL music on the way out and
+        // nothing restarted it until the next level load (Edward, 2026).
+        if (!startInOptionsOnly)
+        {
+            MusicPlayer::Stop();
+        }
 
         if (mainBg) { SDL_DestroyTexture(mainBg); }
         if (optionsBg) { SDL_DestroyTexture(optionsBg); }

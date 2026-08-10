@@ -1,5 +1,6 @@
 #include "PauseMenuScreen.h"
 
+#include "../Audio/MusicPlayer.h"
 #include "../Renderer/Minimap.h"
 #include "../Bootstrap/ModernSettings.h"
 #include "PauseMenuTree.h"
@@ -299,6 +300,14 @@ namespace ALTEngine::Screens
 
         while (running)
         {
+            // Keep the level music fed while paused. PlayLooped only starts the
+            // stream; Update() pushes more audio into it. This loop blocks the
+            // gameplay loop that normally does it, so without this the music
+            // starves a fraction of a second after the pause menu opens - which
+            // is what made it "sometimes" stop, depending on how much was
+            // already buffered when you paused (Edward, 2026).
+            ALTEngine::Audio::MusicPlayer::Update();
+
             // Shared Enter/Escape logic, callable from both their own
             // dedicated keys and from left/right (Edward, 2026: same
             // arrow-key behaviour as the boot menu - right enters a
@@ -450,6 +459,29 @@ namespace ALTEngine::Screens
 
             int panelX = margin + leftWidth + scale * 8;
             int panelY = margin;
+
+            // Every model on every panel centres within this one width, so they
+            // line up with each other and with the Auto Mapper's map rather than
+            // each sitting flush against panelX at its own size (Edward, 2026).
+            //
+            // 520 is the map's width; clamped to what is left of the window
+            // after the inventory column, for the same reason the map is.
+            int windowWidth = 0, windowHeightPx = 0;
+            SDL_GetRenderOutputSize(renderer, &windowWidth, &windowHeightPx);
+            int contentWidth = std::min(520, windowWidth - panelX - margin);
+            if (contentWidth < 80) { contentWidth = 80; }
+
+            // A model's drawn width, shrunk to the column if the column is
+            // narrower. Without this a 260-wide model kept its size on a narrow
+            // window and ran off the right edge - the centring only moved it,
+            // it could not make it fit.
+            auto fitWidth = [contentWidth](int w) { return std::min(w, contentWidth); };
+
+            // X for a model of `w` centred in that column, never left of panelX.
+            auto centredX = [panelX, contentWidth](int w) {
+                int x = panelX + (contentWidth - std::min(w, contentWidth)) / 2;
+                return x < panelX ? panelX : x;
+            };
             const std::string& topLabel = root.children[static_cast<size_t>(path[0])].label;
 
             if (topLabel == "Options")
@@ -514,8 +546,8 @@ namespace ALTEngine::Screens
                     : "No ammo available";
                 DrawBitmapText(renderer, ammoText, panelX, panelY, scale, COLOR_STATUS);
 
-                DrawPickModModel(renderer, cdDirectory, weaponInfo->ammoModel, panelX, panelY + rowHeight * 2, 200, 150, scale, rotationAngle);
-                DrawPickModModel(renderer, cdDirectory, weaponInfo->weaponModel, panelX, panelY + rowHeight * 2 + 170, 260, 150, scale, rotationAngle);
+                DrawPickModModel(renderer, cdDirectory, weaponInfo->ammoModel, centredX(200), panelY + rowHeight * 2, fitWidth(200), 150, scale, rotationAngle);
+                DrawPickModModel(renderer, cdDirectory, weaponInfo->weaponModel, centredX(260), panelY + rowHeight * 2 + 170, fitWidth(260), 150, scale, rotationAngle);
 
                 std::string statusText = weaponInfo->state->equipped ? "Selected" : ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::NotAvailable, language);
                 DrawBitmapText(renderer, statusText, panelX, panelY + rowHeight * 2 + 340, scale, COLOR_STATUS);
@@ -527,7 +559,7 @@ namespace ALTEngine::Screens
                 // "Not available" fallback text here unlike the generic
                 // branch below.
                 const MenuNode& node = root.children[static_cast<size_t>(path[0])];
-                DrawOptobjModel(renderer, cdDirectory, node.modelIndex, panelX, panelY, 260, 200, scale, rotationAngle);
+                DrawOptobjModel(renderer, cdDirectory, node.modelIndex, centredX(260), panelY, fitWidth(260), 200, scale, rotationAngle);
             }
             else // Auto Mapper / Shoulder Lamp / Batteries - single model, no ammo
             {
@@ -566,15 +598,11 @@ namespace ALTEngine::Screens
                     // 520x400: the panel starts after the left column, so a
                     // small window or a wide inventory list would otherwise push
                     // the map (and the model under it) off the edge.
-                    int windowW = 0, windowH = 0;
-                    SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-
                     const int modelHeight = 150;
                     const int gap = scale * 6;
 
-                    int mapW = std::min(520, windowW - panelX - margin);
-                    int mapH = std::min(400, windowH - panelY - margin - modelHeight - gap);
-                    if (mapW < 80) { mapW = 80; }
+                    int mapW = contentWidth;
+                    int mapH = std::min(400, windowHeightPx - panelY - margin - modelHeight - gap);
                     if (mapH < 80) { mapH = 80; }
 
                     ALTEngine::Renderer::MinimapStyle style;
@@ -588,12 +616,12 @@ namespace ALTEngine::Screens
                                                      owned ? nullptr : minimapVisited);
 
                     DrawPickModModel(renderer, cdDirectory, node.modelIndex,
-                                     panelX, panelY + mapH + gap, 260, modelHeight, scale, rotationAngle);
+                                     centredX(260), panelY + mapH + gap, fitWidth(260), modelHeight, scale, rotationAngle);
                     notAvailableY = panelY + mapH + gap + modelHeight + gap;
                 }
                 else
                 {
-                    DrawPickModModel(renderer, cdDirectory, node.modelIndex, panelX, panelY, 260, 200, scale, rotationAngle);
+                    DrawPickModModel(renderer, cdDirectory, node.modelIndex, centredX(260), panelY, fitWidth(260), 200, scale, rotationAngle);
                 }
                 if (!owned)
                 {

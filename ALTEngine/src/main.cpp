@@ -370,6 +370,34 @@ int main(int, char**)
             && menuResult.levelCode.find_first_of("0123456789") != std::string::npos)
         {
             std::cout << "Level Select: " << menuResult.levelCode << "\n";
+
+            // Run the briefing first. It is not just presentation - it is what
+            // preloads PICKMOD and OBJ3D, so skipping it left every crate,
+            // barrel, switch and pickup with no model to draw. That is why
+            // objects only appeared when starting the first level the normal way
+            // (Edward, 2026).
+            //
+            // Multiplayer levels have no briefing text, so they get the same
+            // preload without the screen. Anything whose code starts with 9 is
+            // multiplayer; they are in the list for testing only.
+            bool multiplayerLevel = (menuResult.levelCode[0] == '9');
+            if (!multiplayerLevel)
+            {
+                MissionBriefingResult briefingResult = MissionBriefingScreen::Run(cdDirectory, language, menuResult.levelCode);
+                if (briefingResult.windowClosed)
+                {
+                    std::cout << "Boot window closed. Aborting.\n";
+                    ALTEngine::Renderer::ModelRenderer::Shutdown();
+                    AppWindow::Instance().Shutdown();
+                    PauseBeforeExit();
+                    return 1;
+                }
+            }
+            else
+            {
+                MissionBriefingScreen::PreloadObjectModels(cdDirectory, language);
+            }
+
             GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, menuResult.levelCode, keyBindings, audioSettings,
                                                                   renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings);
             if (gameplayResult.outcome == GameplayOutcome::WindowClosed)

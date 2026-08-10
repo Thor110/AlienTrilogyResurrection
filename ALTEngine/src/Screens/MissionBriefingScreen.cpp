@@ -160,6 +160,30 @@ namespace ALTEngine::Screens
         }
     }
 
+    void MissionBriefingScreen::PreloadObjectModels(const std::filesystem::path& cdDirectory,
+                                                    ALTEngine::Bootstrap::Language& language)
+    {
+        // Same two catalogues, same slot counts and the same gaps-fail-gracefully
+        // behaviour as Run()'s incremental queue - just done in one go, since
+        // there is no loading screen to spread it across.
+        ALTEngine::Renderer::ModelRenderer::Initialize();
+
+        std::vector<ALTEngine::Renderer::PreloadRequest> queue;
+        for (int i = 0; i <= 27; i++) // PICKMOD: 28 slots, gaps at 5/24
+        {
+            auto source = ALTEngine::Renderer::ModelPreviewSource::ForPickmod(cdDirectory, i);
+            queue.push_back({ source.CacheKey(), i, source.objBndPath, source.gfxBndPath,
+                              source.transparentRgb, source.baseRotationRadians });
+        }
+        for (int i = 0; i <= 41; i++) // OBJ3D: 42 slots, no known gaps
+        {
+            auto source = ALTEngine::Renderer::ModelPreviewSource::ForObj3D(cdDirectory, i, language);
+            queue.push_back({ source.CacheKey(), i, source.objBndPath, source.gfxBndPath,
+                              source.transparentRgb, source.baseRotationRadians });
+        }
+        ALTEngine::Renderer::ModelRenderer::PreloadBatch(queue);
+    }
+
     MissionBriefingResult MissionBriefingScreen::Run(
         const std::filesystem::path& cdDirectory,
         Language language,

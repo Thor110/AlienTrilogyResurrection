@@ -31,6 +31,14 @@ namespace ALTEngine::Screens
     class MissionBriefingScreen
     {
     public:
+        // Loads every PICKMOD and OBJ3D model, blocking. Run() does this
+        // incrementally behind its own loading text; this is the same work for
+        // callers that skip the briefing entirely (multiplayer levels via the
+        // level select), because without it no crate, barrel, switch or pickup
+        // has a model to draw.
+        static void PreloadObjectModels(const std::filesystem::path& cdDirectory,
+                                        ALTEngine::Bootstrap::Language& language);
+
         static MissionBriefingResult Run(
             const std::filesystem::path& cdDirectory,
             ALTEngine::Bootstrap::Language language,
