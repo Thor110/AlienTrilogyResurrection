@@ -331,7 +331,7 @@ namespace ALTEngine::Renderer
     // Left at the decompiled value; if it looks wrong side by side, this is the
     // constant to nudge.
     inline constexpr int HUD_HEALTH_BAR_LEFT = 0xe1;    // 225
-    inline constexpr int HUD_HEALTH_BAR_RIGHT = 0x131;  // 305 = 225 + 20 segments * 4
+    inline constexpr int HUD_HEALTH_BAR_RIGHT = 0x12f;  // 303 = 225 + 19*4 + 2, i.e. 20 slots
     inline constexpr int HUD_HEALTH_ROW_TOP = 0x16;     // 22
     inline constexpr int HUD_HEALTH_ROW_BOTTOM = 0x30;  // 48
 
@@ -351,43 +351,38 @@ namespace ALTEngine::Renderer
     {
         if (health <= 0) { return 0; }
         if (health < 100) { return (health * 0x50) / 100; }
-        // 0x50 (80), not the 0x4e (78) the draw code's clamp suggested: 20
-        // segments at a 4-pixel pitch is 80, and Edward counts 20 in the
-        // original. 78 drew only 19.
-        return 0x50;
+        // 0x4e (78) after all. 20 slots of 2px at a 4px pitch starting at 225 end
+        // at 303, which is 78 wide - so the original's clamp was right and the
+        // earlier 19-segment count came from drawing 3px-wide segments from the
+        // bar's left edge instead of into the artwork's slots.
+        return 0x4e;
     }
 
     // ---- overlay artwork ---------------------------------------------------
-    // The HUD frames are blitted straight out of the sheet as raw page regions
-    // rather than via descriptors - these are source rects Edward measured on the
-    // sheet itself, and they do not correspond to any single BX descriptor.
+    // Both frames are ordinary descriptors drawn at positions the decompilation
+    // gives, so nothing here is measured off a screenshot any more:
     //
-    // Source rects in the 256x256 page:
-    inline constexpr int HUD_OVERLAY_HEALTH_SRC_X = 0;
-    inline constexpr int HUD_OVERLAY_HEALTH_SRC_Y = 115;
-    inline constexpr int HUD_OVERLAY_HEALTH_W = 98;
-    inline constexpr int HUD_OVERLAY_HEALTH_H = 34;
+    //   health  FUN_000398a4  descriptor 174, quad x 0xd7..0x139 (215..313),
+    //                         y 0x13..0x35 (19..53)          = 98 x 34
+    //   ammo    same family   descriptor 173, quad x 0xe..0x90 (14..144),
+    //                         y 0xd3..0xe5 (211..229)        = 130 x 18
+    //
+    // Descriptor 174's rect is (0,115) 98x34 and 173's is (0,97) 130x18, matching
+    // the sizes Edward measured on the sheet - 174 exactly, 173 a slightly wider
+    // crop than his 126x15.
+    //
+    // AND IT ALL RECONCILES. 215 + the health slots' +10 inset = 225 = 0xe1, the
+    // health bar left read out of the draw code. 14 + the ammo slots' +34 = 48 =
+    // 0x30, likewise. Two independent numbers landing on the decompiled constants
+    // is what says the slot measurements and the frame positions are both right.
+    inline constexpr int HUD_OVERLAY_HEALTH_DESCRIPTOR = 174;
+    inline constexpr int HUD_OVERLAY_HEALTH_X = 215;
+    inline constexpr int HUD_OVERLAY_HEALTH_Y = 19;
+    inline constexpr int HUD_OVERLAY_HEALTH_Y_ALT = 195; // DAT_000ae0a4 && a5 layout
 
-    inline constexpr int HUD_OVERLAY_AMMO_SRC_X = 0;
-    inline constexpr int HUD_OVERLAY_AMMO_SRC_Y = 100;
-    inline constexpr int HUD_OVERLAY_AMMO_W = 126;
-    inline constexpr int HUD_OVERLAY_AMMO_H = 15;
-
-    // Screen positions in 320x240 space. DERIVED FROM THE ARTWORK SIZES AND THE
-    // SCREENSHOT, not from the decompilation:
-    //   health - 98 wide placed at x 221 ends at 319, i.e. flush with the right
-    //            edge of the 320-wide screen, which is where it sits in the
-    //            original. y chosen to centre the 34-tall frame on the 22..48 bar
-    //            row.
-    //   ammo   - measuring the original puts the whole ammo group between x 10
-    //            and x 136, which is exactly 126 wide, so x = 10 and the frame's
-    //            right edge lands on the bar's right edge (0x88 = 136). y centres
-    //            the 15-tall frame on the 217..224 row.
-    // Both are the obvious constants to nudge if they sit a pixel or two off.
-    inline constexpr int HUD_OVERLAY_HEALTH_X = 221;
-    inline constexpr int HUD_OVERLAY_HEALTH_Y = 18;
-    inline constexpr int HUD_OVERLAY_AMMO_X = 10;
-    inline constexpr int HUD_OVERLAY_AMMO_Y = 214;
+    inline constexpr int HUD_OVERLAY_AMMO_DESCRIPTOR = 173;
+    inline constexpr int HUD_OVERLAY_AMMO_X = 14;
+    inline constexpr int HUD_OVERLAY_AMMO_Y = 211;
 
     // ---- bar slots, MEASURED FROM THE OVERLAY ARTWORK -----------------------
     // The frames have transparent slots the bar shows through, so their spacing
@@ -433,20 +428,15 @@ namespace ALTEngine::Renderer
     inline constexpr int HUD_VIRTUAL_WIDTH = 320;
     inline constexpr int HUD_VIRTUAL_HEIGHT = 240;
 
-    // Ammo number's left edge.
+    // Ammo number's left edge, as the decompilation has it.
     //
-    // DEVIATES FROM THE DECOMPILATION. FUN_0003aac8 passes 0x12 (18), which with
-    // font A's 9-pixel digits puts "045" at 18..45 - ending exactly on the first
-    // bar slot at 44, with no gap. In the original the number sits hard against
-    // the left edge of its frame with clear space before the bars begin, so it is
-    // placed relative to the overlay instead: 3 pixels in, giving 13..40 and a
-    // 4-pixel gap before slot 0 (Edward, 2026).
-    //
-    // Two things could explain the 18: the frame's screen x may not be the 10
-    // measured off the screenshot, or font A's digit advance may be narrower than
-    // its 9-pixel rect. Worth revisiting if the tracker work turns up the real
-    // frame origin - until then this matches the original by eye.
-    inline constexpr int HUD_AMMO_TEXT_INSET = 3;
+    // RESOLVED: this looked 3 pixels too far right until the digit ADVANCE was
+    // fixed. FUN_00039068 builds advances as u1 - u0 from the raw descriptor,
+    // and BxParser adds +1 to width on read - so font A's digits advance 8, not
+    // the 9 the loader reports. At 8 the three digits span 18..42 and leave a
+    // 2-pixel gap before the first bar slot at 44, which is right. The earlier
+    // overlay-relative inset was papering over the advance bug and is gone.
+    inline constexpr int HUD_AMMO_TEXT_X = 0x12;   // 18
     inline constexpr int HUD_AMMO_ROW_TOP = 0xd9;  // 217
     inline constexpr int HUD_AMMO_ROW_BOTTOM = 0xe0; // 224
     inline constexpr int HUD_AMMO_BAR_LEFT = 0x30; // 48

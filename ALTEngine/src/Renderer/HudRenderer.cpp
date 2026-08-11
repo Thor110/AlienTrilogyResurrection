@@ -102,6 +102,141 @@ namespace ALTEngine::Renderer
         }
     }
 
+    namespace
+    {
+        // Snaps a destination rect to whole device pixels.
+        //
+        // The HUD is a 320x240 space stretched to the window, and the vertical
+        // scale is routinely fractional - 1080/240 is 4.5. A destination at
+        // y * 4.5 lands on a half pixel, and NEAREST sampling of a half-pixel
+        // offset reaches one texel outside the source rect. On the health frame,
+        // whose descriptor is flush against its neighbours with no padding, that
+        // pulled the adjacent artwork's row in and showed as the top-right corner
+        // tearing (Edward, 2026).
+        //
+        // Rounding position and extent independently, rather than rounding the
+        // size, keeps adjacent elements from overlapping or leaving seams.
+        SDL_FRect SnapToPixels(float x, float y, float w, float h)
+        {
+            float left = SDL_roundf(x);
+            float top = SDL_roundf(y);
+            float right = SDL_roundf(x + w);
+            float bottom = SDL_roundf(y + h);
+            return SDL_FRect{ left, top, right - left, bottom - top };
+        }
+    }
+
+    HudRenderer::Frame HudRenderer::TightenFrame(const ALTEngine::Formats::BndTexture& page,
+                                                 const ALTEngine::Formats::BxRectangle& rect)
+    {
+        // The frame descriptors are PADDED: descriptor 173's rect is 130x18 but
+        // its artwork is only 126x15, sitting 3 rows down. Drawing the padded
+        // rect put its top edge at sheet y 97, immediately below the font row -
+        // and with a non-integer output scale, NEAREST sampling pulled a row of
+        // white glyph pixels in, which showed as a streak above the ammo counter
+        // (Edward, 2026).
+        //
+        // Tightening to the real content both removes the bleed and confirms
+        // Edward's own measurements of 126x15 at (0,100) and 98x34 at (0,115).
+        Frame out;
+        int minX = rect.width, minY = rect.height, maxX = -1, maxY = -1;
+
+        for (int y = 0; y < rect.height; ++y)
+        {
+            for (int x = 0; x < rect.width; ++x)
+            {
+                int px = rect.x + x;
+                int py = rect.y + y;
+                if (px < 0 || py < 0 || px >= page.width || py >= page.height) { continue; }
+                size_t i = (static_cast<size_t>(py) * page.width + px) * 4;
+                if (page.rgba[i] == 0 && page.rgba[i + 1] == 0 && page.rgba[i + 2] == 0) { continue; }
+                if (x < minX) { minX = x; }
+                if (y < minY) { minY = y; }
+                if (x > maxX) { maxX = x; }
+                if (y > maxY) { maxY = y; }
+            }
+        }
+
+        if (maxX < 0) { return out; }   // nothing but key colour
+
+        out.rect.x = rect.x + minX;
+        out.rect.y = rect.y + minY;
+        out.rect.width = maxX - minX + 1;
+        out.rect.height = maxY - minY + 1;
+        out.rect.page = rect.page;
+        out.insetX = minX;
+        out.insetY = minY;
+        out.valid = true;
+        return out;
+    }
+
+    std::vector<HudRenderer::BarSlot> HudRenderer::ScanBarSlots(
+        const ALTEngine::Formats::BndTexture& page,
+        const ALTEngine::Formats::BxRectangle& frame)
+    {
+        // A slot is a run of columns that are keyed transparent over several
+        // rows. Recording each run's TOP AND BOTTOM as well as its x matters:
+        // filling the frame's full height instead let the bar leak upward
+        // through the transparent part above each slot, which made the bars look
+        // taller than the frame (Edward, 2026).
+        std::vector<BarSlot> slots;
+        int runStart = -1, runTop = 0, runBottom = 0;
+
+        auto flush = [&](int endColumn) {
+            if (runStart < 0) { return; }
+            slots.push_back({ runStart, endColumn - runStart + 1, runTop, runBottom });
+            runStart = -1;
+        };
+
+        auto clearAt = [&](int x, int y) {
+            int px = frame.x + x;
+            int py = frame.y + y;
+            if (px < 0 || py < 0 || px >= page.width || py >= page.height) { return true; }
+            size_t i = (static_cast<size_t>(py) * page.width + px) * 4;
+            return page.rgba[i] == 0 && page.rgba[i + 1] == 0 && page.rgba[i + 2] == 0;
+        };
+
+        for (int x = 0; x < frame.width; ++x)
+        {
+            // A slot is an ENCLOSED notch: a run of keyed pixels with opaque
+            // artwork both above and below it inside this frame. Without the
+            // enclosure test the frame's transparent surround counts as clear
+            // too, and on the ammo frame - which is a taller crop than the health
+            // one - every column qualified and all 22 slots merged into a single
+            // run.
+            int top = -1, bottom = -1;
+            for (int y = 1; y < frame.height - 1; ++y)
+            {
+                if (!clearAt(x, y)) { continue; }
+                if (top < 0)
+                {
+                    if (clearAt(x, y - 1)) { continue; }   // not the start of a notch
+                    top = y;
+                }
+                bottom = y;
+            }
+            bool enclosed = (top >= 0) && (bottom >= top) && !clearAt(x, bottom + 1);
+            bool isSlot = enclosed && (bottom - top + 1) >= 3;
+
+            if (isSlot)
+            {
+                if (runStart < 0) { runStart = x; runTop = top; runBottom = bottom; }
+                else
+                {
+                    if (top > runTop) { runTop = top; }
+                    if (bottom < runBottom) { runBottom = bottom; }
+                }
+                if (x == frame.width - 1) { flush(x); }
+            }
+            else
+            {
+                flush(x - 1);
+            }
+        }
+
+        return slots;
+    }
+
     bool HudRenderer::Load(SDL_Renderer* renderer, const std::filesystem::path& cdDirectory, int fileIndex,
                            const std::string& languageFolderName)
     {
@@ -162,6 +297,25 @@ namespace ALTEngine::Renderer
         rects = set.uvRects;
         loadedFileIndex = fileIndex;
 
+        // Scan the frames for their bar slots, from the ORIGINAL page (before
+        // keying) since the scan looks for the key colour itself.
+        if (static_cast<size_t>(HUD_OVERLAY_HEALTH_DESCRIPTOR) < rects.size())
+        {
+            healthFrame = TightenFrame(page, rects[HUD_OVERLAY_HEALTH_DESCRIPTOR]);
+            if (healthFrame.valid) { healthSlots = ScanBarSlots(page, healthFrame.rect); }
+        }
+        if (static_cast<size_t>(HUD_OVERLAY_AMMO_DESCRIPTOR) < rects.size())
+        {
+            ammoFrame = TightenFrame(page, rects[HUD_OVERLAY_AMMO_DESCRIPTOR]);
+            if (ammoFrame.valid) { ammoSlots = ScanBarSlots(page, ammoFrame.rect); }
+        }
+        SDL_Log("HudRenderer: health frame %dx%d inset (%d,%d), %zu slots; "
+                "ammo frame %dx%d inset (%d,%d), %zu slots",
+                healthFrame.rect.width, healthFrame.rect.height, healthFrame.insetX, healthFrame.insetY,
+                healthSlots.size(),
+                ammoFrame.rect.width, ammoFrame.rect.height, ammoFrame.insetX, ammoFrame.insetY,
+                ammoSlots.size());
+
         SDL_Log("HudRenderer: loaded %s - %dx%d page, %zu descriptors, %d px keyed transparent",
                 path.string().c_str(), page.width, page.height, rects.size(), keyedCount);
         return true;
@@ -171,6 +325,10 @@ namespace ALTEngine::Renderer
     {
         if (sheet) { SDL_DestroyTexture(sheet); sheet = nullptr; }
         rects.clear();
+        healthSlots.clear();
+        ammoSlots.clear();
+        healthFrame = Frame{};
+        ammoFrame = Frame{};
         loadedFileIndex = -1;
     }
 
@@ -182,8 +340,16 @@ namespace ALTEngine::Renderer
 
         SDL_FRect src{ static_cast<float>(r.x), static_cast<float>(r.y),
                        static_cast<float>(r.width), static_cast<float>(r.height) };
-        SDL_FRect dst{ x * scaleX, y * scaleY, r.width * scaleX, r.height * scaleY };
+        SDL_FRect dst = SnapToPixels(x * scaleX, y * scaleY, r.width * scaleX, r.height * scaleY);
         SDL_RenderTexture(renderer, sheet, &src, &dst);
+    }
+
+    void HudRenderer::DrawFrame(SDL_Renderer* renderer, const Frame& frame, int x, int y,
+                                float scaleX, float scaleY) const
+    {
+        if (!sheet || !frame.valid) { return; }
+        DrawSheetRegion(renderer, frame.rect.x, frame.rect.y, frame.rect.width, frame.rect.height,
+                        x + frame.insetX, y + frame.insetY, scaleX, scaleY);
     }
 
     void HudRenderer::DrawSheetRegion(SDL_Renderer* renderer, int srcX, int srcY, int w, int h,
@@ -192,7 +358,7 @@ namespace ALTEngine::Renderer
         if (!sheet || w <= 0 || h <= 0) { return; }
         SDL_FRect src{ static_cast<float>(srcX), static_cast<float>(srcY),
                        static_cast<float>(w), static_cast<float>(h) };
-        SDL_FRect dst{ dstX * scaleX, dstY * scaleY, w * scaleX, h * scaleY };
+        SDL_FRect dst = SnapToPixels(dstX * scaleX, dstY * scaleY, w * scaleX, h * scaleY);
         SDL_RenderTexture(renderer, sheet, &src, &dst);
     }
 
@@ -211,7 +377,17 @@ namespace ALTEngine::Renderer
             DrawDescriptor(renderer, descriptor, cursor, y, scaleX, scaleY);
             if (static_cast<size_t>(descriptor) < rects.size())
             {
-                cursor += rects[static_cast<size_t>(descriptor)].width;
+                // Advance by the RAW stored width, which is one less than the
+                // width BxParser reports.
+                //
+                // FUN_00039068 builds the advance table as u1 - u0 straight off
+                // the descriptor, and BxParser adds +1 to width and height on
+                // read (an inclusive-to-exclusive conversion that is right for
+                // sampling but wrong for an advance). Using the reported width
+                // made each digit a pixel too wide, so "045" ran 3 pixels long
+                // and butted against the first ammo bar - which is what made the
+                // decompiled text x of 0x12 look wrong (Edward, 2026).
+                cursor += rects[static_cast<size_t>(descriptor)].width - 1;
             }
         }
         return cursor - x;
@@ -232,7 +408,8 @@ namespace ALTEngine::Renderer
         auto fillRect = [&](int x0, int y0, int x1, int y1, const SDL_Color& c) {
             if (x1 <= x0) { return; }
             SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-            SDL_FRect dst{ x0 * scaleX, y0 * scaleY, (x1 - x0) * scaleX, (y1 - y0) * scaleY };
+            SDL_FRect dst = SnapToPixels(x0 * scaleX, y0 * scaleY,
+                                         (x1 - x0) * scaleX, (y1 - y0) * scaleY);
             SDL_RenderFillRect(renderer, &dst);
         };
 
@@ -241,12 +418,14 @@ namespace ALTEngine::Renderer
         // fill lands exactly in the transparent gaps the frame leaves. Drawn
         // full-height; the overlay on top clips each slot to its real height,
         // which is what produces the staircase.
-        auto drawSlots = [&](int overlayX, int firstSlot, int litSlots, int y0, int y1,
-                             const SDL_Color& c) {
-            for (int i = 0; i < litSlots; ++i)
+        auto drawSlots = [&](const std::vector<BarSlot>& slots, int frameX, int frameY,
+                             int litSlots, const SDL_Color& c) {
+            int n = std::min(litSlots, static_cast<int>(slots.size()));
+            for (int i = 0; i < n; ++i)
             {
-                int x = overlayX + firstSlot + i * HUD_BAR_SLOT_PITCH;
-                fillRect(x, y0, x + HUD_BAR_SLOT_WIDTH, y1, c);
+                const BarSlot& s = slots[static_cast<size_t>(i)];
+                fillRect(frameX + s.x, frameY + s.top,
+                         frameX + s.x + s.width, frameY + s.bottom + 1, c);
             }
         };
 
@@ -255,30 +434,24 @@ namespace ALTEngine::Renderer
         // is keyed transparent where the bar should show through, so it has to be
         // on top - it is what trims a pixel off the bar's corners and separates
         // the segments.
-        drawSlots(HUD_OVERLAY_HEALTH_X, HUD_HEALTH_SLOT_FIRST,
-                  HudHealthLitSlots(state.health),
-                  HUD_OVERLAY_HEALTH_Y, HUD_OVERLAY_HEALTH_Y + HUD_OVERLAY_HEALTH_H,
-                  BAR_FILL);
+        drawSlots(healthSlots, HUD_OVERLAY_HEALTH_X + healthFrame.insetX,
+                  HUD_OVERLAY_HEALTH_Y + healthFrame.insetY,
+                  HudHealthLitSlots(state.health), BAR_FILL);
 
-        DrawSheetRegion(renderer, HUD_OVERLAY_HEALTH_SRC_X, HUD_OVERLAY_HEALTH_SRC_Y,
-                        HUD_OVERLAY_HEALTH_W, HUD_OVERLAY_HEALTH_H,
-                        HUD_OVERLAY_HEALTH_X, HUD_OVERLAY_HEALTH_Y, scaleX, scaleY);
+        DrawFrame(renderer, healthFrame, HUD_OVERLAY_HEALTH_X, HUD_OVERLAY_HEALTH_Y, scaleX, scaleY);
 
         DrawNumber(renderer, state.health, HUD_HEALTH_TEXT_X, HUD_HEALTH_ROW_TOP,
                    HUD_FONT_B_FIRST_DESCRIPTOR, scaleX, scaleY);
 
         // ---- ammo row ------------------------------------------------------
         int ammo = state.CurrentAmmoTotal();
-        drawSlots(HUD_OVERLAY_AMMO_X, HUD_AMMO_SLOT_FIRST,
-                  HudAmmoLitSlots(ammo),
-                  HUD_OVERLAY_AMMO_Y, HUD_OVERLAY_AMMO_Y + HUD_OVERLAY_AMMO_H,
-                  BAR_FILL);
+        drawSlots(ammoSlots, HUD_OVERLAY_AMMO_X + ammoFrame.insetX,
+                  HUD_OVERLAY_AMMO_Y + ammoFrame.insetY,
+                  HudAmmoLitSlots(ammo), BAR_FILL);
 
-        DrawSheetRegion(renderer, HUD_OVERLAY_AMMO_SRC_X, HUD_OVERLAY_AMMO_SRC_Y,
-                        HUD_OVERLAY_AMMO_W, HUD_OVERLAY_AMMO_H,
-                        HUD_OVERLAY_AMMO_X, HUD_OVERLAY_AMMO_Y, scaleX, scaleY);
+        DrawFrame(renderer, ammoFrame, HUD_OVERLAY_AMMO_X, HUD_OVERLAY_AMMO_Y, scaleX, scaleY);
 
-        DrawNumber(renderer, ammo, HUD_OVERLAY_AMMO_X + HUD_AMMO_TEXT_INSET, HUD_AMMO_ROW_TOP,
+        DrawNumber(renderer, ammo, HUD_AMMO_TEXT_X, HUD_AMMO_ROW_TOP,
                    HUD_FONT_FIRST_DESCRIPTOR, scaleX, scaleY);
     }
 }

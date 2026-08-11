@@ -43,6 +43,21 @@ namespace ALTEngine::Renderer
 
         bool Ready() const { return sheet != nullptr; }
 
+        // One transparent slot in a bar frame: where the fill shows through.
+        // Offsets are relative to the frame's top-left corner.
+        struct BarSlot { int x, width, top, bottom; };
+
+        // A frame's artwork, tightened to its non-transparent content. `inset`
+        // is where the content starts inside the descriptor's rect, so the
+        // drawn position can be offset to match.
+        struct Frame
+        {
+            ALTEngine::Formats::BxRectangle rect{};
+            int insetX = 0;
+            int insetY = 0;
+            bool valid = false;
+        };
+
         ~HudRenderer() { Unload(); }
 
     private:
@@ -51,8 +66,21 @@ namespace ALTEngine::Renderer
         void DrawDescriptor(SDL_Renderer* renderer, int descriptorIndex, int x, int y,
                             float scaleX, float scaleY) const;
 
+        // Finds the transparent slots inside a frame descriptor: contiguous
+        // columns whose keyed run is tall enough to be a bar slot, with that
+        // run's top and bottom. `page` is the un-keyed RGBA.
+        // Shrinks a descriptor's rect to the artwork actually in it.
+        static Frame TightenFrame(const ALTEngine::Formats::BndTexture& page,
+                                  const ALTEngine::Formats::BxRectangle& rect);
+
+        static std::vector<BarSlot> ScanBarSlots(const ALTEngine::Formats::BndTexture& page,
+                                                 const ALTEngine::Formats::BxRectangle& frame);
+
         // Blits an arbitrary region of the sheet page. The frame artwork spans
         // several descriptors, so it is taken as a raw rect rather than looked up.
+        void DrawFrame(SDL_Renderer* renderer, const Frame& frame, int x, int y,
+                       float scaleX, float scaleY) const;
+
         void DrawSheetRegion(SDL_Renderer* renderer, int srcX, int srcY, int w, int h,
                              int dstX, int dstY, float scaleX, float scaleY) const;
 
@@ -61,6 +89,14 @@ namespace ALTEngine::Renderer
         // Returns the width consumed.
         int DrawNumber(SDL_Renderer* renderer, int value, int x, int y,
                        int firstDescriptor, float scaleX, float scaleY) const;
+
+        // Slots scanned out of the frame artwork at load time - see
+        // ScanBarSlots. Derived from the sheet rather than hardcoded, so the
+        // alien-styled PNL1 frames work without a second table.
+        std::vector<BarSlot> healthSlots;
+        std::vector<BarSlot> ammoSlots;
+        Frame healthFrame;
+        Frame ammoFrame;
 
         SDL_Texture* sheet = nullptr;
         std::vector<ALTEngine::Formats::BxRectangle> rects;
