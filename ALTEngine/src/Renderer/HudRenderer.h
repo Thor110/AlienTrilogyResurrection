@@ -41,6 +41,30 @@ namespace ALTEngine::Renderer
         void Draw(SDL_Renderer* renderer, const ALTEngine::Screens::PlayerHudState& state,
                   int outputWidth, int outputHeight) const;
 
+        // Draws the tracker's edge strips above and below an arbitrary box, in
+        // 320x240 HUD space. Used to frame the live minimap so it matches the
+        // tracker's styling.
+        // `thicknessScale` multiplies the strip's height, so a box drawn at
+        // double size gets strips of proportionate weight rather than hairlines.
+        void DrawEdgeStrips(SDL_Renderer* renderer, int left, int right, int top, int bottom,
+                            int outputWidth, int outputHeight, int thicknessScale = 1) const;
+
+        // Same, but in device PIXELS. Used where the box being framed is already
+        // known in pixels - converting back into HUD units and re-scaling rounds
+        // twice and leaves a one-pixel gap under the box.
+        void DrawEdgeStripsPixels(SDL_Renderer* renderer, const SDL_FRect& box, float thickness) const;
+
+        // One gameplay tick of the motion tracker sweep.
+        void TickTracker();
+
+        // Draws the tracker dish and its contacts. `contacts` are world-space
+        // offsets from the player, already in the game's units; they are gated
+        // by range, converted to cells and rotated by the player's facing here,
+        // exactly as FUN_0003a008 does.
+        struct Contact { float dx, dz; };
+        void DrawTracker(SDL_Renderer* renderer, const std::vector<Contact>& contacts,
+                         float playerYaw, int outputWidth, int outputHeight) const;
+
         bool Ready() const { return sheet != nullptr; }
 
         // One transparent slot in a bar frame: where the fill shows through.
@@ -95,6 +119,11 @@ namespace ALTEngine::Renderer
         // alien-styled PNL1 frames work without a second table.
         std::vector<BarSlot> healthSlots;
         std::vector<BarSlot> ammoSlots;
+        // Sweep state, advanced by TickTracker.
+        int trackerFrame = 0;
+        int trackerTimer = 0;
+        int trackerPause = 0;
+
         Frame healthFrame;
         Frame ammoFrame;
 

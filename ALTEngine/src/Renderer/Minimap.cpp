@@ -32,7 +32,7 @@ namespace ALTEngine::Renderer
         }
     }
 
-    void DrawMinimap(SDL_Renderer* renderer,
+    SDL_FRect DrawMinimap(SDL_Renderer* renderer,
                      const ALTEngine::Formats::LevelGeometry& level,
                      const SDL_FRect& dest,
                      float playerGridX, float playerGridZ, float playerYaw,
@@ -48,24 +48,27 @@ namespace ALTEngine::Renderer
         // Using mapWidth as the stride instead drew the level as a field of
         // wall with one-cell-tall horizontal streaks through it, which is what
         // a stride error looks like.
+        SDL_FRect drawn{ dest.x, dest.y, 0.0f, 0.0f };
+
         int gridW = static_cast<int>(level.header.mapLength);
         int gridH = static_cast<int>(level.header.mapWidth);
-        if (gridW <= 0 || gridH <= 0) { return; }
-        if (level.collisionGrid.size() < static_cast<size_t>(gridW) * gridH) { return; }
+        if (gridW <= 0 || gridH <= 0) { return drawn; }
+        if (level.collisionGrid.size() < static_cast<size_t>(gridW) * gridH) { return drawn; }
 
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
         // Letterbox: one scale for both axes so the level is not stretched.
         float scale = std::min(dest.w / static_cast<float>(gridW), dest.h / static_cast<float>(gridH));
-        if (scale <= 0.0f) { return; }
+        if (scale <= 0.0f) { return drawn; }
         float cell = std::max(scale, static_cast<float>(style.minCellPixels) * 0.0f + scale);
         float drawW = cell * gridW;
         float drawH = cell * gridH;
-        float originX = dest.x + (dest.w - drawW) * 0.5f;
-        float originY = dest.y + (dest.h - drawH) * 0.5f;
+        float originX = style.alignTopLeft ? dest.x : dest.x + (dest.w - drawW) * 0.5f;
+        float originY = style.alignTopLeft ? dest.y : dest.y + (dest.h - drawH) * 0.5f;
 
         SetColor(renderer, BACKDROP, style.alpha);
         SDL_FRect backdrop{ originX, originY, drawW, drawH };
+        drawn = backdrop;
         SDL_RenderFillRect(renderer, &backdrop);
 
         // Floor height range, so the shading uses the level's own spread rather
@@ -166,6 +169,8 @@ namespace ALTEngine::Renderer
             SetColor(renderer, BORDER, style.alpha);
             SDL_RenderRect(renderer, &backdrop);
         }
+
+        return drawn;
     }
 }
 

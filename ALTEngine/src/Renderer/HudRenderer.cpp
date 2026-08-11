@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <vector>
 
 namespace ALTEngine::Renderer
@@ -453,5 +454,150 @@ namespace ALTEngine::Renderer
 
         DrawNumber(renderer, ammo, HUD_AMMO_TEXT_X, HUD_AMMO_ROW_TOP,
                    HUD_FONT_FIRST_DESCRIPTOR, scaleX, scaleY);
+    }
+
+    void HudRenderer::DrawEdgeStrips(SDL_Renderer* renderer, int left, int right, int top, int bottom,
+                                     int outputWidth, int outputHeight, int thicknessScale) const
+    {
+        if (!sheet || rects.empty()) { return; }
+        if (outputWidth <= 0 || outputHeight <= 0) { return; }
+        if (static_cast<size_t>(HUD_TRACKER_STRIP_DESCRIPTOR) >= rects.size()) { return; }
+
+        float scaleX = static_cast<float>(outputWidth) / static_cast<float>(HUD_VIRTUAL_WIDTH);
+        float scaleY = static_cast<float>(outputHeight) / static_cast<float>(HUD_VIRTUAL_HEIGHT);
+
+        const ALTEngine::Formats::BxRectangle& sr = rects[HUD_TRACKER_STRIP_DESCRIPTOR];
+        SDL_FRect src{ static_cast<float>(sr.x), static_cast<float>(sr.y),
+                       static_cast<float>(sr.width), static_cast<float>(sr.height) };
+        int width = right - left;
+        if (width <= 0) { return; }
+
+        // The strip sits just OUTSIDE the box on each side.
+        //
+        // The TOP one is the flipped copy, not the bottom. The artwork's own
+        // orientation is the bottom edge, so drawing it unflipped at the top put
+        // both strips the same way up (Edward, 2026).
+        int thickness = sr.height * (thicknessScale < 1 ? 1 : thicknessScale);
+
+        SDL_FRect topRect = SnapToPixels(left * scaleX, (top - thickness) * scaleY,
+                                         width * scaleX, thickness * scaleY);
+        SDL_RenderTextureRotated(renderer, sheet, &src, &topRect, 0.0, nullptr, SDL_FLIP_VERTICAL);
+
+        SDL_FRect bottomRect = SnapToPixels(left * scaleX, bottom * scaleY,
+                                            width * scaleX, thickness * scaleY);
+        SDL_RenderTexture(renderer, sheet, &src, &bottomRect);
+    }
+
+    void HudRenderer::DrawEdgeStripsPixels(SDL_Renderer* renderer, const SDL_FRect& box,
+                                           float thickness) const
+    {
+        if (!sheet || rects.empty() || box.w <= 0.0f || thickness <= 0.0f) { return; }
+        if (static_cast<size_t>(HUD_TRACKER_STRIP_DESCRIPTOR) >= rects.size()) { return; }
+
+        const ALTEngine::Formats::BxRectangle& sr = rects[HUD_TRACKER_STRIP_DESCRIPTOR];
+        SDL_FRect src{ static_cast<float>(sr.x), static_cast<float>(sr.y),
+                       static_cast<float>(sr.width), static_cast<float>(sr.height) };
+
+        // Top is the flipped copy; the artwork reads as the bottom edge.
+        SDL_FRect top = SnapToPixels(box.x, box.y - thickness, box.w, thickness);
+        SDL_RenderTextureRotated(renderer, sheet, &src, &top, 0.0, nullptr, SDL_FLIP_VERTICAL);
+
+        SDL_FRect bottom = SnapToPixels(box.x, box.y + box.h, box.w, thickness);
+        SDL_RenderTexture(renderer, sheet, &src, &bottom);
+    }
+
+    void HudRenderer::TickTracker()
+    {
+        HudTrackerAdvance(trackerFrame, trackerTimer, trackerPause);
+    }
+
+    void HudRenderer::DrawTracker(SDL_Renderer* renderer, const std::vector<Contact>& contacts,
+                                  float playerYaw, int outputWidth, int outputHeight) const
+    {
+        if (!sheet || rects.empty()) { return; }
+        if (outputWidth <= 0 || outputHeight <= 0) { return; }
+
+        float scaleX = static_cast<float>(outputWidth) / static_cast<float>(HUD_VIRTUAL_WIDTH);
+        float scaleY = static_cast<float>(outputHeight) / static_cast<float>(HUD_VIRTUAL_HEIGHT);
+
+        int tile = HUD_TRACKER_FIRST_DESCRIPTOR + trackerFrame;
+        if (static_cast<size_t>(tile) >= rects.size()) { return; }
+        const ALTEngine::Formats::BxRectangle& r = rects[static_cast<size_t>(tile)];
+
+        SDL_FRect src{ static_cast<float>(r.x), static_cast<float>(r.y),
+                       static_cast<float>(r.width), static_cast<float>(r.height) };
+
+        // Four quadrants from ONE tile, mirrored - which is what the original
+        // does by swapping the quad's UVs rather than storing four copies. The
+        // artwork tile is the top-right quarter.
+        struct Quad { int x, y; SDL_FlipMode flip; };
+        // The tile is the dish's TOP-LEFT quarter: its circle centre sits at its
+        // own BOTTOM-RIGHT corner. So the unflipped tile goes top-left and the
+        // other three mirror away from the dish centre.
+        //
+        // Both earlier guesses had the vertical flip inverted, which put the
+        // circle centres at the top and bottom edges instead of in the middle
+        // (Edward, 2026). The original achieves the same mirroring by exchanging
+        // bytes between the quad's UV corner slots (+0x11/+0x19/+0x21/+0x29 in
+        // FUN_0003a1d0) rather than by a flip flag; the result is equivalent.
+        const Quad quads[4] = {
+            { HUD_TRACKER_DISH_LEFT, HUD_TRACKER_DISH_TOP, SDL_FLIP_NONE },                      // top left
+            { HUD_TRACKER_CENTRE_X, HUD_TRACKER_DISH_TOP, SDL_FLIP_HORIZONTAL },                 // top right
+            { HUD_TRACKER_DISH_LEFT, HUD_TRACKER_CENTRE_Y, SDL_FLIP_VERTICAL },                  // bottom left
+            { HUD_TRACKER_CENTRE_X, HUD_TRACKER_CENTRE_Y,
+              static_cast<SDL_FlipMode>(SDL_FLIP_HORIZONTAL | SDL_FLIP_VERTICAL) },              // bottom right
+        };
+
+        for (const Quad& q : quads)
+        {
+            SDL_FRect dst = SnapToPixels(q.x * scaleX, q.y * scaleY,
+                                         HUD_TRACKER_QUADRANT_W * scaleX,
+                                         HUD_TRACKER_QUADRANT_H * scaleY);
+            SDL_RenderTextureRotated(renderer, sheet, &src, &dst, 0.0, nullptr, q.flip);
+        }
+
+        // Edge strips, above and below, from one descriptor used twice.
+        if (static_cast<size_t>(HUD_TRACKER_STRIP_DESCRIPTOR) < rects.size())
+        {
+            const ALTEngine::Formats::BxRectangle& sr = rects[HUD_TRACKER_STRIP_DESCRIPTOR];
+            SDL_FRect strip{ static_cast<float>(sr.x), static_cast<float>(sr.y),
+                             static_cast<float>(sr.width), static_cast<float>(sr.height) };
+            int width = HUD_TRACKER_RIGHT - HUD_TRACKER_LEFT;
+
+            // Top is the flipped copy; the artwork reads as the bottom edge.
+            SDL_FRect top = SnapToPixels(HUD_TRACKER_LEFT * scaleX, HUD_TRACKER_TOP_STRIP_Y * scaleY,
+                                         width * scaleX, sr.height * scaleY);
+            SDL_RenderTextureRotated(renderer, sheet, &strip, &top, 0.0, nullptr, SDL_FLIP_VERTICAL);
+
+            SDL_FRect bottom = SnapToPixels(HUD_TRACKER_LEFT * scaleX, HUD_TRACKER_BOTTOM_STRIP_Y * scaleY,
+                                            width * scaleX, sr.height * scaleY);
+            SDL_RenderTexture(renderer, sheet, &strip, &bottom);
+        }
+
+        // Contacts. Range gate, world-to-cell shift and rotation by the player's
+        // facing, all as FUN_0003a008 does - so the dish is always
+        // player-forward.
+        SDL_SetRenderDrawColor(renderer, 255, 127, 0, 255);
+        float sinYaw = std::sin(-playerYaw);
+        float cosYaw = std::cos(-playerYaw);
+
+        for (const Contact& c : contacts)
+        {
+            if (std::fabs(c.dx) > HUD_TRACKER_RANGE || std::fabs(c.dz) > HUD_TRACKER_RANGE) { continue; }
+
+            // >> 9 is the world-to-cell shift; the dish is 32 cells across its
+            // 64-pixel height, so a cell is two pixels.
+            float cellX = c.dx / 512.0f;
+            float cellZ = c.dz / 512.0f;
+            float rx = cellX * cosYaw - cellZ * sinYaw;
+            float rz = cellX * sinYaw + cellZ * cosYaw;
+
+            float px = HUD_TRACKER_CENTRE_X + rx;
+            float pz = HUD_TRACKER_CENTRE_Y + rz;
+            SDL_FRect blip = SnapToPixels(px * scaleX, pz * scaleY,
+                                          HUD_TRACKER_BLIP_SIZE * scaleX,
+                                          HUD_TRACKER_BLIP_SIZE * scaleY);
+            SDL_RenderFillRect(renderer, &blip);
+        }
     }
 }

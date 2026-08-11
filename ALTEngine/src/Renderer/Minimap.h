@@ -41,6 +41,12 @@ namespace ALTEngine::Renderer
         bool drawTriggers = false; // noisy on a live HUD, useful on the pause map
         bool drawBorder = true;
 
+        // Letterboxing normally CENTRES the map in `dest`. The HUD wants it
+        // pinned to the top-left instead, so the whole assembly starts exactly
+        // where it is placed rather than floating toward the middle of a box
+        // that is wider than the map needs (Edward, 2026).
+        bool alignTopLeft = false;
+
         // 0-255. The live HUD version wants to be readable without hiding the
         // world behind it.
         Uint8 alpha = 255;
@@ -62,7 +68,11 @@ namespace ALTEngine::Renderer
     // +0x07, which the door code sets - not visitation. So the behaviour here
     // (reveal the player's cell and its immediate neighbours) is this port's,
     // matching how the game plays rather than transcribed from it.
-    void DrawMinimap(SDL_Renderer* renderer,
+    // Returns the rect it actually drew into, in pixels. That is NOT `dest`:
+    // the map is letterboxed to preserve the level's aspect, so a tall level in
+    // a wide box fills only part of it. Callers that frame the map need the real
+    // extent, or their border ends up far wider than the map (Edward, 2026).
+    SDL_FRect DrawMinimap(SDL_Renderer* renderer,
                      const ALTEngine::Formats::LevelGeometry& level,
                      const SDL_FRect& dest,
                      float playerGridX, float playerGridZ, float playerYaw,

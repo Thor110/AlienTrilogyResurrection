@@ -1250,6 +1250,7 @@ namespace ALTEngine::Screens
                         ModelRenderer::TickLevelLights(cacheKey, SDL_rand(256));
 
                         hudState.Tick();
+                        hud.TickTracker();
 
                         // Remember where the player has been, for the map's fog
                         // of war. Without this the visited array stays empty and
@@ -1458,6 +1459,13 @@ namespace ALTEngine::Screens
 
                         hud.Draw(renderer, hudState, windowW, windowH);
 
+                        // Motion tracker. Contacts are world-space offsets from
+                        // the player; enemies do not exist yet, so this is empty
+                        // and the dish draws with its sweep and no blips. Wiring
+                        // it now means the enemy work only has to fill the list.
+                        std::vector<ALTEngine::Renderer::HudRenderer::Contact> contacts;
+                        hud.DrawTracker(renderer, contacts, camera.yaw, windowW, windowH);
+
                         // Live Minimap (Modern option). Drawn over the
                         // presented world frame with SDL_Renderer, the same way
                         // the pause menu draws - the 3D pass is already resolved
@@ -1472,26 +1480,60 @@ namespace ALTEngine::Screens
                         // just hides the feature (Edward, 2026).
                         if (liveMinimap && levelReady)
                         {
-                            float size = static_cast<float>(std::min(windowW, windowH)) * 0.22f;
-                            float margin = size * 0.08f;
-                            // Bottom-right, not top-right: the health bar now
-                            // occupies the top right, and the original's motion
-                            // tracker sits bottom-right anyway.
-                            SDL_FRect mapRect{ static_cast<float>(windowW) - size - margin,
-                                               static_cast<float>(windowH) - size - margin,
-                                               size, size };
+                            // Top-left, lined up with the rest of the HUD: the
+                            // ammo frame's own left gap horizontally, and the
+                            // health frame's rows vertically, so the two boxes
+                            // read as one line across the top (Edward, 2026).
+                            //
+                            // Positioned in the HUD's 320x240 space and scaled
+                            // like everything else, rather than as a fraction of
+                            // the window, so it stays aligned at any resolution.
+                            float hudScaleX = static_cast<float>(windowW)
+                                            / static_cast<float>(ALTEngine::Renderer::HUD_VIRTUAL_WIDTH);
+                            float hudScaleY = static_cast<float>(windowH)
+                                            / static_cast<float>(ALTEngine::Renderer::HUD_VIRTUAL_HEIGHT);
+
+                            // HUD_MINIMAP_X/Y is the outer corner of the whole
+                            // assembly INCLUDING the strips, so the map itself is
+                            // inset by one pixel horizontally and by the strip's
+                            // thickness vertically (Edward, 2026 - "this includes
+                            // the black bars").
+                            SDL_FRect mapRect{
+                                (ALTEngine::Renderer::HUD_MINIMAP_X + 1) * hudScaleX,
+                                (ALTEngine::Renderer::HUD_MINIMAP_Y
+                                 + ALTEngine::Renderer::HUD_MINIMAP_STRIP_H) * hudScaleY,
+                                ALTEngine::Renderer::HUD_MINIMAP_W * hudScaleX,
+                                ALTEngine::Renderer::HUD_MINIMAP_H * hudScaleY
+                            };
 
                             ALTEngine::Renderer::MinimapStyle style;
                             style.alpha = 190;          // readable without hiding the world
                             style.drawTriggers = false; // too noisy at this size
+                            style.drawBorder = false;   // the edge strips frame it instead
+                            style.alignTopLeft = true;  // pin to HUD_MINIMAP_X/Y, do not centre
+
                             // The Auto Mapper reveals everything; without it the
                             // player only sees where they have been.
                             const std::vector<uint8_t>* fog =
                                 inventory.hasAutoMapper ? nullptr : &minimapVisited;
-                            ALTEngine::Renderer::DrawMinimap(renderer, level, mapRect,
-                                                             ToGridSpaceX(camera.x, originX) / 512.0f,
-                                                             ToGridSpaceZ(camera.z, originZ) / 512.0f,
-                                                             camera.yaw, style, fog);
+                            SDL_FRect drawn = ALTEngine::Renderer::DrawMinimap(
+                                renderer, level, mapRect,
+                                ToGridSpaceX(camera.x, originX) / 512.0f,
+                                ToGridSpaceZ(camera.z, originZ) / 512.0f,
+                                camera.yaw, style, fog);
+
+                            // Frame what was actually drawn, in PIXELS. Going via
+                            // HUD units and re-scaling rounds twice, which left a
+                            // one-pixel gap under the map. One pixel of leeway
+                            // each side, matching the tracker's 223..305 around a
+                            // dish of 224..304 (Edward, 2026).
+                            if (drawn.w > 0.0f && drawn.h > 0.0f)
+                            {
+                                SDL_FRect framed{ drawn.x - hudScaleX, drawn.y,
+                                                  drawn.w + hudScaleX * 2.0f, drawn.h };
+                                hud.DrawEdgeStripsPixels(renderer, framed,
+                                                         ALTEngine::Renderer::HUD_MINIMAP_STRIP_H * hudScaleY);
+                            }
                         }
                         SDL_DestroyTexture(frameTexture);
                     }

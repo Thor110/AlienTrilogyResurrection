@@ -260,6 +260,81 @@
 // may be mis-ordering aliased writes here (it warns about overlapping globals in
 // this file). The band THRESHOLDS are solid; the colours are not.
 //
+// ============================================================================
+// MOTION TRACKER - FOUND. Two functions, and it is always drawn: it is part of
+// the HUD, not an inventory item (the Auto Mapper only reveals the level map).
+//
+//   FUN_0003a1d0   the dish, and the ping. Runs only when DAT_000ae0a4 and
+//                  DAT_000ae0a5 are both zero, i.e. the normal HUD layout.
+//   FUN_0003a008   the blips. Called by the above, returns the contact count.
+//
+// THE BLIPS (FUN_0003a008):
+//   - walks the entity list at DAT_00247a10, skipping by type on bytes +0x3a
+//     and +0x6f
+//   - delta = player - entity, from DAT_000b0a46 and DAT_000b0a4a (both the
+//     high half of a 16.16 fixed-point pair)
+//   - RANGE GATE: |dx| and |dz| must be < 0x3001. 0x3000 is 12288 world units,
+//     i.e. 24 cells - so the tracker sees 24 cells on each axis.
+//   - the pair is scaled by >> 9, which is the world-to-CELL shift, then run
+//     through a rotation built from `-DAT_000b0ba2 & 0xfff` - the player's yaw
+//     negated in the 4096-step turn - so contacts rotate with the player and
+//     the display is always player-forward.
+//   - each blip is a 2x2 point (entry +0x10 and +0x12 both 2), primitive
+//     LAB_0004c904, colour bytes 0xff, 0x7f, 0x00, and the entry stride here is
+//     0x14 - a THIRD entry size, smaller than the 0x1c flat and 0x2c textured
+//     ones.
+//   - the viewport is set to (0x108, 0xc0) = (264, 192) for the pass and put
+//     back to (0xa0, 0x78) = screen centre afterwards, so blip coordinates are
+//     relative to the dish's centre at 264,192.
+//
+// THE PING (FUN_0003a1d0): when DAT_00247f6c is set it plays sound 0x15 if the
+// contact count is < 1, or 0x16 if something is in range - so the tracker has
+// two ping sounds and swaps them on contact.
+//
+// THE DISH: assembled from several quads at x 0xdf..0x131 (223..305). Two of
+// them are thin 5-pixel strips at y 0x9b..0xa0 (155..160) and y 0xe0..0xe5
+// (224..229) - the top and bottom edges - drawn from descriptor 203 with its UVs
+// swapped vertically, which is how one strip serves both edges. Colour 0x80
+// neutral, textured primitive.
+//
+// THE QUADRANTS AND THE SWEEP - read, and the dish now assembles correctly.
+//
+// The 40x32 tile is the dish's TOP-LEFT quarter, with the circle's centre at the
+// tile's own bottom-right corner. The other three quarters are that tile
+// mirrored horizontally, vertically, and both.
+//
+// One quadrant quad is at x 0x108..0x130 (264..304), y 0xa0..0xc0 (160..192) -
+// 40x32, exactly a tile, and the top-right quarter of the dish whose centre is
+// (264,192). The other three are the same tile with its UVs swapped to mirror
+// it, so the whole dish is 80x64 spanning x 224..304, y 160..224, with the two
+// 5-pixel edge strips just outside at y 155..160 and 224..229.
+//
+// The tile is chosen as `&UNK_00241590 + (DAT_000acb94 >> 0x10) * 0x10`, i.e.
+// descriptor 205 + frame, so DAT_000acb94's high word is the sweep frame.
+//
+// THE ANIMATION, which is the bit worth matching:
+//   - a counter DAT_00247f70 ticks down every frame
+//   - the sweep only advances when (DAT_00247f70 & 1) != 0, so EVERY OTHER TICK
+//   - frame = (frame + 1) & 7, so it cycles through all 8 tiles
+//   - when it wraps back to 0 it sets DAT_000acb9a = 0x20, which gates further
+//     advances - a PAUSE OF 32 before the sweep starts over
+// So: 8 frames at one per two ticks, then a 32-tick rest, repeating.
+// (DAT_000acb98 is a one-shot gate within that; its exact reset was not traced,
+// and it does not change the overall cadence.)
+
+// ============================================================================
+// TEXT IS ASCII - confirmed from a second direction.
+//
+// FUN_0003ab5c (the general character draw) takes a character code and computes
+// its glyph as `code - 0x20`, so the font is ASCII from space onward. Space is
+// glyph 0, and '0' is 0x30 - 0x20 = 0x10 - which is exactly the digit offset the
+// number routines use. Two independent derivations of the same mapping.
+//
+// It also reveals a THIRD glyph table: codes >= 0x80 use `code - 0x80` against
+// advances at DAT_00247d28 and UVs at panel offset 0x1570 (descriptor 343),
+// beyond this sheet's 343 descriptors. Probably an accented or second-language
+// set. Not needed for the HUD.
+//
 // STILL NEEDED BEFORE THIS CAN BE BUILT:
 //   - which descriptor index is which element. The layout is regular (16x16 and
 //     16x24 runs, then 9-pixel-tall font glyphs from index 23 on) so this is a
@@ -357,6 +432,75 @@ namespace ALTEngine::Renderer
         // bar's left edge instead of into the artwork's slots.
         return 0x4e;
     }
+
+    // ---- motion tracker ----------------------------------------------------
+    // Eight sweep frames, one quadrant each. See the note above; the draw
+    // position and the frame timing are both still unknown.
+    inline constexpr int HUD_TRACKER_FIRST_DESCRIPTOR = 205;
+    inline constexpr int HUD_TRACKER_FRAME_COUNT = 8;
+    inline constexpr int HUD_TRACKER_QUADRANT_W = 40;
+    inline constexpr int HUD_TRACKER_QUADRANT_H = 32;
+
+    // Dish centre, from the viewport FUN_0003a008 sets for the blip pass.
+    inline constexpr int HUD_TRACKER_CENTRE_X = 0x108;  // 264
+    inline constexpr int HUD_TRACKER_CENTRE_Y = 0xc0;   // 192
+
+    // Dish extent and its two edge strips.
+    inline constexpr int HUD_TRACKER_LEFT = 0xdf;        // 223
+    inline constexpr int HUD_TRACKER_RIGHT = 0x131;      // 305
+    inline constexpr int HUD_TRACKER_TOP_STRIP_Y = 0x9b; // 155
+    inline constexpr int HUD_TRACKER_BOTTOM_STRIP_Y = 0xe0; // 224
+    inline constexpr int HUD_TRACKER_STRIP_DESCRIPTOR = 203;
+
+    // Contacts are gated on |dx| and |dz| < 0x3001 world units, then shifted
+    // right by 9 into cells.
+    inline constexpr int HUD_TRACKER_RANGE = 0x3000;     // 12288 = 24 cells
+    inline constexpr int HUD_TRACKER_BLIP_SIZE = 2;
+
+    // Ping sounds: index 0 when nothing is in range, 1 on contact.
+    inline constexpr int HUD_TRACKER_SOUND_CLEAR = 0x15;
+    inline constexpr int HUD_TRACKER_SOUND_CONTACT = 0x16;
+
+    // Dish geometry: four 40x32 quadrants around the centre.
+    inline constexpr int HUD_TRACKER_DISH_LEFT = HUD_TRACKER_CENTRE_X - HUD_TRACKER_QUADRANT_W; // 224
+    inline constexpr int HUD_TRACKER_DISH_TOP = HUD_TRACKER_CENTRE_Y - HUD_TRACKER_QUADRANT_H;  // 160
+
+    // Sweep timing, from the counter above.
+    inline constexpr int HUD_TRACKER_TICKS_PER_FRAME = 2;
+    inline constexpr int HUD_TRACKER_PAUSE_TICKS = 0x20; // 32, after the cycle wraps
+
+    // Advances the sweep. `frame` cycles 0..7; `timer` is caller-owned state.
+    // Returns the frame to draw.
+    inline int HudTrackerAdvance(int& frame, int& timer, int& pause)
+    {
+        if (pause > 0) { pause--; return frame; }
+        if (++timer < HUD_TRACKER_TICKS_PER_FRAME) { return frame; }
+        timer = 0;
+        frame = (frame + 1) & 7;
+        if (frame == 0) { pause = HUD_TRACKER_PAUSE_TICKS; }
+        return frame;
+    }
+
+    // ---- live minimap (Modern option) ---------------------------------------
+    // Not part of the original HUD - the original only showed a map in the pause
+    // menu - so this is placement rather than transcription. Lined up with the
+    // rest of the HUD so it does not look bolted on:
+    //   x = 14, the ammo frame's own left gap from the screen edge
+    //   y = 19 and 34 tall, exactly the health frame's rows, so the two boxes
+    //       sit on the same line across the top of the screen
+    //   width = 98, the health frame's width, so left and right balance
+    // Edge strips sit just outside it, the way the tracker's do.
+    // Doubled from the health frame's 98x34 (Edward, 2026). 14 + 196 = 210,
+    // which still clears the health frame's left edge at 215.
+    // Edge strip thickness in HUD units, matching the tracker's own strips
+    // (its quads are y 0x9b..0xa0, five rows).
+    inline constexpr int HUD_MINIMAP_STRIP_H = 5;
+
+    inline constexpr int HUD_MINIMAP_SCALE = 2;
+    inline constexpr int HUD_MINIMAP_X = 14;
+    inline constexpr int HUD_MINIMAP_Y = 19;   // == HUD_OVERLAY_HEALTH_Y, declared below
+    inline constexpr int HUD_MINIMAP_W = 98 * HUD_MINIMAP_SCALE;
+    inline constexpr int HUD_MINIMAP_H = 34 * HUD_MINIMAP_SCALE;
 
     // ---- overlay artwork ---------------------------------------------------
     // Both frames are ordinary descriptors drawn at positions the decompilation
