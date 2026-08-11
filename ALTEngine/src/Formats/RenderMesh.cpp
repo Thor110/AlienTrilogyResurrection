@@ -257,11 +257,32 @@ namespace ALTEngine::Formats
             uint32_t ib = emitVertex(b, uvB, 1);
             uint32_t ic = emitVertex(c, uvC, 2);
 
+            // Draw routine 4 faces are DOUBLE-SIDED - they are meant to be
+            // visible from behind as well as in front, and with BACK culling on
+            // they vanish from one side (Edward, 2026).
+            //
+            // Handled by emitting the reverse winding as extra triangles rather
+            // than by routing these faces through the existing
+            // doubleSidedPipeline. The level mesh is partitioned by texture page,
+            // so a second pipeline would mean a second partition and a second set
+            // of buffers per page; L111 has 171 flag-4 quads, so the duplicate
+            // triangles cost a few hundred indices against that.
+            //
+            // Level faces only: `uvsAlreadyOrdered` marks the level path, and
+            // model flag values mean something different (see ModelQuad).
+            bool doubleSided = uvsAlreadyOrdered && (q.flags == 4);
+
             if (isTriangle)
             {
                 result.indices.push_back(ia);
                 result.indices.push_back(ib);
                 result.indices.push_back(ic);
+                if (doubleSided)
+                {
+                    result.indices.push_back(ic);
+                    result.indices.push_back(ib);
+                    result.indices.push_back(ia);
+                }
             }
             else
             {
@@ -277,6 +298,17 @@ namespace ALTEngine::Formats
                 result.indices.push_back(ia);
                 result.indices.push_back(ic);
                 result.indices.push_back(id);
+
+                if (doubleSided)
+                {
+                    // Same two triangles wound the other way.
+                    result.indices.push_back(ic);
+                    result.indices.push_back(ib);
+                    result.indices.push_back(ia);
+                    result.indices.push_back(id);
+                    result.indices.push_back(ic);
+                    result.indices.push_back(ia);
+                }
             }
         }
     }

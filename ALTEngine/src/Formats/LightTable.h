@@ -43,7 +43,7 @@ namespace ALTEngine::Formats
     //
     // Trivially distinguishable on screen: if the level looks too dark
     // overall, change this to 128.0f and rebuild. Nothing else moves.
-    constexpr float LIGHT_COLOUR_NEUTRAL = 255.0f;
+    constexpr float LIGHT_COLOUR_NEUTRAL = 128.0f;
 
     // Per-quad vertex colour, resolved from the level's light table.
     //

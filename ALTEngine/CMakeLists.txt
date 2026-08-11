@@ -36,6 +36,7 @@ add_library(ALTFormats STATIC
     src/Formats/CddaRipper.cpp
     src/Formats/OverrideImage.cpp
     src/Formats/ModelLoader.cpp
+    src/Renderer/HudRenderer.cpp
     src/Renderer/Minimap.cpp
     src/Formats/LevelList.cpp
     src/Tools/LevelLightScanner.cpp

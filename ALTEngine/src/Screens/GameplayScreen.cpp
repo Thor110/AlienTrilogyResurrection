@@ -3,6 +3,8 @@
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/LevelLoader.h"
+#include "PlayerHudState.h"
+#include "../Renderer/HudRenderer.h"
 #include "../Renderer/Minimap.h"
 #include "../Audio/MusicPlayer.h"
 #include "../Bootstrap/ModernSettings.h"
@@ -346,6 +348,13 @@ namespace ALTEngine::Screens
         // Cells the player has seen, for the map's fog of war. One byte per
         // cell, sized on first use. Owning an Auto Mapper bypasses it entirely.
         std::vector<uint8_t> minimapVisited;
+
+        // HUD. The panel sheet is per-chapter, chosen from the level id (see
+        // Renderer/HudPanel.h), and the state is the original's own health /
+        // armour / ammo model.
+        ALTEngine::Renderer::HudRenderer hud;
+        ALTEngine::Screens::PlayerHudState hudState;
+        bool hudLoadAttempted = false;
         {
             ALTEngine::Bootstrap::Config modernConfig;
             ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
@@ -566,7 +575,24 @@ namespace ALTEngine::Screens
                         //   DAT_00244608 <- resource 0x7d, the SAME on every
                         //                   level: the object/pickup set.
                         //   DAT_002408c0 <- resource 0x7f/0x83/0x84/0x85,
-                        //                   chosen per episode: enemy graphics.
+                        //                   chosen by a switch on DAT_000ae10c.
+                        //
+                        // *** CAUTION: THAT SECOND CLAIM IS NOW DOUBTFUL. ***
+                        // DAT_000ae10c was taken to be an episode selector, and
+                        // "episode-dependent therefore enemy graphics" is what
+                        // this scale choice rested on. It is almost certainly the
+                        // LANGUAGE instead: the same variable's switch in
+                        // FUN_00050c58 emits the Spanish string "de disparo" for
+                        // case 3, and its cases are 0/3/4/5 rather than a
+                        // contiguous episode range.
+                        //
+                        // So DAT_002408c0 is likely a language-selected set (art
+                        // containing words), and the argument for which of the
+                        // three draw functions handles crates does NOT hold.
+                        // 0.875 is left in place because it looks right on screen
+                        // and 0.75/0.85/0.75 visibly did not - but treat it as
+                        // observed rather than derived until the draw function is
+                        // identified some other way.
                         // FUN_0003765c binds DAT_00244608 for everything
                         // except type 0x14 on levels 0x16-0x22; FUN_000377e4
                         // binds DAT_002408c0 unconditionally. So the
@@ -1223,6 +1249,8 @@ namespace ALTEngine::Screens
                         // blink duration.
                         ModelRenderer::TickLevelLights(cacheKey, SDL_rand(256));
 
+                        hudState.Tick();
+
                         // Remember where the player has been, for the map's fog
                         // of war. Without this the visited array stays empty and
                         // the map draws nothing but the player marker.
@@ -1390,6 +1418,46 @@ namespace ALTEngine::Screens
                         SDL_UpdateTexture(frameTexture, nullptr, pixels.data(), windowW * 4);
                         SDL_RenderTexture(renderer, frameTexture, nullptr, nullptr);
 
+                        // HUD. Loaded lazily on the first frame that has a
+                        // renderer to make a texture with; the sheet is picked
+                        // by chapter from the level id.
+                        if (!hudLoadAttempted)
+                        {
+                            hudLoadAttempted = true;
+                            int levelId = ALTEngine::Audio::LevelIdForCode(digits);
+                            hud.Load(renderer, cdDirectory,
+                                     ALTEngine::Renderer::HudPanelFileForLevelId(levelId),
+                                     ALTEngine::Bootstrap::LanguageFolderName(language));
+                        }
+                        // Mirror the inventory into the HUD state each frame.
+                        //
+                        // The inventory already tracks per-weapon ammo as a
+                        // single number, which is the total the original's HUD
+                        // displays - so it goes into the remainder slot with the
+                        // unit counter left at zero. The unit/remainder split
+                        // exists for reload behaviour that does not exist yet;
+                        // when it does, the split becomes meaningful and this
+                        // mapping should move into the inventory itself rather
+                        // than being flattened here.
+                        //
+                        // Weapon order matches the original's 0-4 indices, which
+                        // is also the inventory's declaration order.
+                        hudState.ammoRemainder[0] = static_cast<int16_t>(inventory.pistol.ammo);
+                        hudState.ammoRemainder[1] = static_cast<int16_t>(inventory.shotgun.ammo);
+                        hudState.ammoRemainder[2] = static_cast<int16_t>(inventory.flamethrower.ammo);
+                        hudState.ammoRemainder[3] = static_cast<int16_t>(inventory.pulseRifle.ammo);
+                        hudState.ammoRemainder[4] = static_cast<int16_t>(inventory.smartGun.ammo);
+
+                        // Which weapon's ammo to show. Nothing sets an equipped
+                        // weapon during play yet, so fall back to the pistol.
+                        hudState.currentWeapon = 0;
+                        if (inventory.shotgun.equipped) { hudState.currentWeapon = 1; }
+                        else if (inventory.flamethrower.equipped) { hudState.currentWeapon = 2; }
+                        else if (inventory.pulseRifle.equipped) { hudState.currentWeapon = 3; }
+                        else if (inventory.smartGun.equipped) { hudState.currentWeapon = 4; }
+
+                        hud.Draw(renderer, hudState, windowW, windowH);
+
                         // Live Minimap (Modern option). Drawn over the
                         // presented world frame with SDL_Renderer, the same way
                         // the pause menu draws - the 3D pass is already resolved
@@ -1406,7 +1474,12 @@ namespace ALTEngine::Screens
                         {
                             float size = static_cast<float>(std::min(windowW, windowH)) * 0.22f;
                             float margin = size * 0.08f;
-                            SDL_FRect mapRect{ static_cast<float>(windowW) - size - margin, margin, size, size };
+                            // Bottom-right, not top-right: the health bar now
+                            // occupies the top right, and the original's motion
+                            // tracker sits bottom-right anyway.
+                            SDL_FRect mapRect{ static_cast<float>(windowW) - size - margin,
+                                               static_cast<float>(windowH) - size - margin,
+                                               size, size };
 
                             ALTEngine::Renderer::MinimapStyle style;
                             style.alpha = 190;          // readable without hiding the world
