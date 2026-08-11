@@ -1,4 +1,4 @@
-L111LEV.MAP incorrect texture index
+L111LEV.MAP and L900LEV.MAP incorrect texture index
 0x46DC4 = 38
 UV also needs adjusting manually, not practical for the original file as it uses the texture index.
 

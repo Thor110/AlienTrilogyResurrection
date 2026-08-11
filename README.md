@@ -92,10 +92,11 @@ The road map for this project.
 	- [Patched an issue on L901LEV where player storage was located within the level boundaries.](#L901LEV-Multiplayer-Map-2-Fix-1)
 	- [Patched an issue on L900LEV where four crates had textures which were sideways.](#L900LEV-Multiplayer-Map-1-Fix-1)
 	- [Patched an issue on L900LEV where multiple texture flags were incorrectly set.](#L900LEV-Multiplayer-Map-1-Fix-2)
-	- [Patched an issue on L900LEV where a vertice in the first lift had the wrong Z coordinate.](#L900LEV-Multiplayer-Map-1-Fix-3)
+	- [Patched an issue on L900LEV where a vertex in the first lift had the wrong Z coordinate.](#L900LEV-Multiplayer-Map-1-Fix-3)
+	- [Patched an issue on L900LEV where a face was assigned the wrong texture index.](#L900LEV-Multiplayer-Map-1-Fix-4)
 	- [Patched an issue on L111LEV where four crates had textures which were sideways.](#L111LEV-Fix-1)
 	- [Patched an issue on L111LEV where multiple texture flags were incorrectly set.](#L111LEV-Fix-2)
-	- [Patched an issue on L111LEV where a vertice in the first lift had the wrong Z coordinate.](#L111LEV-Fix-3)
+	- [Patched an issue on L111LEV where a vertex in the first lift had the wrong Z coordinate.](#L111LEV-Fix-3)
 	- [Patched an issue on L111LEV where a face was assigned the wrong texture index.](#L111LEV-Fix-4)
 	- [Patched an issue on L141LEV where some crates had incorrect textures.](#L141LEV-Fix-1)
 	- [Patched an issue on L161LEV where one face had an incorrect texture.](#L161LEV-Fix-1)
@@ -489,6 +490,12 @@ Currently this is only fixed when exporting the level model.
 ## L900LEV Multiplayer Map 1 Fix 3
 
 Patch listed at Patch/new-fix.txt
+
+Not implemented in the toolkit yet
+
+## L900LEV Multiplayer Map 1 Fix 4
+
+Patch listed at Patch/another-fix.txt
 
 Not implemented in the toolkit yet
 
