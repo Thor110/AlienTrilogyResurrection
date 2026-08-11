@@ -56,6 +56,10 @@ namespace ALTEngine::Screens
             ALTEngine::Bootstrap::ResolutionSettings& resolutionSettings,
             ALTEngine::Bootstrap::DifficultySettings& difficultySettings,
             ALTEngine::Bootstrap::CameraSwaySettings& cameraSwaySettings,
-            ALTEngine::Bootstrap::LanguageSettings& languageSettings);
+            ALTEngine::Bootstrap::LanguageSettings& languageSettings,
+            // Owned by the caller so it can SURVIVE between levels when the
+            // Modern "Keep Items" feature is on. Passing nullptr keeps the old
+            // behaviour of a fresh inventory each level.
+            PlayerInventoryState* carriedInventory = nullptr);
     };
 }

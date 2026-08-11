@@ -1,6 +1,7 @@
 #include <iostream>
 #include <optional>
 
+#include "Bootstrap/ModernSettings.h"
 #include "Tools/LevelLightScanner.h"
 #include "Bootstrap/AppWindow.h"
 #include "Bootstrap/Config.h"
@@ -173,6 +174,20 @@ int main(int, char**)
     // Patching happens as part of installation itself (InstallFromDisc)
     // - no separate re-check needed here every boot.
     std::filesystem::path cdDirectory = result.gameDirectory / "CD";
+
+    // The player's loadout, owned here so it can persist across levels when the
+    // Modern "Keep Items" feature is on. Reset before each level otherwise,
+    // which is the original's behaviour: every level starts with the pistol and
+    // nothing else.
+    ALTEngine::Screens::PlayerInventoryState playerInventory;
+    auto prepareInventory = []( ALTEngine::Screens::PlayerInventoryState& inv) {
+        ALTEngine::Bootstrap::Config modernConfig;
+        ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
+        if (!modern.IsActive(ALTEngine::Bootstrap::ModernFeature::KeepItems))
+        {
+            inv = ALTEngine::Screens::PlayerInventoryState{};
+        }
+    };
 
     // Must happen before anything below could possibly call Tr() -
     // LoadedLanguagePacks() only ever initializes its cache once, on
@@ -370,6 +385,7 @@ int main(int, char**)
             && menuResult.levelCode.find_first_of("0123456789") != std::string::npos)
         {
             std::cout << "Level Select: " << menuResult.levelCode << "\n";
+            prepareInventory(playerInventory);
 
             // Run the briefing first. It is not just presentation - it is what
             // preloads PICKMOD and OBJ3D, so skipping it left every crate,
@@ -399,7 +415,8 @@ int main(int, char**)
             }
 
             GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, menuResult.levelCode, keyBindings, audioSettings,
-                                                                  renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings);
+                                                                  renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings,
+                                                                  &playerInventory);
             if (gameplayResult.outcome == GameplayOutcome::WindowClosed)
             {
                 std::cout << "Boot window closed. Aborting.\n";
@@ -428,8 +445,10 @@ int main(int, char**)
                 return 1;
             }
 
+            prepareInventory(playerInventory);
             GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, "1.1.1", keyBindings, audioSettings,
-                                                                  renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings);
+                                                                  renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings,
+                                                                  &playerInventory);
             if (gameplayResult.outcome == GameplayOutcome::WindowClosed)
             {
                 std::cout << "Boot window closed. Aborting.\n";

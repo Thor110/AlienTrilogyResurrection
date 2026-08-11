@@ -23,6 +23,11 @@ namespace ALTEngine::Screens
     struct PauseMenuResult
     {
         PauseMenuOutcome outcome = PauseMenuOutcome::Resumed;
+
+        // Set when the "Fully Loaded" cheat was chosen. Declared after `outcome`
+        // so the existing `{ PauseMenuOutcome::X }` brace-initialisations still
+        // compile.
+        bool cheatFullyLoaded = false;
     };
 
     // The in-game pause menu, opened with Escape. Auto Mapper / Shoulder

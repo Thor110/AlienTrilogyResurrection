@@ -1,5 +1,7 @@
 #pragma once
 
+#include <initializer_list>
+
 namespace ALTEngine::Screens
 {
     struct WeaponState
@@ -26,6 +28,25 @@ namespace ALTEngine::Screens
         // so more than one can be carried and running out matters.
         int batteries = 0;
         bool HasBatteries() const { return batteries > 0; }
+
+        // "Fully Loaded" cheat: every weapon and item available with full ammo.
+        //
+        // 999 is the original's own display clamp (its number routines clamp to
+        // 0..999), so it is the most ammo the HUD can show - anything higher
+        // would read as 999 anyway.
+        void GiveEverything()
+        {
+            for (WeaponState* w : { &pistol, &shotgun, &flamethrower, &pulseRifle, &smartGun })
+            {
+                w->available = true;
+                w->ammo = 999;
+            }
+            hasAutoMapper = true;
+            hasShoulderLamp = true;
+            batteries = 9;
+            // Equipped weapon deliberately left alone - the cheat gives things,
+            // it does not change what the player is holding.
+        }
 
         WeaponState pistol{ true, true, 45 };
         WeaponState shotgun{};

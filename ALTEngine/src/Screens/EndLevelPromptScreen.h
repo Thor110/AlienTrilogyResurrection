@@ -1,3 +1,15 @@
+// COLOURS FOR THE END-LEVEL STATISTICS: use NEWFONT.PAL.
+//
+// Edward, 2026: NEWFONT.PAL holds the colours the original uses for the
+// end-of-level statistics readout. It is one of the real .PAL files on the disc
+// (listed in DiscFileManifest.json alongside BONESHIP / COLONY / LEGAL /
+// LOGOSGFX / PRISHOLD / PANEL), so it can be loaded directly rather than guessed
+// at when the statistics screen is built.
+//
+// Which entries map to which element is not established yet. For reference, the
+// HUD took its bar green from PANEL.PAL entry 5 (RGB 72/164/72), so the same
+// approach - identify the entry, use the value - applies here.
+
 #pragma once
 
 #include <filesystem>

@@ -54,6 +54,11 @@ namespace ALTEngine::Renderer
         // twice and leaves a one-pixel gap under the box.
         void DrawEdgeStripsPixels(SDL_Renderer* renderer, const SDL_FRect& box, float thickness) const;
 
+        // Loads OVERRIDE/CUSTOM/minimap-border.png, a border made for the
+        // minimap rather than borrowed from the tracker's panel strip. Absent is
+        // fine - DrawEdgeStripsPixels falls back to the panel strip.
+        bool LoadCustomBorder(SDL_Renderer* renderer, const std::filesystem::path& cdDirectory);
+
         // One gameplay tick of the motion tracker sweep.
         void TickTracker();
 
@@ -126,6 +131,10 @@ namespace ALTEngine::Renderer
 
         Frame healthFrame;
         Frame ammoFrame;
+
+        SDL_Texture* customBorder = nullptr;
+        int customBorderW = 0;
+        int customBorderH = 0;
 
         SDL_Texture* sheet = nullptr;
         std::vector<ALTEngine::Formats::BxRectangle> rects;

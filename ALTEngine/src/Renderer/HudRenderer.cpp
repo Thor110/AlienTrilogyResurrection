@@ -1,5 +1,8 @@
 #include "HudRenderer.h"
 
+#include "HudPanel.h"
+#include "../Formats/OverrideImage.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -14,8 +17,27 @@ namespace ALTEngine::Renderer
         // looked up at runtime because BndTextureLoader resolves the palette
         // into RGBA when it builds the page and does not keep the CLUT around;
         // both sheets agree on index 5, which is the fill.
-        constexpr SDL_Color BAR_FILL{ 176, 216, 176, 255 };
+        // Bar green: entry 5 of PANEL.PAL, given by Edward as RGB 72/164/72.
+        //
+        // Replaces the 176/216/176 read out of the sheet's own CL00 at the CLUT
+        // index the flat-quad primitive uses - that was too pale. Used as a
+        // literal rather than looked up, since nothing yet establishes whether
+        // the HUD actually samples PANEL.PAL at runtime; if it turns out it does,
+        // this becomes a palette read and the value should agree.
+        constexpr SDL_Color BAR_FILL{ 72, 164, 72, 255 };
         constexpr SDL_Color BAR_FRAME{ 24, 24, 16, 255 };
+
+        // The counters read GREY in the original, not white (Edward, 2026). The
+        // glyphs on the sheet are near-white (200,200,200 is the second most
+        // common colour in the page), so they are tinted down rather than
+        // recoloured.
+        //
+        // A value set by eye, not a measurement - the original's own glyph colour
+        // comes from that display-list entry's three colour bytes, and while the
+        // glyph path writes 0x80 to each, 0x80 through the textured primitive's
+        // >> 2 into a 6-bit register is "neutral", not a tint. So there is no
+        // stated grey to transcribe.
+        constexpr Uint8 NUMBER_TINT = 190;
 
         // Finds the panel sheet for `fileIndex`.
         //
@@ -205,16 +227,20 @@ namespace ALTEngine::Renderer
             // too, and on the ammo frame - which is a taller crop than the health
             // one - every column qualified and all 22 slots merged into a single
             // run.
+            // Take the LOWEST enclosed run in the column, extended down to the
+            // last keyed pixel above the frame's bottom edge.
+            //
+            // Taking the first run's top and bottom made the health bars a pixel
+            // shorter than the ammo bars: that frame's staircase artwork breaks
+            // each column into several short runs, so the health notches scanned
+            // as 4 tall against ammo's 7 (Edward, 2026 - "the green lines below
+            // it are one pixel shorter").
             int top = -1, bottom = -1;
             for (int y = 1; y < frame.height - 1; ++y)
             {
                 if (!clearAt(x, y)) { continue; }
-                if (top < 0)
-                {
-                    if (clearAt(x, y - 1)) { continue; }   // not the start of a notch
-                    top = y;
-                }
-                bottom = y;
+                if (top < 0 && !clearAt(x, y - 1)) { top = y; }   // start of a notch
+                if (top >= 0) { bottom = y; }                     // keep extending
             }
             bool enclosed = (top >= 0) && (bottom >= top) && !clearAt(x, bottom + 1);
             bool isSlot = enclosed && (bottom - top + 1) >= 3;
@@ -325,6 +351,7 @@ namespace ALTEngine::Renderer
     void HudRenderer::Unload()
     {
         if (sheet) { SDL_DestroyTexture(sheet); sheet = nullptr; }
+        if (customBorder) { SDL_DestroyTexture(customBorder); customBorder = nullptr; customBorderW = 0; customBorderH = 0; }
         rects.clear();
         healthSlots.clear();
         ammoSlots.clear();
@@ -339,9 +366,19 @@ namespace ALTEngine::Renderer
         if (descriptorIndex < 0 || static_cast<size_t>(descriptorIndex) >= rects.size()) { return; }
         const ALTEngine::Formats::BxRectangle& r = rects[static_cast<size_t>(descriptorIndex)];
 
-        SDL_FRect src{ static_cast<float>(r.x), static_cast<float>(r.y),
-                       static_cast<float>(r.width), static_cast<float>(r.height) };
-        SDL_FRect dst = SnapToPixels(x * scaleX, y * scaleY, r.width * scaleX, r.height * scaleY);
+        // Descriptor rects are INCLUSIVE on the disc and BxParser adds +1 to
+        // width and height on read. That +1 is right for a sampler bound but
+        // wrong for a glyph's own extent, so a digit drew one pixel wider than
+        // the original's - confirmed by counting pixels across the zero
+        // (Edward, 2026). The advance already subtracted it; the source and
+        // destination rects did not.
+        float w = static_cast<float>(r.width - 1);
+        float h = static_cast<float>(r.height - 1);
+        if (w < 1.0f) { w = static_cast<float>(r.width); }
+        if (h < 1.0f) { h = static_cast<float>(r.height); }
+
+        SDL_FRect src{ static_cast<float>(r.x), static_cast<float>(r.y), w, h };
+        SDL_FRect dst = SnapToPixels(x * scaleX, y * scaleY, w * scaleX, h * scaleY);
         SDL_RenderTexture(renderer, sheet, &src, &dst);
     }
 
@@ -441,8 +478,10 @@ namespace ALTEngine::Renderer
 
         DrawFrame(renderer, healthFrame, HUD_OVERLAY_HEALTH_X, HUD_OVERLAY_HEALTH_Y, scaleX, scaleY);
 
+        SDL_SetTextureColorMod(sheet, NUMBER_TINT, NUMBER_TINT, NUMBER_TINT);
         DrawNumber(renderer, state.health, HUD_HEALTH_TEXT_X, HUD_HEALTH_ROW_TOP,
                    HUD_FONT_B_FIRST_DESCRIPTOR, scaleX, scaleY);
+        SDL_SetTextureColorMod(sheet, 255, 255, 255);
 
         // ---- ammo row ------------------------------------------------------
         int ammo = state.CurrentAmmoTotal();
@@ -452,8 +491,10 @@ namespace ALTEngine::Renderer
 
         DrawFrame(renderer, ammoFrame, HUD_OVERLAY_AMMO_X, HUD_OVERLAY_AMMO_Y, scaleX, scaleY);
 
+        SDL_SetTextureColorMod(sheet, NUMBER_TINT, NUMBER_TINT, NUMBER_TINT);
         DrawNumber(renderer, ammo, HUD_AMMO_TEXT_X, HUD_AMMO_ROW_TOP,
                    HUD_FONT_FIRST_DESCRIPTOR, scaleX, scaleY);
+        SDL_SetTextureColorMod(sheet, 255, 255, 255);
     }
 
     void HudRenderer::DrawEdgeStrips(SDL_Renderer* renderer, int left, int right, int top, int bottom,
@@ -472,6 +513,8 @@ namespace ALTEngine::Renderer
         int width = right - left;
         if (width <= 0) { return; }
 
+        SDL_SetTextureAlphaMod(sheet, static_cast<Uint8>(HUD_TRACKER_ALPHA));
+
         // The strip sits just OUTSIDE the box on each side.
         //
         // The TOP one is the flipped copy, not the bottom. The artwork's own
@@ -486,12 +529,82 @@ namespace ALTEngine::Renderer
         SDL_FRect bottomRect = SnapToPixels(left * scaleX, bottom * scaleY,
                                             width * scaleX, thickness * scaleY);
         SDL_RenderTexture(renderer, sheet, &src, &bottomRect);
+
+        SDL_SetTextureAlphaMod(sheet, 255);
+    }
+
+    bool HudRenderer::LoadCustomBorder(SDL_Renderer* renderer, const std::filesystem::path& cdDirectory)
+    {
+        if (customBorder) { return true; }
+
+        // Deployed by CMake to GameData/CD/OVERRIDE/CUSTOM. Loaded through the
+        // existing override image path, which takes a root plus a key and
+        // appends ".png" itself.
+        std::optional<ALTEngine::Formats::OverrideImage> image =
+            ALTEngine::Formats::TryLoadOverrideImage(cdDirectory / "OVERRIDE", "CUSTOM/minimap-border");
+        if (!image)
+        {
+            // Absent is the normal case on an install without it; the panel strip
+            // is used instead.
+            return false;
+        }
+        if (image->width <= 0 || image->height <= 0 || image->rgba.empty())
+        {
+            SDL_Log("HudRenderer: CUSTOM/minimap-border.png decoded to nothing - using the panel strip");
+            return false;
+        }
+
+        customBorder = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC,
+                                         image->width, image->height);
+        if (!customBorder) { return false; }
+
+        // Key opaque black to transparent, as the panel sheet is (Edward, 2026).
+        // This particular PNG already has an alpha channel and almost all of it
+        // is transparent, so this is belt and braces for a future border saved
+        // without one - and it costs one pass over 230 pixels.
+        std::vector<uint8_t> keyedBorder = image->rgba;
+        for (size_t i = 0; i + 3 < keyedBorder.size(); i += 4)
+        {
+            if (keyedBorder[i] == 0 && keyedBorder[i + 1] == 0 && keyedBorder[i + 2] == 0)
+            {
+                keyedBorder[i + 3] = 0;
+            }
+        }
+        SDL_UpdateTexture(customBorder, nullptr, keyedBorder.data(), image->width * 4);
+        SDL_SetTextureBlendMode(customBorder, SDL_BLENDMODE_BLEND);
+        SDL_SetTextureScaleMode(customBorder, SDL_SCALEMODE_NEAREST);
+        customBorderW = image->width;
+        customBorderH = image->height;
+
+        SDL_Log("HudRenderer: loaded custom minimap border - %dx%d", customBorderW, customBorderH);
+        return true;
     }
 
     void HudRenderer::DrawEdgeStripsPixels(SDL_Renderer* renderer, const SDL_FRect& box,
                                            float thickness) const
     {
-        if (!sheet || rects.empty() || box.w <= 0.0f || thickness <= 0.0f) { return; }
+        if (box.w <= 0.0f || thickness <= 0.0f) { return; }
+
+        // Prefer the custom border when it is present - it was made for this box,
+        // whereas the panel strip is the tracker's and is the wrong proportions
+        // here (Edward, 2026).
+        if (customBorder)
+        {
+            SDL_SetTextureAlphaMod(customBorder, static_cast<Uint8>(HUD_TRACKER_ALPHA));
+            // Drawn at the thickness the caller asked for - which is the
+            // tracker's own strip height - rather than the PNG's 5 pixels, so
+            // the minimap's bars match the tracker's (Edward, 2026). The image
+            // is stretched to fit, which is fine for a border of solid runs.
+            float h = thickness;
+            SDL_FRect top = SnapToPixels(box.x, box.y - h, box.w, h);
+            SDL_RenderTextureRotated(renderer, customBorder, nullptr, &top, 0.0, nullptr, SDL_FLIP_VERTICAL);
+            SDL_FRect bottom = SnapToPixels(box.x, box.y + box.h, box.w, h);
+            SDL_RenderTexture(renderer, customBorder, nullptr, &bottom);
+            SDL_SetTextureAlphaMod(customBorder, 255);
+            return;
+        }
+
+        if (!sheet || rects.empty()) { return; }
         if (static_cast<size_t>(HUD_TRACKER_STRIP_DESCRIPTOR) >= rects.size()) { return; }
 
         const ALTEngine::Formats::BxRectangle& sr = rects[HUD_TRACKER_STRIP_DESCRIPTOR];
@@ -548,6 +661,8 @@ namespace ALTEngine::Renderer
               static_cast<SDL_FlipMode>(SDL_FLIP_HORIZONTAL | SDL_FLIP_VERTICAL) },              // bottom right
         };
 
+        SDL_SetTextureAlphaMod(sheet, static_cast<Uint8>(HUD_TRACKER_ALPHA));
+
         for (const Quad& q : quads)
         {
             SDL_FRect dst = SnapToPixels(q.x * scaleX, q.y * scaleY,
@@ -573,6 +688,8 @@ namespace ALTEngine::Renderer
                                             width * scaleX, sr.height * scaleY);
             SDL_RenderTexture(renderer, sheet, &strip, &bottom);
         }
+
+        SDL_SetTextureAlphaMod(sheet, 255);
 
         // Contacts. Range gate, world-to-cell shift and rotation by the player's
         // facing, all as FUN_0003a008 does - so the dish is always

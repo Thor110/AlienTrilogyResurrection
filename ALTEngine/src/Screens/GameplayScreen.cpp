@@ -4,6 +4,7 @@
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/LevelLoader.h"
 #include "PlayerHudState.h"
+#include "../Renderer/WeaponView.h"
 #include "../Renderer/HudRenderer.h"
 #include "../Renderer/Minimap.h"
 #include "../Audio/MusicPlayer.h"
@@ -205,7 +206,8 @@ namespace ALTEngine::Screens
         Bootstrap::ResolutionSettings& resolutionSettings,
         Bootstrap::DifficultySettings& difficultySettings,
         Bootstrap::CameraSwaySettings& cameraSwaySettings,
-        Bootstrap::LanguageSettings& languageSettings)
+        Bootstrap::LanguageSettings& languageSettings,
+        PlayerInventoryState* carriedInventory)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
@@ -214,7 +216,10 @@ namespace ALTEngine::Screens
         }
         SDL_Renderer* renderer = app.Renderer();
 
-        PlayerInventoryState inventory;
+        // Carried across levels when the caller supplies one; otherwise a fresh
+        // pistol-only loadout, which is how the original always starts a level.
+        PlayerInventoryState localInventory;
+        PlayerInventoryState& inventory = carriedInventory ? *carriedInventory : localInventory;
 
         // Resolve and load the level
         std::string digits = LevelDigitsFromCode(missionLevelCode);
@@ -345,6 +350,7 @@ namespace ALTEngine::Screens
         // it mid-game takes effect without a restart.
         bool freeLook = false;
         bool liveMinimap = false;
+        bool cheatFullyLoaded = false;
         // Cells the player has seen, for the map's fog of war. One byte per
         // cell, sized on first use. Owning an Auto Mapper bypasses it entirely.
         std::vector<uint8_t> minimapVisited;
@@ -353,6 +359,7 @@ namespace ALTEngine::Screens
         // Renderer/HudPanel.h), and the state is the original's own health /
         // armour / ammo model.
         ALTEngine::Renderer::HudRenderer hud;
+        ALTEngine::Renderer::WeaponView weaponView;
         ALTEngine::Screens::PlayerHudState hudState;
         bool hudLoadAttempted = false;
         {
@@ -361,6 +368,13 @@ namespace ALTEngine::Screens
             autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
             freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
+            // The cheat's own stored state, so it stays on across levels while
+            // Enable Cheats is active.
+            if (modern.IsActive(ALTEngine::Bootstrap::ModernFeature::EnableCheats))
+            {
+                auto stored = modernConfig.Get("CheatFullyLoaded");
+                cheatFullyLoaded = stored.has_value() && *stored == "On";
+            }
             // The feature is "unlimited render distance", so the original's
             // fade is the INVERSE of it.
             bool unlimited = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance);
@@ -860,6 +874,16 @@ namespace ALTEngine::Screens
                             !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance));
                     }
 
+                    // "Fully Loaded" is a toggle, not a one-shot: while it is on
+                    // the loadout is topped up every tick, so "unlimited
+                    // ammunition" actually stays unlimited as it is spent.
+                    cheatFullyLoaded = pauseResult.cheatFullyLoaded;
+                    if (cheatFullyLoaded)
+                    {
+                        inventory.GiveEverything();
+                        SDL_Log("GameplayScreen: cheat 'Fully Loaded' enabled");
+                    }
+
                     if (pauseResult.outcome == PauseMenuOutcome::WindowClosed)
                     {
                         result.outcome = GameplayOutcome::WindowClosed;
@@ -1250,6 +1274,7 @@ namespace ALTEngine::Screens
                         ModelRenderer::TickLevelLights(cacheKey, SDL_rand(256));
 
                         hudState.Tick();
+                        if (cheatFullyLoaded) { inventory.GiveEverything(); }
                         hud.TickTracker();
 
                         // Remember where the player has been, for the map's fog
@@ -1429,6 +1454,10 @@ namespace ALTEngine::Screens
                             hud.Load(renderer, cdDirectory,
                                      ALTEngine::Renderer::HudPanelFileForLevelId(levelId),
                                      ALTEngine::Bootstrap::LanguageFolderName(language));
+                            // Border made for the minimap, from
+                            // OVERRIDE/CUSTOM. Absent falls back to the
+                            // tracker's panel strip.
+                            hud.LoadCustomBorder(renderer, cdDirectory);
                         }
                         // Mirror the inventory into the HUD state each frame.
                         //
@@ -1456,6 +1485,11 @@ namespace ALTEngine::Screens
                         else if (inventory.flamethrower.equipped) { hudState.currentWeapon = 2; }
                         else if (inventory.pulseRifle.equipped) { hudState.currentWeapon = 3; }
                         else if (inventory.smartGun.equipped) { hudState.currentWeapon = 4; }
+
+                        // The held weapon, under the HUD so the ammo row and
+                        // tracker stay readable over it.
+                        weaponView.SetWeapon(renderer, cdDirectory, hudState.currentWeapon);
+                        weaponView.Draw(renderer, windowW, windowH);
 
                         hud.Draw(renderer, hudState, windowW, windowH);
 

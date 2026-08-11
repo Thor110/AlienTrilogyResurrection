@@ -57,6 +57,11 @@ namespace ALTEngine::Bootstrap
         // The original only ever showed a map when paused, so having it live is
         // a departure and belongs here.
         LiveMinimap,
+
+        // Adds a Cheats list to the pause menu. Off by default, and the cheats
+        // themselves are inert until it is on - so a normal game cannot reach
+        // them by accident.
+        EnableCheats,
     };
 
     class ModernSettings
@@ -93,6 +98,7 @@ namespace ALTEngine::Bootstrap
             ModernFeature::RenderDistance,
             ModernFeature::LevelSelect,
             ModernFeature::LiveMinimap,
+            ModernFeature::EnableCheats,
         };
 
         // The individual toggle's own stored value, ignoring the mode.
@@ -187,6 +193,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::RenderDistance: return "Render Distance";
             case ModernFeature::LevelSelect: return "Level Select";
             case ModernFeature::LiveMinimap: return "Live Minimap";
+            case ModernFeature::EnableCheats: return "Enable Cheats";
             }
             return "";
         }
@@ -204,6 +211,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::RenderDistance: return "ModernRenderDistance";
             case ModernFeature::LevelSelect: return "ModernLevelSelect";
             case ModernFeature::LiveMinimap: return "ModernLiveMinimap";
+            case ModernFeature::EnableCheats: return "ModernEnableCheats";
             }
             return "ModernUnknown";
         }

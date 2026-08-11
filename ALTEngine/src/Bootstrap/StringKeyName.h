@@ -139,6 +139,11 @@ namespace ALTEngine::Bootstrap
         case StringId::DescPresetModernised: return "DescPresetModernised";
         case StringId::PresetTesting: return "PresetTesting";
         case StringId::DescPresetTesting: return "DescPresetTesting";
+        case StringId::EnableCheats: return "EnableCheats";
+        case StringId::DescEnableCheats: return "DescEnableCheats";
+        case StringId::Cheats: return "Cheats";
+        case StringId::FullyLoaded: return "FullyLoaded";
+        case StringId::DescFullyLoaded: return "DescFullyLoaded";
         default: return "";
         }
     }
@@ -265,6 +270,11 @@ namespace ALTEngine::Bootstrap
         if (name == "DescPresetModernised") { return StringId::DescPresetModernised; }
         if (name == "PresetTesting") { return StringId::PresetTesting; }
         if (name == "DescPresetTesting") { return StringId::DescPresetTesting; }
+        if (name == "EnableCheats") { return StringId::EnableCheats; }
+        if (name == "DescEnableCheats") { return StringId::DescEnableCheats; }
+        if (name == "Cheats") { return StringId::Cheats; }
+        if (name == "FullyLoaded") { return StringId::FullyLoaded; }
+        if (name == "DescFullyLoaded") { return StringId::DescFullyLoaded; }
         return std::nullopt;
     }
 }

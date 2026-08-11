@@ -142,6 +142,11 @@ namespace ALTEngine::Bootstrap
             "Convenience plus free mouse look and unlimited draw distance",
             "Testing",
             "Level select, live map, free look and full draw distance, for testing the port",
+            "Enable Cheats",
+            "Adds a Cheats menu to the pause screen",
+            "Cheats",
+            "Fully Loaded",
+            "Unlimited ammunition and all weapons",
         };
         return table;
     }

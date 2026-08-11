@@ -153,6 +153,11 @@ namespace ALTEngine::Bootstrap
         DescPresetModernised,
         PresetTesting,
         DescPresetTesting,
+        EnableCheats,
+        DescEnableCheats,
+        Cheats,
+        FullyLoaded,
+        DescFullyLoaded,
 
         Count, // sentinel - not a real string, gives the tables their size
     };

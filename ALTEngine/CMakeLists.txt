@@ -36,6 +36,7 @@ add_library(ALTFormats STATIC
     src/Formats/CddaRipper.cpp
     src/Formats/OverrideImage.cpp
     src/Formats/ModelLoader.cpp
+    src/Renderer/WeaponView.cpp
     src/Renderer/HudRenderer.cpp
     src/Renderer/Minimap.cpp
     src/Formats/LevelList.cpp
@@ -268,6 +269,16 @@ add_custom_command(TARGET ALTEngine POST_BUILD
         "$<TARGET_FILE_DIR:ALTEngine>/GameData/CD/OVERRIDE"
 )
 
+# CUSTOM/ holds artwork this port adds that is not in the original game - the
+# minimap border, and whatever follows. Deployed INTO the override tree at
+# GameData/CD/OVERRIDE/CUSTOM, at the same time as LANGUAGE and OVERRIDE, so a
+# fresh build has it without a manual copy (Edward, 2026).
+add_custom_command(TARGET ALTEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/CUSTOM"
+        "$<TARGET_FILE_DIR:ALTEngine>/GameData/CD/OVERRIDE/CUSTOM"
+)
+
 # ---------------------------------------------------------------------------
 # Third-party licenses. Every dependency we link against gets its license
 # text committed under third_party_licenses/<name>/ and shipped alongside
@@ -288,6 +299,7 @@ install(TARGETS ALTEngine RUNTIME DESTINATION bin)
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/data/" DESTINATION bin/data)
 
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/OVERRIDE/" DESTINATION bin/GameData/CD/OVERRIDE)
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/CUSTOM/" DESTINATION bin/GameData/CD/OVERRIDE/CUSTOM)
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/LANGUAGE/" DESTINATION bin/GameData/CD/LANGUAGE)
 install(FILES "${CMAKE_SOURCE_DIR}/third_party_licenses/SDL3/LICENSE.txt"
         DESTINATION bin/licenses/SDL3)

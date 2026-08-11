@@ -2,6 +2,7 @@
 
 #include "../Audio/MusicPlayer.h"
 #include "../Renderer/Minimap.h"
+#include "../Bootstrap/Config.h"
 #include "../Bootstrap/ModernSettings.h"
 #include "PauseMenuTree.h"
 #include "SaveSlotScreen.h"
@@ -293,6 +294,60 @@ namespace ALTEngine::Screens
         }
 
         MenuNode root = BuildPauseMenuTree(language);
+
+        // Cheats are opt-in. The list is built into the tree unconditionally and
+        // added or removed here, so the state is re-evaluated whenever this runs
+        // - both when the pause menu opens and again after returning from the
+        // Options menu, since Enable Cheats can be flipped in there (Edward,
+        // 2026).
+        MenuNode cheatsTemplate;
+        for (const MenuNode& child : root.children)
+        {
+            if (child.label == "Cheats") { cheatsTemplate = child; break; }
+        }
+
+        auto syncCheatsEntry = [&root, &cheatsTemplate]() {
+            ALTEngine::Bootstrap::Config cheatConfig;
+            ALTEngine::Bootstrap::ModernSettings cheatModern(cheatConfig);
+            bool wanted = cheatModern.IsActive(ALTEngine::Bootstrap::ModernFeature::EnableCheats);
+
+            int at = -1;
+            for (size_t i = 0; i < root.children.size(); ++i)
+            {
+                if (root.children[i].label == "Cheats") { at = static_cast<int>(i); break; }
+            }
+
+            if (!wanted)
+            {
+                if (at >= 0) { root.children.erase(root.children.begin() + at); }
+                return;
+            }
+
+            if (at < 0)
+            {
+                // Reinsert just before Exit Game, which is where it belongs.
+                size_t insertAt = root.children.size();
+                for (size_t i = 0; i < root.children.size(); ++i)
+                {
+                    if (root.children[i].label == "Exit Game") { insertAt = i; break; }
+                }
+                root.children.insert(root.children.begin() + static_cast<long>(insertAt), cheatsTemplate);
+                at = static_cast<int>(insertAt);
+            }
+
+            // Refresh each cheat's shown state from config.
+            MenuNode& cheats = root.children[static_cast<size_t>(at)];
+            for (MenuNode& cheat : cheats.children)
+            {
+                if (cheat.label != "Fully Loaded") { continue; }
+                auto stored = cheatConfig.Get("CheatFullyLoaded");
+                bool on = stored.has_value() && *stored == "On";
+                cheat.initialSelectedChild = on ? 1 : 0;
+                cheat.descriptionStringId = static_cast<int>(ALTEngine::Bootstrap::StringId::DescFullyLoaded);
+            }
+        };
+        syncCheatsEntry();
+
         std::vector<int> path = { 0 };
 
         PauseMenuResult result;
@@ -330,6 +385,16 @@ namespace ALTEngine::Screens
                     // nothing at all (Edward, 2026).
                     ALTEngine::Menu::Back(path);
                 }
+                else if (parentLabel == "Fully Loaded")
+                {
+                    // Persisted so it survives the menu closing, and reported so
+                    // the caller (which owns the inventory) can apply it.
+                    bool on = (deepest.label == "Yes");
+                    ALTEngine::Bootstrap::Config cheatConfig;
+                    cheatConfig.Set("CheatFullyLoaded", on ? "On" : "Off");
+                    result.cheatFullyLoaded = on;
+                    SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                }
                 else if (r == EnterResult::Toggled && deepest.label == "Options")
                 {
                     // Opens the same full Options menu the boot menu
@@ -352,6 +417,15 @@ namespace ALTEngine::Screens
                     {
                         result.outcome = PauseMenuOutcome::WindowClosed;
                         running = false;
+                    }
+
+                    // Enable Cheats may have just been toggled in there, so the
+                    // Cheats entry is added or removed now. The cursor is clamped
+                    // because the list can have shrunk under it.
+                    syncCheatsEntry();
+                    if (path.empty() || path[0] >= static_cast<int>(root.children.size()))
+                    {
+                        path = { root.children.empty() ? 0 : static_cast<int>(root.children.size()) - 1 };
                     }
                 }
                 else if (r == EnterResult::Toggled && (deepest.label == "Save Game" || deepest.label == "Load Game"))
@@ -526,6 +600,45 @@ namespace ALTEngine::Screens
                     DrawBitmapText(renderer, confirmLabel, panelX + TextWidth(prefix, scale), exitGameTextY, scale, confirmColor);
                 }
             }
+            else if (topLabel == "Cheats")
+            {
+                // Its own branch, so Cheats does NOT fall through to the generic
+                // inventory-item branch below - that one treats an unknown label
+                // as an unowned item and prints "NOT AVAILABLE" (Edward, 2026).
+                //
+                // Cheat rows in the panel, and the chosen row's No/Yes beside it
+                // once entered, mirroring how Exit Game draws its confirm.
+                const MenuNode& cheats = root.children[static_cast<size_t>(path[0])];
+                int cheatIndex = (path.size() >= 2 && path[1] >= 0
+                                  && static_cast<size_t>(path[1]) < cheats.children.size()) ? path[1] : -1;
+
+                for (size_t i = 0; i < cheats.children.size(); ++i)
+                {
+                    const MenuNode& cheat = cheats.children[i];
+                    bool onThisRow = (cheatIndex == static_cast<int>(i));
+                    int rowY = panelY + static_cast<int>(i) * rowHeight;
+
+                    std::string label = DisplayLabel(cheat, language);
+                    DrawBitmapText(renderer, label, panelX, rowY, scale,
+                                   onThisRow ? COLOR_CURSOR : COLOR_DIM);
+
+                    // No / Yes only once this cheat has been entered, the same
+                    // rule Exit Game uses for its confirm.
+                    if (onThisRow && path.size() >= 3 && !cheat.children.empty())
+                    {
+                        int choice = path[2];
+                        int x = panelX + TextWidth(label, scale) + scale * 8;
+                        for (size_t j = 0; j < cheat.children.size(); ++j)
+                        {
+                            std::string option = DisplayLabel(cheat.children[j], language);
+                            bool selected = (static_cast<int>(j) == choice);
+                            DrawBitmapText(renderer, option, x, rowY, scale,
+                                           selected ? COLOR_CURSOR : COLOR_DIM);
+                            x += TextWidth(option, scale) + scale * 6;
+                        }
+                    }
+                }
+            }
             else if (topLabel == "Mission")
             {
                 if (missionBriefing)
@@ -627,6 +740,65 @@ namespace ALTEngine::Screens
                 {
                     DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::NotAvailable, language),
                                    panelX, notAvailableY, scale, COLOR_STATUS);
+                }
+            }
+
+            // Description line, drawn exactly like the Options menu's: the
+            // deepest node on the path that HAS one, greedy word-wrapped to the
+            // window, growing upward from a fixed bottom so extra lines never
+            // push into anything (Edward, 2026 - "same location as the
+            // description for the Modern options").
+            {
+                const MenuNode* node = &root;
+                const MenuNode* described = nullptr;
+                for (size_t depth = 0; depth < path.size(); ++depth)
+                {
+                    int childIndex = path[depth];
+                    if (childIndex < 0 || static_cast<size_t>(childIndex) >= node->children.size()) { break; }
+                    node = &node->children[static_cast<size_t>(childIndex)];
+                    if (node->descriptionStringId >= 0) { described = node; }
+                }
+
+                if (described)
+                {
+                    int windowW = 0, windowH = 0;
+                    SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+
+                    std::string description = ALTEngine::Bootstrap::Tr(
+                        static_cast<ALTEngine::Bootstrap::StringId>(described->descriptionStringId), language);
+
+                    int maxWidth = windowW - scale * 32;
+                    if (maxWidth < scale * 64) { maxWidth = windowW; }
+
+                    std::vector<std::string> lines;
+                    {
+                        std::string line;
+                        size_t pos = 0;
+                        while (pos <= description.size())
+                        {
+                            size_t space = description.find(' ', pos);
+                            std::string word = description.substr(pos, space == std::string::npos ? std::string::npos : space - pos);
+                            std::string candidate = line.empty() ? word : line + " " + word;
+                            if (!line.empty() && TextWidth(candidate, scale) > maxWidth)
+                            {
+                                lines.push_back(line);
+                                line = word;
+                            }
+                            else { line = candidate; }
+                            if (space == std::string::npos) { break; }
+                            pos = space + 1;
+                        }
+                        if (!line.empty()) { lines.push_back(line); }
+                    }
+
+                    int bottom = windowH - rowHeight * 4;
+                    int top = bottom - rowHeight * static_cast<int>(lines.size());
+                    for (size_t i = 0; i < lines.size(); ++i)
+                    {
+                        DrawBitmapText(renderer, lines[i],
+                                       (windowW - TextWidth(lines[i], scale)) / 2,
+                                       top + rowHeight * static_cast<int>(i), scale, COLOR_DIM);
+                    }
                 }
             }
 

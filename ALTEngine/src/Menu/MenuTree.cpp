@@ -383,6 +383,9 @@ namespace ALTEngine::Menu
                 featureNode(ALTEngine::Bootstrap::ModernSettings::MenuLabel(ALTEngine::Bootstrap::ModernFeature::LiveMinimap),
                             StringId::LiveMinimap, StringId::DescLiveMinimap,
                             ALTEngine::Bootstrap::ModernFeature::LiveMinimap),
+                featureNode(ALTEngine::Bootstrap::ModernSettings::MenuLabel(ALTEngine::Bootstrap::ModernFeature::EnableCheats),
+                            StringId::EnableCheats, StringId::DescEnableCheats,
+                            ALTEngine::Bootstrap::ModernFeature::EnableCheats),
             };
 
             return List("Modern", StringId::Modern, std::move(entries));

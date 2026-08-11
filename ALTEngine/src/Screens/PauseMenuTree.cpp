@@ -56,6 +56,32 @@ namespace ALTEngine::Screens
             // duplicated), and Exit Game moved out to the top level
             // below.
             Tagged(MakeAction("Options"), StringId::Options),
+            // Cheats, between Options and Exit Game. Present only when the
+            // Modern "Enable Cheats" feature is on, so a normal game never sees
+            // it (Edward, 2026 - useful for testing as much as for players).
+            //
+            // Each cheat is a plain action; PauseMenuScreen applies it and the
+            // list is built here so adding one is a single entry plus its
+            // StringIds.
+            // Cheats, between Options and Exit Game. Present only when the
+            // Modern "Enable Cheats" feature is on - PauseMenuScreen removes it
+            // otherwise, and re-checks every time the menu opens so it can be
+            // turned on or off mid-game.
+            //
+            // Each cheat is its OWN list with Off/On beneath it, the same shape
+            // as a Modern feature, so it toggles rather than firing once and its
+            // description lands in the standard place (Edward, 2026).
+            // Cheats -> Fully Loaded -> No / Yes, all buttons, the same shape as
+            // Exit Game's confirm rather than a settings toggle (Edward, 2026).
+            // Present only when the Modern "Enable Cheats" feature is on;
+            // PauseMenuScreen adds and removes it, re-checking every time the
+            // menu opens and again on return from Options.
+            Tagged(MakeList("Cheats", {
+                Tagged(MakeList("Fully Loaded", {
+                    Tagged(MakeAction("No"), StringId::No),
+                    Tagged(MakeAction("Yes"), StringId::Yes),
+                }), StringId::FullyLoaded),
+            }), StringId::Cheats),
             Tagged(MakeList("Exit Game", {
                 Tagged(MakeAction("No"), StringId::No),
                 Tagged(MakeAction("Yes"), StringId::Yes),

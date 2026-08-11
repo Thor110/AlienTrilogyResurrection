@@ -335,6 +335,41 @@
 // beyond this sheet's 343 descriptors. Probably an accented or second-language
 // set. Not needed for the HUD.
 //
+// ============================================================================
+// OVER-100 HEALTH (derm patches) - FULLY DECODED from FUN_0003a674.
+//
+//   if (health <= 100) nothing is drawn
+//   value = min(health, 200) - 100
+//   bars  = value / 10, and if that rounds to 0 it is forced to 1
+//   for i in 0..bars-1:
+//       x    = 0x109 + i*4  .. 0x10b + i*4      (265 + i*4, three wide)
+//       y    = 0x2f - heightTable[i] .. 0x2f    (bottom fixed at 47)
+//   flat quad, CLUT index 0x68, +0x0b = 1
+//
+// So they are up to TEN three-pixel-wide bars on a 4-pixel pitch, hanging from a
+// fixed bottom at y 47, growing UPWARD by a per-bar amount from a height table
+// at DAT_000acba4. That table is data, not code, so the ten heights are not in
+// the decompilation - they need dumping from 0x000acba4 (ten int16s).
+//
+// The alternate HUD layout (DAT_000ae0a4 && DAT_000ae0a5) moves the row's bottom
+// from 0x2f to 0xdf, matching how it moves the health frame.
+//
+// EDWARD'S FIGURES MATCH THE CODE: derm patches give 1 health each and ten is
+// the carry limit, so 110 is the practical maximum - which is bars = 10/10 = 1
+// at the low end, and the clamp at 200 only matters for something that grants
+// more than a patch does. The `if (bars == 0) bars = 1` is why a single point
+// over 100 still shows one bar.
+//
+// THE BLUE IS NOT IN THE PANEL SHEET. CLUT index 0x68 reads rgb(56,64,56) in
+// PNL0 and rgb(72,24,0) in PNL1 - grey-green and brown, neither blue. Since the
+// bar green also turned out to come from PANEL.PAL rather than the sheet's own
+// CLUT, index 0x68 is presumably a PANEL.PAL index too. PANEL.PAL is on the disc
+// and in DiscFileManifest.json, so entry 0x68 (104) can be read directly - that
+// is the number to check rather than sampling a screenshot.
+//
+// NOT IMPLEMENTED YET: needs the ten heights from DAT_000acba4 and the blue from
+// PANEL.PAL entry 0x68. Everything else above is transcribed.
+
 // STILL NEEDED BEFORE THIS CAN BE BUILT:
 //   - which descriptor index is which element. The layout is regular (16x16 and
 //     16x24 runs, then 9-pixel-tall font glyphs from index 23 on) so this is a
@@ -495,6 +530,15 @@ namespace ALTEngine::Renderer
     // Edge strip thickness in HUD units, matching the tracker's own strips
     // (its quads are y 0x9b..0xa0, five rows).
     inline constexpr int HUD_MINIMAP_STRIP_H = 5;
+
+    // The tracker dish and its edge strips are slightly translucent in the
+    // original, so the world shows through them (Edward, 2026). Applied to the
+    // minimap's strips too, so the two assemblies match.
+    //
+    // A value, not a measurement: the original composites through its own
+    // primitive rather than an alpha the decompilation states outright, so this
+    // is set by eye against the screenshots.
+    inline constexpr int HUD_TRACKER_ALPHA = 200;
 
     inline constexpr int HUD_MINIMAP_SCALE = 2;
     inline constexpr int HUD_MINIMAP_X = 14;
