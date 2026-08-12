@@ -768,6 +768,11 @@ namespace ALTEngine::Screens
                 // panelY + 220 landed in the middle of it.
                 int notAvailableY = panelY + 220;
 
+                // Where the status line is centred. Defaults to the middle of the
+                // shared content column, so every panel puts it in the same place;
+                // the Auto Mapper panel overrides it to the map's own centre.
+                int statusCentreX = panelX + contentWidth / 2;
+
                 if (topLabel == "Auto Mapper" && mapAllowed && level != nullptr)
                 {
                     // Twice the old 260x200, with the device's own model beneath
@@ -782,10 +787,12 @@ namespace ALTEngine::Screens
                     const int gap = scale * 6;
 
                     // Wider and further right than the panel default - see
-                    // PAUSE_MAP_* in HudPanel.h.
-                    panelX += ALTEngine::Renderer::PAUSE_MAP_X_OFFSET;
+                    // PAUSE_MAP_* in HudPanel.h. Held in its OWN x rather than
+                    // shifting panelX, so the model and status text below it stay
+                    // on the same centre every other panel uses (Edward, 2026).
+                    int mapX = panelX + ALTEngine::Renderer::PAUSE_MAP_X_OFFSET;
                     int mapW = std::min(ALTEngine::Renderer::PAUSE_MAP_WIDTH,
-                                        windowWidth - panelX - margin);
+                                        windowWidth - mapX - margin);
                     if (mapW < 80) { mapW = 80; }
                     int mapH = std::min(ALTEngine::Renderer::PAUSE_MAP_HEIGHT,
                                         windowHeightPx - panelY - margin - modelHeight - gap);
@@ -793,7 +800,7 @@ namespace ALTEngine::Screens
 
                     ALTEngine::Renderer::MinimapStyle style;
                     style.drawTriggers = true; // room to be informative here
-                    SDL_FRect mapRect{ static_cast<float>(panelX), static_cast<float>(panelY),
+                    SDL_FRect mapRect{ static_cast<float>(mapX), static_cast<float>(panelY),
                                        static_cast<float>(mapW), static_cast<float>(mapH) };
                     // `owned` here means the player has the Auto Mapper, which
                     // reveals the level; otherwise only visited cells show.
@@ -801,9 +808,14 @@ namespace ALTEngine::Screens
                                                      playerGridX, playerGridZ, playerYaw, style,
                                                      owned ? nullptr : minimapVisited);
 
+                    // Centred under the MAP, since that is what this panel shows.
+                    int modelW = fitWidth(260);
+                    int modelX = mapX + (mapW - modelW) / 2;
+                    if (modelX < panelX) { modelX = panelX; }
                     DrawPickModModel(renderer, cdDirectory, node.modelIndex,
-                                     centredX(260), panelY + mapH + gap, fitWidth(260), modelHeight, scale, rotationAngle);
+                                     modelX, panelY + mapH + gap, modelW, modelHeight, scale, rotationAngle);
                     notAvailableY = panelY + mapH + gap + modelHeight + gap;
+                    statusCentreX = mapX + mapW / 2;
                 }
                 else
                 {
@@ -833,7 +845,9 @@ namespace ALTEngine::Screens
                     if (showStatus)
                     {
                         std::string status = ALTEngine::Bootstrap::Tr(statusId, language);
-                        DrawBitmapText(renderer, status, panelX, notAvailableY, scale, statusColor);
+                        DrawBitmapText(renderer, status,
+                                       statusCentreX - TextWidth(status, scale) / 2,
+                                       notAvailableY, scale, statusColor);
                     }
                 }
             }

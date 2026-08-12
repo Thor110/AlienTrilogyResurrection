@@ -8,14 +8,37 @@ namespace ALTEngine::Renderer
     namespace
     {
         // The menu's palette, so the map does not look bolted on.
-        constexpr SDL_Color WALL{ 0, 96, 0, 255 };
-        constexpr SDL_Color FLOOR_LOW{ 0, 24, 0, 255 };
-        constexpr SDL_Color FLOOR_HIGH{ 0, 56, 0, 255 };
-        constexpr SDL_Color DOOR{ 200, 170, 0, 255 };
-        constexpr SDL_Color TRIGGER{ 0, 110, 110, 255 };
-        constexpr SDL_Color PLAYER{ 255, 255, 255, 255 };
-        constexpr SDL_Color BORDER{ 0, 140, 0, 255 };
-        constexpr SDL_Color BACKDROP{ 0, 0, 0, 190 };
+        // Cell roles, as they appear on the original's map (Edward, 2026):
+        //   walls            dark green
+        //   walkable space   light green
+        //   doors            lime green
+        //   crates/barrels   red
+        // and nothing else - level triggers are NOT drawn, which they were here.
+        //
+        // THE EXACT VALUES ARE NOT TRACED. The one colour the decompilation gives
+        // is FUN_00043cc4's modulate on the whole map quad, 0x4c,0x73,0x4c =
+        // RGB(76,115,76). The per-cell colours live in the map TEXTURE, and the
+        // code that builds that texture has not been located - the automap
+        // functions around FUN_00043cc4 turned out to be its save/load text, not
+        // the map raster.
+        //
+        // The builder (FUN_00043078) writes indices 0/1/2/4 per cell - nothing,
+        // walkable, wall, and the Auto Mapper's reveal-all case - so the roles
+        // below line up with the original's own set. Doors and obstacles are not
+        // among those four, which means the original marks them from a later pass
+        // rather than from the grid scan.
+        //
+        // The values are still a family built around the one known colour: the
+        // modulate as the walkable tone, a darker multiple for walls, a
+        // green-shifted brighter one for doors. Red has no relation to it. All four
+        // should be replaced once the map texture's CLUT is located.
+        constexpr SDL_Color FLOOR{ 76, 115, 76, 255 };     // the known modulate
+        constexpr SDL_Color WALL{ 28, 44, 28, 255 };       // darker
+        constexpr SDL_Color DOOR{ 140, 220, 60, 255 };     // lime
+        constexpr SDL_Color OBSTACLE{ 180, 40, 40, 255 };  // crates, barrels
+        constexpr SDL_Color PLAYER{ 255, 127, 0, 255 };    // ff,7f,00 from the code
+        constexpr SDL_Color BACKDROP{ 0, 0, 0, 255 };
+        constexpr SDL_Color BORDER{ 76, 115, 76, 255 };   // only when style.drawBorder
 
         void SetColor(SDL_Renderer* renderer, const SDL_Color& c, Uint8 alpha)
         {
@@ -23,7 +46,8 @@ namespace ALTEngine::Renderer
             SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, a);
         }
 
-        bool IsWall(const ALTEngine::Formats::CollisionNode& cell)
+        // Kept for reference; superseded by IsCellBlocking below.
+        bool IsWallLegacy(const ALTEngine::Formats::CollisionNode& cell)
         {
             // Both bytes are confirmed to only ever be 255 or 0. Either one
             // marking solid is enough - they agree in practice, and treating a
@@ -56,11 +80,27 @@ namespace ALTEngine::Renderer
         if (level.collisionGrid.size() < static_cast<size_t>(gridW) * gridH) { return drawn; }
 
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-
         // Letterbox: one scale for both axes so the level is not stretched.
         float scale = std::min(dest.w / static_cast<float>(gridW), dest.h / static_cast<float>(gridH));
         if (scale <= 0.0f) { return drawn; }
-        float cell = std::max(scale, static_cast<float>(style.minCellPixels) * 0.0f + scale);
+        // WHOLE PIXELS PER CELL. A fractional cell size means NEAREST sampling
+        // gives some cells 4 pixels and others 5, which reads as an uneven stretch
+        // (Edward, 2026). Flooring it makes every cell identical; the map just
+        // occupies slightly less of its box.
+        // Whole pixels per cell where there is room for it, since a fractional
+        // cell makes NEAREST give some cells 4 pixels and others 5 - an uneven
+        // stretch (Edward, 2026).
+        //
+        // Below one pixel per cell that is impossible: L111 is 92x105 cells and the
+        // live HUD box is 196x68, so the scale is 0.65 and flooring it would blank
+        // the map entirely. There the fractional scale is kept and the texture is
+        // filtered down instead, which is the lesser evil - the pause map, where
+        // detail actually matters, gets whole cells.
+        float cell = scale;
+        if (scale >= 1.0f)
+        {
+            cell = std::floor(scale);
+        }
         float drawW = cell * gridW;
         float drawH = cell * gridH;
         float originX = style.alignTopLeft ? dest.x : dest.x + (dest.w - drawW) * 0.5f;
@@ -71,21 +111,36 @@ namespace ALTEngine::Renderer
         drawn = backdrop;
         SDL_RenderFillRect(renderer, &backdrop);
 
-        // Floor height range, so the shading uses the level's own spread rather
-        // than an arbitrary fixed scale. A flat level then reads as one tone
-        // instead of all-black.
-        int minFloor = 255, maxFloor = 0;
-        for (int z = 0; z < gridH; ++z)
+
+        // ONE PIXEL PER CELL, built into a texture and blitted - the structure
+        // FUN_00043cc4 uses. Drawing a rect per cell could not avoid seams or
+        // overlaps at a fractional scale however the edges were rounded; a
+        // gridW x gridH image scaled up has neither by construction, and it is
+        // also far less work per frame (Edward, 2026).
+        static SDL_Texture* cached = nullptr;
+        static int cachedW = 0, cachedH = 0;
+
+        if (!cached || cachedW != gridW || cachedH != gridH)
         {
-            for (int x = 0; x < gridW; ++x)
-            {
-                const auto& c = level.collisionGrid[static_cast<size_t>(z) * gridW + x];
-                if (IsWall(c)) { continue; }
-                minFloor = std::min(minFloor, static_cast<int>(c.floorHeight));
-                maxFloor = std::max(maxFloor, static_cast<int>(c.floorHeight));
-            }
+            if (cached) { SDL_DestroyTexture(cached); }
+            cached = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+                                       SDL_TEXTUREACCESS_STATIC, gridW, gridH);
+            if (!cached) { return drawn; }
+            SDL_SetTextureBlendMode(cached, SDL_BLENDMODE_BLEND);
+            SDL_SetTextureScaleMode(cached, SDL_SCALEMODE_NEAREST);
+            cachedW = gridW;
+            cachedH = gridH;
         }
-        int floorRange = std::max(1, maxFloor - minFloor);
+
+        std::vector<uint8_t> pixels(static_cast<size_t>(gridW) * gridH * 4, 0);
+        auto put = [&](int x, int z, const SDL_Color& c) {
+            if (x < 0 || z < 0 || x >= gridW || z >= gridH) { return; }
+            size_t i = (static_cast<size_t>(z) * gridW + x) * 4;
+            pixels[i + 0] = c.r;
+            pixels[i + 1] = c.g;
+            pixels[i + 2] = c.b;
+            pixels[i + 3] = c.a;
+        };
 
         for (int z = 0; z < gridH; ++z)
         {
@@ -93,78 +148,59 @@ namespace ALTEngine::Renderer
             {
                 size_t index = static_cast<size_t>(z) * gridW + x;
 
-                // Unseen cells are left blank. nullptr means fully revealed,
-                // i.e. the player has an Auto Mapper.
+                // Unseen cells stay fully transparent. nullptr means revealed.
                 if (visited && (index >= visited->size() || (*visited)[index] == 0)) { continue; }
 
                 const auto& c = level.collisionGrid[index];
-                // Cell bounds from the NEXT cell's origin, so neighbours share an
-                // exact edge.
+                // The engine's OWN blocking test, not the two 255 bytes this used
+                // to check.
                 //
-                // The old `cell + 0.5f` fudge was there to close seams, but at a
-                // fractional cell size it makes adjacent rects overlap by varying
-                // amounts - and where two different colours overlap, the later one
-                // paints a line into the earlier. That is the artifact lines
-                // across the live map (Edward, 2026). Rounding both edges to whole
-                // pixels leaves no seam and no overlap.
-                float x0 = SDL_roundf(originX + x * cell);
-                float x1 = SDL_roundf(originX + (x + 1) * cell);
-                float z0 = SDL_roundf(originY + z * cell);
-                float z1 = SDL_roundf(originY + (z + 1) * cell);
-                if (x1 <= x0) { x1 = x0 + 1.0f; }
-                if (z1 <= z0) { z1 = z0 + 1.0f; }
-                SDL_FRect r{ x0, z0, x1 - x0, z1 - z0 };
-
-                if (IsWall(c))
-                {
-                    SetColor(renderer, WALL, style.alpha);
-                }
-                else if (style.drawTriggers && c.scriptAction != 0)
-                {
-                    SetColor(renderer, TRIGGER, style.alpha);
-                }
-                else
-                {
-                    float t = static_cast<float>(c.floorHeight - minFloor) / static_cast<float>(floorRange);
-                    SDL_Color shade{
-                        static_cast<Uint8>(FLOOR_LOW.r + (FLOOR_HIGH.r - FLOOR_LOW.r) * t),
-                        static_cast<Uint8>(FLOOR_LOW.g + (FLOOR_HIGH.g - FLOOR_LOW.g) * t),
-                        static_cast<Uint8>(FLOOR_LOW.b + (FLOOR_HIGH.b - FLOOR_LOW.b) * t),
-                        255
-                    };
-                    SetColor(renderer, shade, style.alpha);
-                }
-                SDL_RenderFillRect(renderer, &r);
+                // Those two only mark solid geometry, so anything blocking for
+                // another reason - the dead space beside a door frame, an
+                // unbreakable crate that is part of the level - came out as
+                // walkable floor (Edward, 2026). IsCellBlocking is what the player
+                // actually collides with, so it is the right question to ask, and
+                // it is already proven correct because movement depends on it.
+                //
+                // It takes GAME coordinates, which are cells << 9.
+                bool blocking = ALTEngine::Formats::IsCellBlocking(level, x << 9, z << 9);
+                put(x, z, blocking ? WALL : FLOOR);
             }
         }
 
-        // Doors from their own records - see the header for why not the grid.
+        // Doors over the floor. Two cells along the door's own axis - see below.
         if (style.drawDoors)
         {
-            SetColor(renderer, DOOR, style.alpha);
             for (const auto& door : level.doors)
             {
-                // A door spans 4 cells along its own axis. rotation 2 and 6 run
-                // along Z, the same test the door mesh placement uses.
                 bool alongZ = (door.rotation == 2 || door.rotation == 6);
-                for (int i = 0; i < 4; ++i)
+                for (int i = 0; i < 2; ++i)
                 {
                     int dx = static_cast<int>(door.x) + (alongZ ? 0 : i);
                     int dz = static_cast<int>(door.y) + (alongZ ? i : 0);
-                    if (dx < 0 || dz < 0 || dx >= gridW || dz >= gridH) { continue; }
                     size_t di = static_cast<size_t>(dz) * gridW + dx;
                     if (visited && (di >= visited->size() || (*visited)[di] == 0)) { continue; }
-                    float dx0 = SDL_roundf(originX + dx * cell);
-                    float dx1 = SDL_roundf(originX + (dx + 1) * cell);
-                    float dz0 = SDL_roundf(originY + dz * cell);
-                    float dz1 = SDL_roundf(originY + (dz + 1) * cell);
-                    if (dx1 <= dx0) { dx1 = dx0 + 1.0f; }
-                    if (dz1 <= dz0) { dz1 = dz0 + 1.0f; }
-                    SDL_FRect r{ dx0, dz0, dx1 - dx0, dz1 - dz0 };
-                    SDL_RenderFillRect(renderer, &r);
+                    put(dx, dz, DOOR);
                 }
             }
         }
+
+        // Crates and barrels - the obstacles the original marks in red.
+        for (const auto& crate : level.crates)
+        {
+            int cx = static_cast<int>(crate.x);
+            int cz = static_cast<int>(crate.y);
+            size_t ci = static_cast<size_t>(cz) * gridW + cx;
+            if (visited && (ci >= visited->size() || (*visited)[ci] == 0)) { continue; }
+            put(cx, cz, OBSTACLE);
+        }
+
+        SDL_UpdateTexture(cached, nullptr, pixels.data(), gridW * 4);
+        SDL_SetTextureAlphaMod(cached, style.alpha);
+
+        SDL_FRect blit{ originX, originY, drawW, drawH };
+        SDL_RenderTexture(renderer, cached, nullptr, &blit);
+        SDL_SetTextureAlphaMod(cached, 255);
 
         if (style.drawPlayer)
         {

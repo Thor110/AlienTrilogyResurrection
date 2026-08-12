@@ -11,6 +11,53 @@ namespace ALTEngine::Renderer
 {
     // Top-down map of a level, drawn from the collision grid.
     //
+    // THE ORIGINAL'S MAP RENDERER IS FUN_00043cc4 - found, and it works quite
+    // differently from this:
+    //
+    //   origin  = (0xe0 - gridWidth/2, 0x60 - gridHeight/2) in 320x240 space,
+    //             i.e. the map is CENTRED on (224, 96)
+    //   extent  = origin .. origin + gridWidth-1 / gridHeight-1
+    //             so ONE PIXEL PER CELL, not a scaled block per cell
+    //   player  = a 3x3 point, colour ff,7f,00 (orange), at
+    //             origin + ((worldPos + offset) >> 9) - 1, entry stride 0x14
+    //   the map itself = a SINGLE TEXTURED QUAD with UVs from DAT_00249830.., and
+    //             a modulate colour of 0x4c,0x73,0x4c = RGB(76,115,76)
+    //
+    // So the original builds the map into a TEXTURE somewhere else and draws it as
+    // one quad, tinted that muted green - it does not emit a rect per cell the way
+    // this does. There is also a second mode when DAT_0024985c == 2, which draws a
+    // fixed 0x74 (116) square at (0xa6, 0x26) = (166, 38) with UV clamping either
+    // side - almost certainly the live HUD version, scrolling a window over the
+    // same texture.
+    //
+    // THE TEXTURE BUILDER IS FUN_00043078 - found, via the writes to DAT_00249830
+    // (which is the map quad's UV pair, not a colour). It walks the grid 0..0x7f in
+    // both axes and writes ONE BYTE PER CELL into the texture, from a set of just
+    // four values:
+    //
+    //     0   outside the grid, or a cell with nothing to show
+    //     1   walkable
+    //     2   wall
+    //     4   written when bit 0x80 of DAT_000b0ab4 is set, which takes a separate
+    //         branch for every cell - almost certainly the Auto Mapper's
+    //         reveal-everything path
+    //
+    // Note 3 is never written. So the map is an 8bpp indexed image and the actual
+    // COLOURS live in that texture's CLUT, which is uploaded elsewhere - it is not
+    // in this function and not in the panel sheet's CL00. That CLUT is the last
+    // piece needed to get the colours exactly right.
+    //
+    // *** AND THE ORIGINAL'S VISITED FLAG IS BYTE +7, BIT 1 OF THE RUNTIME
+    // COLLISION CELL. *** FUN_00043078 tests `cell[7] & 1` to decide whether a cell
+    // has been seen, and bit 0x80 of the same byte marks something further. This is
+    // the tracking I looked for and could not find when the fog of war was written
+    // - it is stored in the collision grid itself, not a separate buffer. Worth
+    // adopting in place of this port's own `visited` vector, since it would then be
+    // whatever the original actually reveals rather than an approximation.
+    //
+    // Given the CLUT is still missing, the per-cell approach below stays for now. Two things from the above are worth adopting regardless
+    // and have been: the modulate colour, and one pixel per cell.
+    //
     // NOT TRACED FROM THE ORIGINAL. Nothing resembling a map or motion-tracker
     // renderer has been located in the decompilation - there is no function
     // that walks the grid and draws it, and no automap symbol of any kind. So
