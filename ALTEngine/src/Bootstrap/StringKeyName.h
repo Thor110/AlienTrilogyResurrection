@@ -146,6 +146,8 @@ namespace ALTEngine::Bootstrap
         case StringId::Cheats: return "Cheats";
         case StringId::FullyLoaded: return "FullyLoaded";
         case StringId::DescFullyLoaded: return "DescFullyLoaded";
+        case StringId::MaximumHealth: return "MaximumHealth";
+        case StringId::DescMaximumHealth: return "DescMaximumHealth";
         default: return "";
         }
     }
@@ -279,6 +281,8 @@ namespace ALTEngine::Bootstrap
         if (name == "Cheats") { return StringId::Cheats; }
         if (name == "FullyLoaded") { return StringId::FullyLoaded; }
         if (name == "DescFullyLoaded") { return StringId::DescFullyLoaded; }
+        if (name == "MaximumHealth") { return StringId::MaximumHealth; }
+        if (name == "DescMaximumHealth") { return StringId::DescMaximumHealth; }
         return std::nullopt;
     }
 }

@@ -8,37 +8,37 @@ namespace ALTEngine::Renderer
     namespace
     {
         // The menu's palette, so the map does not look bolted on.
-        // Cell roles, as they appear on the original's map (Edward, 2026):
-        //   walls            dark green
-        //   walkable space   light green
-        //   doors            lime green
-        //   crates/barrels   red
-        // and nothing else - level triggers are NOT drawn, which they were here.
+        // Cell colours, SAMPLED FROM THE ORIGINAL'S OWN MAP.
         //
-        // THE EXACT VALUES ARE NOT TRACED. The one colour the decompilation gives
-        // is FUN_00043cc4's modulate on the whole map quad, 0x4c,0x73,0x4c =
-        // RGB(76,115,76). The per-cell colours live in the map TEXTURE, and the
-        // code that builds that texture has not been located - the automap
-        // functions around FUN_00043cc4 turned out to be its save/load text, not
-        // the map raster.
+        // Decoding Edward's crop of the original pause map gives exactly FIVE
+        // distinct colours - which is the five values FUN_00043078 writes per cell,
+        // so the mapping is no longer guesswork:
         //
-        // The builder (FUN_00043078) writes indices 0/1/2/4 per cell - nothing,
-        // walkable, wall, and the Auto Mapper's reveal-all case - so the roles
-        // below line up with the original's own set. Doors and obstacles are not
-        // among those four, which means the original marks them from a later pass
-        // rather than from the grid scan.
+        //   rgb(  0, 24,  0)  x50656   value 0   backdrop: walls, void, unexplored
+        //   rgb( 33, 65, 33)  x10964   value 1   walkable
+        //   rgb( 16, 40, 16)  x 4720   value 2   a dimmer tier - see below
+        //   rgb( 74, 40, 16)  x  176   value 5   VENT - a brown, not a green
+        //   rgb( 16,113, 16)  x   48   value 4   the brightest green
         //
-        // The values are still a family built around the one known colour: the
-        // modulate as the walkable tone, a darker multiple for walls, a
-        // green-shifted brighter one for doors. Red has no relation to it. All four
-        // should be replaced once the map texture's CLUT is located.
-        constexpr SDL_Color FLOOR{ 76, 115, 76, 255 };     // the known modulate
-        constexpr SDL_Color WALL{ 28, 44, 28, 255 };       // darker
-        constexpr SDL_Color DOOR{ 140, 220, 60, 255 };     // lime
-        constexpr SDL_Color OBSTACLE{ 180, 40, 40, 255 };  // crates, barrels
-        constexpr SDL_Color PLAYER{ 255, 127, 0, 255 };    // ff,7f,00 from the code
-        constexpr SDL_Color BACKDROP{ 0, 0, 0, 255 };
-        constexpr SDL_Color BORDER{ 76, 115, 76, 255 };   // only when style.drawBorder
+        // These replace the PANEL.PAL guesses. PANEL.PAL was the wrong source: none
+        // of its entries is rgb(0,24,0) or rgb(74,40,16), so the map texture has its
+        // own CLUT after all, exactly as the code implied.
+        //
+        // THERE IS NO RED ANYWHERE IN THE ORIGINAL MAP. So crates and barrels are
+        // not drawn on it at all, and the red obstacles this had been drawing were
+        // my invention - they are gone.
+        //
+        // At roughly 6.9 pixels per cell in that crop the counts work out to about
+        // 1589 walkable cells, 684 dimmer ones, 25 vents and 7 bright - and 24 vents
+        // is exactly what byte +10 == 6 finds on L111, which confirms the vent
+        // colour.
+        constexpr SDL_Color BACKDROP{ 0, 24, 0, 255 };
+        constexpr SDL_Color FLOOR{ 33, 65, 33, 255 };
+        constexpr SDL_Color OUTLINE{ 16, 40, 16, 255 };   // 1180 cells: the wall outline
+        constexpr SDL_Color CRATE{ 74, 40, 16, 255 };     // 44 cells: L111 has exactly 44 crates
+        constexpr SDL_Color DOOR{ 16, 113, 16, 255 };
+        constexpr SDL_Color BORDER{ 33, 65, 33, 255 };
+        constexpr SDL_Color PLAYER{ 255, 127, 0, 255 };   // ff,7f,00, from the code
 
         void SetColor(SDL_Renderer* renderer, const SDL_Color& c, Uint8 alpha)
         {
@@ -163,8 +163,79 @@ namespace ALTEngine::Renderer
                 // it is already proven correct because movement depends on it.
                 //
                 // It takes GAME coordinates, which are cells << 9.
-                bool blocking = ALTEngine::Formats::IsCellBlocking(level, x << 9, z << 9);
-                put(x, z, blocking ? WALL : FLOOR);
+                // CLASSIFICATION TRACED FROM FUN_00043078, which writes one of
+                // five values per cell. Its logic, with the runtime cell as an
+                // int* (16 bytes per cell):
+                //
+                //   if (DAT_00245bb4[cell[5]] == 0)            -> 0   not drawn
+                //   else if (byte12 == 0 || byte12 < 0x14 || byte12 == 0xff) {
+                //       if (cell[7] & 0x80)                    -> 2   wall
+                //       else if (cell[10] == 6)                -> 5   VENT
+                //       else if (cell[0] != 0 || (cell[7] & 1)) -> 1  walkable
+                //       else                                   -> 0   nothing
+                //   } else                                     -> 4   obstacle
+                //
+                // Which corrects two things I had guessed wrong: null space is a
+                // LOOKUP on byte +5, not my neighbour heuristic, and there is a
+                // fifth cell type at byte +10 == 6 - the vents facehuggers spawn
+                // from, which the original draws as its own box rather than a bump
+                // in the wall (Edward, 2026).
+                //
+                // Byte +7 is runtime-only and always 0 on disc, so its wall bit is
+                // read here from unknown3/unknown4 (confirmed 255 = wall) and its
+                // seen bit from our own visited tracking.
+                const uint8_t* raw = reinterpret_cast<const uint8_t*>(&c);
+
+                // WALLS ARE NOT DRAWN. This inverts what this function used to do,
+                // and it is why the map never looked right.
+                //
+                // FUN_00043078's branch reads:
+                //     if ((cell[7] & 0x80) == 0) { ... 5 / 1 / 0 ... } else { 2 }
+                // so bit 0x80 selects value 2 - and FUN_00029704, the DOOR placement
+                // code, is what sets that bit. Value 2 is therefore a DOOR cell, not
+                // a wall. Nothing in the whole function emits a wall value at all:
+                // solid geometry simply falls through to 0, "not drawn", exactly
+                // like empty space.
+                //
+                // That matches the original's map, where the light lines are the
+                // walkable corridors and everything else - walls and void alike - is
+                // the flat dark backdrop.
+                // NOT drawing byte+10 == 6 as its own colour. It finds 24 cells on
+                // L111, but the original's only warm colour has 44 - which is the
+                // crate count exactly. So that warm colour is crates, and whatever
+                // byte +10 == 6 marks is not given its own colour on the map.
+                (void)raw;
+
+                // Blocking cells are left transparent, which reads as the backdrop.
+                // IsCellBlocking stands in for the original's `cell[0] != 0` test,
+                // since it is what the player actually collides with.
+                // Walkable floor is drawn. A SOLID cell is drawn only if it touches
+                // walkable floor, which gives the one-cell outline the original has
+                // (1180 cells there, 1045 here). Every other solid cell is backdrop -
+                // 5684 of them on L111, and colouring those was what flooded the map.
+                if (!ALTEngine::Formats::IsCellBlocking(level, x << 9, z << 9))
+                {
+                    put(x, z, FLOOR);
+                }
+                else
+                {
+                    bool touchesFloor = false;
+                    for (int dz = -1; dz <= 1 && !touchesFloor; ++dz)
+                    {
+                        for (int dx = -1; dx <= 1; ++dx)
+                        {
+                            if (dx == 0 && dz == 0) { continue; }
+                            int nx = x + dx, nz = z + dz;
+                            if (nx < 0 || nz < 0 || nx >= gridW || nz >= gridH) { continue; }
+                            if (!ALTEngine::Formats::IsCellBlocking(level, nx << 9, nz << 9))
+                            {
+                                touchesFloor = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (touchesFloor) { put(x, z, OUTLINE); }
+                }
             }
         }
 
@@ -173,6 +244,10 @@ namespace ALTEngine::Renderer
         {
             for (const auto& door : level.doors)
             {
+                // FUN_00029704 writes bit 0x80 on only the FIRST and LAST cell of
+                // the door's four-cell span (iVar15 + 7 and iVar15 + 0x37), not the
+                // two in between - which is exactly why the original's doors read as
+                // 2 cells wide on the map (Edward, 2026).
                 bool alongZ = (door.rotation == 2 || door.rotation == 6);
                 for (int i = 0; i < 2; ++i)
                 {
@@ -185,14 +260,16 @@ namespace ALTEngine::Renderer
             }
         }
 
-        // Crates and barrels - the obstacles the original marks in red.
+        // Crates, in red. L111 has 44 and the original's map has exactly 44 cells of
+        // #4A2810, so this is confirmed by count rather than assumed. They were right
+        // the first time; I removed them on the false grounds that the map had no red.
         for (const auto& crate : level.crates)
         {
             int cx = static_cast<int>(crate.x);
             int cz = static_cast<int>(crate.y);
             size_t ci = static_cast<size_t>(cz) * gridW + cx;
             if (visited && (ci >= visited->size() || (*visited)[ci] == 0)) { continue; }
-            put(cx, cz, OBSTACLE);
+            put(cx, cz, CRATE);
         }
 
         SDL_UpdateTexture(cached, nullptr, pixels.data(), gridW * 4);

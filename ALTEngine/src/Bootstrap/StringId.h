@@ -160,6 +160,8 @@ namespace ALTEngine::Bootstrap
         Cheats,
         FullyLoaded,
         DescFullyLoaded,
+        MaximumHealth,
+        DescMaximumHealth,
 
         Count, // sentinel - not a real string, gives the tables their size
     };

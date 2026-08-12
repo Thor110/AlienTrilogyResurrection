@@ -77,10 +77,20 @@ namespace ALTEngine::Screens
             // PauseMenuScreen adds and removes it, re-checking every time the
             // menu opens and again on return from Options.
             Tagged(MakeList("Cheats", {
+                // Enable All first, working the same way Modern's does: it turns
+                // every cheat below it on or off in one go (Edward, 2026).
+                Tagged(MakeList("Enable All", {
+                    Tagged(MakeAction("Off"), StringId::Off),
+                    Tagged(MakeAction("On"), StringId::On),
+                }), StringId::EnableAll),
                 Tagged(MakeList("Fully Loaded", {
                     Tagged(MakeAction("Off"), StringId::Off),
                     Tagged(MakeAction("On"), StringId::On),
                 }), StringId::FullyLoaded),
+                Tagged(MakeList("Maximum Health", {
+                    Tagged(MakeAction("Off"), StringId::Off),
+                    Tagged(MakeAction("On"), StringId::On),
+                }), StringId::MaximumHealth),
             }), StringId::Cheats),
             Tagged(MakeList("Exit Game", {
                 Tagged(MakeAction("No"), StringId::No),

@@ -28,6 +28,9 @@ namespace ALTEngine::Screens
         // so the existing `{ PauseMenuOutcome::X }` brace-initialisations still
         // compile.
         bool cheatFullyLoaded = false;
+
+        // Health pinned to its maximum while on.
+        bool cheatMaximumHealth = false;
     };
 
     // The in-game pause menu, opened with Escape. Auto Mapper / Shoulder

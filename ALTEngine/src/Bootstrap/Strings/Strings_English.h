@@ -149,6 +149,8 @@ namespace ALTEngine::Bootstrap
             "Cheats",
             "Fully Loaded",
             "Unlimited ammunition and all weapons",
+            "Maximum Health",
+            "Health held at its maximum, including derm patch overcharge",
         };
         return table;
     }

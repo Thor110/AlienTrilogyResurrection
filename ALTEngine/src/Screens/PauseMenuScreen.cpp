@@ -402,11 +402,36 @@ namespace ALTEngine::Screens
                 // branch (Edward, 2026 - "just like the way the lists in the
                 // Modern Options part of the options menu work").
                 cheat.isSettingsList = true;
-                if (cheat.label != "Fully Loaded") { continue; }
-                auto stored = cheatConfig.Get("CheatFullyLoaded");
+                const char* key = nullptr;
+                ALTEngine::Bootstrap::StringId desc = ALTEngine::Bootstrap::StringId::Count;
+
+                if (cheat.label == "Fully Loaded")
+                {
+                    key = "CheatFullyLoaded";
+                    desc = ALTEngine::Bootstrap::StringId::DescFullyLoaded;
+                }
+                else if (cheat.label == "Maximum Health")
+                {
+                    key = "CheatMaximumHealth";
+                    desc = ALTEngine::Bootstrap::StringId::DescMaximumHealth;
+                }
+                else if (cheat.label == "Enable All")
+                {
+                    // On only when EVERY cheat is on, matching how Modern's
+                    // Enable All reads back.
+                    auto a = cheatConfig.Get("CheatFullyLoaded");
+                    auto b = cheatConfig.Get("CheatMaximumHealth");
+                    bool all = a.has_value() && *a == "On" && b.has_value() && *b == "On";
+                    cheat.initialSelectedChild = all ? 1 : 0;
+                    cheat.descriptionStringId = static_cast<int>(ALTEngine::Bootstrap::StringId::DescEnableAll);
+                    continue;
+                }
+
+                if (!key) { continue; }
+                auto stored = cheatConfig.Get(key);
                 bool on = stored.has_value() && *stored == "On";
                 cheat.initialSelectedChild = on ? 1 : 0;
-                cheat.descriptionStringId = static_cast<int>(ALTEngine::Bootstrap::StringId::DescFullyLoaded);
+                cheat.descriptionStringId = static_cast<int>(desc);
             }
         };
         syncCheatsEntry();
@@ -448,14 +473,33 @@ namespace ALTEngine::Screens
                     // nothing at all (Edward, 2026).
                     ALTEngine::Menu::Back(path);
                 }
-                else if (parentLabel == "Fully Loaded")
+                else if (parentLabel == "Fully Loaded" || parentLabel == "Maximum Health"
+                         || (parentLabel == "Enable All" && path.size() >= 2
+                             && root.children[static_cast<size_t>(path[0])].label == "Cheats"))
                 {
-                    // Persisted so it survives the menu closing, and reported so
-                    // the caller (which owns the inventory) can apply it.
+                    // Every cheat is a config key plus a flag on the result, so the
+                    // caller (which owns the player state) applies it. Enable All
+                    // writes them all at once, exactly as Modern's does.
                     bool on = (deepest.label == "On");
                     ALTEngine::Bootstrap::Config cheatConfig;
-                    cheatConfig.Set("CheatFullyLoaded", on ? "On" : "Off");
-                    result.cheatFullyLoaded = on;
+
+                    if (parentLabel == "Enable All")
+                    {
+                        cheatConfig.Set("CheatFullyLoaded", on ? "On" : "Off");
+                        cheatConfig.Set("CheatMaximumHealth", on ? "On" : "Off");
+                        result.cheatFullyLoaded = on;
+                        result.cheatMaximumHealth = on;
+                    }
+                    else if (parentLabel == "Fully Loaded")
+                    {
+                        cheatConfig.Set("CheatFullyLoaded", on ? "On" : "Off");
+                        result.cheatFullyLoaded = on;
+                    }
+                    else
+                    {
+                        cheatConfig.Set("CheatMaximumHealth", on ? "On" : "Off");
+                        result.cheatMaximumHealth = on;
+                    }
                     SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                 }
                 else if (r == EnterResult::Toggled && deepest.label == "Options")

@@ -351,6 +351,7 @@ namespace ALTEngine::Screens
         bool freeLook = false;
         bool liveMinimap = false;
         bool cheatFullyLoaded = false;
+        bool cheatMaximumHealth = false;
         // Cells the player has seen, for the map's fog of war. One byte per
         // cell, sized on first use. Owning an Auto Mapper bypasses it entirely.
         std::vector<uint8_t> minimapVisited;
@@ -374,6 +375,8 @@ namespace ALTEngine::Screens
             {
                 auto stored = modernConfig.Get("CheatFullyLoaded");
                 cheatFullyLoaded = stored.has_value() && *stored == "On";
+                auto storedHealth = modernConfig.Get("CheatMaximumHealth");
+                cheatMaximumHealth = storedHealth.has_value() && *storedHealth == "On";
             }
             // The feature is "unlimited render distance", so the original's
             // fade is the INVERSE of it.
@@ -878,6 +881,7 @@ namespace ALTEngine::Screens
                     // the loadout is topped up every tick, so "unlimited
                     // ammunition" actually stays unlimited as it is spent.
                     cheatFullyLoaded = pauseResult.cheatFullyLoaded;
+                    cheatMaximumHealth = pauseResult.cheatMaximumHealth;
                     if (cheatFullyLoaded)
                     {
                         inventory.GiveEverything();
@@ -1275,6 +1279,15 @@ namespace ALTEngine::Screens
 
                         hudState.Tick();
                         if (cheatFullyLoaded) { inventory.GiveEverything(); }
+
+                        // 200 is the game's own ceiling: pickup type 0x17 sets it
+                        // outright and FUN_0003a674 clamps the derm patch display
+                        // there, so it is the real maximum rather than 100.
+                        if (cheatMaximumHealth)
+                        {
+                            hudState.health = 200;
+                            hudState.dead = false;
+                        }
                         hud.TickTracker();
 
                         // Remember where the player has been, for the map's fog

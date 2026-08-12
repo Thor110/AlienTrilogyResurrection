@@ -55,6 +55,29 @@ namespace ALTEngine::Renderer
     // adopting in place of this port's own `visited` vector, since it would then be
     // whatever the original actually reveals rather than an approximation.
     //
+    // THE FULL PER-CELL LOGIC, traced from FUN_00043078 (see Minimap.cpp for how it
+    // maps onto the on-disc fields). Five values, not three:
+    //
+    //     0  not drawn        4  obstacle
+    //     1  walkable         5  VENT - byte +10 == 6
+    //     2  wall
+    //
+    // Verified against L111: 5774 walls, 3861 walkable, and 24 VENTS - which is the
+    // feature Edward identified as facehugger spawn points, drawn by the original as
+    // its own box rather than a bump in the wall. Nothing would have found those by
+    // guesswork; they only appear because byte +10 == 6 is tested explicitly.
+    //
+    // TWO THINGS THIS PORT STILL CANNOT REPRODUCE:
+    //
+    //  1. DAT_00245bb4 - a 256-entry byte table indexed by cell byte +5. When its
+    //     entry is zero the cell is NOT DRAWN AT ALL. This is the real null-space
+    //     test, and it replaces the neighbour heuristic that was here before. On
+    //     L111 byte +5 is 0 for every cell, so the table's entry 0 alone decides
+    //     whether empty cells appear - but other levels will use more of it.
+    //  2. Byte +12, which selects the obstacle value 4, is 0 for every cell on disc.
+    //     So obstacles are marked at RUNTIME, presumably when a crate is placed -
+    //     which is why this port draws them from the crate records instead.
+    //
     // Given the CLUT is still missing, the per-cell approach below stays for now. Two things from the above are worth adopting regardless
     // and have been: the modulate colour, and one pixel per cell.
     //
