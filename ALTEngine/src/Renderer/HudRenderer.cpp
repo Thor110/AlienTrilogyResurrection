@@ -145,7 +145,26 @@ namespace ALTEngine::Renderer
             float top = SDL_roundf(y);
             float right = SDL_roundf(x + w);
             float bottom = SDL_roundf(y + h);
-            return SDL_FRect{ left, top, right - left, bottom - top };
+
+            // Never round a feature away, and never let its thickness depend on
+            // where it happens to land.
+            //
+            // The HUD's Y scale is fractional at most resolutions (1080/240 =
+            // 4.5), so rounding both edges independently gives a 1-row feature 4
+            // pixels on an even row and 5 on an odd one. Every green dash in this
+            // artwork is exactly 1 row by 2 columns (measured: 22 dashes on the
+            // health frame, 31 on the ammo, 20 on the tracker strip, longest run
+            // 2px in all three), so that inconsistency is visible on the
+            // underlines (Edward, 2026).
+            //
+            // Rounding UP any non-zero extent keeps them uniform, and matters
+            // only for thin features - anything several rows tall is unaffected.
+            float wOut = right - left;
+            float hOut = bottom - top;
+            if (w > 0.0f && wOut < SDL_ceilf(w)) { wOut = SDL_ceilf(w); }
+            if (h > 0.0f && hOut < SDL_ceilf(h)) { hOut = SDL_ceilf(h); }
+
+            return SDL_FRect{ left, top, wOut, hOut };
         }
     }
 
@@ -360,25 +379,39 @@ namespace ALTEngine::Renderer
         loadedFileIndex = -1;
     }
 
-    void HudRenderer::DrawDescriptor(SDL_Renderer* renderer, int descriptorIndex, int x, int y,
+    // `x` and `y` are DEVICE PIXELS, not HUD units - the caller advances the
+    // cursor in pixels so the spacing matches the drawn glyph size.
+    void HudRenderer::DrawDescriptor(SDL_Renderer* renderer, int descriptorIndex, float x, float y,
                                      float scaleX, float scaleY) const
     {
         if (descriptorIndex < 0 || static_cast<size_t>(descriptorIndex) >= rects.size()) { return; }
         const ALTEngine::Formats::BxRectangle& r = rects[static_cast<size_t>(descriptorIndex)];
 
-        // Descriptor rects are INCLUSIVE on the disc and BxParser adds +1 to
-        // width and height on read. That +1 is right for a sampler bound but
-        // wrong for a glyph's own extent, so a digit drew one pixel wider than
-        // the original's - confirmed by counting pixels across the zero
-        // (Edward, 2026). The advance already subtracted it; the source and
-        // destination rects did not.
-        float w = static_cast<float>(r.width - 1);
-        float h = static_cast<float>(r.height - 1);
-        if (w < 1.0f) { w = static_cast<float>(r.width); }
-        if (h < 1.0f) { h = static_cast<float>(r.height); }
+        // SOURCE AND DESTINATION ARE THE FULL RECT. The rect is INCLUSIVE on the
+        // disc and BxParser reports width+1 / height+1, which is exactly the
+        // number of pixels the region covers - so the whole reported rect is the
+        // glyph. Measured ink confirms it: font A is 8x7 of ink inside a 9x9 rect
+        // (the padding is the artwork's own spacing), font B is 12x10 of ink in a
+        // 12x10 rect with none.
+        //
+        // Sourcing width-1 by 9 was therefore clipping font B's right column AND
+        // its bottom row - which is the missing bottom row of pixels Edward has
+        // now reported three times. My fault for reading FUN_000393a0's `y + 9` as
+        // the glyph height when 9 is font A's rect height; FUN_000395d0 uses its
+        // own, and font B's is 10.
+        //
+        // The ADVANCE is separate: u1 - u0, i.e. reported width - 1. It is applied
+        // by the caller, in the same units this draws in.
+        float w = static_cast<float>(r.width);
+        float h = static_cast<float>(r.height);
+
+        // Square pixels. The HUD's two scales differ on 16:9 (6.0 and 4.5 at
+        // 1080p), and scaling a glyph by both stretches it 1.333x wide - the 4-vs-5
+        // pixel counter width Edward measured. Both axes use the vertical factor.
+        float glyphScale = scaleY;
 
         SDL_FRect src{ static_cast<float>(r.x), static_cast<float>(r.y), w, h };
-        SDL_FRect dst = SnapToPixels(x * scaleX, y * scaleY, w * scaleX, h * scaleY);
+        SDL_FRect dst = SnapToPixels(x, y, w * glyphScale, h * glyphScale);
         SDL_RenderTexture(renderer, sheet, &src, &dst);
     }
 
@@ -408,27 +441,41 @@ namespace ALTEngine::Renderer
         int clamped = std::clamp(value, 0, 999);
         int digits[3] = { clamped / 100, (clamped % 100) / 10, clamped % 10 };
 
-        int cursor = x;
+        // Cursor in PIXELS, advancing by the glyph's own advance times the same
+        // scale the glyph is drawn at.
+        //
+        // Mixing the two was the cause of the over-wide gap between digits: the
+        // position stepped by advance * scaleX (6.0) while the glyph was drawn at
+        // advance * scaleY (4.5), leaving a 1.333x hole after every character
+        // (Edward, 2026).
+        float glyphScale = scaleY;
+        float cursor = x * scaleX;      // start position keeps the HUD layout
+        float py = y * scaleY;
+
         for (int digit : digits)
         {
             int descriptor = firstDescriptor + HUD_FONT_DIGIT_GLYPH + digit;
-            DrawDescriptor(renderer, descriptor, cursor, y, scaleX, scaleY);
+            DrawDescriptor(renderer, descriptor, cursor, py, scaleX, scaleY);
             if (static_cast<size_t>(descriptor) < rects.size())
             {
-                // Advance by the RAW stored width, which is one less than the
-                // width BxParser reports.
+                // Advance = the rect's FULL pixel width.
                 //
-                // FUN_00039068 builds the advance table as u1 - u0 straight off
-                // the descriptor, and BxParser adds +1 to width and height on
-                // read (an inclusive-to-exclusive conversion that is right for
-                // sampling but wrong for an advance). Using the reported width
-                // made each digit a pixel too wide, so "045" ran 3 pixels long
-                // and butted against the first ammo bar - which is what made the
-                // decompiled text x of 0x12 look wrong (Edward, 2026).
-                cursor += rects[static_cast<size_t>(descriptor)].width - 1;
+                // FUN_00039068 stores u1 - u0, which for a 9-pixel region with
+                // inclusive coordinates is 8 - a coordinate delta, not a pixel
+                // count. Advancing by 8 puts the next glyph's first column on top
+                // of this one's last, and since font A's '0' has ink across all 8
+                // of its used columns, consecutive zeros came out touching with no
+                // gap at all (Edward, 2026).
+                //
+                // The region actually covers 9 pixels, and its 9th column is blank
+                // in the artwork - that blank column IS the letter spacing. So the
+                // advance is the reported width, and the result matches the
+                // original: 1 pixel between two zeros, and 2 after a '1', whose
+                // ink is inset by one column on each side.
+                cursor += rects[static_cast<size_t>(descriptor)].width * glyphScale;
             }
         }
-        return cursor - x;
+        return static_cast<int>(cursor - x * scaleX);
     }
 
     void HudRenderer::Draw(SDL_Renderer* renderer, const ALTEngine::Screens::PlayerHudState& state,
@@ -462,8 +509,18 @@ namespace ALTEngine::Renderer
             for (int i = 0; i < n; ++i)
             {
                 const BarSlot& s = slots[static_cast<size_t>(i)];
-                fillRect(frameX + s.x, frameY + s.top,
-                         frameX + s.x + s.width, frameY + s.bottom + 1, c);
+
+                // One row of leeway at top and bottom.
+                //
+                // The scan finds the notch's CLEAR rows, but the original's fill
+                // reaches a row further in each direction - it is drawn as a quad
+                // with its own extent and the frame's opaque artwork clips it,
+                // rather than being fitted to the gap. Fitting exactly left the
+                // green a pixel short against a side-by-side of the original
+                // (Edward, 2026). The overshoot is hidden by the frame, which is
+                // drawn over the top.
+                fillRect(frameX + s.x, frameY + s.top - 1,
+                         frameX + s.x + s.width, frameY + s.bottom + 2, c);
             }
         };
 
@@ -482,6 +539,21 @@ namespace ALTEngine::Renderer
         DrawNumber(renderer, state.health, HUD_HEALTH_TEXT_X, HUD_HEALTH_ROW_TOP,
                    HUD_FONT_B_FIRST_DESCRIPTOR, scaleX, scaleY);
         SDL_SetTextureColorMod(sheet, 255, 255, 255);
+
+        // Derm patch bars, for health over 100. Three pixels wide on a 4-pixel
+        // pitch, hanging from a fixed bottom and growing upward by the per-bar
+        // heights at DAT_000acba4 - all transcribed from FUN_0003a674; only the
+        // colour is sampled rather than derived. See HudPanel.h.
+        int dermBars = HudDermBarCount(state.health);
+        for (int i = 0; i < dermBars; ++i)
+        {
+            int x = HUD_DERM_X + i * HUD_DERM_PITCH;
+            int height = HUD_DERM_HEIGHTS[i];
+            fillRect(x, HUD_DERM_BOTTOM - height, x + HUD_DERM_BAR_WIDTH, HUD_DERM_BOTTOM,
+                     SDL_Color{ static_cast<Uint8>(HUD_DERM_BLUE_R),
+                                static_cast<Uint8>(HUD_DERM_BLUE_G),
+                                static_cast<Uint8>(HUD_DERM_BLUE_B), 255 });
+        }
 
         // ---- ammo row ------------------------------------------------------
         int ammo = state.CurrentAmmoTotal();

@@ -78,8 +78,8 @@ namespace ALTEngine::Screens
             // menu opens and again on return from Options.
             Tagged(MakeList("Cheats", {
                 Tagged(MakeList("Fully Loaded", {
-                    Tagged(MakeAction("No"), StringId::No),
-                    Tagged(MakeAction("Yes"), StringId::Yes),
+                    Tagged(MakeAction("Off"), StringId::Off),
+                    Tagged(MakeAction("On"), StringId::On),
                 }), StringId::FullyLoaded),
             }), StringId::Cheats),
             Tagged(MakeList("Exit Game", {

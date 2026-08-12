@@ -354,21 +354,43 @@
 // The alternate HUD layout (DAT_000ae0a4 && DAT_000ae0a5) moves the row's bottom
 // from 0x2f to 0xdf, matching how it moves the health frame.
 //
-// EDWARD'S FIGURES MATCH THE CODE: derm patches give 1 health each and ten is
-// the carry limit, so 110 is the practical maximum - which is bars = 10/10 = 1
-// at the low end, and the clamp at 200 only matters for something that grants
-// more than a patch does. The `if (bars == 0) bars = 1` is why a single point
-// over 100 still shows one bar.
+// HOW HEALTH OVER 100 IS ACTUALLY REACHED - traced. There are THREE separate
+// health pickup types in the collection handler (the switch around line 28745):
 //
-// THE BLUE IS NOT IN THE PANEL SHEET. CLUT index 0x68 reads rgb(56,64,56) in
-// PNL0 and rgb(72,24,0) in PNL1 - grey-green and brown, neither blue. Since the
-// bar green also turned out to come from PANEL.PAL rather than the sheet's own
-// CLUT, index 0x68 is presumably a PANEL.PAL index too. PANEL.PAL is on the disc
-// and in DiscFileManifest.json, so entry 0x68 (104) can be read directly - that
-// is the number to check rather than sampling a screenshot.
+//   type 0x11  raises health UP TO 100 if below it, never above, and also sets
+//              DAT_000b0ae4 = 900 - some 900-tick effect
+//   type 0x14  health += amount, then CLAMPED AT 100
+//   type 0x15  health += amount, with NO CLAMP AT ALL
+//   type 0x17  health = 200 outright
 //
-// NOT IMPLEMENTED YET: needs the ten heights from DAT_000acba4 and the blue from
-// PANEL.PAL entry 0x68. Everything else above is transcribed.
+// So 0x14 is the ordinary medikit and 0x15 is the one that can exceed 100 - the
+// derm patch. Because it is unclamped, the amount comes from the pickup record's
+// own field (`param_2`), not from a fixed +1, and the reachable total is bounded
+// only by how many are placed in a level. Type 0x17 sets 200 flat, which is
+// exactly the value FUN_0003a674 clamps to and the point at which all ten bars
+// show.
+//
+// That resolves the earlier worry: the ramp is NOT unreachable. With 0x15
+// granting more than 1, or 0x17 existing at all, the full 1,3,5,7,8... curve is
+// reachable in normal play, and the ten-bar display makes sense.
+//
+// NOT YET ESTABLISHED: which pickup ids in PICKMOD map to 0x14 / 0x15 / 0x17, and
+// what the 900-tick DAT_000b0ae4 effect on 0x11 is. Both are in the pickup tables
+// rather than this switch.
+//
+// THE TEN HEIGHTS, dumped from 0x000acba4 by Edward as int16s:
+//
+//     1, 3, 5, 7, 8, 8, 8, 8, 8, 8
+//
+// So the bars ramp 1,3,5,7 then plateau at 8 - a short curve rising to a flat
+// top, read left to right. That plateau is why the row looks like a small block
+// once several patches are held rather than a continuous slope.
+//
+// STILL MISSING: the colour. CLUT index 0x68 is grey-green in PNL0 and brown in
+// PNL1, and Edward has confirmed it is in neither PANEL.PAL nor NEWFONT.PAL, nor
+// any other palette the game actually needs. So the blue is presumably a literal
+// in the executable - the same situation as the weapon frame sizes. Until it
+// turns up, HUD_DERM_BLUE below is sampled from a screenshot and marked as such.
 
 // STILL NEEDED BEFORE THIS CAN BE BUILT:
 //   - which descriptor index is which element. The layout is regular (16x16 and
@@ -391,6 +413,11 @@ namespace ALTEngine::Renderer
     inline constexpr int HUD_FONT_FIRST_DESCRIPTOR = 23;
     inline constexpr int HUD_FONT_GLYPH_COUNT = 0x5b; // 91
     inline constexpr int HUD_FONT_GLYPH_HEIGHT = 9;
+
+    // Height of the quad both number routines emit: FUN_000393a0 and
+    // FUN_000395d0 both write y and y + 9, a literal, regardless of the glyph's
+    // descriptor height. The WIDTH comes from the advance table, not the rect.
+    inline constexpr int HUD_FONT_QUAD_HEIGHT = 9;
 
     // Font B - the large font, used by the health row. Starts immediately after
     // font A. Its glyph count is not established, only its base and digits.
@@ -545,6 +572,40 @@ namespace ALTEngine::Renderer
     inline constexpr int HUD_MINIMAP_Y = 19;   // == HUD_OVERLAY_HEALTH_Y, declared below
     inline constexpr int HUD_MINIMAP_W = 98 * HUD_MINIMAP_SCALE;
     inline constexpr int HUD_MINIMAP_H = 34 * HUD_MINIMAP_SCALE;
+
+    // ---- over-100 health (derm patches) -------------------------------------
+    // Geometry transcribed from FUN_0003a674; see the long note above.
+    inline constexpr int HUD_DERM_X = 0x109;          // 265, first bar's left edge
+    inline constexpr int HUD_DERM_BAR_WIDTH = 3;      // 0x109..0x10b inclusive
+    inline constexpr int HUD_DERM_PITCH = 4;
+    inline constexpr int HUD_DERM_BOTTOM = 0x2f;      // 47, fixed
+    inline constexpr int HUD_DERM_BOTTOM_ALT = 0xdf;  // 223, alternate HUD layout
+    inline constexpr int HUD_DERM_MAX_BARS = 10;
+
+    // Per-bar heights at DAT_000acba4 (Edward, 2026).
+    inline constexpr int HUD_DERM_HEIGHTS[HUD_DERM_MAX_BARS] = { 1, 3, 5, 7, 8, 8, 8, 8, 8, 8 };
+
+    // SAMPLED FROM A SCREENSHOT by Edward, not from a palette - see the note
+    // above. The one value in the derm patch path that is not derived.
+    //
+    // A desaturated teal rather than a blue: RGB 90/154/156, which converts to
+    // HSL 121/64/116 on the 0-240 scale and matches the figure Edward measured.
+    // The 64/112/216 previously here was MY invention, not a sample - I described
+    // it as sampled when it was not, which was wrong of me.
+    inline constexpr int HUD_DERM_BLUE_R = 90;
+    inline constexpr int HUD_DERM_BLUE_G = 154;
+    inline constexpr int HUD_DERM_BLUE_B = 156;
+
+    // How many bars to draw, exactly as FUN_0003a674 computes it: nothing at or
+    // below 100, otherwise (min(health,200) - 100) / 10, forced to at least 1.
+    inline int HudDermBarCount(int health)
+    {
+        if (health <= 100) { return 0; }
+        int value = (health > 200 ? 200 : health) - 100;
+        int bars = value / 10;
+        if (bars == 0) { bars = 1; }
+        return bars > HUD_DERM_MAX_BARS ? HUD_DERM_MAX_BARS : bars;
+    }
 
     // ---- overlay artwork ---------------------------------------------------
     // Both frames are ordinary descriptors drawn at positions the decompilation

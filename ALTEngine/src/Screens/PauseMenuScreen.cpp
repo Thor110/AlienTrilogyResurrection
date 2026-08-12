@@ -85,6 +85,61 @@ namespace ALTEngine::Screens
             return WeaponInfo{ state, node.modelIndex, node.secondaryModelIndex };
         }
 
+        // Draws a nested list as its own column, the way the Options menu does.
+        //
+        // The pause menu's left column only ever rendered one flat list, so a
+        // nested entry had nothing to show and had to be faked in the panel area.
+        // This gives it real columns instead (Edward, 2026 - "add the option to
+        // have nested lists in the pause menu").
+        //
+        // `selectedIndex` is the cursor's row when the cursor is IN this column,
+        // or the list's stored value when it is only being previewed one ahead -
+        // which is the same distinction DrawColumn makes in MenuController.
+        int DrawNestedColumn(SDL_Renderer* renderer, const std::vector<MenuNode>& items,
+                             int selectedIndex, bool pulseSelected, int x, int y, int rowHeight,
+                             int scale, Language language)
+        {
+            // Same metrics as MenuController's DrawColumn, so the pause menu's
+            // nested lists look identical to the Options menu's: label width plus
+            // scale*8 padding, a rounded box of rowHeight - scale*2, and columns
+            // separated by scale*4 (Edward, 2026).
+            int width = 0;
+            for (const auto& item : items)
+            {
+                width = std::max(width, TextWidth(DisplayLabel(item, language), scale));
+            }
+            width += scale * 8;
+
+            for (size_t i = 0; i < items.size(); ++i)
+            {
+                int rowY = y + static_cast<int>(i) * rowHeight;
+                bool selected = (static_cast<int>(i) == selectedIndex);
+                int boxHeight = rowHeight - scale * 2;
+
+                // The BOX pulses, not the text - lerped between the dark and light
+                // highlight greens, exactly as DrawLeftColumn does for the pause
+                // menu's own rows and DrawColumn does for the Options menu's. My
+                // first attempt flashed the label instead, which is a different
+                // effect entirely (Edward, 2026).
+                Color boxColor = COLOR_HIGHLIGHT_BG;
+                if (selected && pulseSelected)
+                {
+                    boxColor = LerpColor(COLOR_HIGHLIGHT_BG, COLOR_HIGHLIGHT_BG_LIGHT, PulsePhase());
+                }
+
+                SDL_FRect bar{ static_cast<float>(x), static_cast<float>(rowY),
+                               static_cast<float>(width), static_cast<float>(boxHeight) };
+                DrawRoundedRect(renderer, bar, static_cast<float>(scale * 2), boxColor);
+
+                Color textColor = selected ? COLOR_CURSOR : COLOR_DIM;
+
+                DrawBitmapText(renderer, DisplayLabel(items[i], language),
+                               x + scale * 4, rowY + (boxHeight - TextHeight(scale)) / 2, scale,
+                               textColor);
+            }
+            return width;
+        }
+
         void DrawLeftColumn(SDL_Renderer* renderer, const std::vector<MenuNode>& items, int cursorIndex,
                              const PlayerInventoryState& inventory, int x, int y, int rowHeight, int scale, int& outWidth, Language language)
         {
@@ -339,6 +394,13 @@ namespace ALTEngine::Screens
             MenuNode& cheats = root.children[static_cast<size_t>(at)];
             for (MenuNode& cheat : cheats.children)
             {
+                // Exactly what MenuTree's featureNode does for a Modern toggle:
+                // a settings list with Off/On, the stored state selected, and a
+                // description id. isSettingsList is what makes the shared
+                // renderer draw it as a list rather than needing a bespoke panel
+                // branch (Edward, 2026 - "just like the way the lists in the
+                // Modern Options part of the options menu work").
+                cheat.isSettingsList = true;
                 if (cheat.label != "Fully Loaded") { continue; }
                 auto stored = cheatConfig.Get("CheatFullyLoaded");
                 bool on = stored.has_value() && *stored == "On";
@@ -389,7 +451,7 @@ namespace ALTEngine::Screens
                 {
                     // Persisted so it survives the menu closing, and reported so
                     // the caller (which owns the inventory) can apply it.
-                    bool on = (deepest.label == "Yes");
+                    bool on = (deepest.label == "On");
                     ALTEngine::Bootstrap::Config cheatConfig;
                     cheatConfig.Set("CheatFullyLoaded", on ? "On" : "Off");
                     result.cheatFullyLoaded = on;
@@ -602,41 +664,45 @@ namespace ALTEngine::Screens
             }
             else if (topLabel == "Cheats")
             {
-                // Its own branch, so Cheats does NOT fall through to the generic
-                // inventory-item branch below - that one treats an unknown label
-                // as an unowned item and prints "NOT AVAILABLE" (Edward, 2026).
-                //
-                // Cheat rows in the panel, and the chosen row's No/Yes beside it
-                // once entered, mirroring how Exit Game draws its confirm.
-                const MenuNode& cheats = root.children[static_cast<size_t>(path[0])];
-                int cheatIndex = (path.size() >= 2 && path[1] >= 0
-                                  && static_cast<size_t>(path[1]) < cheats.children.size()) ? path[1] : -1;
+                // Real nested columns, the same shape as the Options menu's
+                // lists: Cheats -> <cheat> -> Off / On, each level its own
+                // column, appearing as the cursor descends.
+                const MenuNode* node = &root.children[static_cast<size_t>(path[0])];
 
-                for (size_t i = 0; i < cheats.children.size(); ++i)
+                // Start from the left column's own right edge plus the SAME gap
+                // the Options menu puts between its columns (scale * 4), rather
+                // than from panelX - which already includes scale * 8 for the
+                // model-preview panels and so put the first cheat column at
+                // double the correct distance (Edward, 2026).
+                int columnX = margin + leftWidth + scale * 4;
+
+                for (size_t depth = 1; ; ++depth)
                 {
-                    const MenuNode& cheat = cheats.children[i];
-                    bool onThisRow = (cheatIndex == static_cast<int>(i));
-                    int rowY = panelY + static_cast<int>(i) * rowHeight;
+                    if (node->children.empty()) { break; }
 
-                    std::string label = DisplayLabel(cheat, language);
-                    DrawBitmapText(renderer, label, panelX, rowY, scale,
-                                   onThisRow ? COLOR_CURSOR : COLOR_DIM);
-
-                    // No / Yes only once this cheat has been entered, the same
-                    // rule Exit Game uses for its confirm.
-                    if (onThisRow && path.size() >= 3 && !cheat.children.empty())
+                    int selectedHere;
+                    if (depth < path.size())
                     {
-                        int choice = path[2];
-                        int x = panelX + TextWidth(label, scale) + scale * 8;
-                        for (size_t j = 0; j < cheat.children.size(); ++j)
-                        {
-                            std::string option = DisplayLabel(cheat.children[j], language);
-                            bool selected = (static_cast<int>(j) == choice);
-                            DrawBitmapText(renderer, option, x, rowY, scale,
-                                           selected ? COLOR_CURSOR : COLOR_DIM);
-                            x += TextWidth(option, scale) + scale * 6;
-                        }
+                        selectedHere = path[depth];             // cursor is in this column
                     }
+                    else
+                    {
+                        // Preview column - show the stored value for a settings
+                        // list, nothing for a plain navigation list.
+                        selectedHere = node->isSettingsList ? node->initialSelectedChild : -1;
+                    }
+
+                    // Only the column the cursor is actually in pulses; a preview
+                    // column shows its value steadily.
+                    bool pulseHere = (depth < path.size());
+                    columnX += DrawNestedColumn(renderer, node->children, selectedHere, pulseHere,
+                                                columnX, panelY, rowHeight, scale, language)
+                             + scale * 4;
+
+                    if (depth >= path.size()) { break; }
+                    int childIndex = path[depth];
+                    if (childIndex < 0 || static_cast<size_t>(childIndex) >= node->children.size()) { break; }
+                    node = &node->children[static_cast<size_t>(childIndex)];
                 }
             }
             else if (topLabel == "Mission")

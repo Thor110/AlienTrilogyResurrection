@@ -92,7 +92,8 @@ namespace ALTEngine::Renderer
     private:
         // Blits one descriptor rect into the 320x240 virtual space at (x, y),
         // scaled to the output.
-        void DrawDescriptor(SDL_Renderer* renderer, int descriptorIndex, int x, int y,
+        // x/y in DEVICE PIXELS - see the definition.
+        void DrawDescriptor(SDL_Renderer* renderer, int descriptorIndex, float x, float y,
                             float scaleX, float scaleY) const;
 
         // Finds the transparent slots inside a frame descriptor: contiguous
