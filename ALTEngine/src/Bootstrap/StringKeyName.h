@@ -104,6 +104,8 @@ namespace ALTEngine::Bootstrap
         case StringId::OrEscToCancel: return "OrEscToCancel";
         case StringId::OptionsTitle: return "OptionsTitle";
         case StringId::NotAvailable: return "NotAvailable";
+        case StringId::Available: return "Available";
+        case StringId::Selected: return "Selected";
         case StringId::ExitGameTitle: return "ExitGameTitle";
         case StringId::VSync: return "VSync";
         case StringId::DisplayModeTitle: return "DisplayModeTitle";
@@ -235,6 +237,8 @@ namespace ALTEngine::Bootstrap
         if (name == "OrEscToCancel") { return StringId::OrEscToCancel; }
         if (name == "OptionsTitle") { return StringId::OptionsTitle; }
         if (name == "NotAvailable") { return StringId::NotAvailable; }
+        if (name == "Available") { return StringId::Available; }
+        if (name == "Selected") { return StringId::Selected; }
         if (name == "ExitGameTitle") { return StringId::ExitGameTitle; }
         if (name == "VSync") { return StringId::VSync; }
         if (name == "DisplayModeTitle") { return StringId::DisplayModeTitle; }

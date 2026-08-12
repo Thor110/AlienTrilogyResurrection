@@ -107,6 +107,8 @@ namespace ALTEngine::Bootstrap
             "OR ESC TO CANCEL",
             "OPTIONS",
             "Not available",
+            "Available",
+            "Selected",
             "EXIT GAME",
             "VSync",
             "Display Mode",

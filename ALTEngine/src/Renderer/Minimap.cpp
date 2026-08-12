@@ -98,7 +98,22 @@ namespace ALTEngine::Renderer
                 if (visited && (index >= visited->size() || (*visited)[index] == 0)) { continue; }
 
                 const auto& c = level.collisionGrid[index];
-                SDL_FRect r{ originX + x * cell, originY + z * cell, cell + 0.5f, cell + 0.5f };
+                // Cell bounds from the NEXT cell's origin, so neighbours share an
+                // exact edge.
+                //
+                // The old `cell + 0.5f` fudge was there to close seams, but at a
+                // fractional cell size it makes adjacent rects overlap by varying
+                // amounts - and where two different colours overlap, the later one
+                // paints a line into the earlier. That is the artifact lines
+                // across the live map (Edward, 2026). Rounding both edges to whole
+                // pixels leaves no seam and no overlap.
+                float x0 = SDL_roundf(originX + x * cell);
+                float x1 = SDL_roundf(originX + (x + 1) * cell);
+                float z0 = SDL_roundf(originY + z * cell);
+                float z1 = SDL_roundf(originY + (z + 1) * cell);
+                if (x1 <= x0) { x1 = x0 + 1.0f; }
+                if (z1 <= z0) { z1 = z0 + 1.0f; }
+                SDL_FRect r{ x0, z0, x1 - x0, z1 - z0 };
 
                 if (IsWall(c))
                 {
@@ -139,7 +154,13 @@ namespace ALTEngine::Renderer
                     if (dx < 0 || dz < 0 || dx >= gridW || dz >= gridH) { continue; }
                     size_t di = static_cast<size_t>(dz) * gridW + dx;
                     if (visited && (di >= visited->size() || (*visited)[di] == 0)) { continue; }
-                    SDL_FRect r{ originX + dx * cell, originY + dz * cell, cell + 0.5f, cell + 0.5f };
+                    float dx0 = SDL_roundf(originX + dx * cell);
+                    float dx1 = SDL_roundf(originX + (dx + 1) * cell);
+                    float dz0 = SDL_roundf(originY + dz * cell);
+                    float dz1 = SDL_roundf(originY + (dz + 1) * cell);
+                    if (dx1 <= dx0) { dx1 = dx0 + 1.0f; }
+                    if (dz1 <= dz0) { dz1 = dz0 + 1.0f; }
+                    SDL_FRect r{ dx0, dz0, dx1 - dx0, dz1 - dz0 };
                     SDL_RenderFillRect(renderer, &r);
                 }
             }

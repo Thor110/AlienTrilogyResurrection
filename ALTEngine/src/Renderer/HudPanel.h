@@ -558,16 +558,29 @@ namespace ALTEngine::Renderer
     // (its quads are y 0x9b..0xa0, five rows).
     inline constexpr int HUD_MINIMAP_STRIP_H = 5;
 
-    // The tracker dish and its edge strips are slightly translucent in the
-    // original, so the world shows through them (Edward, 2026). Applied to the
-    // minimap's strips too, so the two assemblies match.
+    // The tracker dish, its edge strips and the minimap's border composite at
+    // FIFTY PERCENT.
     //
-    // A value, not a measurement: the original composites through its own
-    // primitive rather than an alpha the decompilation states outright, so this
-    // is set by eye against the screenshots.
-    inline constexpr int HUD_TRACKER_ALPHA = 200;
+    // Not a value picked by eye. The panel artwork is 15-bit BGR555 with bit 15
+    // as the semi-transparency flag (visible in the CLUT dumps as `stp`), and
+    // semi-transparency in that format means an even blend of source and
+    // destination - the PlayStation's default and what this port of it inherits.
+    // So 128 rather than the 200 I had guessed at, which is why ours read as far
+    // more solid than the original (Edward, 2026).
+    inline constexpr int HUD_TRACKER_ALPHA = 128;
 
     inline constexpr int HUD_MINIMAP_SCALE = 2;
+
+    // The PAUSE menu's map, in that screen's own pixel space rather than the
+    // HUD's 320x240. Bigger and further right than the old 520x400 at panelX,
+    // matching how much of the screen the original's gives it.
+    //
+    // NOT LOCATED IN THE DECOMPILATION. Several functions touch the collision
+    // grid base and none is obviously the pause map renderer; the original's own
+    // geometry and colours are still unfound, so these are layout values.
+    inline constexpr int PAUSE_MAP_X_OFFSET = 60;   // extra, beyond panelX
+    inline constexpr int PAUSE_MAP_WIDTH = 660;
+    inline constexpr int PAUSE_MAP_HEIGHT = 500;
     inline constexpr int HUD_MINIMAP_X = 14;
     inline constexpr int HUD_MINIMAP_Y = 19;   // == HUD_OVERLAY_HEALTH_Y, declared below
     inline constexpr int HUD_MINIMAP_W = 98 * HUD_MINIMAP_SCALE;

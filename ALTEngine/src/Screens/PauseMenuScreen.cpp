@@ -2,6 +2,7 @@
 
 #include "../Audio/MusicPlayer.h"
 #include "../Renderer/Minimap.h"
+#include "../Renderer/HudPanel.h"
 #include "../Bootstrap/Config.h"
 #include "../Bootstrap/ModernSettings.h"
 #include "PauseMenuTree.h"
@@ -780,8 +781,14 @@ namespace ALTEngine::Screens
                     const int modelHeight = 150;
                     const int gap = scale * 6;
 
-                    int mapW = contentWidth;
-                    int mapH = std::min(400, windowHeightPx - panelY - margin - modelHeight - gap);
+                    // Wider and further right than the panel default - see
+                    // PAUSE_MAP_* in HudPanel.h.
+                    panelX += ALTEngine::Renderer::PAUSE_MAP_X_OFFSET;
+                    int mapW = std::min(ALTEngine::Renderer::PAUSE_MAP_WIDTH,
+                                        windowWidth - panelX - margin);
+                    if (mapW < 80) { mapW = 80; }
+                    int mapH = std::min(ALTEngine::Renderer::PAUSE_MAP_HEIGHT,
+                                        windowHeightPx - panelY - margin - modelHeight - gap);
                     if (mapH < 80) { mapH = 80; }
 
                     ALTEngine::Renderer::MinimapStyle style;
@@ -802,10 +809,32 @@ namespace ALTEngine::Screens
                 {
                     DrawPickModModel(renderer, cdDirectory, node.modelIndex, centredX(260), panelY, fitWidth(260), 200, scale, rotationAngle);
                 }
-                if (!owned)
+                // Status under the model: what the player has, and which weapon
+                // is in hand - the original labels both (Edward, 2026).
                 {
-                    DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::NotAvailable, language),
-                                   panelX, notAvailableY, scale, COLOR_STATUS);
+                    ALTEngine::Bootstrap::StringId statusId = ALTEngine::Bootstrap::StringId::NotAvailable;
+                    Color statusColor = COLOR_STATUS;
+                    bool showStatus = true;
+
+                    if (owned)
+                    {
+                        bool isEquipped =
+                            (topLabel == "9mm Pistol" && inventory.pistol.equipped) ||
+                            (topLabel == "Shotgun" && inventory.shotgun.equipped) ||
+                            (topLabel == "Flamethrower" && inventory.flamethrower.equipped) ||
+                            (topLabel == "Pulse Rifle" && inventory.pulseRifle.equipped) ||
+                            (topLabel == "Smart Gun" && inventory.smartGun.equipped);
+
+                        statusId = isEquipped ? ALTEngine::Bootstrap::StringId::Selected
+                                              : ALTEngine::Bootstrap::StringId::Available;
+                        statusColor = isEquipped ? COLOR_EQUIPPED : COLOR_CURSOR;
+                    }
+
+                    if (showStatus)
+                    {
+                        std::string status = ALTEngine::Bootstrap::Tr(statusId, language);
+                        DrawBitmapText(renderer, status, panelX, notAvailableY, scale, statusColor);
+                    }
                 }
             }
 
