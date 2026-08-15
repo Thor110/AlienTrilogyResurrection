@@ -126,6 +126,10 @@ namespace ALTEngine::Screens
 
         // Player collision constants, taken from the game's own entity
         // mover (Ghidra: FUN_00031afc / FUN_000315f0).
+        // Ejected casings are drawn with the ammo PICKUP mesh shrunk down - see
+        // the note at the particle draw. GUESS, chosen by eye.
+        constexpr float CASING_MODEL_SCALE = 0.25f;
+
         constexpr float COLLISION_RADIUS = 200.0f; // 400-unit footprint, sampled at -r, centre, +r
         constexpr float MAX_STEP_UP = 256.0f;      // a rise steeper than this blocks movement
         constexpr float EYE_HEIGHT = 768.0f;       // camera sits this far above the player's feet
@@ -1657,7 +1661,45 @@ namespace ALTEngine::Screens
 
             if (levelReady)
             {
+                // Live particles ride along as PlacedObjects. Casings ARE
+                // little models in the original - FUN_0002b37c stores a model
+                // pointer from DAT_00248160 or DAT_0024815c into the object -
+                // so going through the existing object path keeps them properly
+                // depth-sorted against the level for free, rather than needing a
+                // separate pass that would draw them through walls.
+                //
+                // WHICH model those two pointers are is not resolved, so the
+                // PickMod shell meshes stand in at a small scale. They are the
+                // ammo PICKUP models, so they are the right shape and the wrong
+                // size; the scale below is chosen by eye and is a GUESS.
+                //
+                // PlacedObject carries a single rotation axis while a real
+                // casing tumbles on two (FUN_0002b37c seeds +0x10 and +0x12).
+                // Only the yaw is applied here - the second axis needs a
+                // renderer change and is not worth one yet.
+                const size_t staticObjectCount = placedObjects.size();
+                if (levelReady)
+                {
+                    namespace P = ALTEngine::Screens::Particles;
+                    for (const P::Particle& particle : particles.All())
+                    {
+                        if (!particle.alive) { continue; }
+                        if (particle.type != P::TYPE_CASING_A && particle.type != P::TYPE_CASING_B) { continue; }
+
+                        ALTEngine::Renderer::PlacedObject shell;
+                        shell.cacheKey = { ALTEngine::Renderer::ModelCatalog::Pickmod,
+                                           ALTEngine::Formats::ModelIndices::PickMod::PistolShell };
+                        shell.x = particle.x;
+                        shell.y = particle.y;
+                        shell.z = particle.z;
+                        shell.rotationRadians = ALTEngine::Screens::PlayerCamera::ToRadians(particle.angleY);
+                        shell.scaleX = shell.scaleY = shell.scaleZ = CASING_MODEL_SCALE;
+                        placedObjects.push_back(shell);
+                    }
+                }
+
                 std::vector<uint8_t> pixels = ModelRenderer::RenderLevelToRgba(cacheKey, camera, windowW, windowH, placedObjects);
+                placedObjects.resize(staticObjectCount); // drop this frame's particles again
                 if (!pixels.empty())
                 {
                     SDL_Texture* frameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, windowW, windowH);
