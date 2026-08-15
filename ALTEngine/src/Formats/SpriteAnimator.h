@@ -27,11 +27,17 @@ namespace ALTEngine::Formats
         // code DOES, which is traced; what each one is FOR is mostly not.
         enum Opcode : uint8_t
         {
-            // Stores the operand in `param` and raises FLAG_EVENT for this tick.
-            // The only opcode that carries a payload out to the caller, so this
-            // is almost certainly the hook the original hangs per-frame events
-            // on - a muzzle flash, a sound, a damage window. WHICH of those, and
-            // what the operand indexes, is NOT traced. Marked as a guess.
+            // Stores the operand in `param` and raises FLAG_EVENT for this
+            // tick.
+            //
+            // CONFIRMED: the operand is a SOUND ID. FUN_0003e93c tests the
+            // weapon animator's flags for 0x10 and passes `param` straight to
+            // FUN_00040b2c(id, -1), then to FUN_00052b28(id, playerX >> 16) for
+            // the positional call - the same pair the footstep code uses with
+            // sound 0x2c. Id 0xb is special-cased and skips the positional call.
+            //
+            // So an animation sequence carries its own sound cues inline, which
+            // is how a weapon's report lands on the right frame.
             OP_EVENT = 1,
 
             // Loop back to `loopStart`. First time through, the operand seeds

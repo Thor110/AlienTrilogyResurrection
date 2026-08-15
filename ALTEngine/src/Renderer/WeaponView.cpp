@@ -37,6 +37,7 @@ namespace ALTEngine::Renderer
         // matters the moment a weapon turns out to have an idle cycle.
         constexpr uint16_t IDLE_DURATION = 4;
         constexpr uint16_t FIRE_DURATION = 2;
+        constexpr uint16_t RELOAD_DURATION = 10;
     }
 
     const char* WeaponView::WeaponFileStem(int weaponIndex)
@@ -127,19 +128,8 @@ namespace ALTEngine::Renderer
         // Idle holds frame 0 forever; firing runs every frame once and stops on
         // the last one, at which point Tick() drops back to idle. Both are built
         // on the real VM - see the header on why the DATA is synthesised.
-        idleSequence = ALTEngine::Formats::SpriteAnim::BuildSequence(IDLE_DURATION, { 0 }, true);
-
-        std::vector<uint16_t> fireFrames;
-        for (int i = 0; i < static_cast<int>(frames.size()); ++i)
-        {
-            fireFrames.push_back(static_cast<uint16_t>(i));
-        }
-        // A single-frame weapon has nothing to animate; leave the fire sequence
-        // holding that frame so Fire() is a no-op rather than a flicker.
-        fireSequence = ALTEngine::Formats::SpriteAnim::BuildSequence(FIRE_DURATION, fireFrames,
-                                                                    fireFrames.size() <= 1);
-
-        StartIdle();
+        BuildSequences();
+        PlayState(ALTEngine::Screens::WeaponSystem::STATE_IDLE);
 
         SDL_Log("WeaponView: loaded %s section %d - %d frame(s), first %dx%d",
                 stem, usedSection, static_cast<int>(frames.size()),
@@ -147,30 +137,59 @@ namespace ALTEngine::Renderer
         return true;
     }
 
-    void WeaponView::StartIdle()
+    void WeaponView::BuildSequences()
     {
-        firing = false;
-        ALTEngine::Formats::SpriteAnim::Start(animator, idleSequence);
+        namespace WS = ALTEngine::Screens::WeaponSystem;
+        for (auto& seq : stateSequences) { seq.clear(); }
+
+        // Idle holds frame 0 forever - OP_LOOP with an operand of 0 reseeds a
+        // zero counter every pass and so never terminates.
+        stateSequences[WS::STATE_IDLE] =
+            ALTEngine::Formats::SpriteAnim::BuildSequence(IDLE_DURATION, { 0 }, true);
+
+        // Firing runs every frame the section has, once, and stops on the last.
+        // FLAG_ENDED is then what returns the weapon to idle, which is exactly
+        // how FUN_0003e93c does it.
+        std::vector<uint16_t> fireFrames;
+        for (int i = 0; i < static_cast<int>(frames.size()); ++i)
+        {
+            fireFrames.push_back(static_cast<uint16_t>(i));
+        }
+        stateSequences[WS::STATE_FIRING] =
+            ALTEngine::Formats::SpriteAnim::BuildSequence(FIRE_DURATION, fireFrames,
+                                                         fireFrames.size() <= 1);
+
+        // Reload, grenade and empty have NO frames of their own here. The
+        // original has a distinct sequence for each - that is what its per-state
+        // table is for - but which frames they use is in data that is not parsed
+        // yet. Running the fire frames backwards for a reload would be inventing
+        // animation, so instead these hold frame 0 and simply take time, which
+        // keeps the state machine's timing honest without faking artwork.
+        const std::vector<uint16_t> holdFrame{ 0 };
+        stateSequences[WS::STATE_RELOAD] =
+            ALTEngine::Formats::SpriteAnim::BuildSequence(RELOAD_DURATION, holdFrame, false);
+        stateSequences[WS::STATE_GRENADE] =
+            ALTEngine::Formats::SpriteAnim::BuildSequence(FIRE_DURATION, holdFrame, false);
+        stateSequences[WS::STATE_EMPTY] =
+            ALTEngine::Formats::SpriteAnim::BuildSequence(IDLE_DURATION, holdFrame, true);
+        stateSequences[WS::STATE_UNKNOWN_5] = stateSequences[WS::STATE_IDLE];
     }
 
-    void WeaponView::Fire()
+    void WeaponView::PlayState(int weaponState)
     {
-        if (frames.size() <= 1) { return; }
-        if (firing) { return; }
-        firing = true;
-        ALTEngine::Formats::SpriteAnim::Start(animator, fireSequence);
+        if (weaponState < 0 || weaponState >= ALTEngine::Screens::WeaponSystem::STATE_COUNT) { return; }
+        currentState = weaponState;
+        ALTEngine::Formats::SpriteAnim::Start(animator, stateSequences[static_cast<size_t>(weaponState)]);
     }
 
-    void WeaponView::Tick()
+    bool WeaponView::Tick()
     {
-        if (frames.empty()) { return; }
+        if (frames.empty()) { return false; }
 
-        const std::vector<uint16_t>& sequence = firing ? fireSequence : idleSequence;
+        const std::vector<uint16_t>& sequence = stateSequences[static_cast<size_t>(currentState)];
+        const bool wasEnded = animator.Ended();
         ALTEngine::Formats::SpriteAnim::Tick(animator, sequence);
-
-        // The fire sequence terminates with OP_END, which raises FLAG_ENDED and
-        // freezes the frame. That is the cue to go back to the held pose.
-        if (firing && animator.Ended()) { StartIdle(); }
+        return animator.Ended() && !wasEnded;
     }
 
     void WeaponView::Unload()
@@ -180,10 +199,9 @@ namespace ALTEngine::Renderer
             if (ft.texture) { SDL_DestroyTexture(ft.texture); }
         }
         frames.clear();
-        idleSequence.clear();
-        fireSequence.clear();
+        for (auto& seq : stateSequences) { seq.clear(); }
         animator = ALTEngine::Formats::SpriteAnim::Animator{};
-        firing = false;
+        currentState = ALTEngine::Screens::WeaponSystem::STATE_IDLE;
         loadedWeapon = -1;
     }
 
@@ -204,19 +222,29 @@ namespace ALTEngine::Renderer
         float scaleX = static_cast<float>(outputWidth) / static_cast<float>(HUD_VIRTUAL_WIDTH);
         float scaleY = static_cast<float>(outputHeight) / static_cast<float>(HUD_VIRTUAL_HEIGHT);
 
-        // Bottom-centre, sitting on the bottom edge. The ammo row occupies
-        // y 211..229, so the sprite is allowed to overlap it - it does in the
-        // original too.
-        float x = (HUD_VIRTUAL_WIDTH - frameWidth) * 0.5f;
-        float y = static_cast<float>(HUD_VIRTUAL_HEIGHT - frameHeight);
+        // TRACED. FUN_0003e93c writes the weapon instance's position as
+        //     x = 0xa0                                + stateOffsetX
+        //     y = 0xf0 - (bob) + DAT_000b0b57         + stateOffsetY
+        // 0xa0 is 160 and 0xf0 is 240, so the anchor is bottom-centre of the
+        // 320x240 surface - which is what was guessed here before, now
+        // confirmed. What is NEW is the bob term: the weapon rides the camera's
+        // own dip, from the same phase, moving down up to 4 pixels as the head
+        // sinks.
+        namespace WS = ALTEngine::Screens::WeaponSystem;
+        const int stateIndex = (currentState >= 0 && currentState < WS::STATE_COUNT) ? currentState : 0;
 
-        // ANCHORING IS STILL OURS, and matters more now there is more than one
-        // frame. Bottom-centre means a recoil frame that is shorter than the
-        // held pose pulls the muzzle DOWN rather than kicking it up. That is
-        // almost certainly not what the original does - its sprite instance
-        // carries its own position, which has not been read out. Left as it was
-        // rather than invented differently; the fix is the instance's placement
-        // fields, not a different guess here.
+        const int anchorX = WS::WEAPON_ANCHOR_X + WS::STATE_OFFSET_X[static_cast<size_t>(stateIndex)];
+        const int anchorY = WS::WEAPON_ANCHOR_Y + WS::WeaponBobOffset(cameraDip) + WS::WEAPON_Y_BIAS
+                          + WS::STATE_OFFSET_Y[static_cast<size_t>(stateIndex)];
+
+        float x = anchorX - frameWidth * 0.5f;
+        float y = static_cast<float>(anchorY - frameHeight);
+
+        // A shorter recoil frame still pulls the muzzle DOWN rather than
+        // kicking it up, because the anchor is the bottom edge. That is what the
+        // original's own anchor does too - the correction is the per-state
+        // offset table at DAT_000acea2, which is not readable from the export
+        // and is currently all zeros. See WeaponSystem.h.
         SDL_FRect dst{ SDL_roundf(x * scaleX), SDL_roundf(y * scaleY),
                        SDL_roundf(frameWidth * scaleX), SDL_roundf(frameHeight * scaleY) };
         SDL_RenderTexture(renderer, current.texture, nullptr, &dst);

@@ -5,6 +5,7 @@
 #include "../Formats/LevelLoader.h"
 #include "PlayerHudState.h"
 #include "PlayerCamera.h"
+#include "WeaponSystem.h"
 #include "../Renderer/WeaponView.h"
 #include "../Renderer/HudRenderer.h"
 #include "../Renderer/Minimap.h"
@@ -361,6 +362,7 @@ namespace ALTEngine::Screens
         ALTEngine::Renderer::HudRenderer hud;
         ALTEngine::Renderer::WeaponView weaponView;
         bool firePressedLastTick = false;
+        ALTEngine::Screens::WeaponSystem::Runtime weaponRuntime;
         ALTEngine::Screens::PlayerHudState hudState;
         bool hudLoadAttempted = false;
         {
@@ -1088,15 +1090,59 @@ namespace ALTEngine::Screens
                         }
                     }
 
-                    // Weapon. Fired on the key's rising edge so holding the
-                    // trigger does not restart the animation every tick - the
-                    // sequence length sets the repeat rate, which is the shape
-                    // the original has. Ticked here rather than per frame so
-                    // firing speed does not follow the frame rate.
+                    // ---- weapon ----------------------------------------
+                    // The original keeps two input words and reads the fire key
+                    // from a DIFFERENT one depending on the weapon: DAT_000b0cc4
+                    // (newly pressed) for the pistol and shotgun, DAT_000b0cc8
+                    // (held) for the flamethrower, pulse rifle and smartgun.
+                    // That is what makes two of them semi-automatic and three of
+                    // them continuous, and it is per-weapon rather than a
+                    // property of the key. See WeaponSystem::FireMode.
+                    namespace WS = ALTEngine::Screens::WeaponSystem;
+
                     const bool fireHeld = keys[keyBindings.GetKey(InputAction::Fire1)];
-                    if (fireHeld && !firePressedLastTick) { weaponView.Fire(); }
+                    const bool firePressed = fireHeld && !firePressedLastTick;
                     firePressedLastTick = fireHeld;
-                    weaponView.Tick();
+
+                    weaponRuntime.weapon = hudState.currentWeapon;
+                    weaponRuntime.stateChanged = false;
+
+                    const bool triggerActive =
+                        (WS::Def(weaponRuntime.weapon).primary == WS::FIRE_ON_PRESS) ? firePressed : fireHeld;
+
+                    if (triggerActive) { WS::TryPrimaryFire(weaponRuntime, hudState); }
+
+                    // Reload and out-of-ammo run only from idle, as a separate
+                    // pass after the fire keys - the same order FUN_0003efcc has.
+                    //
+                    // `canSwitchAway` stands in for FUN_00038c78. Automatic
+                    // weapon switching is not implemented, so this is false,
+                    // which takes the original's fallback path: the pistol is
+                    // topped up to one round so the player is never left with
+                    // nothing. That is real traced behaviour, not a stopgap.
+                    WS::UpdateIdle(weaponRuntime, hudState, false);
+                    WS::TickNoise(weaponRuntime);
+
+                    // Starting the animation IS the state change (FUN_000400fc).
+                    if (weaponRuntime.stateChanged) { weaponView.PlayState(weaponRuntime.state); }
+
+                    weaponView.SetCameraDip(playerCam.bobOffsetY * 64);
+                    if (weaponView.Tick())
+                    {
+                        // The sequence ending is what returns the weapon to idle
+                        // (FUN_0003e93c), except from the latched empty states.
+                        weaponRuntime.stateChanged = false;
+                        WS::OnAnimationEnded(weaponRuntime);
+                        if (weaponRuntime.stateChanged) { weaponView.PlayState(weaponRuntime.state); }
+                    }
+
+                    // The animation's own sound cue. OP_EVENT's operand is a
+                    // sound id (see SpriteAnimator.h); SFX are not wired yet, so
+                    // this is where the call will go.
+                    if (weaponView.SoundCued())
+                    {
+                        (void)weaponView.CuedSoundId();
+                    }
 
                     // Footsteps. SFX are not wired yet, so this only records
                     // which sound the original would have played - see

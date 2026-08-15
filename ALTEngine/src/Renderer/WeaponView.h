@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Formats/SpriteAnimator.h"
+#include "../Screens/WeaponSystem.h"
 #include "../Formats/SpriteFrameLoader.h"
 #include "../Screens/PlayerInventoryState.h"
 
@@ -8,6 +9,7 @@
 
 #include <filesystem>
 #include <string>
+#include <array>
 #include <vector>
 
 namespace ALTEngine::Renderer
@@ -69,15 +71,24 @@ namespace ALTEngine::Renderer
         // Advances the animation by one of the ORIGINAL'S logic ticks, not one
         // frame - call it from the same fixed-rate loop the player runs on, or
         // the firing speed changes with the frame rate.
-        void Tick();
+        //
+        // Returns true when the sequence has just ENDED, which is the original's
+        // cue to drop the weapon back to idle (FUN_0003e93c tests the animator's
+        // flag 2 for exactly this).
+        bool Tick();
 
-        // Starts the firing animation. Ignored while one is already playing, so
-        // holding the trigger does not restart it every tick; that gives a
-        // repeat rate set by the sequence length, which is the shape the
-        // original has even though its own rate is not read out yet.
-        void Fire();
+        // Plays the sequence for a weapon state. This is the original's
+        // FUN_000400fc: the state indexes the per-weapon table and starting its
+        // animation IS the state change.
+        void PlayState(int weaponState);
 
-        bool IsFiring() const { return firing; }
+        // The camera's own bob term, so the weapon rides it - see
+        // WeaponSystem::WeaponBobOffset.
+        void SetCameraDip(int dip) { cameraDip = dip; }
+
+        // True on the tick the animation asked for a sound, with its id.
+        bool SoundCued() const { return animator.EventFired(); }
+        int CuedSoundId() const { return static_cast<int>(animator.param); }
 
         // True on the tick an OP_EVENT opcode fired, with its operand. This is
         // where a muzzle flash, a shot, or a sound would hang once the meaning
@@ -109,10 +120,18 @@ namespace ALTEngine::Renderer
         int loadedWeapon = -1;
 
         ALTEngine::Formats::SpriteAnim::Animator animator;
-        std::vector<uint16_t> idleSequence;
-        std::vector<uint16_t> fireSequence;
-        bool firing = false;
 
-        void StartIdle();
+        // One sequence per weapon state, indexed by WeaponSystem::State.
+        //
+        // The ORIGINAL has one per state too - that is exactly what its 8-byte
+        // per-state table entries are. What it does NOT share is the contents:
+        // its sequences are data this cannot read yet, so these are synthesised
+        // from the frames the weapon's section actually has. See the header.
+        std::array<std::vector<uint16_t>,
+                   ALTEngine::Screens::WeaponSystem::STATE_COUNT> stateSequences;
+        int currentState = ALTEngine::Screens::WeaponSystem::STATE_IDLE;
+        int cameraDip = 0;
+
+        void BuildSequences();
     };
 }
