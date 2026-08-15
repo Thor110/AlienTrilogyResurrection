@@ -687,6 +687,14 @@ namespace ALTEngine::Renderer
     }
 
     // ---- ammo row, from FUN_0003aac8, in the original's 320x240 space -------
+    // AN INTEGER PIXEL SCALE WAS TRIED HERE AND REVERTED - it broke the HUD
+    // (Edward, 2026). Kept as a note so the next attempt does not repeat it
+    // blindly: the idea was outputHeight / 240 so one source pixel becomes exactly
+    // N device pixels, which would make the 1-row green dashes uniform. It is
+    // still probably the right shape of fix, but it must be applied to POSITIONS
+    // and SIZES together - changing only sizes, as was done, misaligns every bar
+    // fill from the frame art it sits inside.
+
     inline constexpr int HUD_VIRTUAL_WIDTH = 320;
     inline constexpr int HUD_VIRTUAL_HEIGHT = 240;
 

@@ -370,6 +370,7 @@ namespace ALTEngine::Renderer
     void HudRenderer::Unload()
     {
         if (sheet) { SDL_DestroyTexture(sheet); sheet = nullptr; }
+        if (hudTarget) { SDL_DestroyTexture(hudTarget); hudTarget = nullptr; }
         if (customBorder) { SDL_DestroyTexture(customBorder); customBorder = nullptr; customBorderW = 0; customBorderH = 0; }
         rects.clear();
         healthSlots.clear();
@@ -484,9 +485,39 @@ namespace ALTEngine::Renderer
         if (!sheet || rects.empty()) { return; }
         if (outputWidth <= 0 || outputHeight <= 0) { return; }
 
-        // Independent axis scaling, matching FUN_000498dc.
-        float scaleX = static_cast<float>(outputWidth) / static_cast<float>(HUD_VIRTUAL_WIDTH);
-        float scaleY = static_cast<float>(outputHeight) / static_cast<float>(HUD_VIRTUAL_HEIGHT);
+        // Rasterise into the original's own 320x240 surface, then blit that once.
+        // See the header: FUN_0003aac8 sets each HUD entry's byte +0xb, which
+        // puts FUN_000498dc on its unscaled branch with the clip forced to
+        // 319x239 and the draw surface swapped out. Everything below therefore
+        // runs at 1:1 in HUD coordinates.
+        if (!hudTarget)
+        {
+            hudTarget = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+                                          SDL_TEXTUREACCESS_TARGET,
+                                          HUD_VIRTUAL_WIDTH, HUD_VIRTUAL_HEIGHT);
+            if (!hudTarget)
+            {
+                SDL_Log("HudRenderer: could not create the 320x240 HUD target: %s", SDL_GetError());
+                return;
+            }
+            SDL_SetTextureBlendMode(hudTarget, SDL_BLENDMODE_BLEND);
+            SDL_SetTextureScaleMode(hudTarget, SDL_SCALEMODE_NEAREST);
+        }
+
+        SDL_Texture* previousTarget = SDL_GetRenderTarget(renderer);
+        if (!SDL_SetRenderTarget(renderer, hudTarget)) { return; }
+
+        // Transparent, so the world shows through everywhere the HUD does not
+        // draw. The target is not persistent across frames.
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderClear(renderer);
+
+        // Identity: HUD coordinates ARE target pixels on this surface. Kept as
+        // named variables rather than deleted so the drawing code below stays
+        // recognisable against the decompilation it was transcribed from.
+        const float scaleX = 1.0f;
+        const float scaleY = 1.0f;
 
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
@@ -498,30 +529,48 @@ namespace ALTEngine::Renderer
             SDL_RenderFillRect(renderer, &dst);
         };
 
-        // Fills the lit slots of a bar. Slot positions come from the overlay
-        // artwork (see HudPanel.h) rather than from the bar's own extent, so the
-        // fill lands exactly in the transparent gaps the frame leaves. Drawn
-        // full-height; the overlay on top clips each slot to its real height,
-        // which is what produces the staircase.
+        // Fills a bar as ONE rectangle spanning the lit slots, not one rectangle
+        // per slot.
+        //
+        // TRACED, and the reason the dashes were uneven. FUN_0003aac8 emits the
+        // ammo bar as exactly two quads: a background spanning x 0x30..0x88 at
+        // y 0xd9..0xe0 in colour 0x5f, and a lit quad over it spanning
+        // x 0x30..(0x30 + segments * 4) at the same rows in colour 5. There is
+        // no per-segment geometry anywhere - the segmentation you see is the
+        // frame artwork, which is drawn on top and is opaque between the
+        // notches. The port's own numbers agree exactly: bar left 0x30, right
+        // 0x88, 22 segments of 4 = 88 = 0x88 - 0x30.
+        //
+        // Drawing 22 separate rectangles meant 22 independent rounding
+        // decisions, so at a fractional scale the gaps between dashes came out
+        // uneven. One span has one edge pair, and at 1:1 on the HUD target has
+        // none at all.
+        //
+        // The vertical overshoot is kept: the original's quad has its own extent
+        // and the frame clips it, rather than being fitted to the gap - fitting
+        // exactly left the green a pixel short against a side-by-side of the
+        // original (Edward, 2026).
         auto drawSlots = [&](const std::vector<BarSlot>& slots, int frameX, int frameY,
                              int litSlots, const SDL_Color& c) {
             int n = std::min(litSlots, static_cast<int>(slots.size()));
+            if (n <= 0 || slots.empty()) { return; }
+
+            const BarSlot& first = slots.front();
+            const BarSlot& last = slots[static_cast<size_t>(n - 1)];
+
+            // Rows come from the slot extents rather than being hardcoded,
+            // because the health bar's own row range has not been read out of
+            // the decompilation the way the ammo bar's has.
+            int top = first.top;
+            int bottom = first.bottom;
             for (int i = 0; i < n; ++i)
             {
-                const BarSlot& s = slots[static_cast<size_t>(i)];
-
-                // One row of leeway at top and bottom.
-                //
-                // The scan finds the notch's CLEAR rows, but the original's fill
-                // reaches a row further in each direction - it is drawn as a quad
-                // with its own extent and the frame's opaque artwork clips it,
-                // rather than being fitted to the gap. Fitting exactly left the
-                // green a pixel short against a side-by-side of the original
-                // (Edward, 2026). The overshoot is hidden by the frame, which is
-                // drawn over the top.
-                fillRect(frameX + s.x, frameY + s.top - 1,
-                         frameX + s.x + s.width, frameY + s.bottom + 2, c);
+                top = std::min(top, slots[static_cast<size_t>(i)].top);
+                bottom = std::max(bottom, slots[static_cast<size_t>(i)].bottom);
             }
+
+            fillRect(frameX + first.x, frameY + top - 1,
+                     frameX + last.x + last.width, frameY + bottom + 2, c);
         };
 
         // ---- health row ----------------------------------------------------
@@ -567,6 +616,12 @@ namespace ALTEngine::Renderer
         DrawNumber(renderer, ammo, HUD_AMMO_TEXT_X, HUD_AMMO_ROW_TOP,
                    HUD_FONT_FIRST_DESCRIPTOR, scaleX, scaleY);
         SDL_SetTextureColorMod(sheet, 255, 255, 255);
+
+        // Back to the window, and put the whole 320x240 surface on it in one
+        // stretch - the single scaling step the original's compositing does.
+        SDL_SetRenderTarget(renderer, previousTarget);
+        SDL_FRect full{ 0.0f, 0.0f, static_cast<float>(outputWidth), static_cast<float>(outputHeight) };
+        SDL_RenderTexture(renderer, hudTarget, nullptr, &full);
     }
 
     void HudRenderer::DrawEdgeStrips(SDL_Renderer* renderer, int left, int right, int top, int bottom,

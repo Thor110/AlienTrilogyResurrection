@@ -4,6 +4,7 @@
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/LevelLoader.h"
 #include "PlayerHudState.h"
+#include "PlayerCamera.h"
 #include "../Renderer/WeaponView.h"
 #include "../Renderer/HudRenderer.h"
 #include "../Renderer/Minimap.h"
@@ -33,14 +34,12 @@ namespace ALTEngine::Screens
 
     namespace
     {
-        // TODO: still a guess. The real value lives at DAT_000b0a64 in
-        // the original and could not be found statically - it is written
-        // through an unresolved struct pointer. It can be recovered
-        // empirically instead: the view-bob phase advances by
-        // (speed * 3) >> 1 per tick and a footstep fires each time it
-        // crosses 0x800, so matching footstep cadence against a recording
-        // of the original solves for speed directly.
-        constexpr float MOVE_SPEED = 2000.0f;   // world units/sec
+        // Movement speed is no longer a single tuned number - the original's
+        // walk/run tuning sets, acceleration and deceleration are transcribed
+        // in PlayerCamera.h and applied per logic tick. The one number still
+        // unresolved there is the LOGIC TICK RATE, which scales all of them;
+        // the footstep-cadence method described in this comment previously is
+        // still how to solve it, and is written out at PlayerCamera::TICK_HZ.
         constexpr float MOUSE_SENSITIVITY = 0.0025f; // radians per pixel of mouse delta - a starting guess, not tuned against real hardware yet
         constexpr float MAX_PITCH = 1.4f;       // just under 90 degrees, avoids the view flipping past vertical
 
@@ -361,6 +360,7 @@ namespace ALTEngine::Screens
         // armour / ammo model.
         ALTEngine::Renderer::HudRenderer hud;
         ALTEngine::Renderer::WeaponView weaponView;
+        bool firePressedLastTick = false;
         ALTEngine::Screens::PlayerHudState hudState;
         bool hudLoadAttempted = false;
         {
@@ -397,6 +397,17 @@ namespace ALTEngine::Screens
         bool prevUseHeld = false;
         int lastCellIndex = -1;
         float tickAccumulator = 0.0f;
+
+        // Player camera state. Runs at the original's own logic rate rather
+        // than the 60 Hz door tick - see PlayerCamera::TICK_HZ.
+        ALTEngine::Screens::PlayerCamera::State playerCam;
+        float playerTickAccumulator = 0.0f;
+        float pendingMouseYaw = 0.0f;   // angle units, accumulated between player ticks
+        float pendingMouseY = 0.0f;     // raw mouse Y, drives the original's mouse-forward
+        bool playerCamSeeded = false;
+        // Camera Sway (the original's DAT_000acea0) gates head bob, view roll
+        // and the yaw sway together. Footsteps keep running either way.
+        bool cameraSway = cameraSwaySettings.Get();
 
         if (mapPath.has_value() && gfxPath.has_value())
         {
@@ -934,18 +945,26 @@ namespace ALTEngine::Screens
                 // MOUSE_SENSITIVITY, so this changes nothing for anyone
                 // who hasn't touched the setting.
                 float sensitivity = MOUSE_SENSITIVITY * (static_cast<float>(keyBindings.MouseSensitivity()) / 5.0f);
-                camera.yaw += mouseDx * sensitivity;
 
-                // Pitch. Yaw is always mouse-driven; pitch is not.
+                // Mouse deltas accumulate here and are consumed by the player
+                // tick below, so a 144 Hz machine does not feed the fixed-rate
+                // movement code more input than a 30 Hz one.
                 //
-                // The original game had no free look at all - the camera's
-                // pitch was a function of the ground, panning up or down as
-                // the player walked stairs and ramps, and the player could
-                // never deliberately look up or down. With Free Look off we
-                // reproduce that: mouse Y is ignored here and the pitch is
-                // driven from the floor slope in the fixed tick instead.
+                // The original adds its mouse X straight to yaw, 1:1, in
+                // 4096-per-turn units (FUN_0003efcc, DAT_00404656). Converting
+                // through the existing radians-based sensitivity keeps the
+                // Controls > Mouse Sensitivity slider producing exactly the
+                // feel it did before this change.
+                pendingMouseYaw += mouseDx * sensitivity
+                    * (static_cast<float>(ALTEngine::Screens::PlayerCamera::ANGLE_UNITS) / 6.28318530718f);
+                pendingMouseY += mouseDy;
+
+                // Free Look is ours, not the original's - it never let the
+                // player aim the view at all. With it on the mouse drives pitch
+                // and PlayerCamera's ramp system stands down; with it off the
+                // original's automatic pitch runs instead.
                 //
-                // This is also what makes the -GAP override geometry
+                // Free Look is also what makes the -GAP override geometry
                 // necessary: the holes above door frames are only visible if
                 // you can look up, which originally you could not.
                 if (freeLook)
@@ -953,46 +972,150 @@ namespace ALTEngine::Screens
                     camera.pitch = std::clamp(camera.pitch - mouseDy * sensitivity, -MAX_PITCH, MAX_PITCH);
                 }
 
-                // Ground-plane movement (X/Z only) relative to yaw -
-                // matches typical FPS convention of not flying up/down
-                // just from looking up/down.
-                float forwardX = std::sin(camera.yaw);
-                float forwardZ = -std::cos(camera.yaw);
-                float rightX = std::cos(camera.yaw);
-                float rightZ = std::sin(camera.yaw);
-
                 using ALTEngine::Bootstrap::InputAction;
-                float moveX = 0, moveZ = 0;
-                if (keys[keyBindings.GetKey(InputAction::MoveForward)]) { moveX += forwardX; moveZ += forwardZ; }
-                if (keys[keyBindings.GetKey(InputAction::MoveBackward)]) { moveX -= forwardX; moveZ -= forwardZ; }
-                if (keys[keyBindings.GetKey(InputAction::StrafeRight)]) { moveX += rightX; moveZ += rightZ; }
-                if (keys[keyBindings.GetKey(InputAction::StrafeLeft)]) { moveX -= rightX; moveZ -= rightZ; }
+                namespace PC = ALTEngine::Screens::PlayerCamera;
 
-                float moveLen = std::sqrt(moveX * moveX + moveZ * moveZ);
-                if (moveLen > 0.0001f)
+                // Seed the integer pose from whatever the spawn code put in
+                // `camera`, once, so the two representations start in sync.
+                if (!playerCamSeeded)
                 {
-                    float stepX = (moveX / moveLen) * MOVE_SPEED * dt;
-                    float stepZ = (moveZ / moveLen) * MOVE_SPEED * dt;
+                    playerCam.yaw = static_cast<int>(std::lround(camera.yaw * (PC::ANGLE_UNITS / 6.28318530718f))) & PC::ANGLE_MASK;
+                    playerCam.pitch = 0;
+                    playerCamSeeded = true;
+                }
 
-                    // Per-axis movement, matching the game's separate X
-                    // and Z movers - moving each axis independently is
-                    // what lets you slide along a wall instead of
-                    // sticking to it.
+                // The player runs at the original's own logic rate. Every
+                // constant in PlayerCamera.h is per-tick at that rate, so this
+                // deliberately does NOT share the 60 Hz door tick below.
+                playerTickAccumulator += dt;
+                const float playerTickLength = 1.0f / static_cast<float>(PC::TICK_HZ);
+                int playerTicksThisFrame = 0;
+                while (playerTickAccumulator >= playerTickLength)
+                {
+                    playerTickAccumulator -= playerTickLength;
+                    playerTicksThisFrame++;
+
+                    PC::Input pcInput;
+
+                    // Turn vs strafe. The original had no dedicated turn keys -
+                    // its direction keys turned, and the strafe modifier is what
+                    // converted them to a sidestep. Turn Left/Right (Q/E by
+                    // default) are a departure that keeps Strafe Left/Right on
+                    // A/D, where anyone playing with a mouse expects them.
+                    //
+                    // The strafe modifier keeps its original meaning: held, it
+                    // turns the turn keys into strafing too. It does nothing to
+                    // A/D, which already strafe.
+                    const bool strafeMod = keys[keyBindings.GetKey(InputAction::StrafeModifier)];
+                    const bool turnLeftKey = keys[keyBindings.GetKey(InputAction::TurnLeft)];
+                    const bool turnRightKey = keys[keyBindings.GetKey(InputAction::TurnRight)];
+
+                    pcInput.forward = keys[keyBindings.GetKey(InputAction::MoveForward)];
+                    pcInput.backward = keys[keyBindings.GetKey(InputAction::MoveBackward)];
+                    pcInput.strafeLeft = keys[keyBindings.GetKey(InputAction::StrafeLeft)] || (strafeMod && turnLeftKey);
+                    pcInput.strafeRight = keys[keyBindings.GetKey(InputAction::StrafeRight)] || (strafeMod && turnRightKey);
+                    pcInput.turnLeft = !strafeMod && turnLeftKey;
+                    pcInput.turnRight = !strafeMod && turnRightKey;
+
+                    // RunModifier is a hold. RunMode is very likely a toggle in
+                    // the original, but nothing traced confirms that, so it is
+                    // OR'd in as a second hold key rather than inventing toggle
+                    // state - MARKED AS A GUESS.
+                    pcInput.run = keys[keyBindings.GetKey(InputAction::RunModifier)]
+                               || keys[keyBindings.GetKey(InputAction::RunMode)];
+
+                    pcInput.turn180 = keys[keyBindings.GetKey(InputAction::Turnaround)];
+
+                    // Manual look: the original gates look up/down behind a
+                    // modifier and reuses the forward/back keys for it. There is
+                    // no separate Look action in the port's binding list, so it
+                    // is wired to the strafe modifier + forward/back, which is
+                    // the closest available shape. MARKED AS A GUESS - if the
+                    // original binds this elsewhere the mapping moves, not the
+                    // logic in PlayerCamera.h.
+                    pcInput.look = false;
+                    pcInput.lookUp = false;
+                    pcInput.lookDown = false;
+
+                    // Mouse. Spread the accumulated delta over the ticks this
+                    // frame owes so a single large delta is not applied twice.
+                    pcInput.mouseYaw = static_cast<int>(std::lround(pendingMouseYaw));
+                    pendingMouseYaw -= static_cast<float>(pcInput.mouseYaw);
+                    // Mouse-forward is the original's scheme and only makes
+                    // sense when the mouse is not being used to aim.
+                    pcInput.mouseForward = freeLook ? 0 : static_cast<int>(std::lround(pendingMouseY));
+
+                    // The cell underfoot: drives ramp pitch, the sluggish-cell
+                    // slowdown and footstep suppression.
+                    uint8_t cellAttribute = 0;
                     if (levelReady)
                     {
-                        float currentFloorY = ALTEngine::Formats::FindFloorHeightGridSpace(
-                            level,
-                            ToGridSpaceX(camera.x, originX),
-                            ToGridSpaceZ(camera.z, originZ));
+                        int cx = ToGridSpaceX(camera.x, originX) >> 9;
+                        int cz = ToGridSpaceZ(camera.z, originZ) >> 9;
+                        if (cx >= 0 && cz >= 0 && cx < level.header.mapLength && cz < level.header.mapWidth)
+                        {
+                            size_t ci = static_cast<size_t>(cz) * static_cast<size_t>(level.header.mapLength)
+                                      + static_cast<size_t>(cx);
+                            if (ci < level.collisionGrid.size()) { cellAttribute = level.collisionGrid[ci].attribute; }
+                        }
+                    }
+                    // The hazard flag selects which footstep sound plays. The
+                    // damage attributes are the ones FUN_0003dff0 reacts to.
+                    const bool onHazardCell = (cellAttribute == 7 || cellAttribute == 8 || cellAttribute == 0xc);
 
-                        if (CanOccupy(level, originX, originZ, camera.x + stepX, camera.z, currentFloorY)) { camera.x += stepX; }
-                        if (CanOccupy(level, originX, originZ, camera.x, camera.z + stepZ, currentFloorY)) { camera.z += stepZ; }
-                    }
-                    else
+                    PC::Tick(playerCam, pcInput, cellAttribute, onHazardCell, cameraSway, freeLook);
+
+                    // Apply the tick's movement through the existing collision
+                    // mover, per axis, so wall sliding keeps working.
+                    float stepX = 0.0f, stepZ = 0.0f;
+                    PC::MovementStep(playerCam, stepX, stepZ);
+                    if (stepX != 0.0f || stepZ != 0.0f)
                     {
-                        camera.x += stepX;
-                        camera.z += stepZ;
+                        if (levelReady)
+                        {
+                            float currentFloorY = ALTEngine::Formats::FindFloorHeightGridSpace(
+                                level,
+                                ToGridSpaceX(camera.x, originX),
+                                ToGridSpaceZ(camera.z, originZ));
+
+                            if (CanOccupy(level, originX, originZ, camera.x + stepX, camera.z, currentFloorY)) { camera.x += stepX; }
+                            if (CanOccupy(level, originX, originZ, camera.x, camera.z + stepZ, currentFloorY)) { camera.z += stepZ; }
+                        }
+                        else
+                        {
+                            camera.x += stepX;
+                            camera.z += stepZ;
+                        }
                     }
+
+                    // Weapon. Fired on the key's rising edge so holding the
+                    // trigger does not restart the animation every tick - the
+                    // sequence length sets the repeat rate, which is the shape
+                    // the original has. Ticked here rather than per frame so
+                    // firing speed does not follow the frame rate.
+                    const bool fireHeld = keys[keyBindings.GetKey(InputAction::Fire1)];
+                    if (fireHeld && !firePressedLastTick) { weaponView.Fire(); }
+                    firePressedLastTick = fireHeld;
+                    weaponView.Tick();
+
+                    // Footsteps. SFX are not wired yet, so this only records
+                    // which sound the original would have played - see
+                    // PlayerCamera::FootstepSound and SfxPlayer's own TODO.
+                    if (playerCam.footstep)
+                    {
+                        (void)PC::FootstepSound(onHazardCell);
+                    }
+                }
+
+                // Hand the integer pose back to the renderer's float camera.
+                // Yaw always; pitch only when the original owns it, so Free
+                // Look's mouse pitch is not overwritten.
+                if (playerTicksThisFrame > 0)
+                {
+                    pendingMouseY = 0.0f;
+                    camera.yaw = PC::ToRadians(playerCam.viewYaw);
+                    if (!freeLook) { camera.pitch = PC::ToRadians(playerCam.viewPitch); }
+                    camera.roll = PC::ToRadians(playerCam.viewRoll);
                 }
 
                 // Triggers and door ticking.
@@ -1242,10 +1365,14 @@ namespace ALTEngine::Screens
                         // its own, so from the far side the first cell ahead
                         // is the door itself and its trigger sits beyond that.
                         int probes[3] = { cellIndex, -1, -1 };
+                        // Facing, for the ahead-probe only. Ground plane, so
+                        // pitch is deliberately ignored.
+                        const float probeForwardX = std::sin(camera.yaw);
+                        const float probeForwardZ = -std::cos(camera.yaw);
                         for (int step = 1; step <= 2; ++step)
                         {
-                            int ax = (pgx + static_cast<int>(forwardX * 512.0f * step)) >> 9;
-                            int az = (pgz + static_cast<int>(forwardZ * 512.0f * step)) >> 9;
+                            int ax = (pgx + static_cast<int>(probeForwardX * 512.0f * step)) >> 9;
+                            int az = (pgz + static_cast<int>(probeForwardZ * 512.0f * step)) >> 9;
                             if (ax >= 0 && az >= 0 && ax < level.header.mapLength && az < level.header.mapWidth)
                             {
                                 probes[step] = az * level.header.mapLength + ax;
@@ -1406,40 +1533,19 @@ namespace ALTEngine::Screens
                         level,
                         ToGridSpaceX(camera.x, originX),
                         ToGridSpaceZ(camera.z, originZ));
-                    camera.y = floorY + STAND_OFFSET + EYE_HEIGHT;
-
-                    // Automatic pitch, when Free Look is off. Samples the
-                    // floor a short way ahead along the view direction and
-                    // pitches toward it, which is what produces the
-                    // original's pan up a staircase and back down the other
-                    // side. Eased rather than snapped so a step boundary
-                    // does not jolt the view.
+                    // Head bob rides on top of the eye height. It only ever
+                    // dips - the original's vertical term is
+                    // min(sin p, sin p+180), which is -|sin p| - so the camera
+                    // never rises above eye level, only sinks up to 64 units
+                    // below it twice per stride. See PlayerCamera.h.
                     //
-                    // NOT DERIVED FROM THE ORIGINAL. The behaviour is
-                    // qualitatively right (pitch follows the ground, no
-                    // player control) but the look-ahead distance, the gain
-                    // and the easing rate are all chosen by feel - nothing in
-                    // the decompilation has been traced that sets pitch. If
-                    // the pan feels too strong or too slow, these three
-                    // numbers are the knobs.
-                    if (!freeLook)
-                    {
-                        constexpr float LOOK_AHEAD = 512.0f;  // one cell
-                        constexpr float PITCH_GAIN = 0.6f;
-                        constexpr float PITCH_EASE = 0.15f;
-
-                        float aheadX = camera.x + std::sin(camera.yaw) * LOOK_AHEAD;
-                        float aheadZ = camera.z - std::cos(camera.yaw) * LOOK_AHEAD;
-                        float aheadFloorY = ALTEngine::Formats::FindFloorHeightGridSpace(
-                            level,
-                            ToGridSpaceX(aheadX, originX),
-                            ToGridSpaceZ(aheadZ, originZ));
-
-                        float rise = aheadFloorY - floorY;
-                        float targetPitch = std::clamp(std::atan2(rise, LOOK_AHEAD) * PITCH_GAIN,
-                                                       -MAX_PITCH, MAX_PITCH);
-                        camera.pitch += (targetPitch - camera.pitch) * PITCH_EASE;
-                    }
+                    // STAND_OFFSET + EYE_HEIGHT is kept as-is rather than
+                    // replaced with the original's DAT_000b0b4c (0x180 = 384),
+                    // because 384 against this 800 is an unexplained factor of
+                    // two and the current value is known to look right. See the
+                    // note on EYE_HEIGHT_ORIGINAL in PlayerCamera.h.
+                    camera.y = floorY + STAND_OFFSET + EYE_HEIGHT
+                             + static_cast<float>(playerCam.bobOffsetY);
                 }
             }
 

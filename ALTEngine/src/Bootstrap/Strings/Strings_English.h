@@ -66,6 +66,8 @@ namespace ALTEngine::Bootstrap
             "Move Backward",
             "Strafe Left",
             "Strafe Right",
+            "Turn Left",
+            "Turn Right",
             "Fire 1",
             "Fire 2",
             "Do / Use",

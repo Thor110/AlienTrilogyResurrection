@@ -16,11 +16,28 @@ namespace ALTEngine::Renderer
     // sheet's own glyphs and palette.
     //
     // Everything positional comes from the decompilation; see HudPanel.h for
-    // where each number was read from. The one thing invented here is how the
-    // 320x240 virtual space maps to the window: the original scales by
-    // outputWidth/320 and outputHeight/240 independently (FUN_000498dc), so a
-    // non-4:3 window stretches the HUD. That is reproduced rather than
-    // letterboxed, because it is what the original does.
+    // where each number was read from.
+    //
+    // HOW THE ORIGINAL GETS THE HUD ONTO THE SCREEN - traced, and not what this
+    // used to do. FUN_0003aac8 builds each HUD element as a display-list entry
+    // whose draw routine is FUN_000498dc, and sets the entry's byte +0xb to 1.
+    // That byte selects FUN_000498dc's SECOND branch, which:
+    //   - does NOT apply the outputWidth/320, outputHeight/240 scaling its
+    //     first branch applies,
+    //   - forces the clip bounds to 0x13f x 0xef (319 x 239), and
+    //   - swaps the draw surface pointer (fix_off32_000ad58c) to a separate
+    //     buffer for the duration of the call, then restores it.
+    // In other words the HUD is rasterised at 1:1 into its own 320x240 surface
+    // at whole-pixel coordinates, and that surface is what reaches the screen.
+    // Nothing in the HUD is ever scaled per element.
+    //
+    // This renders into a 320x240 target and blits it once, which is the same
+    // thing. It is why the per-element rounding workarounds that used to live
+    // in this file are gone: at 1:1 there is nothing to round.
+    //
+    // The final blit still stretches to the window rather than letterboxing,
+    // since independent per-axis scaling is what the original's own scaled path
+    // does for everything else.
     class HudRenderer
     {
     public:
@@ -90,6 +107,10 @@ namespace ALTEngine::Renderer
         ~HudRenderer() { Unload(); }
 
     private:
+        // The original's 320x240 HUD surface. Created on first use and kept for
+        // the renderer's lifetime; Draw() is const, hence mutable.
+        mutable SDL_Texture* hudTarget = nullptr;
+
         // Blits one descriptor rect into the 320x240 virtual space at (x, y),
         // scaled to the output.
         // x/y in DEVICE PIXELS - see the definition.

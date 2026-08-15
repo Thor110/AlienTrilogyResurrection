@@ -1623,9 +1623,28 @@ namespace ALTEngine::Renderer
         float forwardY = std::sin(camera.pitch);
         float forwardZ = -std::cos(camera.yaw) * std::cos(camera.pitch);
 
+        // Up vector, tilted by roll around the forward axis. Left as the
+        // world up when roll is zero so the common path is untouched.
+        float upX = 0.0f, upY = 1.0f, upZ = 0.0f;
+        if (camera.roll != 0.0f)
+        {
+            // right = normalize(forward x worldUp); up = worldUp*cos + right*sin
+            float sx = forwardZ, sy = 0.0f, sz = -forwardX; // forward x (0,1,0)
+            float slen = std::sqrt(sx * sx + sy * sy + sz * sz);
+            if (slen > 0.0001f)
+            {
+                sx /= slen; sy /= slen; sz /= slen;
+                float c = std::cos(camera.roll);
+                float sn = std::sin(camera.roll);
+                upX = sx * sn;
+                upY = c;
+                upZ = sz * sn;
+            }
+        }
+
         Mat4 view = Mat4::LookAt(camera.x, camera.y, camera.z,
                                   camera.x + forwardX, camera.y + forwardY, camera.z + forwardZ,
-                                  0, 1, 0);
+                                  upX, upY, upZ);
         // Near/far chosen generously for the level's own coordinate
         // scale - confirmed real L111LEV.MAP vertex coordinates span up
         // to roughly +-27000 units, so this comfortably covers that with

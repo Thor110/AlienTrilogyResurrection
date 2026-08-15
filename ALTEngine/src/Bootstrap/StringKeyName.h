@@ -67,6 +67,8 @@ namespace ALTEngine::Bootstrap
         case StringId::ActionMoveBackward: return "ActionMoveBackward";
         case StringId::ActionStrafeLeft: return "ActionStrafeLeft";
         case StringId::ActionStrafeRight: return "ActionStrafeRight";
+        case StringId::ActionTurnLeft: return "ActionTurnLeft";
+        case StringId::ActionTurnRight: return "ActionTurnRight";
         case StringId::ActionFire1: return "ActionFire1";
         case StringId::ActionFire2: return "ActionFire2";
         case StringId::ActionUse: return "ActionUse";
@@ -202,6 +204,8 @@ namespace ALTEngine::Bootstrap
         if (name == "ActionMoveBackward") { return StringId::ActionMoveBackward; }
         if (name == "ActionStrafeLeft") { return StringId::ActionStrafeLeft; }
         if (name == "ActionStrafeRight") { return StringId::ActionStrafeRight; }
+        if (name == "ActionTurnLeft") { return StringId::ActionTurnLeft; }
+        if (name == "ActionTurnRight") { return StringId::ActionTurnRight; }
         if (name == "ActionFire1") { return StringId::ActionFire1; }
         if (name == "ActionFire2") { return StringId::ActionFire2; }
         if (name == "ActionUse") { return StringId::ActionUse; }

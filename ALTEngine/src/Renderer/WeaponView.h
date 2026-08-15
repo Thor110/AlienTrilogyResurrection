@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../Formats/SpriteAnimator.h"
 #include "../Formats/SpriteFrameLoader.h"
 #include "../Screens/PlayerInventoryState.h"
 
@@ -29,6 +30,19 @@ namespace ALTEngine::Renderer
     //   system the entities use, indexed by weapon state - which is where the
     //   firing and reload sequences live.
     //
+    // THE ANIMATOR IS NOW TRACED - see Formats/SpriteAnimator.h, which is a
+    // faithful transcription of FUN_00028a6c and its opcode interpreter
+    // FUN_000288e0. FUN_000400fc confirms the setup this class mirrors: the
+    // instance base is DAT_000b0a68, the per-weapon table at DAT_000b0aa8 holds
+    // 8-byte entries of {frame table base, sequence pointer}, and the sequence
+    // opens with the frame duration.
+    //
+    // WHAT IS NOT TRACED IS THE SEQUENCE DATA ITSELF. The tables live in the
+    // game files and are not parsed yet, so the idle and fire sequences below
+    // are SYNTHESISED from the frames each weapon's section actually contains.
+    // They run on the real VM, so replacing them with the original's own
+    // sequence bytes later is a data change, not a code change.
+    //
     // WHICH SECTION IS THE HELD POSE - a hypothesis, not traced. Section 1
     // frame 0 is used, not section 0. Reasoning: MM9's section 0 is 40x68 while
     // section 1 frame 0 is 40x88, and measuring the pistol in a screenshot of
@@ -52,9 +66,29 @@ namespace ALTEngine::Renderer
 
         void Draw(SDL_Renderer* renderer, int outputWidth, int outputHeight) const;
 
+        // Advances the animation by one of the ORIGINAL'S logic ticks, not one
+        // frame - call it from the same fixed-rate loop the player runs on, or
+        // the firing speed changes with the frame rate.
+        void Tick();
+
+        // Starts the firing animation. Ignored while one is already playing, so
+        // holding the trigger does not restart it every tick; that gives a
+        // repeat rate set by the sequence length, which is the shape the
+        // original has even though its own rate is not read out yet.
+        void Fire();
+
+        bool IsFiring() const { return firing; }
+
+        // True on the tick an OP_EVENT opcode fired, with its operand. This is
+        // where a muzzle flash, a shot, or a sound would hang once the meaning
+        // of the operand is known - see SpriteAnimator.h.
+        bool EventFired() const { return animator.EventFired(); }
+        int EventParam() const { return static_cast<int>(animator.param); }
+
         void Unload();
-        bool Ready() const { return texture != nullptr; }
+        bool Ready() const { return !frames.empty(); }
         int CurrentWeapon() const { return loadedWeapon; }
+        int FrameCount() const { return static_cast<int>(frames.size()); }
 
         ~WeaponView() { Unload(); }
 
@@ -62,9 +96,23 @@ namespace ALTEngine::Renderer
         static const char* WeaponFileStem(int weaponIndex);
 
     private:
-        SDL_Texture* texture = nullptr;
-        int frameWidth = 0;
-        int frameHeight = 0;
+        struct FrameTexture
+        {
+            SDL_Texture* texture = nullptr;
+            int width = 0;
+            int height = 0;
+        };
+
+        // Every frame of the weapon's animation section, in file order. The
+        // animator's frame index selects one.
+        std::vector<FrameTexture> frames;
         int loadedWeapon = -1;
+
+        ALTEngine::Formats::SpriteAnim::Animator animator;
+        std::vector<uint16_t> idleSequence;
+        std::vector<uint16_t> fireSequence;
+        bool firing = false;
+
+        void StartIdle();
     };
 }

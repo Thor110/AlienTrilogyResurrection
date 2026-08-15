@@ -77,6 +77,8 @@ namespace ALTEngine::Bootstrap
         ActionMoveBackward,
         ActionStrafeLeft,
         ActionStrafeRight,
+        ActionTurnLeft,
+        ActionTurnRight,
         ActionFire1,
         ActionFire2,
         ActionUse,

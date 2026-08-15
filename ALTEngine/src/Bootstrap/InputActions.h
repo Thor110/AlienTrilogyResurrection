@@ -45,16 +45,33 @@ namespace ALTEngine::Bootstrap
         Turnaround,
         WeaponSelectMenu,
         Pause,
+        // APPENDED, NOT INSERTED. KeyBindings stores a binding under the
+        // config key "Key_{device}_{(int)action}", so the numeric value of
+        // every existing action has to stay put or every player's saved
+        // bindings silently shift by two. New actions therefore go on the end
+        // regardless of where they belong in the list - AllActions() below is
+        // what controls the order the Redefine menu actually shows.
+        //
+        // Turn Left/Right are OURS, not the original's. The original turned
+        // with its direction keys and used the strafe modifier to sidestep;
+        // dedicated turn keys let A/D stay on strafe, which is what anyone
+        // playing with a mouse expects.
+        TurnLeft,
+        TurnRight,
     };
 
     // Every action, in the order every device's Redefine list shows
     // them - one shared list, not a separate one per device (Edward,
     // 2026).
-    inline const std::array<InputAction, 19>& AllActions()
+    inline const std::array<InputAction, 21>& AllActions()
     {
-        static const std::array<InputAction, 19> actions{
+        static const std::array<InputAction, 21> actions{
             InputAction::MoveForward, InputAction::MoveBackward,
             InputAction::StrafeLeft, InputAction::StrafeRight,
+            // Shown here, next to the movement actions they belong with, even
+            // though the enum values themselves are appended at the end - see
+            // the note on the enum.
+            InputAction::TurnLeft, InputAction::TurnRight,
             InputAction::Fire1, InputAction::Fire2, InputAction::Use,
             InputAction::StrafeModifier, InputAction::RunMode, InputAction::RunModifier,
             InputAction::SelectWeapon1, InputAction::SelectWeapon2, InputAction::SelectWeapon3,
@@ -93,6 +110,8 @@ namespace ALTEngine::Bootstrap
         case InputAction::MoveBackward: return "Move Backward";
         case InputAction::StrafeLeft: return "Strafe Left";
         case InputAction::StrafeRight: return "Strafe Right";
+        case InputAction::TurnLeft: return "Turn Left";
+        case InputAction::TurnRight: return "Turn Right";
         case InputAction::Fire1: return "Fire 1";
         case InputAction::Fire2: return "Fire 2";
         case InputAction::Use: return "Do / Use";
@@ -124,6 +143,8 @@ namespace ALTEngine::Bootstrap
         case InputAction::MoveBackward: return Tr(StringId::ActionMoveBackward, language);
         case InputAction::StrafeLeft: return Tr(StringId::ActionStrafeLeft, language);
         case InputAction::StrafeRight: return Tr(StringId::ActionStrafeRight, language);
+        case InputAction::TurnLeft: return Tr(StringId::ActionTurnLeft, language);
+        case InputAction::TurnRight: return Tr(StringId::ActionTurnRight, language);
         case InputAction::Fire1: return Tr(StringId::ActionFire1, language);
         case InputAction::Fire2: return Tr(StringId::ActionFire2, language);
         case InputAction::Use: return Tr(StringId::ActionUse, language);
@@ -159,6 +180,8 @@ namespace ALTEngine::Bootstrap
         case InputAction::MoveBackward: return SDL_SCANCODE_S;
         case InputAction::StrafeLeft: return SDL_SCANCODE_A;
         case InputAction::StrafeRight: return SDL_SCANCODE_D;
+        case InputAction::TurnLeft: return SDL_SCANCODE_Q;
+        case InputAction::TurnRight: return SDL_SCANCODE_E;
         case InputAction::Fire1: return SDL_SCANCODE_LCTRL;
         case InputAction::Fire2: return SDL_SCANCODE_KP_5;
         case InputAction::Use: return SDL_SCANCODE_SPACE;

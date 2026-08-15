@@ -21,6 +21,11 @@ namespace ALTEngine::Renderer
         float x = 0, y = 0, z = 0;
         float yaw = 0;   // radians, rotation around Y (turning left/right)
         float pitch = 0; // radians, looking up/down
+        // Radians, tilt around the view axis. Only ever driven by the head
+        // bob's sway term (PlayerCamera.h), which peaks at about 0.7 degrees.
+        // Defaults to zero, and the view matrix skips the extra work entirely
+        // when it is zero, so nothing that does not set it is affected.
+        float roll = 0;
         float fovYRadians = 1.221f; // ~70 degrees, standard FPS default
     };
 
