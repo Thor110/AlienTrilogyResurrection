@@ -6,6 +6,7 @@
 #include "PlayerHudState.h"
 #include "PlayerCamera.h"
 #include "WeaponSystem.h"
+#include "ParticleSystem.h"
 #include "../Renderer/WeaponView.h"
 #include "../Renderer/HudRenderer.h"
 #include "../Renderer/Minimap.h"
@@ -363,6 +364,17 @@ namespace ALTEngine::Screens
         ALTEngine::Renderer::WeaponView weaponView;
         bool firePressedLastTick = false;
         ALTEngine::Screens::WeaponSystem::Runtime weaponRuntime;
+        ALTEngine::Screens::Particles::Pool particles;
+
+        // What the ammo mirror last saw, so pickups can be applied as DELTAS.
+        //
+        // This used to copy the inventory straight into hudState.ammoRemainder
+        // every frame, which quietly made firing impossible: the weapon system
+        // decremented a round and the mirror put it back on the same frame, and
+        // a reload that moved a magazine into the remainder was wiped just as
+        // fast. Nothing visible ever happened (Edward, 2026).
+        std::array<int, ALTEngine::Screens::PlayerHudState::WEAPON_COUNT> mirroredAmmo{ 0, 0, 0, 0, 0 };
+        bool ammoSeeded = false;
         ALTEngine::Screens::PlayerHudState hudState;
         bool hudLoadAttempted = false;
         {
@@ -939,7 +951,16 @@ namespace ALTEngine::Screens
                 const bool* keys = SDL_GetKeyboardState(nullptr);
 
                 float mouseDx = 0.0f, mouseDy = 0.0f;
-                SDL_GetRelativeMouseState(&mouseDx, &mouseDy);
+                const SDL_MouseButtonFlags mouseButtons = SDL_GetRelativeMouseState(&mouseDx, &mouseDy);
+
+                // The mouse fires. The original reads its buttons into the same
+                // input word as the keyboard (DAT_000b0cc8 / DAT_000b0cc4), so
+                // left and right button ARE Fire 1 and Fire 2 - they are not a
+                // separate binding, and holding either behaves exactly like
+                // holding the bound key, including the per-weapon difference
+                // between edge and held.
+                const bool mouseFire1 = (mouseButtons & SDL_BUTTON_LMASK) != 0;
+                const bool mouseFire2 = (mouseButtons & SDL_BUTTON_RMASK) != 0;
                 // Read live rather than cached once - lets the Controls
                 // > Mouse > Mouse Sensitivity slider take effect
                 // immediately without needing a restart (Edward, 2026).
@@ -1100,7 +1121,7 @@ namespace ALTEngine::Screens
                     // property of the key. See WeaponSystem::FireMode.
                     namespace WS = ALTEngine::Screens::WeaponSystem;
 
-                    const bool fireHeld = keys[keyBindings.GetKey(InputAction::Fire1)];
+                    const bool fireHeld = keys[keyBindings.GetKey(InputAction::Fire1)] || mouseFire1;
                     const bool firePressed = fireHeld && !firePressedLastTick;
                     firePressedLastTick = fireHeld;
 
@@ -1110,7 +1131,22 @@ namespace ALTEngine::Screens
                     const bool triggerActive =
                         (WS::Def(weaponRuntime.weapon).primary == WS::FIRE_ON_PRESS) ? firePressed : fireHeld;
 
-                    if (triggerActive) { WS::TryPrimaryFire(weaponRuntime, hudState); }
+                    if (triggerActive && WS::TryPrimaryFire(weaponRuntime, hudState))
+                    {
+                        // A shot spawns the round AND the casing - FUN_0003d5b0
+                        // calls the weapon's projectile spawn, which then calls
+                        // FUN_0002b37c for the ejection once the round is away.
+                        namespace P = ALTEngine::Screens::Particles;
+                        const int projectileType = (hudState.currentWeapon == 1) ? P::TYPE_SHOTGUN
+                                                 : (hudState.currentWeapon == 2) ? P::TYPE_FLAME
+                                                 : (hudState.currentWeapon >= 3) ? P::TYPE_HEAVY
+                                                 : P::TYPE_PISTOL;
+
+                        particles.SpawnProjectile(projectileType, camera.x, camera.y, camera.z,
+                                                  playerCam.viewYaw, playerCam.viewPitch, playerCam.speed);
+                        particles.SpawnCasing(P::TYPE_CASING_A, camera.x, camera.y, camera.z,
+                                              playerCam.viewYaw, playerCam.speed);
+                    }
 
                     // Reload and out-of-ammo run only from idle, as a separate
                     // pass after the fire keys - the same order FUN_0003efcc has.
@@ -1124,7 +1160,13 @@ namespace ALTEngine::Screens
                     WS::TickNoise(weaponRuntime);
 
                     // Starting the animation IS the state change (FUN_000400fc).
-                    if (weaponRuntime.stateChanged) { weaponView.PlayState(weaponRuntime.state); }
+                    // Not every state animates. The out-of-ammo arms in
+                    // FUN_0003efcc set state 4 and call FUN_000524b0, NOT
+                    // FUN_000400fc - the empty state leaves the last frame up.
+                    if (weaponRuntime.stateChanged && WS::StateHasAnimation(weaponRuntime.state))
+                    {
+                        weaponView.PlayState(weaponRuntime.state);
+                    }
 
                     weaponView.SetCameraDip(playerCam.bobOffsetY * 64);
                     if (weaponView.Tick())
@@ -1133,7 +1175,22 @@ namespace ALTEngine::Screens
                         // (FUN_0003e93c), except from the latched empty states.
                         weaponRuntime.stateChanged = false;
                         WS::OnAnimationEnded(weaponRuntime);
-                        if (weaponRuntime.stateChanged) { weaponView.PlayState(weaponRuntime.state); }
+                        if (weaponRuntime.stateChanged && WS::StateHasAnimation(weaponRuntime.state))
+                        {
+                            weaponView.PlayState(weaponRuntime.state);
+                        }
+                    }
+
+                    // Move every live particle. A round that runs into geometry
+                    // shatters where it stopped - two pieces for a pistol round,
+                    // eight for a shotgun pellet (FUN_0002abe0).
+                    if (levelReady)
+                    {
+                        particles.Tick([&](float px, float py, float pz) {
+                            float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(
+                                level, ToGridSpaceX(px, originX), ToGridSpaceZ(pz, originZ));
+                            return !CanOccupy(level, originX, originZ, px, pz, floorY) || py < floorY;
+                        });
                     }
 
                     // The animation's own sound cue. OP_EVENT's operand is a
@@ -1637,11 +1694,56 @@ namespace ALTEngine::Screens
                         //
                         // Weapon order matches the original's 0-4 indices, which
                         // is also the inventory's declaration order.
-                        hudState.ammoRemainder[0] = static_cast<int16_t>(inventory.pistol.ammo);
-                        hudState.ammoRemainder[1] = static_cast<int16_t>(inventory.shotgun.ammo);
-                        hudState.ammoRemainder[2] = static_cast<int16_t>(inventory.flamethrower.ammo);
-                        hudState.ammoRemainder[3] = static_cast<int16_t>(inventory.pulseRifle.ammo);
-                        hudState.ammoRemainder[4] = static_cast<int16_t>(inventory.smartGun.ammo);
+                        {
+                            const std::array<int, ALTEngine::Screens::PlayerHudState::WEAPON_COUNT> current{
+                                inventory.pistol.ammo, inventory.shotgun.ammo, inventory.flamethrower.ammo,
+                                inventory.pulseRifle.ammo, inventory.smartGun.ammo
+                            };
+
+                            for (size_t w = 0; w < current.size(); ++w)
+                            {
+                                const int magazine = ALTEngine::Screens::PlayerHudState::ROUNDS_PER_UNIT[w];
+
+                                if (!ammoSeeded)
+                                {
+                                    // First frame: split the inventory total
+                                    // into the original's unit/remainder pair.
+                                    // A total that divides exactly leaves the
+                                    // last magazine LOADED rather than banked,
+                                    // so the player can fire immediately.
+                                    if (magazine > 0)
+                                    {
+                                        int units = current[w] / magazine;
+                                        int rem = current[w] % magazine;
+                                        if (rem == 0 && units > 0) { units--; rem = magazine; }
+                                        hudState.ammoUnits[w] = static_cast<int16_t>(units);
+                                        hudState.ammoRemainder[w] = static_cast<int16_t>(rem);
+                                    }
+                                    else
+                                    {
+                                        hudState.ammoUnits[w] = 0;
+                                        hudState.ammoRemainder[w] = static_cast<int16_t>(current[w]);
+                                    }
+                                }
+                                else if (current[w] != mirroredAmmo[w])
+                                {
+                                    // A pickup happened. Apply only the change,
+                                    // so the rounds already spent stay spent.
+                                    int rem = hudState.ammoRemainder[w] + (current[w] - mirroredAmmo[w]);
+                                    int units = hudState.ammoUnits[w];
+                                    if (magazine > 0)
+                                    {
+                                        while (rem > magazine) { rem -= magazine; units++; }
+                                    }
+                                    if (rem < 0) { rem = 0; }
+                                    hudState.ammoUnits[w] = static_cast<int16_t>(units);
+                                    hudState.ammoRemainder[w] = static_cast<int16_t>(rem);
+                                }
+
+                                mirroredAmmo[w] = current[w];
+                            }
+                            ammoSeeded = true;
+                        }
 
                         // Which weapon's ammo to show. Nothing sets an equipped
                         // weapon during play yet, so fall back to the pistol.
@@ -1651,12 +1753,24 @@ namespace ALTEngine::Screens
                         else if (inventory.pulseRifle.equipped) { hudState.currentWeapon = 3; }
                         else if (inventory.smartGun.equipped) { hudState.currentWeapon = 4; }
 
-                        // The held weapon, under the HUD so the ammo row and
-                        // tracker stay readable over it.
+                        // The held weapon goes INTO the HUD's own 320x240
+                        // surface, under the panels, rather than being scaled
+                        // into the window on its own.
+                        //
+                        // Drawing it separately put its bottom edge on a
+                        // different pixel row than the screen edge, because the
+                        // two took different rounding paths to get there - which
+                        // showed up as a gap under the sprite that moved as the
+                        // weapon bobbed (Edward, 2026). At 1:1 in the shared
+                        // surface the anchor lands on row 240 exactly, every
+                        // frame, and the single blit at the end scales both
+                        // together.
                         weaponView.SetWeapon(renderer, cdDirectory, hudState.currentWeapon);
-                        weaponView.Draw(renderer, windowW, windowH);
-
-                        hud.Draw(renderer, hudState, windowW, windowH);
+                        hud.Draw(renderer, hudState, windowW, windowH, [&] {
+                            weaponView.Draw(renderer,
+                                            ALTEngine::Renderer::HUD_VIRTUAL_WIDTH,
+                                            ALTEngine::Renderer::HUD_VIRTUAL_HEIGHT);
+                        });
 
                         // Motion tracker. Contacts are world-space offsets from
                         // the player; enemies do not exist yet, so this is empty

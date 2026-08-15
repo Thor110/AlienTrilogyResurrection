@@ -175,12 +175,28 @@ int main(int, char**)
     // - no separate re-check needed here every boot.
     std::filesystem::path cdDirectory = result.gameDirectory / "CD";
 
-    // The player's loadout, owned here so it can persist across levels when the
-    // Modern "Keep Items" feature is on. Reset before each level otherwise,
-    // which is the original's behaviour: every level starts with the pistol and
-    // nothing else.
+    // The player's loadout, owned here so it can persist across levels.
     ALTEngine::Screens::PlayerInventoryState playerInventory;
+
+    // Launching a level FROM THE MENU always starts a fresh loadout - the
+    // pistol and nothing else, which is the original's behaviour.
+    //
+    // This used to be gated on the Modern "Keep Items" feature, and that was
+    // wrong. Keep Items is about carrying a loadout from one level into the
+    // NEXT one; it was never meant to carry anything into a level launched from
+    // the main menu, which is the start of a new run. With the gate in place,
+    // turning on the Fully Loaded cheat once left 999 rounds in the inventory
+    // permanently - disabling cheats and restarting the level did not clear it,
+    // because nothing ever reset the struct again (Edward, 2026).
     auto prepareInventory = []( ALTEngine::Screens::PlayerInventoryState& inv) {
+        inv = ALTEngine::Screens::PlayerInventoryState{};
+    };
+
+    // What Keep Items is actually for: level-to-level progression, which does
+    // not exist yet. Left here so the distinction is explicit rather than
+    // implied by an absence, and so the feature has an obvious home the moment
+    // there is a level-completion path to call it from.
+    auto carryInventoryBetweenLevels = []( ALTEngine::Screens::PlayerInventoryState& inv) {
         ALTEngine::Bootstrap::Config modernConfig;
         ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
         if (!modern.IsActive(ALTEngine::Bootstrap::ModernFeature::KeepItems))
@@ -188,6 +204,7 @@ int main(int, char**)
             inv = ALTEngine::Screens::PlayerInventoryState{};
         }
     };
+    (void)carryInventoryBetweenLevels;
 
     // Must happen before anything below could possibly call Tr() -
     // LoadedLanguagePacks() only ever initializes its cache once, on

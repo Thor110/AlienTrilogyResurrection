@@ -480,7 +480,8 @@ namespace ALTEngine::Renderer
     }
 
     void HudRenderer::Draw(SDL_Renderer* renderer, const ALTEngine::Screens::PlayerHudState& state,
-                           int outputWidth, int outputHeight) const
+                           int outputWidth, int outputHeight,
+                           const std::function<void()>& drawUnderPanels) const
     {
         if (!sheet || rects.empty()) { return; }
         if (outputWidth <= 0 || outputHeight <= 0) { return; }
@@ -512,6 +513,9 @@ namespace ALTEngine::Renderer
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
+
+        // The weapon goes on first, so every panel draws over it.
+        if (drawUnderPanels) { drawUnderPanels(); }
 
         // Identity: HUD coordinates ARE target pixels on this surface. Kept as
         // named variables rather than deleted so the drawing code below stays

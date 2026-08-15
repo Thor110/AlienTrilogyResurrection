@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <string>
+#include <functional>
 #include <vector>
 
 namespace ALTEngine::Renderer
@@ -55,8 +56,16 @@ namespace ALTEngine::Renderer
 
         // Draws the HUD over the current frame. `outputWidth/Height` are the
         // real render target size.
+        // `drawUnderPanels`, if given, runs after the 320x240 surface is
+        // cleared and before any panel is drawn, with that surface still bound
+        // as the render target. It is how the weapon gets composited at 1:1
+        // alongside the HUD instead of being scaled separately into the window -
+        // the original puts both in the same surface, and doing it any other way
+        // leaves the weapon's bottom edge landing on a different pixel row than
+        // the screen edge does.
         void Draw(SDL_Renderer* renderer, const ALTEngine::Screens::PlayerHudState& state,
-                  int outputWidth, int outputHeight) const;
+                  int outputWidth, int outputHeight,
+                  const std::function<void()>& drawUnderPanels = {}) const;
 
         // Draws the tracker's edge strips above and below an arbitrary box, in
         // 320x240 HUD space. Used to frame the live minimap so it matches the

@@ -89,16 +89,27 @@ namespace ALTEngine::Screens
         inline constexpr int WEAPON_ANCHOR_X = 0xa0;
         inline constexpr int WEAPON_ANCHOR_Y = 0xf0;
 
-        // PER-STATE OFFSETS: NOT AVAILABLE. FUN_0003e93c adds a pair of shorts
-        // from a 4-byte-stride table at DAT_000acea2 (x) / DAT_000acea4 (y),
-        // indexed by state. Those are data-segment initialisers with no write
-        // site in the export, exactly like the pitch constants in
-        // PlayerCamera.h, so all six entries are ZERO here as a placeholder.
+        // Per-weapon nudge, from the 4-byte-stride table at DAT_000acea2 (x) /
+        // DAT_000acea4 (y). RESOLVED from the data listing.
         //
-        // Reading 24 bytes at 0x000acea2 out of Ghidra's listing fills this in
-        // and is what will make the firing pose sit where it should.
-        inline constexpr std::array<int, STATE_COUNT> STATE_OFFSET_X{ 0, 0, 0, 0, 0, 0 }; // GUESS
-        inline constexpr std::array<int, STATE_COUNT> STATE_OFFSET_Y{ 0, 0, 0, 0, 0, 0 }; // GUESS
+        // I had this indexed by STATE. It is not - FUN_0003e93c indexes it with
+        // `DAT_000b0aac >> 0x10`, which is the HIGH half of that packed word,
+        // i.e. the weapon. The low half is the state. Six entries, five weapons
+        // and a spare, which is the giveaway I should have caught.
+        //
+        // Every Y is zero, so the correction is purely horizontal - each weapon
+        // sprite has its own idea of where its centre is.
+        inline constexpr std::array<int, PlayerHudState::WEAPON_COUNT + 1> WEAPON_OFFSET_X{
+            +4,  // 0 pistol
+            +2,  // 1 shotgun
+             0,  // 2 flamethrower
+            -6,  // 3 pulse rifle
+            +10, // 4 smartgun
+             0,  // spare slot
+        };
+        inline constexpr std::array<int, PlayerHudState::WEAPON_COUNT + 1> WEAPON_OFFSET_Y{
+            0, 0, 0, 0, 0, 0
+        };
 
         // DAT_000b0b57, added to the weapon's Y. Untraced; zero until it is.
         inline constexpr int WEAPON_Y_BIAS = 0; // GUESS
@@ -217,6 +228,21 @@ namespace ALTEngine::Screens
         inline void TickNoise(Runtime& runtime)
         {
             if (runtime.noise > 0) { runtime.noise--; }
+        }
+
+        // Whether entering a state starts an animation.
+        //
+        // NOT ALL OF THEM DO. FUN_0003efcc's out-of-ammo arms set state 4 and
+        // call FUN_000524b0, NOT FUN_000400fc - so the empty state deliberately
+        // leaves the previous frame on screen rather than playing anything. The
+        // per-weapon table backs this up: its entries are contiguous in memory
+        // between the five weapons (0xace28, 0xace48, 0xace58, 0xace70,
+        // 0xace88), which leaves the pistol three states, the shotgun two and
+        // the flamethrower four - too few for a state-4 entry to exist at all.
+        inline constexpr bool StateHasAnimation(int state)
+        {
+            return state == STATE_IDLE || state == STATE_FIRING
+                || state == STATE_RELOAD || state == STATE_GRENADE;
         }
 
         // FUN_0003e93c: the animation ending is what returns the weapon to idle.

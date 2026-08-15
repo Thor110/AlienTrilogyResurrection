@@ -161,6 +161,24 @@ namespace ALTEngine::Screens
         // A TESTABLE CONSEQUENCE: if 30 is right, the motion tracker's 48-tick
         // sweep is currently running at twice the original's speed, because
         // GameplayScreen ticks it at 60. Worth watching for.
+        //
+        // EVIDENCE SO FAR, and it does not all point the same way:
+        //   - Footstep cadence favours 30. Anything below about 25 puts walking
+        //     under two steps a second, which is a stroll.
+        //   - The pistol's firing animation is 3 frames at 2 ticks each, so 6
+        //     ticks. At 30 that is 0.20s, which reads as slightly too fast
+        //     against the original (Edward, 2026). 0.30s would be 20Hz.
+        //   - The hand-tuned MOVE_SPEED this replaced was 2000 units/second,
+        //     which against a walk speed of 0x78 implies about 17Hz.
+        //
+        // Two of the three favour something near 17-20. The footstep number is
+        // the only one that can be measured EXACTLY rather than judged, which is
+        // why it is still the thing to settle this:
+        //     steps/second = TICK_HZ * (speed * 3 / 2) / 0x800
+        // Count footsteps over ten seconds of walking in a recording of the
+        // original and solve. Left at 30 until then, because changing it moves
+        // movement speed by the same proportion and that is not a change to make
+        // on a judgement call about an animation.
         constexpr int TICK_HZ = 30;   // GUESS - see above
 
         inline double FootstepsPerSecond(int speed)

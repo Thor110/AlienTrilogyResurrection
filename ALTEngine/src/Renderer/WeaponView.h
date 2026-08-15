@@ -45,14 +45,20 @@ namespace ALTEngine::Renderer
     // They run on the real VM, so replacing them with the original's own
     // sequence bytes later is a data change, not a code change.
     //
-    // WHICH SECTION IS THE HELD POSE - a hypothesis, not traced. Section 1
-    // frame 0 is used, not section 0. Reasoning: MM9's section 0 is 40x68 while
-    // section 1 frame 0 is 40x88, and measuring the pistol in a screenshot of
-    // the original gives roughly 90 units tall in 320x240 space - which matches
-    // section 1 frame 0 at 1:1 and not section 0. That also gives section 0 a
-    // sensible job as the pickup/inventory icon, and makes MM9's section 1
-    // (40x88, 40x72, 40x68) read as a recoil sequence. Falls back to section 0
-    // if section 1 will not load.
+    // A .B16 SECTION IS A WEAPON STATE. Section 0 is idle, section 1 is firing,
+    // section 2 is reloading, and the section's sub-frame count is the length of
+    // that state's animation (Edward, 2026 - measured from the files).
+    //
+    // The pistol's own state table at 0x000ace58 agrees exactly. The gap between
+    // each state's frame table and its sequence pointer is the table itself, at
+    // 12 bytes per record: idle 12 bytes = 1 frame, firing 36 = 3, reload
+    // 36 = 3. MM9's sections have 1, 3 and 3 sub-frames. The section index and
+    // the state index are the same number.
+    //
+    // An earlier version of this guessed that section 1 frame 0 was the held
+    // pose, from a screenshot measurement. It was wrong - that is the first
+    // frame of the FIRING animation, which is why the weapon appeared to rest
+    // in a recoiled position.
     //
     // PLACEMENT IS STILL OURS. The sprite is anchored bottom-centre in the
     // 320x240 HUD space. The original's own position comes from that sprite
@@ -97,9 +103,13 @@ namespace ALTEngine::Renderer
         int EventParam() const { return static_cast<int>(animator.param); }
 
         void Unload();
-        bool Ready() const { return !frames.empty(); }
+        bool Ready() const { return !frames[ALTEngine::Screens::WeaponSystem::STATE_IDLE].empty(); }
         int CurrentWeapon() const { return loadedWeapon; }
-        int FrameCount() const { return static_cast<int>(frames.size()); }
+        int FrameCount(int weaponState) const
+        {
+            if (weaponState < 0 || weaponState >= ALTEngine::Screens::WeaponSystem::STATE_COUNT) { return 0; }
+            return static_cast<int>(frames[static_cast<size_t>(weaponState)].size());
+        }
 
         ~WeaponView() { Unload(); }
 
@@ -114,9 +124,12 @@ namespace ALTEngine::Renderer
             int height = 0;
         };
 
-        // Every frame of the weapon's animation section, in file order. The
-        // animator's frame index selects one.
-        std::vector<FrameTexture> frames;
+        // Frames per weapon STATE. A .B16 section maps one-to-one onto a
+        // weapon state, so section 0 is idle, section 1 is firing, section 2 is
+        // reload - see the header. The animator's frame index selects within
+        // the current state's section.
+        std::array<std::vector<FrameTexture>,
+                   ALTEngine::Screens::WeaponSystem::STATE_COUNT> frames;
         int loadedWeapon = -1;
 
         ALTEngine::Formats::SpriteAnim::Animator animator;
