@@ -8,6 +8,8 @@
 #include "WeaponSystem.h"
 #include "ParticleSystem.h"
 #include "DamageSystem.h"
+#include "../Audio/SfxPlayer.h"
+#include "../Formats/SoundIds.h"
 #include "../Renderer/WeaponView.h"
 #include "../Renderer/HudRenderer.h"
 #include "../Renderer/Minimap.h"
@@ -145,6 +147,20 @@ namespace ALTEngine::Screens
         // the centre and the four corners of the +/-200 box: every point
         // must be non-blocking, and no point may rise more than the
         // step-up limit above the floor the player is currently on.
+        // The cell attribute under a world position, for picking the impact
+        // sound (attributes 8 and 9 are the wet ones).
+        inline uint8_t ImpactCellAttribute(const ALTEngine::Formats::LevelGeometry& level,
+                                           float originX, float originZ, float worldX, float worldZ)
+        {
+            int cx = ToGridSpaceX(worldX, originX) >> 9;
+            int cz = ToGridSpaceZ(worldZ, originZ) >> 9;
+            if (cx < 0 || cz < 0 || cx >= level.header.mapLength || cz >= level.header.mapWidth) { return 0; }
+            size_t ci = static_cast<size_t>(cz) * static_cast<size_t>(level.header.mapLength)
+                      + static_cast<size_t>(cx);
+            if (ci >= level.collisionGrid.size()) { return 0; }
+            return level.collisionGrid[ci].attribute;
+        }
+
         bool CanOccupy(const ALTEngine::Formats::LevelGeometry& level,
                        float originX, float originZ,
                        float worldX, float worldZ, float currentFloorY)
@@ -229,6 +245,10 @@ namespace ALTEngine::Screens
 
         // Resolve and load the level
         std::string digits = LevelDigitsFromCode(missionLevelCode);
+
+        // The impact sound differs on levels 0x0c-0x15, and the original tests
+        // its own level index rather than the code - see Particles::ImpactSound.
+        const int levelIdForSfx = digits.empty() ? 0 : std::atoi(digits.c_str());
 
         // Level music. The original resolves this through one table indexed by
         // its internal level id (Ghidra: FUN_0004263c -> FUN_0004258c); see
@@ -1223,7 +1243,7 @@ namespace ALTEngine::Screens
                         namespace D = ALTEngine::Screens::Damage;
                         for (D::Target& target : damageTargets) { D::TickTarget(target); }
 
-                        particles.Tick([&](float px, float py, float pz, int hitType) {
+                        particles.Tick([&](float px, float py, float pz, int hitType, int hitLife) {
                             // Something destructible first. The damage is the
                             // projectile's SPEED field doubled while the round is
                             // still fresh - see DamageSystem::HitDamage, and note
@@ -1246,8 +1266,12 @@ namespace ALTEngine::Screens
                                 // pistol's numbers, which made every weapon hit
                                 // for 32 - wrong for all four of the others, and
                                 // it would have hidden the barrel rule entirely.
+                                // Falloff: the round's remaining life against
+                                // what it started with. Full damage over the
+                                // first half of the flight, half over the second
+                                // (FUN_0002a628).
                                 const auto def = ALTEngine::Screens::Particles::DefFor(hitType);
-                                const int damage = D::HitDamage(def.speed, def.strength, def.strength);
+                                const int damage = D::HitDamage(def.speed, hitLife, def.strength);
 
                                 if (D::ApplyHit(target, damage, hitType))
                                 {
@@ -1269,6 +1293,13 @@ namespace ALTEngine::Screens
                                     // Byte 4, which carries the crate's record
                                     // index, is cleared with it: it only has
                                     // meaning while byte 12 identifies an object.
+                                    // Barrels explode, crates break apart.
+                                    ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                        target.kind == D::TARGET_BARREL
+                                            ? ALTEngine::Formats::SoundIds::BARREL_EXPLODE
+                                            : ALTEngine::Formats::SoundIds::CRATE_BREAK,
+                                        digits.c_str(), cdDirectory);
+
                                     if (target.cellIndex >= 0
                                         && target.cellIndex < static_cast<int>(level.collisionGrid.size()))
                                     {
@@ -1297,6 +1328,12 @@ namespace ALTEngine::Screens
                             if (ALTEngine::Formats::IsCellBlocking(level,
                                     ToGridSpaceX(px, originX), ToGridSpaceZ(pz, originZ)))
                             {
+                                // Impact sound picked by where it landed, not by
+                                // what fired - brick, metal or water.
+                                ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                    ALTEngine::Screens::Particles::ImpactSound(
+                                        levelIdForSfx, ImpactCellAttribute(level, originX, originZ, px, pz)),
+                                    digits.c_str(), cdDirectory);
                                 return true;
                             }
 
@@ -1306,20 +1343,21 @@ namespace ALTEngine::Screens
                         });
                     }
 
-                    // The animation's own sound cue. OP_EVENT's operand is a
-                    // sound id (see SpriteAnimator.h); SFX are not wired yet, so
-                    // this is where the call will go.
+                    // The animation's own sound cue. OP_EVENT's operand IS a
+                    // slot id - FUN_0003e93c passes it straight through - so an
+                    // animation carries its own audio and the weapon report
+                    // lands on the frame the artist put it on.
                     if (weaponView.SoundCued())
                     {
-                        (void)weaponView.CuedSoundId();
+                        ALTEngine::Audio::SfxPlayer::PlaySlot(
+                            weaponView.CuedSoundId(), digits.c_str(), cdDirectory);
                     }
 
-                    // Footsteps. SFX are not wired yet, so this only records
-                    // which sound the original would have played - see
-                    // PlayerCamera::FootstepSound and SfxPlayer's own TODO.
+                    // Footsteps, each half-stride of the bob phase.
                     if (playerCam.footstep)
                     {
-                        (void)PC::FootstepSound(onHazardCell);
+                        ALTEngine::Audio::SfxPlayer::PlaySlot(
+                            PC::FootstepSound(onHazardCell), digits.c_str(), cdDirectory);
                     }
                 }
 

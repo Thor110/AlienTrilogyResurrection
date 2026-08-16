@@ -137,9 +137,18 @@ namespace ALTEngine::Screens
         constexpr int EYE_HEIGHT_ORIGINAL = 0x180;   // 384 - see note, currently unused
         constexpr int EYE_HEIGHT_RECOVERY = 0xc;     // per tick, FUN_0003ee4c
 
-        // Footstep sound ids, from FUN_0003d00c's two calls to FUN_00040ba0.
-        constexpr int SFX_FOOTSTEP = 0x2c;
-        constexpr int SFX_FOOTSTEP_HAZARD = 0x26;  // when stood on a damage cell
+        // The two ids FUN_0003d00c plays each half-stride. RESOLVED against the
+        // slot table in Formats/SoundIds.h - and they are not two footsteps.
+        //
+        //   0x26 -> 5004astp, "a step". This is the footstep.
+        //   0x2c -> 0204ripl, a Ripley vocalisation, and the branch that also
+        //           gets the positional call.
+        //
+        // So the choice is "footstep, or Ripley reacting", not "footstep on one
+        // surface or another" as this previously assumed. Which way the 0x40
+        // flag runs is still open; the filenames settle which sound is which.
+        constexpr int SFX_FOOTSTEP = 0x26;
+        constexpr int SFX_PLAYER_VOCAL = 0x2c;
 
         // The original's logic tick rate.
         //
@@ -548,7 +557,7 @@ namespace ALTEngine::Screens
         // Which sound a footstep should play this tick.
         inline int FootstepSound(bool onHazardCell)
         {
-            return onHazardCell ? SFX_FOOTSTEP_HAZARD : SFX_FOOTSTEP;
+            return onHazardCell ? SFX_PLAYER_VOCAL : SFX_FOOTSTEP;
         }
 
         // Per-tick world-space movement for the caller's collision mover.

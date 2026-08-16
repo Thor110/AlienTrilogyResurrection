@@ -37,9 +37,22 @@ namespace ALTEngine::Screens
         };
 
         // Per-projectile spawn parameters, read straight out of FUN_0002b534's
-        // switch. `strength` is the byte it writes to +0x1c (and mirrors into
-        // +0x1d); `speed` is the short at +0x1a; `lateral` is the sideways
-        // muzzle offset it rotates by the view angles before adding.
+        // switch.
+        //
+        // `strength` is the byte at +0x1c, and it is the projectile's LIFETIME
+        // IN TICKS. The update loop at 0x2d91c decrements it once per pass and
+        // frees the particle the moment it reaches zero. That is what limits a
+        // round's range - there is no distance test anywhere, only this counter.
+        //
+        // It also means the damage rule in FUN_0002a628 - double while
+        // strength >= initial/2 - is a RANGE FALLOFF: full damage over the first
+        // half of the flight, half over the second.
+        //
+        //     pistol 20 ticks   shotgun 16   flame 28   heavy 28
+        //
+        // `speed` is the short at +0x1a, used both as the damage figure and,
+        // shifted left 4, as the distance FUN_0002a448 probes.
+        // `lateral` is the sideways muzzle offset, rotated by the view angles.
         struct ProjectileDef
         {
             int strength;
@@ -141,6 +154,59 @@ namespace ALTEngine::Screens
         inline constexpr int CASING_SPIN_Y = 0x38;   // GUESS
         inline constexpr int CASING_GRAVITY = 12;    // GUESS - world units/tick^2
 
+        // HOW THE ORIGINAL DRAWS THESE - all traced, from the aggressive
+        // re-export. FUN_0002d6ec is the per-particle draw dispatch: it projects
+        // the position with FUN_0004884c, keeps the distance, and switches on
+        // the type byte to one of several draw routines.
+        //
+        // They are SCREEN-SPACE PRIMITIVES, not billboards and not meshes. The
+        // projection lands in the same 320x240 space the HUD uses (the bounds
+        // tested are 0x141 and 0xf1), and each one is inserted into the shared
+        // display list with a sort key of distance >> 5 - the same list and the
+        // same FUN_00048f64 insert the level geometry uses. That is why they
+        // occlude correctly without a depth buffer: they are painter-sorted in
+        // with everything else.
+        //
+        // A BULLET IS A LINE, not a dot (FUN_0002d3e4). It draws from the
+        // particle's position to position + a fraction of its velocity, so a
+        // round in flight is a short streak pointing the way it is going:
+        //     type 0        position .. position + velocity/2
+        //     types 2, 4    position .. position + velocity
+        // Colour comes from three palette bytes that differ per type.
+        //
+        // A FRAGMENT IS A 2x2 PIXEL QUAD (FUN_0002d1b4) - four screen points at
+        // (x,y), (x+1,y), (x,y+1), (x+1,y+1), shaded by the particle's +0x1a.
+        //
+        // Casings and the types around them (0x0b-0x0d, 0x13-0x15) go to
+        // FUN_0002cf14 instead, before the projection above even happens.
+        // IMPACT SOUNDS, from the update loop at 0x2d91c. When a round is
+        // stopped by geometry it plays one of three ids through FUN_00040c38,
+        // chosen by where it landed rather than by what fired:
+        //     0x23  levels 0x0c..0x15
+        //     0x24  every other level
+        //     0x25  overrides both when the cell attribute underfoot is 8 or 9
+        // Attribute 9 is the same one that suppresses footsteps, so 0x25 is
+        // almost certainly the wet impact.
+        inline constexpr int SFX_IMPACT_ALT_LEVELS = 0x23;
+        inline constexpr int SFX_IMPACT_DEFAULT = 0x24;
+        inline constexpr int SFX_IMPACT_LIQUID = 0x25;
+
+        inline constexpr int ImpactSound(int levelId, int cellAttribute)
+        {
+            if (cellAttribute == 8 || cellAttribute == 9) { return SFX_IMPACT_LIQUID; }
+            return (levelId > 0x0b && levelId < 0x16) ? SFX_IMPACT_ALT_LEVELS : SFX_IMPACT_DEFAULT;
+        }
+
+        inline constexpr int DRAW_NEAR_CUTOFF = 0x200;    // closer than this is not drawn
+        inline constexpr int DRAW_FAR_CUTOFF = 0x1801;    // 6145 units, about 12 cells
+        inline constexpr int DRAW_SORT_SHIFT = 5;         // display-list key = distance >> 5
+
+        // Fraction of the velocity a tracer streak spans, by type.
+        inline constexpr float TracerVelocityFraction(int type)
+        {
+            return (type == TYPE_PISTOL) ? 0.5f : 1.0f;
+        }
+
         struct Particle
         {
             // Position and velocity, world units. The original keeps these as
@@ -157,9 +223,9 @@ namespace ALTEngine::Screens
             bool falls = false;          // gravity applies - casings only
 
             uint8_t type = TYPE_PISTOL;  // +0x1e
-            int strength = 0;            // +0x1c
-            int speed = 0;               // +0x1a
-            int life = 0;                // +0x20 for casings; fragments get FRAGMENT_STRENGTH
+            int strength = 0;            // +0x1d, the value life started at
+            int speed = 0;               // +0x1a, damage and probe distance
+            int life = 0;                // +0x1c, ticks remaining; zero frees it
             bool alive = false;
         };
 
@@ -227,7 +293,8 @@ namespace ALTEngine::Screens
 
                 const ProjectileDef def = DefFor(type);
                 p->type = static_cast<uint8_t>(type);
-                p->strength = def.strength;
+                p->strength = def.strength;   // the value life started at, for the falloff test
+                p->life = def.strength;       // +0x1c, counts down; zero frees the particle
                 p->speed = def.speed;
 
                 p->x = eyeX;
@@ -351,6 +418,11 @@ namespace ALTEngine::Screens
                 {
                     if (!p.alive) { continue; }
 
+                    // Life first. The original decrements +0x1c at the top of
+                    // each pass and frees the particle before it moves it, so a
+                    // round on its last tick never travels that tick.
+                    if (p.life > 0 && --p.life == 0) { p.alive = false; continue; }
+
                     // Tumble, and fall if this is something with weight.
                     if (p.spinX != 0 || p.spinY != 0 || p.spinZ != 0)
                     {
@@ -381,7 +453,7 @@ namespace ALTEngine::Screens
                         nx += p.vx * inv;
                         ny += p.vy * inv;
                         nz += p.vz * inv;
-                        if ((isProjectile || p.falls) && blocked(nx, ny, nz, static_cast<int>(p.type)))
+                        if ((isProjectile || p.falls) && blocked(nx, ny, nz, static_cast<int>(p.type), p.life))
                         {
                             stopped = true;
                         }
@@ -411,8 +483,6 @@ namespace ALTEngine::Screens
                     p.x = nx;
                     p.y = ny;
                     p.z = nz;
-
-                    if (p.life > 0 && --p.life == 0) { p.alive = false; }
                 }
             }
 
