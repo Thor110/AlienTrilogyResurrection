@@ -234,6 +234,7 @@ namespace ALTEngine::Screens
             bool destroyed = false;
             int placedObjectIndex = -1;
             int cellIndex = -1;        // collision cell this object stamps as occupied
+            int crateIndex = -1;       // its record in level.crates, for its contents
         };
 
         // Length of the hit-reaction window - ZERO for static objects, and this
@@ -283,6 +284,55 @@ namespace ALTEngine::Screens
             target.destroyed = true;
             return true;
         }
+
+        // THE BLAST, from FUN_000368c8.
+        //
+        // It is not a radius. The explosion walks the CELL GRID outward from the
+        // cell it went off in, in two rings: first 8 cells from an offset table
+        // at DAT_000acb00, then 16 more from DAT_000acb20. Each candidate cell
+        // is kept only if:
+        //   - its attribute (+10) is 0x13 or less - anything above is a wall
+        //   - its floor height (+0xb) is within 0xc of the origin cell's
+        //   - it is not attribute 6 with less than 8 units of headroom
+        // and a second-ring cell is discarded along with its first-ring parent,
+        // so the blast cannot reach round a corner it could not reach through.
+        //
+        // What it then does to each surviving cell, by the occupancy byte (+0xc):
+        //   0xFF        the player: FUN_0003e5a8(0x32, 5) - a flat 50
+        //   0x01-0x0F   a monster: damaged by the ENTITY'S OWN +0x56 value, not
+        //               by any blast figure
+        //   above 0x0F  an object: DESTROYED OUTRIGHT, no health check at all
+        //
+        // That last one is the chain reaction. A barrel inside another barrel's
+        // blast is simply removed, which fires its own blast, and so on.
+        inline constexpr int BLAST_PLAYER_DAMAGE = 0x32;
+        inline constexpr int BLAST_MAX_ATTRIBUTE = 0x13;
+        inline constexpr int BLAST_MAX_HEIGHT_STEP = 0xc;
+
+        // RING OFFSETS: THE TABLES THEMSELVES ARE NOT DUMPED. 8 pairs at
+        // 0x000acb00 and 16 at 0x000acb20, 96 bytes in total. The shapes below
+        // are the obvious reading - the 8 cells touching the origin, then the 16
+        // that form the border of the 5x5 around it - and the counts match
+        // exactly, but the ORDER matters because it decides which second-ring
+        // cell is culled with which first-ring parent. MARKED AS A GUESS until
+        // those 96 bytes are read.
+        struct CellOffset { int dx; int dz; };
+
+        inline constexpr CellOffset BLAST_RING1[8] = {
+            { -1, -1 }, { 0, -1 }, { 1, -1 },
+            { -1,  0 },            { 1,  0 },
+            { -1,  1 }, { 0,  1 }, { 1,  1 },
+        };
+
+        // Each second-ring cell, with the first-ring cell it sits behind - the
+        // one the blast has to pass through to reach it.
+        struct RingTwoCell { CellOffset offset; int parent; };
+        inline constexpr RingTwoCell BLAST_RING2[16] = {
+            { { -2, -2 }, 0 }, { { -1, -2 }, 1 }, { { 0, -2 }, 1 }, { { 1, -2 }, 1 },
+            { {  2, -2 }, 2 }, { {  2, -1 }, 4 }, { { 2,  0 }, 4 }, { { 2,  1 }, 4 },
+            { {  2,  2 }, 7 }, { {  1,  2 }, 6 }, { { 0,  2 }, 6 }, { { -1, 2 }, 6 },
+            { { -2,  2 }, 5 }, { { -2,  1 }, 3 }, { { -2, 0 }, 3 }, { { -2, -1 }, 3 },
+        };
 
         inline void TickTarget(Target& target)
         {

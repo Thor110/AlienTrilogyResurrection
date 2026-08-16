@@ -1,4 +1,5 @@
 #include "WeaponView.h"
+#include "WeaponData.h"
 
 #include "HudPanel.h"
 
@@ -28,42 +29,9 @@ namespace ALTEngine::Renderer
         // out-of-range indices.
         constexpr int MAX_FRAMES = 32;
 
-        // THE PISTOL'S REAL SEQUENCES, transcribed word for word from the data
-        // at 0x0901a4 (firing) and 0x0901e4 (reload). No longer synthesised.
-        //
-        // The header is two words, not one: [0] is the frame duration and [1] is
-        // the FRAME COUNT. That explains the layout that looked odd before - the
-        // program counter starts at index 1 and pre-increments, so it lands on
-        // index 2, and the loop target is 2 as well. Index 1 was never a skipped
-        // frame; it is the count.
-        //
-        // Firing:  duration 2, 3 frames
-        //     OP_EVENT(0x0d)   <- plays sound slot 0x0d on the FIRST tick
-        //     OP_SET_FLAG1
-        //     frames 0, 1, 2
-        //     OP_END
-        //
-        // Reload:  duration 3, 3 frames
-        //     OP_SET_FLAG1, frames 0, 1, 2, OP_END   - no sound of its own
-        //
-        // Slot 0x0d is 0602hand, which is exactly what the NEWSFX.BAT pattern
-        // predicted for the pistol's report. That guess is now a fact, and the
-        // report lands on the first tick of the animation rather than wherever a
-        // caller decides to put it.
-        namespace Op = ALTEngine::Formats::SpriteAnim;
-        const std::vector<uint16_t> PISTOL_FIRE_SEQUENCE{
-            2, 3,
-            Op::Op(Op::OP_EVENT, 0x0d),
-            Op::Op(Op::OP_SET_FLAG1),
-            0, 1, 2,
-            Op::Op(Op::OP_END),
-        };
-        const std::vector<uint16_t> PISTOL_RELOAD_SEQUENCE{
-            3, 3,
-            Op::Op(Op::OP_SET_FLAG1),
-            0, 1, 2,
-            Op::Op(Op::OP_END),
-        };
+        // All five weapons' frame offsets and sequences now come from
+        // Renderer/WeaponData.h, transcribed from the data block at 0x090000.
+        // Nothing in this file is synthesised any more.
 
         // FRAME DURATIONS - CONFIRMED for the pistol, read from its own state
         // table at 0x000ace58. Each entry is {frame table, sequence}, and the
@@ -211,25 +179,18 @@ namespace ALTEngine::Renderer
                 ALTEngine::Formats::SpriteAnim::BuildSequence(duration, list, false);
         }
 
-        // The pistol's are read from the game rather than synthesised, so it
-        // gets its real timing and its real sound cue. The other four still use
-        // the generated ones until their tables are dumped - their sequence
-        // pointers are in the same per-weapon tables at 0x000ace28 (flame),
-        // 0x000ace48 (shotgun), 0x000ace70 (smartgun) and 0x000ace88 (pulse).
-        if (loadedWeapon == 0)
+        // Replace the generated sequences with the real ones wherever the
+        // weapon's frame count matches what the original's table expects. The
+        // guard matters: if a .B16 section has fewer frames than the sequence
+        // indexes, the animator would run off the end of the loaded textures.
+        const WeaponData::WeaponTables& tables = WeaponData::For(loadedWeapon);
+        for (int state = 0; state < 4; ++state)
         {
-            if (FrameCount(WS::STATE_FIRING) >= 3)
-            {
-                stateSequences[WS::STATE_FIRING] = PISTOL_FIRE_SEQUENCE;
-            }
-            if (FrameCount(WS::STATE_RELOAD) >= 3)
-            {
-                stateSequences[WS::STATE_RELOAD] = PISTOL_RELOAD_SEQUENCE;
-            }
+            const std::vector<uint16_t>* seq = tables.sequences[state];
+            if (!seq) { continue; }
+            if (FrameCount(state) < static_cast<int>(tables.offsetCounts[state])) { continue; }
+            stateSequences[static_cast<size_t>(state)] = *seq;
         }
-
-        stateSequences[WS::STATE_EMPTY] = stateSequences[WS::STATE_IDLE];
-        stateSequences[WS::STATE_UNKNOWN_5] = stateSequences[WS::STATE_IDLE];
     }
 
     void WeaponView::PlayState(int weaponState)
@@ -305,14 +266,32 @@ namespace ALTEngine::Renderer
         const int anchorY = WS::WEAPON_ANCHOR_Y + WS::WeaponBobOffset(cameraDip) + WS::WEAPON_Y_BIAS
                           + WS::WEAPON_OFFSET_Y[w];
 
-        float x = anchorX - frameWidth * 0.5f;
-        float y = static_cast<float>(anchorY - frameHeight);
+        // Per-frame offset from the weapon's frame table, where one is known.
+        // Anything without real data keeps the old bottom-centre placement,
+        // which is a guess and is marked as one.
+        const WeaponData::WeaponTables& tables = WeaponData::For(loadedWeapon);
+        const WeaponData::FrameOffset* offsets =
+            (section < 4) ? tables.offsets[section] : nullptr;
+        const size_t offsetCount = (section < 4) ? tables.offsetCounts[section] : 0;
 
-        // A shorter recoil frame still pulls the muzzle DOWN rather than
-        // kicking it up, because the anchor is the bottom edge. That is what the
-        // original's own anchor does too - the correction is the per-state
-        // offset table at DAT_000acea2, which is not readable from the export
-        // and is currently all zeros. See WeaponSystem.h.
+        float x;
+        float y;
+        if (offsets && index < offsetCount)
+        {
+            x = static_cast<float>(anchorX + offsets[index].x);
+            y = static_cast<float>(anchorY + offsets[index].y);
+        }
+        else
+        {
+            // GUESS - no frame table for this weapon yet.
+            x = anchorX - frameWidth * 0.5f;
+            y = static_cast<float>(anchorY - frameHeight);
+        }
+
+        // Recoil now moves the muzzle the right way. With the real offsets the
+        // firing frames run (-10,-86), (-7,-67), (-6,-64) - the first frame both
+        // taller AND placed higher, so the gun kicks UP and settles back rather
+        // than sinking, which is what bottom-anchoring made it do.
         SDL_FRect dst{ SDL_roundf(x * scaleX), SDL_roundf(y * scaleY),
                        SDL_roundf(frameWidth * scaleX), SDL_roundf(frameHeight * scaleY) };
         SDL_RenderTexture(renderer, current.texture, nullptr, &dst);

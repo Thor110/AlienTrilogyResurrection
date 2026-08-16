@@ -24,17 +24,51 @@ namespace ALTEngine::Screens
     namespace Particles
     {
         // Type byte at +0x1e. These are the values the code branches on.
+        // Type byte at +0x1e. ALL FIVE ARE NOW TRACED, each to the weapon whose
+        // ammo counter its spawn function decrements - which is the only
+        // unambiguous link, since the type numbers do not follow the weapon
+        // order:
+        //     FUN_0002bb74  -> DAT_000b0abe  pistol       type 0
+        //     FUN_0002bbc0  -> DAT_000b0ac2  shotgun      type 1
+        //     FUN_0002bc18  -> DAT_000b0ac4  pulse rifle  type 2
+        //     FUN_0002bcac  -> DAT_000b0aca  smartgun     type 3
+        //     FUN_0002c1d4  -> DAT_000b0acc  flamethrower type 4
+        //
+        // Two of these were guessed wrong before: type 2 was labelled the
+        // flamethrower's and type 4 "heavy". Type 2 is the pulse rifle and type
+        // 4 is the flamethrower.
         enum Type : uint8_t
         {
             TYPE_PISTOL = 0,
             TYPE_SHOTGUN = 1,
-            TYPE_FLAME = 2,
-            TYPE_UNKNOWN_3 = 3,
-            TYPE_HEAVY = 4,      // spawns 0xa0 lower and much faster; pulse or smartgun
+            TYPE_PULSE = 2,
+            TYPE_SMARTGUN = 3,
+            TYPE_FLAME = 4,
             TYPE_FRAGMENT = 7,   // what a projectile shatters INTO
             TYPE_CASING_B = 0x14,
             TYPE_CASING_A = 0x15,
         };
+
+        // HOW MANY PROJECTILES EACH TRIGGER PULL SPAWNS, and it is not one for
+        // three of them:
+        //     pulse rifle   3, from FUN_0002bc18's loop, each launched at
+        //                   playerSpeed + n * 0x80 - a burst that strings out
+        //                   in flight because the later rounds are faster
+        //     flamethrower  3, FUN_0002c1d4, same staggered-speed pattern
+        //     smartgun      3, FUN_0002c0a0 calling FUN_0002bcac(1), (2), (3),
+        //                   and each gets a SHORTER life than the last:
+        //                   +0x1c = 0x10 - n. A spread that dies at three
+        //                   different ranges.
+        inline constexpr int ShotsPerPull(int type)
+        {
+            switch (type)
+            {
+            case TYPE_PULSE:
+            case TYPE_FLAME:
+            case TYPE_SMARTGUN: return 3;
+            default:            return 1;
+            }
+        }
 
         // Per-projectile spawn parameters, read straight out of FUN_0002b534's
         // switch.
@@ -62,17 +96,30 @@ namespace ALTEngine::Screens
 
         inline constexpr ProjectileDef PROJECTILE_PISTOL{ 0x14, 0x10, 0x28 };
         inline constexpr ProjectileDef PROJECTILE_SHOTGUN{ 0x10, 0x50, 0x20 };
-        inline constexpr ProjectileDef PROJECTILE_FLAME{ 0x1c, 0x60, 0x20 };
-        inline constexpr ProjectileDef PROJECTILE_HEAVY{ 0x1c, 0xa0, 0x00 };
+        inline constexpr ProjectileDef PROJECTILE_PULSE{ 0x1c, 0x60, 0x20 };
+
+        // The flamethrower's, read straight off FUN_0002c1d4, which builds its
+        // particles inline rather than through FUN_0002b534: +0x1c = 0x1c,
+        // +0x1a = 0xa0. Those are the same two numbers the old "heavy" guess
+        // carried, so that part was right by accident.
+        inline constexpr ProjectileDef PROJECTILE_FLAME{ 0x1c, 0xa0, 0x00 };
+
+        // The smartgun's, from FUN_0002bcac: +0x1a = 0x50, and +0x1c is
+        // 0x10 - n where n is which of the three shots it is. The strength here
+        // is the FIRST shot's; SmartgunLife below gives the rest.
+        inline constexpr ProjectileDef PROJECTILE_SMARTGUN{ 0x0f, 0x50, 0x00 };
+
+        inline constexpr int SmartgunLife(int shotIndex) { return 0x10 - (shotIndex + 1); }
 
         inline constexpr ProjectileDef DefFor(int type)
         {
             switch (type)
             {
-            case TYPE_SHOTGUN: return PROJECTILE_SHOTGUN;
-            case TYPE_FLAME:   return PROJECTILE_FLAME;
-            case TYPE_HEAVY:   return PROJECTILE_HEAVY;
-            default:           return PROJECTILE_PISTOL;
+            case TYPE_SHOTGUN:  return PROJECTILE_SHOTGUN;
+            case TYPE_PULSE:    return PROJECTILE_PULSE;
+            case TYPE_SMARTGUN: return PROJECTILE_SMARTGUN;
+            case TYPE_FLAME:    return PROJECTILE_FLAME;
+            default:            return PROJECTILE_PISTOL;
             }
         }
 
@@ -96,13 +143,13 @@ namespace ALTEngine::Screens
             switch (sourceType)
             {
             case TYPE_PISTOL:
+            case TYPE_PULSE:
             case TYPE_FLAME:
-            case TYPE_HEAVY:
                 return 2;
             case TYPE_SHOTGUN:
                 return 8;
             default:
-                return 3;
+                return 3;   // the smartgun's type 3 lands here
             }
         }
 
@@ -207,6 +254,10 @@ namespace ALTEngine::Screens
             return (type == TYPE_PISTOL) ? 0.5f : 1.0f;
         }
 
+        // The extra forward speed the nth shot of a burst gets, from the
+        // `n * 0x80 + playerSpeed` the pulse rifle and flamethrower both pass.
+        inline constexpr int BurstSpeedStep = 0x80;
+
         struct Particle
         {
             // Position and velocity, world units. The original keeps these as
@@ -300,7 +351,7 @@ namespace ALTEngine::Screens
                 p->x = eyeX;
                 p->y = eyeY - MUZZLE_DROP;
                 p->z = eyeZ;
-                if (type == TYPE_HEAVY) { p->y -= HEAVY_EXTRA_DROP; }
+                if (type == TYPE_FLAME) { p->y -= HEAVY_EXTRA_DROP; }
 
                 // Lateral muzzle offset, rotated into the world by the facing.
                 const float s = static_cast<float>(PlayerCamera::Sin(viewYaw)) / PlayerCamera::TRIG_ONE;
@@ -433,7 +484,8 @@ namespace ALTEngine::Screens
                     if (p.falls) { p.vy -= CASING_GRAVITY; }
 
                     const bool isProjectile = (p.type == TYPE_PISTOL || p.type == TYPE_SHOTGUN
-                                            || p.type == TYPE_FLAME || p.type == TYPE_HEAVY);
+                                            || p.type == TYPE_PULSE || p.type == TYPE_SMARTGUN
+                                            || p.type == TYPE_FLAME);
 
                     // Substep. A pistol round covers 376 units a tick and a
                     // crate is about 256 across, so testing only the endpoint

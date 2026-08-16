@@ -117,6 +117,39 @@ namespace ALTEngine::Renderer
         bool visible = true; // cleared when a pickup is collected, rather than rebuilding the list
     };
 
+    // A world-space billboard. Enemies, explosions and any other sprite that
+    // has to sit in the scene and be occluded by it.
+    //
+    // WHY BILLBOARDS RATHER THAN THE ORIGINAL'S APPROACH. The original projects
+    // each sprite to screen space (FUN_0004884c) and inserts it into the shared
+    // display list with a sort key of distance >> 5, so geometry and sprites are
+    // painter-sorted together. This renderer has a real depth buffer, so the
+    // same result comes out of drawing the sprite as a camera-facing quad in the
+    // world and letting depth testing occlude it. Same visible outcome, and no
+    // global sort every frame.
+    //
+    // Y-AXIS BILLBOARD, deliberately. The quad rotates about the vertical only,
+    // so a sprite stays upright when the player looks up or down rather than
+    // tipping to face the camera. That is how the original's sprites behave -
+    // they have no pitch at all - and a full face-the-camera billboard would
+    // look wrong the moment Free Look is used.
+    struct PlacedSprite
+    {
+        float x = 0, y = 0, z = 0;      // world position of the sprite's CENTRE
+        float halfWidth = 64.0f;
+        float halfHeight = 64.0f;
+
+        // Which uploaded sheet, and the sub-rectangle of it to draw, in UV.
+        std::string textureKey;
+        float u0 = 0.0f, v0 = 0.0f, u1 = 1.0f, v1 = 1.0f;
+
+        // Multiplied into the texel, like the level's light colour. Leave at
+        // 1,1,1 for an unlit sprite.
+        float r = 1.0f, g = 1.0f, b = 1.0f;
+
+        bool visible = true;
+    };
+
     class ModelRenderer
     {
     public:
@@ -301,7 +334,15 @@ namespace ALTEngine::Renderer
         // alone has no gameplay objects in it at all - those are a
         // separate list in LevelGeometry, not part of the MAP0 mesh
         // (Edward, 2026).
+        // Uploads (or replaces) a sprite sheet under `key`. RGBA8, and the
+        // fragment shader cuts out texels with alpha below 0.5 - the same
+        // colour-key path the cutout models use - so a sprite wants a hard alpha
+        // edge, not a soft one.
+        static bool UploadSpriteSheet(const std::string& key, const std::vector<uint8_t>& rgba,
+                                      int width, int height);
+
         static std::vector<uint8_t> RenderLevelToRgba(const std::string& cacheKey, const FpsCamera& camera, int width, int height,
-                                                        const std::vector<PlacedObject>& objects = {});
+                                                        const std::vector<PlacedObject>& objects = {},
+                                                        const std::vector<PlacedSprite>& sprites = {});
     };
 }

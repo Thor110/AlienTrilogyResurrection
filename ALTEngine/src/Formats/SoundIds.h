@@ -74,7 +74,9 @@ namespace ALTEngine::Formats
 
         // Fire and reload sounds by weapon index, matching PlayerHudState's
         // ordering: pistol, shotgun, flamethrower, pulse rifle, smartgun.
-        inline constexpr int WEAPON_SHOT[] = { PISTOL_SHOT, SHOTGUN_SHOT, FLAME_SHOT, PULSE_SHOT, SMARTGUN_SHOT };
+        // Indexed by the canonical weapon order - pistol, shotgun, PULSE RIFLE,
+        // FLAMETHROWER, smartgun. See PlayerInventoryState::ByIndex.
+        inline constexpr int WEAPON_SHOT[] = { PISTOL_SHOT, SHOTGUN_SHOT, PULSE_SHOT, FLAME_SHOT, SMARTGUN_SHOT };
         inline constexpr int WEAPON_CLIP[] = { PISTOL_CLIP, SHOTGUN_CLIP, -1, -1, SMARTGUN_CLIP };
 
         // Named slots worth having even though no traced call site uses them yet.

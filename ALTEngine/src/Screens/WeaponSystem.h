@@ -72,9 +72,14 @@ namespace ALTEngine::Screens
         inline constexpr std::array<WeaponDef, PlayerHudState::WEAPON_COUNT> WEAPONS{ {
             { 0xf,  0x80,  FIRE_ON_PRESS },   // 0 9mm pistol
             { 0,    0x200, FIRE_ON_PRESS },   // 1 shotgun
-            { 100,  0x140, FIRE_WHILE_HELD }, // 2 flamethrower
-            { 100,  0x200, FIRE_WHILE_HELD }, // 3 pulse rifle
+            { 100,  0x140, FIRE_WHILE_HELD }, // 2 pulse rifle
+            { 100,  0x200, FIRE_WHILE_HELD }, // 3 flamethrower
             { 0,    0x80,  FIRE_WHILE_HELD }, // 4 smartgun
+            //
+            // ONLY THE LABELS CHANGED HERE. The values were already read out of
+            // FUN_0003d5b0 and FUN_0003efcc in the switch's own case order, so
+            // they were right all along - it was the names against them that had
+            // the pulse rifle and the flamethrower the wrong way round.
         } };
 
         // The flamethrower's grenade, fired from its secondary. Its own noise

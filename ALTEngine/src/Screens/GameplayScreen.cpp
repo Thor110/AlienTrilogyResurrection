@@ -133,6 +133,37 @@ namespace ALTEngine::Screens
         // the note at the particle draw. GUESS, chosen by eye.
         constexpr float CASING_MODEL_SCALE = 0.25f;
 
+        // Particle sprite sizes. The original works in screen pixels - a
+        // fragment is literally 2x2 - and these are the world-space equivalents
+        // at a typical engagement range. GUESSES, and the first thing to adjust
+        // if tracers look too fat or too thin.
+        constexpr float FRAGMENT_HALF_SIZE = 6.0f;
+        constexpr float TRACER_MIN_HALF_SIZE = 5.0f;
+
+        // A small round dot, generated rather than loaded - the original's
+        // tracers and fragments are untextured coloured primitives, so there is
+        // no artwork to read. Hard-edged alpha, because the fragment shader cuts
+        // out at 0.5 rather than blending.
+        inline std::vector<uint8_t> BuildParticleSprite(int size)
+        {
+            std::vector<uint8_t> rgba(static_cast<size_t>(size) * size * 4, 0);
+            const float centre = (size - 1) * 0.5f;
+            const float radius = centre + 0.25f;
+            for (int y = 0; y < size; ++y)
+            {
+                for (int x = 0; x < size; ++x)
+                {
+                    const float dx = x - centre;
+                    const float dy = y - centre;
+                    const bool inside = (dx * dx + dy * dy) <= (radius * radius);
+                    uint8_t* px = &rgba[(static_cast<size_t>(y) * size + x) * 4];
+                    px[0] = 255; px[1] = 240; px[2] = 190;   // a warm white
+                    px[3] = inside ? 255 : 0;
+                }
+            }
+            return rgba;
+        }
+
         constexpr float COLLISION_RADIUS = 200.0f; // 400-unit footprint, sampled at -r, centre, +r
         constexpr float MAX_STEP_UP = 256.0f;      // a rise steeper than this blocks movement
         constexpr float EYE_HEIGHT = 768.0f;       // camera sits this far above the player's feet
@@ -361,6 +392,13 @@ namespace ALTEngine::Screens
             uint8_t amount = 0;
             uint8_t multiplier = 0;
             bool collected = false;
+
+            // Sealed inside a crate. A crate's drop1/drop2 are INDICES INTO THE
+            // LEVEL'S PICKUP ARRAY, so a crate's contents are ordinary pickups
+            // that happen to start locked away - not a separate list. They are
+            // hidden and uncollectable until the crate breaks.
+            bool contained = false;
+            uint8_t pickupIndex = 0xFF;   // its slot in level.pickups
         };
         std::vector<LivePickup> livePickups;
         // Switch/object state, indexed by object record. Non-zero means
@@ -395,6 +433,11 @@ namespace ALTEngine::Screens
         bool firePressedLastTick = false;
         ALTEngine::Screens::WeaponSystem::Runtime weaponRuntime;
         ALTEngine::Screens::Particles::Pool particles;
+
+        // The held weapon. Driven by the select keys below; the pistol is the
+        // only thing available at the start of a level.
+        int selectedWeapon = 0;
+        std::array<bool, 6> weaponKeyWasDown{ false, false, false, false, false, false };
 
         // What the ammo mirror last saw, so pickups can be applied as DELTAS.
         //
@@ -705,6 +748,7 @@ namespace ALTEngine::Screens
                             // The cell this object stamps as occupied. Clearing
                             // that stamp is what reopens the square when the
                             // object is destroyed - see the destruction handler.
+                            target.crateIndex = static_cast<int>(ci);
                             target.cellIndex = static_cast<int>(
                                 static_cast<size_t>(crate.y) * level.header.mapLength + static_cast<size_t>(crate.x));
                             damageTargets.push_back(target);
@@ -850,8 +894,9 @@ namespace ALTEngine::Screens
                     // same cache keys that preload used.
                     {
                         int spawned = 0;
-                        for (const auto& pickup : level.pickups)
+                        for (size_t pickupSlot = 0; pickupSlot < level.pickups.size(); ++pickupSlot)
                         {
+                            const auto& pickup = level.pickups[pickupSlot];
                             // Record byte 6 gates level-start spawning:
                             // non-zero means the pickup only appears once a
                             // script fires SpawnPickup.
@@ -884,6 +929,7 @@ namespace ALTEngine::Screens
                             placed.scaleZ = scale;
 
                             LivePickup live;
+                            live.pickupIndex = static_cast<uint8_t>(pickupSlot);
                             live.placedIndex = placedObjects.size();
                             live.cellIndex = static_cast<int>(pickup.y) * level.header.mapLength + static_cast<int>(pickup.x);
                             live.type = pickup.type;
@@ -897,6 +943,45 @@ namespace ALTEngine::Screens
                         }
                         SDL_Log("GameplayScreen: %d of %zu pickups placed (rest are script-spawned)",
                                 spawned, level.pickups.size());
+                        // Seal the pickups that crates hold.
+                        //
+                        // The crate record's byte 3 says WHAT it holds:
+                        //   0 -> pickups, drop1 and drop2 indexing the pickup array
+                        //   2 -> an enemy, drop1 indexing the MONSTER array
+                        //
+                        // Level 1-1 makes the second case obvious: every drop==2
+                        // crate points at a type-2 monster parked at x=9, in a
+                        // tidy row at y=83/85/87/89 off the edge of the playable
+                        // map. They are held there until something lets them
+                        // out - which is how the original does a facehugger
+                        // bursting from a crate.
+                        int sealed = 0;
+                        int enemyCrates = 0;
+                        for (const auto& crate : level.crates)
+                        {
+                            if (crate.drop == 2) { enemyCrates++; continue; }
+                            for (uint8_t index : { crate.drop1, crate.drop2 })
+                            {
+                                if (index == 0xFF) { continue; }
+                                for (size_t k = 0; k < livePickups.size(); ++k)
+                                {
+                                    if (livePickups[k].pickupIndex != index) { continue; }
+                                    livePickups[k].contained = true;
+                                    if (livePickups[k].placedIndex < placedObjects.size())
+                                    {
+                                        placedObjects[livePickups[k].placedIndex].visible = false;
+                                    }
+                                    sealed++;
+                                }
+                            }
+                        }
+                        SDL_Log("GameplayScreen: %d pickups sealed in crates, %d crates hold an enemy",
+                                sealed, enemyCrates);
+
+                        // The particle sheet, uploaded once for the level.
+                        ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
+                            "particle", BuildParticleSprite(8), 8, 8);
+
                         objectState.assign(level.crates.size(), 0);
                     }
                 }
@@ -1035,6 +1120,48 @@ namespace ALTEngine::Screens
                 pendingMouseYaw += mouseDx * sensitivity
                     * (static_cast<float>(ALTEngine::Screens::PlayerCamera::ANGLE_UNITS) / 6.28318530718f);
                 pendingMouseY += mouseDy;
+
+                // ---- weapon selection -----------------------------------
+                // Keys 1-5 pick a weapon directly and 6 steps to the next one,
+                // which is the original's scheme. A key for a weapon that has
+                // not been picked up does nothing at all rather than selecting
+                // an empty slot.
+                //
+                // Availability is what PICKUP sets. This used to read `equipped`
+                // instead, which nothing ever wrote during play - so collecting
+                // the shotgun made it available and left it unselectable
+                // (Edward, 2026).
+                {
+                    using ALTEngine::Bootstrap::InputAction;
+                    const InputAction selectKeys[5] = {
+                        InputAction::SelectWeapon1, InputAction::SelectWeapon2,
+                        InputAction::SelectWeapon3, InputAction::SelectWeapon4,
+                        InputAction::SelectWeapon5,
+                    };
+
+                    for (int i = 0; i < 5; ++i)
+                    {
+                        const bool down = keys[keyBindings.GetKey(selectKeys[i])];
+                        if (down && !weaponKeyWasDown[static_cast<size_t>(i)])
+                        {
+                            const int equipped = inventory.Equip(i);
+                            if (equipped >= 0) { selectedWeapon = equipped; }
+                        }
+                        weaponKeyWasDown[static_cast<size_t>(i)] = down;
+                    }
+
+                    const bool nextDown = keys[keyBindings.GetKey(InputAction::NextWeapon)];
+                    if (nextDown && !weaponKeyWasDown[5])
+                    {
+                        const int equipped = inventory.Equip(inventory.NextAvailable(selectedWeapon));
+                        if (equipped >= 0) { selectedWeapon = equipped; }
+                    }
+                    weaponKeyWasDown[5] = nextDown;
+
+                    // If the held weapon somehow is not available - a fresh
+                    // level, or a loadout reset - fall back to the pistol.
+                    if (!inventory.Available(selectedWeapon)) { selectedWeapon = 0; }
+                }
 
                 // Free Look is ours, not the original's - it never let the
                 // player aim the view at all. With it on the mouse drives pitch
@@ -1191,13 +1318,41 @@ namespace ALTEngine::Screens
                         // calls the weapon's projectile spawn, which then calls
                         // FUN_0002b37c for the ejection once the round is away.
                         namespace P = ALTEngine::Screens::Particles;
-                        const int projectileType = (hudState.currentWeapon == 1) ? P::TYPE_SHOTGUN
-                                                 : (hudState.currentWeapon == 2) ? P::TYPE_FLAME
-                                                 : (hudState.currentWeapon >= 3) ? P::TYPE_HEAVY
-                                                 : P::TYPE_PISTOL;
+                        // Projectile type by weapon. All five are traced now -
+                        // each spawn function was matched to a weapon by which
+                        // ammo counter it decrements. The type numbers do NOT
+                        // follow the weapon order.
+                        static constexpr int TYPE_FOR_WEAPON[5] = {
+                            P::TYPE_PISTOL,   // 0 pistol       FUN_0002bb74
+                            P::TYPE_SHOTGUN,  // 1 shotgun      FUN_0002bbc0
+                            P::TYPE_PULSE,    // 2 pulse rifle  FUN_0002bc18
+                            P::TYPE_FLAME,    // 3 flamethrower FUN_0002c1d4
+                            P::TYPE_SMARTGUN, // 4 smartgun     FUN_0002bcac
+                        };
+                        const int projectileType = TYPE_FOR_WEAPON[hudState.currentWeapon];
 
-                        particles.SpawnProjectile(projectileType, camera.x, camera.y, camera.z,
-                                                  playerCam.viewYaw, playerCam.viewPitch, playerCam.speed);
+                        // The pulse rifle, flamethrower and smartgun each put
+                        // THREE projectiles out per pull, with the later ones
+                        // launched faster (0x80 apart) so a burst strings out in
+                        // flight rather than travelling as a clump.
+                        const int shots = P::ShotsPerPull(projectileType);
+                        for (int shot = 0; shot < shots; ++shot)
+                        {
+                            const int launchSpeed = playerCam.speed + shot * P::BurstSpeedStep;
+                            P::Particle* round = particles.SpawnProjectile(
+                                projectileType, camera.x, camera.y, camera.z,
+                                playerCam.viewYaw, playerCam.viewPitch, launchSpeed);
+
+                            // The smartgun's three shots get progressively
+                            // shorter lives, so they die at three ranges
+                            // (FUN_0002bcac: +0x1c = 0x10 - n).
+                            if (round && projectileType == P::TYPE_SMARTGUN)
+                            {
+                                round->life = P::SmartgunLife(shot);
+                                round->strength = round->life;
+                            }
+                        }
+
                         particles.SpawnCasing(P::TYPE_CASING_A, camera.x, camera.y, camera.z,
                                               playerCam.viewYaw, playerCam.speed);
                     }
@@ -1279,6 +1434,118 @@ namespace ALTEngine::Screens
                         namespace D = ALTEngine::Screens::Damage;
                         for (D::Target& target : damageTargets) { D::TickTarget(target); }
 
+                        // Destroying something: clear its occupancy so the
+                        // square opens up, spill what it held, and - if it was a
+                        // barrel - set off the blast, which can take out its
+                        // neighbours and start a chain.
+                        auto ReleaseContents = [&](int crateIndex) {
+                            if (crateIndex < 0 || crateIndex >= static_cast<int>(level.crates.size())) { return; }
+                            const auto& crate = level.crates[static_cast<size_t>(crateIndex)];
+                            if (crate.drop == 2)
+                            {
+                                // Holds an enemy - drop1 indexes the MONSTER
+                                // array, and the monster is parked off the edge
+                                // of the map until released. Enemies do not
+                                // exist yet, so this only records the intent.
+                                SDL_Log("crate %d would release monster %u", crateIndex, crate.drop1);
+                                return;
+                            }
+                            for (uint8_t index : { crate.drop1, crate.drop2 })
+                            {
+                                if (index == 0xFF) { continue; }
+                                for (auto& live : livePickups)
+                                {
+                                    if (live.pickupIndex != index || !live.contained) { continue; }
+                                    live.contained = false;
+                                    if (live.placedIndex < placedObjects.size())
+                                    {
+                                        placedObjects[live.placedIndex].visible = true;
+                                    }
+                                }
+                            }
+                        };
+
+                        auto ClearOccupancy = [&](int cellIdx) {
+                            if (cellIdx < 0 || cellIdx >= static_cast<int>(level.collisionGrid.size())) { return; }
+                            auto& cell = level.collisionGrid[static_cast<size_t>(cellIdx)];
+                            cell.unknown13 = 0;
+                            cell.unknown5 = 0;
+                        };
+
+                        // Depth-limited so a room packed with barrels cannot
+                        // recurse without bound; the original has no such limit
+                        // because its blast is iterative.
+                        std::vector<int> blastQueue;
+                        auto DestroyTarget = [&](D::Target& target) {
+                            if (target.placedObjectIndex >= 0
+                                && target.placedObjectIndex < static_cast<int>(placedObjects.size()))
+                            {
+                                placedObjects[static_cast<size_t>(target.placedObjectIndex)].visible = false;
+                            }
+                            ClearOccupancy(target.cellIndex);
+                            ReleaseContents(target.crateIndex);
+                            if (target.kind == D::TARGET_BARREL) { blastQueue.push_back(target.cellIndex); }
+                        };
+
+                        // Walk the blast out from a cell, two rings, gated the
+                        // way FUN_000368c8 gates it.
+                        auto RunBlast = [&](int originCell) {
+                            if (originCell < 0 || originCell >= static_cast<int>(level.collisionGrid.size())) { return; }
+                            const int width = level.header.mapLength;
+                            const int ox = originCell % width;
+                            const int oz = originCell / width;
+                            const auto& origin = level.collisionGrid[static_cast<size_t>(originCell)];
+
+                            bool ringOneOpen[8] = { false, false, false, false, false, false, false, false };
+                            auto Reachable = [&](int dx, int dz, int& outCell) {
+                                const int cx = ox + dx;
+                                const int cz = oz + dz;
+                                outCell = -1;
+                                if (cx < 0 || cz < 0 || cx >= width || cz >= level.header.mapWidth) { return false; }
+                                const size_t ci = static_cast<size_t>(cz) * static_cast<size_t>(width)
+                                                + static_cast<size_t>(cx);
+                                if (ci >= level.collisionGrid.size()) { return false; }
+                                const auto& cell = level.collisionGrid[ci];
+                                if (cell.attribute > D::BLAST_MAX_ATTRIBUTE) { return false; }
+                                const int step = static_cast<int>(cell.floorHeight) - static_cast<int>(origin.floorHeight);
+                                if (step > D::BLAST_MAX_HEIGHT_STEP || step < -D::BLAST_MAX_HEIGHT_STEP) { return false; }
+                                outCell = static_cast<int>(ci);
+                                return true;
+                            };
+
+                            std::vector<int> hit;
+                            for (int i = 0; i < 8; ++i)
+                            {
+                                int cell = -1;
+                                if (Reachable(D::BLAST_RING1[i].dx, D::BLAST_RING1[i].dz, cell))
+                                {
+                                    ringOneOpen[i] = true;
+                                    hit.push_back(cell);
+                                }
+                            }
+                            for (const auto& outer : D::BLAST_RING2)
+                            {
+                                if (!ringOneOpen[outer.parent]) { continue; }  // culled with its parent
+                                int cell = -1;
+                                if (Reachable(outer.offset.dx, outer.offset.dz, cell)) { hit.push_back(cell); }
+                            }
+
+                            for (int cell : hit)
+                            {
+                                for (D::Target& other : damageTargets)
+                                {
+                                    // Objects caught in a blast are removed
+                                    // outright - no health check.
+                                    if (!other.destroyed && other.cellIndex == cell)
+                                    {
+                                        other.destroyed = true;
+                                        other.state = D::STATE_DYING;
+                                        DestroyTarget(other);
+                                    }
+                                }
+                            }
+                        };
+
                         particles.Tick([&](float px, float py, float pz, int hitType, int hitLife) {
                             // Something destructible first. The damage is the
                             // projectile's SPEED field doubled while the round is
@@ -1336,13 +1603,18 @@ namespace ALTEngine::Screens
                                             : ALTEngine::Formats::SoundIds::CRATE_BREAK,
                                         digits.c_str(), cdDirectory);
 
-                                    if (target.cellIndex >= 0
-                                        && target.cellIndex < static_cast<int>(level.collisionGrid.size()))
+                                    DestroyTarget(target);
+
+                                    // Run every blast this set off, including
+                                    // ones started by the chain itself.
+                                    for (size_t q = 0; q < blastQueue.size(); ++q)
                                     {
-                                        auto& cell = level.collisionGrid[static_cast<size_t>(target.cellIndex)];
-                                        cell.unknown13 = 0;
-                                        cell.unknown5 = 0;
+                                        ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                            ALTEngine::Formats::SoundIds::BARREL_EXPLODE,
+                                            digits.c_str(), cdDirectory);
+                                        RunBlast(blastQueue[q]);
                                     }
+                                    blastQueue.clear();
                                 }
                                 return true; // the round stops here and shatters
                             }
@@ -1611,7 +1883,7 @@ namespace ALTEngine::Screens
                     // script is still picked up.
                     for (auto& live : livePickups)
                     {
-                        if (live.collected || live.cellIndex != cellIndex) { continue; }
+                        if (live.collected || live.contained || live.cellIndex != cellIndex) { continue; }
                         live.collected = true;
                         if (live.placedIndex < placedObjects.size()) { placedObjects[live.placedIndex].visible = false; }
 
@@ -1860,6 +2132,56 @@ namespace ALTEngine::Screens
                 // casing tumbles on two (FUN_0002b37c seeds +0x10 and +0x12).
                 // Only the yaw is applied here - the second axis needs a
                 // renderer change and is not worth one yet.
+                // Particle sprites. The tracers and impact fragments finally
+                // have somewhere to be drawn.
+                //
+                // The original draws a bullet as a LINE from its position to
+                // position + a fraction of its velocity (FUN_0002d3e4), and a
+                // fragment as a 2x2 pixel quad (FUN_0002d1b4). A line is not
+                // something the billboard pass can express, so a tracer is drawn
+                // as a quad stretched along its travel instead - same streak,
+                // different primitive. MARKED as a departure.
+                std::vector<ALTEngine::Renderer::PlacedSprite> placedSprites;
+                if (levelReady)
+                {
+                    namespace P = ALTEngine::Screens::Particles;
+                    for (const P::Particle& particle : particles.All())
+                    {
+                        if (!particle.alive) { continue; }
+                        if (particle.type == P::TYPE_CASING_A || particle.type == P::TYPE_CASING_B) { continue; }
+
+                        // The original's own culling: nothing closer than 0x200,
+                        // nothing past 0x1801.
+                        const float dx = particle.x - camera.x;
+                        const float dz = particle.z - camera.z;
+                        const float distance = std::sqrt(dx * dx + dz * dz);
+                        if (distance < P::DRAW_NEAR_CUTOFF || distance > P::DRAW_FAR_CUTOFF) { continue; }
+
+                        ALTEngine::Renderer::PlacedSprite spark;
+                        spark.textureKey = "particle";
+                        spark.x = particle.x;
+                        spark.y = particle.y;
+                        spark.z = particle.z;
+
+                        if (particle.type == P::TYPE_FRAGMENT)
+                        {
+                            spark.halfWidth = FRAGMENT_HALF_SIZE;
+                            spark.halfHeight = FRAGMENT_HALF_SIZE;
+                        }
+                        else
+                        {
+                            // Stretched along the direction of travel, by the
+                            // same fraction of the velocity the original's line
+                            // spans.
+                            const float speed = std::sqrt(particle.vx * particle.vx + particle.vz * particle.vz);
+                            const float streak = speed * P::TracerVelocityFraction(particle.type) * 0.5f;
+                            spark.halfWidth = (streak > TRACER_MIN_HALF_SIZE) ? streak : TRACER_MIN_HALF_SIZE;
+                            spark.halfHeight = TRACER_MIN_HALF_SIZE;
+                        }
+                        placedSprites.push_back(spark);
+                    }
+                }
+
                 const size_t staticObjectCount = placedObjects.size();
                 if (levelReady)
                 {
@@ -1881,7 +2203,8 @@ namespace ALTEngine::Screens
                     }
                 }
 
-                std::vector<uint8_t> pixels = ModelRenderer::RenderLevelToRgba(cacheKey, camera, windowW, windowH, placedObjects);
+                std::vector<uint8_t> pixels = ModelRenderer::RenderLevelToRgba(cacheKey, camera, windowW, windowH,
+                                                                               placedObjects, placedSprites);
                 placedObjects.resize(staticObjectCount); // drop this frame's particles again
                 if (!pixels.empty())
                 {
@@ -1970,13 +2293,9 @@ namespace ALTEngine::Screens
                             ammoSeeded = true;
                         }
 
-                        // Which weapon's ammo to show. Nothing sets an equipped
-                        // weapon during play yet, so fall back to the pistol.
-                        hudState.currentWeapon = 0;
-                        if (inventory.shotgun.equipped) { hudState.currentWeapon = 1; }
-                        else if (inventory.flamethrower.equipped) { hudState.currentWeapon = 2; }
-                        else if (inventory.pulseRifle.equipped) { hudState.currentWeapon = 3; }
-                        else if (inventory.smartGun.equipped) { hudState.currentWeapon = 4; }
+                        // The select keys own this now, in the canonical order
+                        // (see PlayerInventoryState::ByIndex).
+                        hudState.currentWeapon = selectedWeapon;
 
                         // The held weapon goes INTO the HUD's own 320x240
                         // surface, under the panels, rather than being scaled

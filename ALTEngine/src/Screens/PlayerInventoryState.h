@@ -48,6 +48,65 @@ namespace ALTEngine::Screens
             // it does not change what the player is holding.
         }
 
+        // THE CANONICAL WEAPON ORDER, and it is the original's:
+        //     0 pistol   1 shotgun   2 pulse rifle   3 flamethrower   4 smartgun
+        //
+        // Confirmed twice over. The select keys are 1-5 in that order (Edward,
+        // 2026), and FUN_000401d0's switch reaches the per-weapon tables in that
+        // sequence - the four-state table with the grenade launcher is the pulse
+        // rifle, identified by its 0401gren sound cue.
+        //
+        // The pickup switch already used this order; the current-weapon code did
+        // not, which is part of why a picked-up shotgun never became selectable.
+        // Everything indexes through here now.
+        WeaponState* ByIndex(int i)
+        {
+            switch (i)
+            {
+            case 0:  return &pistol;
+            case 1:  return &shotgun;
+            case 2:  return &pulseRifle;
+            case 3:  return &flamethrower;
+            case 4:  return &smartGun;
+            default: return nullptr;
+            }
+        }
+        const WeaponState* ByIndex(int i) const
+        {
+            return const_cast<PlayerInventoryState*>(this)->ByIndex(i);
+        }
+
+        bool Available(int i) const
+        {
+            const WeaponState* w = ByIndex(i);
+            return w && w->available;
+        }
+
+        // Makes `i` the held weapon, if it can be held at all. Returns the index
+        // actually equipped so the caller can keep its own state in step.
+        int Equip(int i)
+        {
+            if (!Available(i)) { return -1; }
+            for (int k = 0; k < 5; ++k)
+            {
+                if (WeaponState* w = ByIndex(k)) { w->equipped = (k == i); }
+            }
+            return i;
+        }
+
+        // The original's key 6: step to the next weapon that has been picked up,
+        // wrapping. Returns the new index, or the old one if nothing else is
+        // available.
+        int NextAvailable(int current) const
+        {
+            for (int step = 1; step <= 5; ++step)
+            {
+                const int candidate = (current + step) % 5;
+                if (Available(candidate)) { return candidate; }
+            }
+            return current;
+        }
+
         WeaponState pistol{ true, true, 45 };
         WeaponState shotgun{};
         WeaponState flamethrower{};

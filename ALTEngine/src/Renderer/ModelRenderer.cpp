@@ -115,6 +115,24 @@ namespace ALTEngine::Renderer
             bool geometryOverridden = false;
         };
 
+        // Uploaded sprite sheets, by key. Sprites reuse the model pipeline
+        // wholesale - same vertex format, same shaders - so nothing here needs a
+        // new pipeline or a new shader binary.
+        struct SpriteSheet
+        {
+            SDL_GPUTexture* texture = nullptr;
+            int width = 0;
+            int height = 0;
+        };
+        std::unordered_map<std::string, SpriteSheet> spriteSheets;
+
+        // One dynamic vertex/index buffer, grown on demand, refilled each frame
+        // with the billboard quads. Sprites are transient by nature, so there is
+        // nothing to cache between frames.
+        SDL_GPUBuffer* spriteVertexBuffer = nullptr;
+        SDL_GPUBuffer* spriteIndexBuffer = nullptr;
+        size_t spriteBufferCapacity = 0;   // in quads
+
         SDL_GPUDevice* device = nullptr;
         SDL_GPUGraphicsPipeline* pipeline = nullptr;           // cull_mode=BACK - correct for solid, opaque geometry
         SDL_GPUGraphicsPipeline* doubleSidedPipeline = nullptr; // cull_mode=NONE - see LoadModel's doc comment on why colour-key cutout models need this
@@ -1603,8 +1621,67 @@ namespace ALTEngine::Renderer
         it->second.animator.ChangeTexture(static_cast<size_t>(animatorIndex), delta);
     }
 
+    bool ModelRenderer::UploadSpriteSheet(const std::string& key, const std::vector<uint8_t>& rgba,
+                                          int width, int height)
+    {
+        if (!device || width <= 0 || height <= 0) { return false; }
+        const size_t expected = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+        if (rgba.size() < expected) { return false; }
+
+        auto existing = spriteSheets.find(key);
+        if (existing != spriteSheets.end())
+        {
+            if (existing->second.texture) { SDL_ReleaseGPUTexture(device, existing->second.texture); }
+            spriteSheets.erase(existing);
+        }
+
+        SDL_GPUTextureCreateInfo texInfo{};
+        texInfo.type = SDL_GPU_TEXTURETYPE_2D;
+        texInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+        texInfo.width = static_cast<Uint32>(width);
+        texInfo.height = static_cast<Uint32>(height);
+        texInfo.layer_count_or_depth = 1;
+        texInfo.num_levels = 1;
+        texInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        SDL_GPUTexture* texture = SDL_CreateGPUTexture(device, &texInfo);
+        if (!texture)
+        {
+            SDL_Log("UploadSpriteSheet(%s): texture creation failed: %s", key.c_str(), SDL_GetError());
+            return false;
+        }
+
+        SDL_GPUTransferBufferCreateInfo transferInfo{};
+        transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+        transferInfo.size = static_cast<Uint32>(expected);
+        SDL_GPUTransferBuffer* transfer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
+        if (!transfer) { SDL_ReleaseGPUTexture(device, texture); return false; }
+
+        void* mapped = SDL_MapGPUTransferBuffer(device, transfer, false);
+        std::memcpy(mapped, rgba.data(), expected);
+        SDL_UnmapGPUTransferBuffer(device, transfer);
+
+        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
+        SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
+        SDL_GPUTextureTransferInfo texSrc{};
+        texSrc.transfer_buffer = transfer;
+        texSrc.offset = 0;
+        SDL_GPUTextureRegion texDst{};
+        texDst.texture = texture;
+        texDst.w = static_cast<Uint32>(width);
+        texDst.h = static_cast<Uint32>(height);
+        texDst.d = 1;
+        SDL_UploadToGPUTexture(copyPass, &texSrc, &texDst, false);
+        SDL_EndGPUCopyPass(copyPass);
+        SDL_SubmitGPUCommandBuffer(cmd);
+        SDL_ReleaseGPUTransferBuffer(device, transfer);
+
+        spriteSheets[key] = SpriteSheet{ texture, width, height };
+        return true;
+    }
+
     std::vector<uint8_t> ModelRenderer::RenderLevelToRgba(const std::string& cacheKey, const FpsCamera& camera, int width, int height,
-                                                             const std::vector<PlacedObject>& objects)
+                                                             const std::vector<PlacedObject>& objects,
+                                                             const std::vector<PlacedSprite>& sprites)
     {
         if (!device || !pipeline) { return {}; }
         auto it = loadedLevels.find(cacheKey);
@@ -1748,7 +1825,168 @@ namespace ALTEngine::Renderer
             SDL_DrawGPUIndexedPrimitives(renderPass, model.indexCount, 1, 0, 0, 0);
         }
 
-        SDL_EndGPURenderPass(renderPass);
+        // ---- world-space sprites -------------------------------------
+        //
+        // Built fresh each frame into one dynamic buffer and drawn grouped by
+        // sheet. The pipeline is the model one: the fragment shader's
+        // clip(a - 0.5) gives a hard cutout with a correct depth write, which is
+        // exactly what a sprite needs, and the double-sided variant is used
+        // because a billboard has no meaningful winding.
+        if (!sprites.empty() && device)
+        {
+            // Y-axis billboard basis. The quad turns about the vertical only, so
+            // a sprite stays upright when the player looks up or down - the
+            // original's sprites have no pitch, and tipping them to face the
+            // camera would look wrong under Free Look.
+            float forwardX = std::sin(camera.yaw);
+            float forwardZ = -std::cos(camera.yaw);
+            float rightX = forwardZ;
+            float rightZ = -forwardX;
+            const float rightLen = std::sqrt(rightX * rightX + rightZ * rightZ);
+            if (rightLen > 0.0001f) { rightX /= rightLen; rightZ /= rightLen; }
+
+            size_t drawable = 0;
+            for (const PlacedSprite& sprite : sprites)
+            {
+                if (sprite.visible && spriteSheets.count(sprite.textureKey)) { drawable++; }
+            }
+
+            if (drawable > 0)
+            {
+                // Grow the shared buffer if this frame needs more room. It is
+                // never shrunk - sprite counts spike during a firefight and
+                // settle afterwards, and reallocating on the way back down would
+                // just churn.
+                if (drawable > spriteBufferCapacity)
+                {
+                    if (spriteVertexBuffer) { SDL_ReleaseGPUBuffer(device, spriteVertexBuffer); }
+                    if (spriteIndexBuffer) { SDL_ReleaseGPUBuffer(device, spriteIndexBuffer); }
+                    spriteBufferCapacity = drawable + 64;
+
+                    SDL_GPUBufferCreateInfo vbInfo{ SDL_GPU_BUFFERUSAGE_VERTEX,
+                        static_cast<Uint32>(spriteBufferCapacity * 4 * sizeof(ALTEngine::Formats::RenderVertex)) };
+                    spriteVertexBuffer = SDL_CreateGPUBuffer(device, &vbInfo);
+                    SDL_GPUBufferCreateInfo ibInfo{ SDL_GPU_BUFFERUSAGE_INDEX,
+                        static_cast<Uint32>(spriteBufferCapacity * 6 * sizeof(uint32_t)) };
+                    spriteIndexBuffer = SDL_CreateGPUBuffer(device, &ibInfo);
+                }
+
+                if (spriteVertexBuffer && spriteIndexBuffer)
+                {
+                    // Grouped by sheet so each sheet costs one draw call. A
+                    // contiguous run per group means the index range can just be
+                    // an offset and a count.
+                    std::vector<ALTEngine::Formats::RenderVertex> verts;
+                    std::vector<uint32_t> indices;
+                    verts.reserve(drawable * 4);
+                    indices.reserve(drawable * 6);
+
+                    struct SpriteBatch { SDL_GPUTexture* texture; uint32_t first; uint32_t count; };
+                    std::vector<SpriteBatch> batches;
+
+                    for (const auto& sheetEntry : spriteSheets)
+                    {
+                        const uint32_t firstIndex = static_cast<uint32_t>(indices.size());
+                        for (const PlacedSprite& sprite : sprites)
+                        {
+                            if (!sprite.visible || sprite.textureKey != sheetEntry.first) { continue; }
+
+                            const uint32_t base = static_cast<uint32_t>(verts.size());
+                            const float dx = rightX * sprite.halfWidth;
+                            const float dz = rightZ * sprite.halfWidth;
+                            const float dy = sprite.halfHeight;
+
+                            // top-left, top-right, bottom-right, bottom-left
+                            const float px[4] = { sprite.x - dx, sprite.x + dx, sprite.x + dx, sprite.x - dx };
+                            const float py[4] = { sprite.y + dy, sprite.y + dy, sprite.y - dy, sprite.y - dy };
+                            const float pz[4] = { sprite.z - dz, sprite.z + dz, sprite.z + dz, sprite.z - dz };
+                            const float u[4] = { sprite.u0, sprite.u1, sprite.u1, sprite.u0 };
+                            const float v[4] = { sprite.v0, sprite.v0, sprite.v1, sprite.v1 };
+
+                            for (int corner = 0; corner < 4; ++corner)
+                            {
+                                ALTEngine::Formats::RenderVertex vertex{};
+                                vertex.x = px[corner]; vertex.y = py[corner]; vertex.z = pz[corner];
+                                vertex.u = u[corner];  vertex.v = v[corner];
+                                vertex.r = sprite.r;   vertex.g = sprite.g;  vertex.b = sprite.b;
+                                verts.push_back(vertex);
+                            }
+                            indices.push_back(base + 0); indices.push_back(base + 1); indices.push_back(base + 2);
+                            indices.push_back(base + 0); indices.push_back(base + 2); indices.push_back(base + 3);
+                        }
+                        const uint32_t added = static_cast<uint32_t>(indices.size()) - firstIndex;
+                        if (added > 0) { batches.push_back({ sheetEntry.second.texture, firstIndex, added }); }
+                    }
+
+                    if (!batches.empty())
+                    {
+                        const size_t vbSize = verts.size() * sizeof(ALTEngine::Formats::RenderVertex);
+                        const size_t ibSize = indices.size() * sizeof(uint32_t);
+
+                        SDL_GPUTransferBufferCreateInfo transferInfo{};
+                        transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+                        transferInfo.size = static_cast<Uint32>(vbSize + ibSize);
+                        SDL_GPUTransferBuffer* transfer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
+                        if (transfer)
+                        {
+                            uint8_t* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, transfer, false));
+                            std::memcpy(mapped, verts.data(), vbSize);
+                            std::memcpy(mapped + vbSize, indices.data(), ibSize);
+                            SDL_UnmapGPUTransferBuffer(device, transfer);
+
+                            // The copy has to happen outside the render pass, so
+                            // this closes the pass, uploads, and opens a second
+                            // pass that LOADs the existing colour and depth
+                            // rather than clearing them.
+                            SDL_EndGPURenderPass(renderPass);
+
+                            SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
+                            SDL_GPUTransferBufferLocation vbSrc{ transfer, 0 };
+                            SDL_GPUBufferRegion vbDst{ spriteVertexBuffer, 0, static_cast<Uint32>(vbSize) };
+                            SDL_UploadToGPUBuffer(copyPass, &vbSrc, &vbDst, true);
+                            SDL_GPUTransferBufferLocation ibSrc{ transfer, static_cast<Uint32>(vbSize) };
+                            SDL_GPUBufferRegion ibDst{ spriteIndexBuffer, 0, static_cast<Uint32>(ibSize) };
+                            SDL_UploadToGPUBuffer(copyPass, &ibSrc, &ibDst, true);
+                            SDL_EndGPUCopyPass(copyPass);
+
+                            SDL_GPUColorTargetInfo spriteColor{};
+                            spriteColor.texture = colorTarget;
+                            spriteColor.load_op = SDL_GPU_LOADOP_LOAD;
+                            spriteColor.store_op = SDL_GPU_STOREOP_STORE;
+                            SDL_GPUDepthStencilTargetInfo spriteDepth{};
+                            spriteDepth.texture = depthTarget;
+                            spriteDepth.load_op = SDL_GPU_LOADOP_LOAD;
+                            spriteDepth.store_op = SDL_GPU_STOREOP_STORE;
+                            spriteDepth.stencil_load_op = SDL_GPU_LOADOP_LOAD;
+                            spriteDepth.stencil_store_op = SDL_GPU_STOREOP_STORE;
+
+                            renderPass = SDL_BeginGPURenderPass(cmd, &spriteColor, 1, &spriteDepth);
+                            if (renderPass)
+                            {
+                                SDL_BindGPUGraphicsPipeline(renderPass, doubleSidedPipeline);
+                                SDL_GPUBufferBinding vbBinding{ spriteVertexBuffer, 0 };
+                                SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
+                                SDL_GPUBufferBinding ibBinding{ spriteIndexBuffer, 0 };
+                                SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+                                SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
+                                float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
+                                SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
+
+                                for (const SpriteBatch& batch : batches)
+                                {
+                                    SDL_GPUTextureSamplerBinding texBinding{ batch.texture, sampler };
+                                    SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
+                                    SDL_DrawGPUIndexedPrimitives(renderPass, batch.count, 1, batch.first, 0, 0);
+                                }
+                            }
+                            SDL_ReleaseGPUTransferBuffer(device, transfer);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (renderPass) { SDL_EndGPURenderPass(renderPass); }
 
         return DownloadColorTarget(cmd, width, height);
     }
