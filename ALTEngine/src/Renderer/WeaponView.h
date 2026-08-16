@@ -92,6 +92,10 @@ namespace ALTEngine::Renderer
         // WeaponSystem::WeaponBobOffset.
         void SetCameraDip(int dip) { cameraDip = dip; }
 
+        // How far down the weapon is drawn while a switch is in progress - see
+        // WeaponSystem::SwitchAnimation.
+        void SetSwitchOffset(int rows) { switchOffset = rows; }
+
         // True on the tick the animation asked for a sound, with its id.
         bool SoundCued() const { return animator.EventFired(); }
         int CuedSoundId() const { return static_cast<int>(animator.param); }
@@ -144,6 +148,7 @@ namespace ALTEngine::Renderer
                    ALTEngine::Screens::WeaponSystem::STATE_COUNT> stateSequences;
         int currentState = ALTEngine::Screens::WeaponSystem::STATE_IDLE;
         int cameraDip = 0;
+        int switchOffset = 0;
 
         void BuildSequences();
     };

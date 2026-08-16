@@ -309,29 +309,42 @@ namespace ALTEngine::Screens
         inline constexpr int BLAST_MAX_ATTRIBUTE = 0x13;
         inline constexpr int BLAST_MAX_HEIGHT_STEP = 0xc;
 
-        // RING OFFSETS: THE TABLES THEMSELVES ARE NOT DUMPED. 8 pairs at
-        // 0x000acb00 and 16 at 0x000acb20, 96 bytes in total. The shapes below
-        // are the obvious reading - the 8 cells touching the origin, then the 16
-        // that form the border of the 5x5 around it - and the counts match
-        // exactly, but the ORDER matters because it decides which second-ring
-        // cell is culled with which first-ring parent. MARKED AS A GUESS until
-        // those 96 bytes are read.
+        // RING OFFSETS. Ring 1 is read from 0x000acb00; ring 2 is DERIVED, and
+        // the derivation is checked rather than assumed.
+        //
+        // Ring 1 is the 8 neighbours in CLOCKWISE order starting at the top-left
+        // corner - not the row-major order that seems natural, which is what was
+        // guessed here before and which put the wrong parent on five of the
+        // sixteen outer cells.
+        //
+        // Ring 2's own table at 0x000acb20 has not been dumped, but it does not
+        // need to be. FUN_000368c8 clears each outer slot alongside its parent,
+        // and those groupings are visible in the code: ring1[0] carries outer
+        // 0/1/15, ring1[1] carries 2, ring1[2] carries 3/4/5, ring1[5] carries
+        // 10, ring1[6] carries 11/12/13, ring1[7] carries 14. Corners carry three
+        // outer cells and edges carry one. Only one 16-cell clockwise ring
+        // starting at (-2,-2) satisfies all of that, and in it every outer cell
+        // is adjacent to its stated parent - checked, 16 of 16.
         struct CellOffset { int dx; int dz; };
 
         inline constexpr CellOffset BLAST_RING1[8] = {
-            { -1, -1 }, { 0, -1 }, { 1, -1 },
-            { -1,  0 },            { 1,  0 },
-            { -1,  1 }, { 0,  1 }, { 1,  1 },
+            { -1, -1 },  // 0 corner
+            {  0, -1 },  // 1 edge
+            {  1, -1 },  // 2 corner
+            {  1,  0 },  // 3 edge
+            {  1,  1 },  // 4 corner
+            {  0,  1 },  // 5 edge
+            { -1,  1 },  // 6 corner
+            { -1,  0 },  // 7 edge
         };
 
-        // Each second-ring cell, with the first-ring cell it sits behind - the
-        // one the blast has to pass through to reach it.
+        // Each outer cell with the inner cell the blast must pass through.
         struct RingTwoCell { CellOffset offset; int parent; };
         inline constexpr RingTwoCell BLAST_RING2[16] = {
-            { { -2, -2 }, 0 }, { { -1, -2 }, 1 }, { { 0, -2 }, 1 }, { { 1, -2 }, 1 },
-            { {  2, -2 }, 2 }, { {  2, -1 }, 4 }, { { 2,  0 }, 4 }, { { 2,  1 }, 4 },
-            { {  2,  2 }, 7 }, { {  1,  2 }, 6 }, { { 0,  2 }, 6 }, { { -1, 2 }, 6 },
-            { { -2,  2 }, 5 }, { { -2,  1 }, 3 }, { { -2, 0 }, 3 }, { { -2, -1 }, 3 },
+            { { -2, -2 }, 0 }, { { -1, -2 }, 0 }, { {  0, -2 }, 1 }, { {  1, -2 }, 2 },
+            { {  2, -2 }, 2 }, { {  2, -1 }, 2 }, { {  2,  0 }, 3 }, { {  2,  1 }, 4 },
+            { {  2,  2 }, 4 }, { {  1,  2 }, 4 }, { {  0,  2 }, 5 }, { { -1,  2 }, 6 },
+            { { -2,  2 }, 6 }, { { -2,  1 }, 6 }, { { -2,  0 }, 7 }, { { -2, -1 }, 0 },
         };
 
         inline void TickTarget(Target& target)

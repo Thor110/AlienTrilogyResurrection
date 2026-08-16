@@ -7,6 +7,7 @@
 #include "PlayerCamera.h"
 #include "WeaponSystem.h"
 #include "ParticleSystem.h"
+#include "ExplosionEffects.h"
 #include "DamageSystem.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Formats/SoundIds.h"
@@ -24,6 +25,7 @@
 
 #include <SDL3/SDL.h>
 #include <algorithm>
+#include <set>
 #include <cmath>
 #include <limits>
 #include <optional>
@@ -137,6 +139,10 @@ namespace ALTEngine::Screens
         // fragment is literally 2x2 - and these are the world-space equivalents
         // at a typical engagement range. GUESSES, and the first thing to adjust
         // if tracers look too fat or too thin.
+        // Where the fireball sits relative to the barrel's base. GUESS - the
+        // original's explosion carries its own position which has not been read.
+        constexpr float EXPLOSION_HEIGHT_OFFSET = 256.0f;
+
         constexpr float FRAGMENT_HALF_SIZE = 6.0f;
         constexpr float TRACER_MIN_HALF_SIZE = 5.0f;
 
@@ -433,10 +439,12 @@ namespace ALTEngine::Screens
         bool firePressedLastTick = false;
         ALTEngine::Screens::WeaponSystem::Runtime weaponRuntime;
         ALTEngine::Screens::Particles::Pool particles;
+        ALTEngine::Screens::ExplosionEffects explosions;
 
         // The held weapon. Driven by the select keys below; the pistol is the
         // only thing available at the start of a level.
         int selectedWeapon = 0;
+        ALTEngine::Screens::WeaponSystem::SwitchAnimation weaponSwitch;
         std::array<bool, 6> weaponKeyWasDown{ false, false, false, false, false, false };
 
         // What the ammo mirror last saw, so pickups can be applied as DELTAS.
@@ -894,13 +902,36 @@ namespace ALTEngine::Screens
                     // same cache keys that preload used.
                     {
                         int spawned = 0;
+                        // Which pickups a crate holds, needed before the
+                        // placement loop so their gate byte can be overridden.
+                        std::set<uint8_t> crateHeldPickups;
+                        for (const auto& crate : level.crates)
+                        {
+                            if (crate.drop == 2) { continue; }   // holds an enemy, not pickups
+                            if (crate.drop1 != 0xFF) { crateHeldPickups.insert(crate.drop1); }
+                            if (crate.drop2 != 0xFF) { crateHeldPickups.insert(crate.drop2); }
+                        }
+
                         for (size_t pickupSlot = 0; pickupSlot < level.pickups.size(); ++pickupSlot)
                         {
                             const auto& pickup = level.pickups[pickupSlot];
                             // Record byte 6 gates level-start spawning:
-                            // non-zero means the pickup only appears once a
-                            // script fires SpawnPickup.
-                            if (pickup.z != 0) { continue; }
+                            // non-zero means the pickup does not simply appear
+                            // on the floor.
+                            //
+                            // BUT A CRATE'S CONTENTS ARE ALSO GATED THIS WAY, and
+                            // skipping them meant they were never created at all,
+                            // so breaking a crate had nothing to reveal (Edward,
+                            // 2026). On level 1-1 the correlation is exact: all
+                            // 18 free pickups have byte 6 == 0 and all 10 that a
+                            // crate holds have byte 6 == 1. So the byte means
+                            // "something is holding this", and the crate records
+                            // say what.
+                            //
+                            // Crate contents are therefore created here and
+                            // hidden; anything else still gated stays skipped.
+                            const bool heldByCrate = crateHeldPickups.count(static_cast<uint8_t>(pickupSlot)) != 0;
+                            if (pickup.z != 0 && !heldByCrate) { continue; }
 
                             // Type 24 is remapped to 21 for both model and
                             // scale lookup.
@@ -981,6 +1012,12 @@ namespace ALTEngine::Screens
                         // The particle sheet, uploaded once for the level.
                         ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
                             "particle", BuildParticleSprite(8), 8, 8);
+
+                        // EXPLGFX's barrel page - nine 84x84 frames.
+                        if (!explosions.Load(cdDirectory))
+                        {
+                            SDL_Log("GameplayScreen: EXPLGFX.B16 not loaded - explosions will be silent-invisible");
+                        }
 
                         objectState.assign(level.crates.size(), 0);
                     }
@@ -1144,8 +1181,9 @@ namespace ALTEngine::Screens
                         const bool down = keys[keyBindings.GetKey(selectKeys[i])];
                         if (down && !weaponKeyWasDown[static_cast<size_t>(i)])
                         {
-                            const int equipped = inventory.Equip(i);
-                            if (equipped >= 0) { selectedWeapon = equipped; }
+                            // Only start a swap for a weapon that is actually
+                            // held and is not the one already in hand.
+                            if (i != selectedWeapon && inventory.Available(i)) { weaponSwitch.Begin(i); }
                         }
                         weaponKeyWasDown[static_cast<size_t>(i)] = down;
                     }
@@ -1153,8 +1191,8 @@ namespace ALTEngine::Screens
                     const bool nextDown = keys[keyBindings.GetKey(InputAction::NextWeapon)];
                     if (nextDown && !weaponKeyWasDown[5])
                     {
-                        const int equipped = inventory.Equip(inventory.NextAvailable(selectedWeapon));
-                        if (equipped >= 0) { selectedWeapon = equipped; }
+                        const int next = inventory.NextAvailable(selectedWeapon);
+                        if (next != selectedWeapon) { weaponSwitch.Begin(next); }
                     }
                     weaponKeyWasDown[5] = nextDown;
 
@@ -1306,6 +1344,15 @@ namespace ALTEngine::Screens
                     const bool firePressed = fireHeld && !firePressedLastTick;
                     firePressedLastTick = fireHeld;
 
+                    // The swap happens at the bottom of the lower, out of sight.
+                    const int swapTo = weaponSwitch.Tick();
+                    if (swapTo >= 0)
+                    {
+                        const int equipped = inventory.Equip(swapTo);
+                        if (equipped >= 0) { selectedWeapon = equipped; }
+                    }
+                    weaponView.SetSwitchOffset(weaponSwitch.Offset());
+
                     weaponRuntime.weapon = hudState.currentWeapon;
                     weaponRuntime.stateChanged = false;
 
@@ -1433,6 +1480,7 @@ namespace ALTEngine::Screens
                     {
                         namespace D = ALTEngine::Screens::Damage;
                         for (D::Target& target : damageTargets) { D::TickTarget(target); }
+                        explosions.Tick();
 
                         // Destroying something: clear its occupancy so the
                         // square opens up, spill what it held, and - if it was a
@@ -1484,7 +1532,14 @@ namespace ALTEngine::Screens
                             }
                             ClearOccupancy(target.cellIndex);
                             ReleaseContents(target.crateIndex);
-                            if (target.kind == D::TARGET_BARREL) { blastQueue.push_back(target.cellIndex); }
+                            if (target.kind == D::TARGET_BARREL)
+                            {
+                                blastQueue.push_back(target.cellIndex);
+                                // The fireball goes off where the barrel stood,
+                                // lifted so it sits around the barrel's middle
+                                // rather than on the floor.
+                                explosions.Spawn(target.x, target.y + EXPLOSION_HEIGHT_OFFSET, target.z);
+                            }
                         };
 
                         // Walk the blast out from a cell, two rings, gated the
@@ -2180,6 +2235,7 @@ namespace ALTEngine::Screens
                         }
                         placedSprites.push_back(spark);
                     }
+                    explosions.Collect(placedSprites);
                 }
 
                 const size_t staticObjectCount = placedObjects.size();

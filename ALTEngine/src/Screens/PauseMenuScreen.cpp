@@ -773,7 +773,15 @@ namespace ALTEngine::Screens
                 DrawPickModModel(renderer, cdDirectory, weaponInfo->ammoModel, centredX(200), panelY + rowHeight * 2, fitWidth(200), 150, scale, rotationAngle);
                 DrawPickModModel(renderer, cdDirectory, weaponInfo->weaponModel, centredX(260), panelY + rowHeight * 2 + 170, fitWidth(260), 150, scale, rotationAngle);
 
-                std::string statusText = weaponInfo->state->equipped ? "Selected" : ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::NotAvailable, language);
+                // Three states, not two. This read only `equipped`, so a weapon
+                // the player had picked up but was not holding reported "Not
+                // Available" - which is what it says about a weapon you do not
+                // own at all (Edward, 2026).
+                ALTEngine::Bootstrap::StringId weaponStatusId =
+                    weaponInfo->state->equipped  ? ALTEngine::Bootstrap::StringId::Selected
+                  : weaponInfo->state->available ? ALTEngine::Bootstrap::StringId::Available
+                                                 : ALTEngine::Bootstrap::StringId::NotAvailable;
+                std::string statusText = ALTEngine::Bootstrap::Tr(weaponStatusId, language);
                 DrawBitmapText(renderer, statusText, panelX, panelY + rowHeight * 2 + 340, scale, COLOR_STATUS);
             }
             else if (topLabel == "Save Game" || topLabel == "Load Game")

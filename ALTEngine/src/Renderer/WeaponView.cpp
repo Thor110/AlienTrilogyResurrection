@@ -264,6 +264,7 @@ namespace ALTEngine::Renderer
 
         const int anchorX = WS::WEAPON_ANCHOR_X + WS::WEAPON_OFFSET_X[w];
         const int anchorY = WS::WEAPON_ANCHOR_Y + WS::WeaponBobOffset(cameraDip) + WS::WEAPON_Y_BIAS
+                          + switchOffset
                           + WS::WEAPON_OFFSET_Y[w];
 
         // Per-frame offset from the weapon's frame table, where one is known.

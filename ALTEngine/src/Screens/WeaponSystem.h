@@ -116,8 +116,79 @@ namespace ALTEngine::Screens
             0, 0, 0, 0, 0, 0
         };
 
-        // DAT_000b0b57, added to the weapon's Y. Untraced; zero until it is.
+        // DAT_000b0b57, added to the weapon's Y in FUN_0003e93c. Still untraced,
+        // but its SHAPE is suggestive: a per-frame vertical offset applied on top
+        // of the anchor and the bob is exactly what a weapon being lowered and
+        // raised would animate, and the weapon does drop off the bottom of the
+        // screen and come back when you change weapons (Edward, 2026).
+        //
+        // The switch animation below drives its own offset rather than claiming
+        // to be this variable. If DAT_000b0b57 turns out to be the holster
+        // offset, the two become one thing.
         inline constexpr int WEAPON_Y_BIAS = 0; // GUESS
+
+        // WEAPON SWITCH: LOWER, SWAP, RAISE.
+        //
+        // BEHAVIOUR CONFIRMED, MECHANISM NOT TRACED. The weapon drops off the
+        // bottom of the screen, the new one is swapped in out of sight, and it
+        // rises back up. Nothing in the decompilation has been tied to this yet -
+        // FUN_000401d0 just sets the weapon index and state 0 - so the timing
+        // below is invented and marked as such.
+        //
+        // The distance is not: it travels far enough to clear the tallest weapon
+        // frame in the game (the smartgun's 116-row reload frame), so no weapon
+        // is left peeking at the bottom mid-swap.
+        inline constexpr int SWITCH_TRAVEL = 128;      // world/HUD rows to drop
+        inline constexpr int SWITCH_LOWER_TICKS = 6;   // GUESS
+        inline constexpr int SWITCH_RAISE_TICKS = 6;   // GUESS
+
+        // Drives the lower/raise. `pending` is the weapon to switch TO, or -1.
+        struct SwitchAnimation
+        {
+            int pending = -1;
+            int ticks = 0;
+            bool lowering = false;
+
+            void Begin(int nextWeapon)
+            {
+                // Ignore a repeat of the weapon already in hand, and do not
+                // restart a swap that is already under way.
+                if (pending >= 0) { return; }
+                pending = nextWeapon;
+                ticks = SWITCH_LOWER_TICKS;
+                lowering = true;
+            }
+
+            bool Busy() const { return pending >= 0 || ticks > 0; }
+
+            // Returns the weapon to equip on the tick the swap happens, or -1.
+            int Tick()
+            {
+                if (ticks <= 0) { return -1; }
+                ticks--;
+                if (ticks == 0 && lowering)
+                {
+                    // Bottom of the travel: swap now, out of sight.
+                    const int next = pending;
+                    pending = -1;
+                    lowering = false;
+                    ticks = SWITCH_RAISE_TICKS;
+                    return next;
+                }
+                return -1;
+            }
+
+            // How far down the weapon is drawn this tick, 0 when it is up.
+            int Offset() const
+            {
+                if (ticks <= 0) { return 0; }
+                const int span = lowering ? SWITCH_LOWER_TICKS : SWITCH_RAISE_TICKS;
+                if (span <= 0) { return 0; }
+                // Lowering counts down to the swap; raising counts down to rest.
+                const int progress = lowering ? (span - ticks) : ticks;
+                return (SWITCH_TRAVEL * progress) / span;
+            }
+        };
 
         // The weapon's vertical bob, from FUN_0003e93c's `_DAT_000b0b4e >> 0x14`.
         //
