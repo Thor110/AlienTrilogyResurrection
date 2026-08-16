@@ -119,6 +119,9 @@ namespace ALTEngine::Screens
         inline constexpr int CASING_EJECT_SPREAD = 0x7f;
         inline constexpr int CASING_LIFETIME = 0x20;
 
+        // Longest distance a particle may move between collision tests.
+        inline constexpr float MAX_SUBSTEP = 128.0f;
+
         // CASING TUMBLE. FUN_0002b37c gives a fresh casing two RANDOM
         // orientation angles and leaves the third at zero:
         //     +0x10 = random & 0xfff
@@ -357,18 +360,38 @@ namespace ALTEngine::Screens
                     }
                     if (p.falls) { p.vy -= CASING_GRAVITY; }
 
-                    const float nx = p.x + p.vx;
-                    const float ny = p.y + p.vy;
-                    const float nz = p.z + p.vz;
-
                     const bool isProjectile = (p.type == TYPE_PISTOL || p.type == TYPE_SHOTGUN
                                             || p.type == TYPE_FLAME || p.type == TYPE_HEAVY);
+
+                    // Substep. A pistol round covers 376 units a tick and a
+                    // crate is about 256 across, so testing only the endpoint
+                    // lets a fast round step over a small target. Splitting the
+                    // move into pieces no longer than a target is wide costs
+                    // nothing at these speeds and removes the whole class of
+                    // problem for walls too.
+                    const float stepLength = std::sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz);
+                    const int substeps = (stepLength > MAX_SUBSTEP)
+                                       ? static_cast<int>(stepLength / MAX_SUBSTEP) + 1 : 1;
+                    const float inv = 1.0f / static_cast<float>(substeps);
+
+                    bool stopped = false;
+                    float nx = p.x, ny = p.y, nz = p.z;
+                    for (int step = 0; step < substeps && !stopped; ++step)
+                    {
+                        nx += p.vx * inv;
+                        ny += p.vy * inv;
+                        nz += p.vz * inv;
+                        if ((isProjectile || p.falls) && blocked(nx, ny, nz, static_cast<int>(p.type)))
+                        {
+                            stopped = true;
+                        }
+                    }
 
                     // A casing that reaches the floor stops there and rests out
                     // its remaining life. NOT TRACED - whether the original
                     // bounces, slides or simply removes them is in the same
                     // unread update loop.
-                    if (p.falls && blocked(nx, ny, nz))
+                    if (p.falls && stopped)
                     {
                         p.vx = 0; p.vy = 0; p.vz = 0;
                         p.spinX = 0; p.spinY = 0; p.spinZ = 0;
@@ -377,7 +400,7 @@ namespace ALTEngine::Screens
                         continue;
                     }
 
-                    if (isProjectile && blocked(nx, ny, nz))
+                    if (isProjectile && stopped)
                     {
                         Particle hit = p;   // copy: Shatter reuses the pool and may move memory
                         p.alive = false;

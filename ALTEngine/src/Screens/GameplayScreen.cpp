@@ -7,6 +7,7 @@
 #include "PlayerCamera.h"
 #include "WeaponSystem.h"
 #include "ParticleSystem.h"
+#include "DamageSystem.h"
 #include "../Renderer/WeaponView.h"
 #include "../Renderer/HudRenderer.h"
 #include "../Renderer/Minimap.h"
@@ -273,6 +274,11 @@ namespace ALTEngine::Screens
         FpsCamera camera;
         ALTEngine::Formats::LevelGeometry level;
         std::vector<ALTEngine::Renderer::PlacedObject> placedObjects;
+
+        // Destructible crates and barrels, one per placed object that can be
+        // shot. See DamageSystem.h - the health value is derived from the three
+        // pistol rounds a crate takes, not read out of the entity template.
+        std::vector<ALTEngine::Screens::Damage::Target> damageTargets;
         // Grid space is the game's own coordinate system: cell =
         // coord >> 9, sub-cell = coord & 0x1ff. World space is grid
         // space shifted by this origin, which is the level's own
@@ -658,6 +664,30 @@ namespace ALTEngine::Screens
                         if (familyBase >= 0)
                         {
                             switchVisuals.push_back({ placedObjects.size(), ci, familyBase });
+                        }
+
+                        // Destructible. Switches are not - shooting a switch
+                        // does nothing in the original - so only the crate and
+                        // barrel families get a damage target.
+                        if (familyBase < 0)
+                        {
+                            ALTEngine::Screens::Damage::Target target;
+                            target.x = worldX;
+                            target.y = floorY;
+                            target.z = worldZ;
+                            const bool isBarrel = (crate.type == 23);
+                            target.kind = isBarrel ? ALTEngine::Screens::Damage::TARGET_BARREL
+                                                   : ALTEngine::Screens::Damage::TARGET_CRATE;
+                            target.health = isBarrel
+                                          ? ALTEngine::Screens::Damage::BARREL_HEALTH_UNKNOWN
+                                          : ALTEngine::Screens::Damage::CRATE_HEALTH_DERIVED;
+                            target.placedObjectIndex = static_cast<int>(placedObjects.size());
+                            // The cell this object stamps as occupied. Clearing
+                            // that stamp is what reopens the square when the
+                            // object is destroyed - see the destruction handler.
+                            target.cellIndex = static_cast<int>(
+                                static_cast<size_t>(crate.y) * level.header.mapLength + static_cast<size_t>(crate.x));
+                            damageTargets.push_back(target);
                         }
 
                         placedObjects.push_back(placed);
@@ -1190,10 +1220,89 @@ namespace ALTEngine::Screens
                     // eight for a shotgun pellet (FUN_0002abe0).
                     if (levelReady)
                     {
-                        particles.Tick([&](float px, float py, float pz) {
-                            float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(
+                        namespace D = ALTEngine::Screens::Damage;
+                        for (D::Target& target : damageTargets) { D::TickTarget(target); }
+
+                        particles.Tick([&](float px, float py, float pz, int hitType) {
+                            // Something destructible first. The damage is the
+                            // projectile's SPEED field doubled while the round is
+                            // still fresh - see DamageSystem::HitDamage, and note
+                            // that the field named like strength is not the one
+                            // used as damage.
+                            for (D::Target& target : damageTargets)
+                            {
+                                if (target.destroyed) { continue; }
+                                const float dx = px - target.x;
+                                const float dz = pz - target.z;
+                                // Per-axis box, as FUN_0002a628 does - and the
+                                // box doubles for shotgun pellets. The extents
+                                // are a placeholder until the entity template is
+                                // read; the SHAPE of the test is traced.
+                                const float half = D::HitHalfExtent(hitType);
+                                if (dx > half || dx < -half || dz > half || dz < -half) { continue; }
+
+                                // The damage comes from THIS round's own type,
+                                // not the pistol's. It was hardcoded to the
+                                // pistol's numbers, which made every weapon hit
+                                // for 32 - wrong for all four of the others, and
+                                // it would have hidden the barrel rule entirely.
+                                const auto def = ALTEngine::Screens::Particles::DefFor(hitType);
+                                const int damage = D::HitDamage(def.speed, def.strength, def.strength);
+
+                                if (D::ApplyHit(target, damage, hitType))
+                                {
+                                    if (target.placedObjectIndex >= 0
+                                        && target.placedObjectIndex < static_cast<int>(placedObjects.size()))
+                                    {
+                                        placedObjects[static_cast<size_t>(target.placedObjectIndex)].visible = false;
+                                    }
+
+                                    // Clear the occupancy stamp so the square
+                                    // becomes walkable. A crate blocks by writing
+                                    // its type into byte 12 of its cell at spawn
+                                    // (IsCellBlocking treats any non-zero,
+                                    // non-0xFF value there as solid), so removing
+                                    // the crate has to remove the stamp too -
+                                    // otherwise the wreckage keeps blocking a
+                                    // square that is visibly empty.
+                                    //
+                                    // Byte 4, which carries the crate's record
+                                    // index, is cleared with it: it only has
+                                    // meaning while byte 12 identifies an object.
+                                    if (target.cellIndex >= 0
+                                        && target.cellIndex < static_cast<int>(level.collisionGrid.size()))
+                                    {
+                                        auto& cell = level.collisionGrid[static_cast<size_t>(target.cellIndex)];
+                                        cell.unknown13 = 0;
+                                        cell.unknown5 = 0;
+                                    }
+                                }
+                                return true; // the round stops here and shatters
+                            }
+
+                            // A PROJECTILE IS A POINT IN ONE CELL. It was going
+                            // through CanOccupy, which is the PLAYER's test: a
+                            // 400x400 footprint sampled at five points plus a
+                            // step-up rule. That stopped rounds as soon as any
+                            // corner of an imaginary body came within 200 units
+                            // of a wall, which in a corridor is almost at once -
+                            // hence only being able to break a crate from right
+                            // next to it.
+                            //
+                            // The original tests one cell and no radius:
+                            // FUN_0002b534 derives a single index as
+                            // (x >> 9) + width * (z >> 9) and probes that, then
+                            // steps once and probes again. No footprint, no
+                            // step-up.
+                            if (ALTEngine::Formats::IsCellBlocking(level,
+                                    ToGridSpaceX(px, originX), ToGridSpaceZ(pz, originZ)))
+                            {
+                                return true;
+                            }
+
+                            const float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(
                                 level, ToGridSpaceX(px, originX), ToGridSpaceZ(pz, originZ));
-                            return !CanOccupy(level, originX, originZ, px, pz, floorY) || py < floorY;
+                            return py < floorY;
                         });
                     }
 
