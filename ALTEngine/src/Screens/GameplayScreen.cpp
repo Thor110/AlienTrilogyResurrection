@@ -1224,9 +1224,14 @@ namespace ALTEngine::Screens
                     // playing. Firing on the state change instead gets the sound
                     // out at roughly the right moment; replacing it with the real
                     // sequence is a data change, not a code one.
+                    // The PISTOL carries its own OP_EVENT and plays itself, so
+                    // firing it here as well would double the report. Every
+                    // other weapon still runs a synthesised sequence with no
+                    // opcodes in it, so those need the stand-in until their
+                    // sequence tables are dumped.
                     if (weaponRuntime.stateChanged
                         && weaponRuntime.state == WS::STATE_FIRING
-                        && hudState.currentWeapon >= 0
+                        && hudState.currentWeapon > 0
                         && hudState.currentWeapon < ALTEngine::Screens::PlayerHudState::WEAPON_COUNT)
                     {
                         ALTEngine::Audio::SfxPlayer::PlaySlot(

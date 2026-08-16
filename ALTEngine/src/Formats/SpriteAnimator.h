@@ -201,6 +201,15 @@ namespace ALTEngine::Formats
         // frame changed, so callers can skip redundant work.
         inline bool Tick(Animator& animator, const std::vector<uint16_t>& sequence)
         {
+            // FLAG_EVENT is a ONE-TICK PULSE. RunOpcodes raises it and clears it
+            // on its own entry, but it only runs on the ticks where the frame
+            // timer expires - so on a sequence with a duration above 1 the flag
+            // would still be standing on the ticks in between, and a caller
+            // polling it once per tick would fire the sound repeatedly. The
+            // pistol's report played twice before this, once per tick of its
+            // two-tick first frame.
+            animator.flags = static_cast<uint8_t>(animator.flags & ~FLAG_EVENT);
+
             if (sequence.empty()) { return false; }
             if (animator.frameTimer == 0) { return false; }
 

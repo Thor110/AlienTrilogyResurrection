@@ -28,6 +28,43 @@ namespace ALTEngine::Renderer
         // out-of-range indices.
         constexpr int MAX_FRAMES = 32;
 
+        // THE PISTOL'S REAL SEQUENCES, transcribed word for word from the data
+        // at 0x0901a4 (firing) and 0x0901e4 (reload). No longer synthesised.
+        //
+        // The header is two words, not one: [0] is the frame duration and [1] is
+        // the FRAME COUNT. That explains the layout that looked odd before - the
+        // program counter starts at index 1 and pre-increments, so it lands on
+        // index 2, and the loop target is 2 as well. Index 1 was never a skipped
+        // frame; it is the count.
+        //
+        // Firing:  duration 2, 3 frames
+        //     OP_EVENT(0x0d)   <- plays sound slot 0x0d on the FIRST tick
+        //     OP_SET_FLAG1
+        //     frames 0, 1, 2
+        //     OP_END
+        //
+        // Reload:  duration 3, 3 frames
+        //     OP_SET_FLAG1, frames 0, 1, 2, OP_END   - no sound of its own
+        //
+        // Slot 0x0d is 0602hand, which is exactly what the NEWSFX.BAT pattern
+        // predicted for the pistol's report. That guess is now a fact, and the
+        // report lands on the first tick of the animation rather than wherever a
+        // caller decides to put it.
+        namespace Op = ALTEngine::Formats::SpriteAnim;
+        const std::vector<uint16_t> PISTOL_FIRE_SEQUENCE{
+            2, 3,
+            Op::Op(Op::OP_EVENT, 0x0d),
+            Op::Op(Op::OP_SET_FLAG1),
+            0, 1, 2,
+            Op::Op(Op::OP_END),
+        };
+        const std::vector<uint16_t> PISTOL_RELOAD_SEQUENCE{
+            3, 3,
+            Op::Op(Op::OP_SET_FLAG1),
+            0, 1, 2,
+            Op::Op(Op::OP_END),
+        };
+
         // FRAME DURATIONS - CONFIRMED for the pistol, read from its own state
         // table at 0x000ace58. Each entry is {frame table, sequence}, and the
         // sequence's first word is the duration:
@@ -172,6 +209,23 @@ namespace ALTEngine::Renderer
             if (list.empty()) { list.push_back(0); }
             stateSequences[static_cast<size_t>(state)] =
                 ALTEngine::Formats::SpriteAnim::BuildSequence(duration, list, false);
+        }
+
+        // The pistol's are read from the game rather than synthesised, so it
+        // gets its real timing and its real sound cue. The other four still use
+        // the generated ones until their tables are dumped - their sequence
+        // pointers are in the same per-weapon tables at 0x000ace28 (flame),
+        // 0x000ace48 (shotgun), 0x000ace70 (smartgun) and 0x000ace88 (pulse).
+        if (loadedWeapon == 0)
+        {
+            if (FrameCount(WS::STATE_FIRING) >= 3)
+            {
+                stateSequences[WS::STATE_FIRING] = PISTOL_FIRE_SEQUENCE;
+            }
+            if (FrameCount(WS::STATE_RELOAD) >= 3)
+            {
+                stateSequences[WS::STATE_RELOAD] = PISTOL_RELOAD_SEQUENCE;
+            }
         }
 
         stateSequences[WS::STATE_EMPTY] = stateSequences[WS::STATE_IDLE];
