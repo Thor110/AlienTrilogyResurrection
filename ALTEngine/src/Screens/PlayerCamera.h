@@ -137,18 +137,26 @@ namespace ALTEngine::Screens
         constexpr int EYE_HEIGHT_ORIGINAL = 0x180;   // 384 - see note, currently unused
         constexpr int EYE_HEIGHT_RECOVERY = 0xc;     // per tick, FUN_0003ee4c
 
-        // The two ids FUN_0003d00c plays each half-stride. RESOLVED against the
-        // slot table in Formats/SoundIds.h - and they are not two footsteps.
+        // The two ids FUN_0003d00c plays each half-stride.
         //
-        //   0x26 -> 5004astp, "a step". This is the footstep.
-        //   0x2c -> 0204ripl, a Ripley vocalisation, and the branch that also
-        //           gets the positional call.
+        // 0x2c IS THE FOOTSTEP, and it took two passes to be sure. The name
+        // 5004astp at slot 0x26 reads like "a step", which is what made me swap
+        // these round once; that was wrong. Three things say so:
         //
-        // So the choice is "footstep, or Ripley reacting", not "footstep on one
-        // surface or another" as this previously assumed. Which way the 0x40
-        // flag runs is still open; the filenames settle which sound is which.
-        constexpr int SFX_FOOTSTEP = 0x26;
-        constexpr int SFX_PLAYER_VOCAL = 0x2c;
+        //   - NEWSFX.BAT builds slot 0x2c's sample from shipft1.raw and
+        //     shipft8.raw. SHIPFT is ship footstep.
+        //   - Slot 0x2c is the only one of the two that VARIES: 0204ripl,
+        //     0206ripl or 0208ripl depending on the episode, which is what a
+        //     surface-dependent footstep would do. 0x26 is 5004astp on all 45
+        //     levels.
+        //   - It is the branch FUN_0003d00c gives the positional call to, and a
+        //     footstep is the sound that needs placing in the world.
+        //
+        // 0x26 is therefore the special case, played only when the 0x40 flag is
+        // set. What that flag means is still untraced, so the constant is named
+        // after the condition rather than after a guess at the surface.
+        constexpr int SFX_FOOTSTEP = 0x2c;
+        constexpr int SFX_FOOTSTEP_FLAGGED = 0x26;
 
         // The original's logic tick rate.
         //
@@ -557,7 +565,7 @@ namespace ALTEngine::Screens
         // Which sound a footstep should play this tick.
         inline int FootstepSound(bool onHazardCell)
         {
-            return onHazardCell ? SFX_PLAYER_VOCAL : SFX_FOOTSTEP;
+            return onHazardCell ? SFX_FOOTSTEP_FLAGGED : SFX_FOOTSTEP;
         }
 
         // Per-tick world-space movement for the caller's collision mover.

@@ -1213,6 +1213,37 @@ namespace ALTEngine::Screens
                     WS::UpdateIdle(weaponRuntime, hudState, false);
                     WS::TickNoise(weaponRuntime);
 
+                    // Weapon audio.
+                    //
+                    // THIS IS A STAND-IN. In the original the report comes from
+                    // an OP_EVENT opcode inside the weapon's firing sequence, so
+                    // it lands on whichever frame the artist put it on. Those
+                    // sequences are data this cannot read yet (the pistol's are
+                    // at 0x0901a4), and the sequences built here are synthesised
+                    // and contain no opcodes at all - which is why nothing was
+                    // playing. Firing on the state change instead gets the sound
+                    // out at roughly the right moment; replacing it with the real
+                    // sequence is a data change, not a code one.
+                    if (weaponRuntime.stateChanged
+                        && weaponRuntime.state == WS::STATE_FIRING
+                        && hudState.currentWeapon >= 0
+                        && hudState.currentWeapon < ALTEngine::Screens::PlayerHudState::WEAPON_COUNT)
+                    {
+                        ALTEngine::Audio::SfxPlayer::PlaySlot(
+                            ALTEngine::Formats::SoundIds::WEAPON_SHOT[hudState.currentWeapon],
+                            digits.c_str(), cdDirectory);
+                    }
+                    if (weaponRuntime.stateChanged && weaponRuntime.state == WS::STATE_RELOAD
+                        && hudState.currentWeapon >= 0
+                        && hudState.currentWeapon < ALTEngine::Screens::PlayerHudState::WEAPON_COUNT)
+                    {
+                        const int clip = ALTEngine::Formats::SoundIds::WEAPON_CLIP[hudState.currentWeapon];
+                        if (clip >= 0)
+                        {
+                            ALTEngine::Audio::SfxPlayer::PlaySlot(clip, digits.c_str(), cdDirectory);
+                        }
+                    }
+
                     // Starting the animation IS the state change (FUN_000400fc).
                     // Not every state animates. The out-of-ammo arms in
                     // FUN_0003efcc set state 4 and call FUN_000524b0, NOT

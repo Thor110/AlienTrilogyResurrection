@@ -48,8 +48,34 @@ namespace ALTEngine::Formats
         inline constexpr int IMPACT_METAL = 0x24;       // 5003metl, every other level
         inline constexpr int IMPACT_WATER = 0x25;       // 5003watr, cell attribute 8 or 9
 
-        inline constexpr int FOOTSTEP = 0x26;           // 5004astp
-        inline constexpr int RIPLEY_VOCAL_STEP = 0x2c;  // 0204ripl, the positional branch
+        // 0x2c is the footstep - it varies by episode (0204/0206/0208ripl) and
+        // NEWSFX.BAT builds it from shipft*.raw, "ship footstep". 0x26 is
+        // 5004astp, identical on all 45 levels, played only when the 0x40 flag
+        // is set. See PlayerCamera.h.
+        inline constexpr int FOOTSTEP = 0x2c;
+        inline constexpr int FOOTSTEP_FLAGGED = 0x26;
+
+        // WEAPON FIRE. Every weapon has three slots - xx01, xx02 and xx05CLIP -
+        // and NEWSFX.BAT retunes the xx02 of all four it touches: newhand4 onto
+        // 0602hand, newshot2 onto 0702shot, prfl2b_1 onto 0302puls, smart1 onto
+        // 0902smar. Those replacement names are the weapon reports, so xx02 is
+        // the firing sound. Four for four, but it is a PATTERN rather than a
+        // traced call site - if the pistol sounds wrong, try the xx01 slot one
+        // lower.
+        inline constexpr int PISTOL_SHOT = 0x0d;        // 0602hand
+        inline constexpr int SHOTGUN_SHOT = 0x10;       // 0702shot
+        inline constexpr int PULSE_SHOT = 0x06;         // 0302puls
+        inline constexpr int SMARTGUN_SHOT = 0x13;      // 0902smar
+        inline constexpr int FLAME_SHOT = 0x0b;         // 0503-fla, the loop
+
+        inline constexpr int PISTOL_CLIP = 0x0e;        // 0605clip
+        inline constexpr int SHOTGUN_CLIP = 0x11;       // 0705clip
+        inline constexpr int SMARTGUN_CLIP = 0x14;      // 0905clip
+
+        // Fire and reload sounds by weapon index, matching PlayerHudState's
+        // ordering: pistol, shotgun, flamethrower, pulse rifle, smartgun.
+        inline constexpr int WEAPON_SHOT[] = { PISTOL_SHOT, SHOTGUN_SHOT, FLAME_SHOT, PULSE_SHOT, SMARTGUN_SHOT };
+        inline constexpr int WEAPON_CLIP[] = { PISTOL_CLIP, SHOTGUN_CLIP, -1, -1, SMARTGUN_CLIP };
 
         // Named slots worth having even though no traced call site uses them yet.
         inline constexpr int PULSE_FIRE = 0x05;         // 0301puls
