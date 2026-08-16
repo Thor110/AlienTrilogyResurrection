@@ -235,6 +235,8 @@ namespace ALTEngine::Screens
             int placedObjectIndex = -1;
             int cellIndex = -1;        // collision cell this object stamps as occupied
             int crateIndex = -1;       // its record in level.crates, for its contents
+            int facing = 0;            // rotation - picks the debris scatter axis
+            int objectType = 0;        // crate type - 0x1d scatters one piece, not six
         };
 
         // Length of the hit-reaction window - ZERO for static objects, and this
@@ -309,22 +311,18 @@ namespace ALTEngine::Screens
         inline constexpr int BLAST_MAX_ATTRIBUTE = 0x13;
         inline constexpr int BLAST_MAX_HEIGHT_STEP = 0xc;
 
-        // RING OFFSETS. Ring 1 is read from 0x000acb00; ring 2 is DERIVED, and
-        // the derivation is checked rather than assumed.
+        // RING OFFSETS. BOTH TABLES CONFIRMED against the data - ring 1 at
+        // 0x000acb00, ring 2 at 0x000acb20, 8 and 16 int16 pairs.
         //
-        // Ring 1 is the 8 neighbours in CLOCKWISE order starting at the top-left
-        // corner - not the row-major order that seems natural, which is what was
-        // guessed here before and which put the wrong parent on five of the
-        // sixteen outer cells.
+        // Both run CLOCKWISE from the top-left corner. That is not the row-major
+        // order that seems natural, which is what was guessed here first and
+        // which put the wrong parent on five of the sixteen outer cells.
         //
-        // Ring 2's own table at 0x000acb20 has not been dumped, but it does not
-        // need to be. FUN_000368c8 clears each outer slot alongside its parent,
-        // and those groupings are visible in the code: ring1[0] carries outer
-        // 0/1/15, ring1[1] carries 2, ring1[2] carries 3/4/5, ring1[5] carries
-        // 10, ring1[6] carries 11/12/13, ring1[7] carries 14. Corners carry three
-        // outer cells and edges carry one. Only one 16-cell clockwise ring
-        // starting at (-2,-2) satisfies all of that, and in it every outer cell
-        // is adjacent to its stated parent - checked, 16 of 16.
+        // Ring 2 was derived before it was dumped, from the parent groupings
+        // FUN_000368c8 makes visible - corners carry three outer cells, edges
+        // carry one - and the dump then matched the derivation 16 of 16, in
+        // order. Worth recording: the code's structure alone was enough to
+        // reconstruct the table exactly.
         struct CellOffset { int dx; int dz; };
 
         inline constexpr CellOffset BLAST_RING1[8] = {

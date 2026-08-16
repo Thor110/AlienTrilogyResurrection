@@ -338,5 +338,32 @@ namespace ALTEngine::Formats
     // 0x14-0x2c blocking band. Stairs and ramps (0x2d+) are walkable and
     // return false - use the step-up limit against
     // FindFloorHeightGridSpace to reject rises that are too steep.
+    // One height unit is 32 world units - FindFloorHeightGridSpace multiplies
+    // the floor byte by 32, and a door moves 32 world units per step.
+    inline constexpr int WORLD_UNITS_PER_HEIGHT_UNIT = 32;
+
+    // A normal cell's ceiling is floor + 0x30. FUN_00027950 writes exactly that
+    // when it builds the grid, so a standard room is 48 units - 1536 world
+    // units - of headroom.
+    inline constexpr int STANDARD_ROOM_CLEARANCE = 0x30;
+
+    // How much vertical gap the player needs to fit through.
+    //
+    // The player is STAND_OFFSET + EYE_HEIGHT tall, 800 world units, which is 25
+    // height units. That is the figure - not the 8 this used first.
+    //
+    // 8 came from FUN_000368c8, but that is the test for whether an EXPLOSION
+    // can pass through a gap, not a person. Reusing it let the player through a
+    // door that had lifted a third of the way (Edward, 2026). A blast squeezing
+    // through a gap a player cannot is entirely reasonable behaviour for the
+    // original to have; borrowing the number across was the mistake.
+    //
+    // 25 against a standard room's 48 leaves plenty of margin, so no ordinary
+    // cell becomes impassable.
+    inline constexpr int MIN_PASSABLE_CLEARANCE = 25;
+
+    // The blast's own figure, kept separate now that they are known to differ.
+    inline constexpr int MIN_BLAST_CLEARANCE = 8;
+
     bool IsCellBlocking(const LevelGeometry& level, int gameX, int gameZ);
 }

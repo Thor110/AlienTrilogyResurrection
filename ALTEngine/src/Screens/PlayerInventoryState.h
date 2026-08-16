@@ -9,6 +9,12 @@ namespace ALTEngine::Screens
         bool available = false; // false = "No ammo available" / not picked up
         bool equipped = false;  // shown bright regardless of cursor position, plus "Selected"
         int ammo = 0;
+
+        // Only the pulse rifle uses this. The original keeps grenades in the
+        // HIGH half of that weapon's own ammo word (DAT_000b0ac6), capped at
+        // 0x14 by FUN_000387c0 - they belong to the weapon because the launcher
+        // is underslung on it, not to an inventory slot of their own.
+        int grenades = 0;
     };
 
     // Placeholder inventory/equipment state - there's no real gameplay
@@ -110,6 +116,9 @@ namespace ALTEngine::Screens
         WeaponState pistol{ true, true, 45 };
         WeaponState shotgun{};
         WeaponState flamethrower{};
+        // Grenades ride with the pulse rifle rather than being their own item:
+        // the original keeps them in the high half of that weapon's ammo word
+        // (DAT_000b0ac6), because the launcher is underslung on it.
         WeaponState pulseRifle{};
         WeaponState smartGun{};
     };

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Bootstrap/Font8x8.h"
+
 // HUD PANEL GRAPHICS - decoded, not yet implemented.
 //
 // WHAT THE FILES ARE. PNL0GFXU.16 and PNL1GFXU.16 are ordinary BND texture
@@ -406,6 +408,48 @@
 
 namespace ALTEngine::Renderer
 {
+    // THE CARRIED-ITEM ICON STACK, from the tail of FUN_0003aac8.
+    //
+    // A vertical list of icons, each drawn only when its counter is non-zero,
+    // stepping 0x0f rows per entry. The direction depends on the same
+    // DAT_000ae0a4/DAT_000ae0a5 pair that moves other HUD elements: normally the
+    // stack starts at y 0x37 and grows DOWNWARD, and in the other mode it starts
+    // at 0xb3 and grows UPWARD.
+    //
+    // In order:
+    //   1. FUN_0003997c  drawn when the held weapon is 2 (the pulse rifle) and
+    //                    the grenade count DAT_000b0ac6 high half is non-zero -
+    //                    OR when the held weapon is NOT 2 and DAT_000b0ace's
+    //                    high half is non-zero. So one icon slot serves two
+    //                    different counters depending on what is in hand, which
+    //                    is why it seems to come and go with the weapon.
+    //   2. FUN_00039b38  drawn when DAT_000b0aba is non-zero
+    //   3. FUN_00039c90  drawn when DAT_000b0abc is non-zero
+    //   4. FUN_00039e00  drawn when DAT_000b0ae4 is non-zero (last, no advance)
+    //
+    // Grenades cap at 0x14 (20) and pulse magazines at 9, both clamped in
+    // FUN_000387c0.
+    //
+    // Where the stack sits, in the 320x240 HUD space. The Y start and the row
+    // step are the original's (0x37 and 0x0f); the box size and colours are ours.
+    inline constexpr int HUD_ITEM_STACK_TOP = 0x37;
+    inline constexpr int HUD_ITEM_ROW_STEP = 0x0f;
+    inline constexpr int HUD_ITEM_X = 4;
+    inline constexpr int HUD_ITEM_WIDTH = 54;
+    inline constexpr int HUD_ITEM_HEIGHT = 13;
+    inline constexpr int HUD_ITEM_PADDING = 4;
+    inline constexpr int HUD_ITEM_TEXT_INSET = 3;
+    inline constexpr float HUD_ITEM_CORNER = 3.0f;
+    inline constexpr int HUD_GRENADE_WEAPON = 2;   // the pulse rifle
+    inline constexpr ALTEngine::Bootstrap::Color HUD_ITEM_BACKGROUND{ 24, 32, 24, 200 };
+    inline constexpr ALTEngine::Bootstrap::Color HUD_ITEM_LABEL{ 150, 190, 150, 255 };
+    inline constexpr ALTEngine::Bootstrap::Color HUD_ITEM_COUNT{ 235, 245, 235, 255 };
+
+    // WHAT THE ORIGINAL'S ICONS LOOK LIKE IS NOT KNOWN. What each of the four icons actually depicts needs
+    // the sprite descriptors inside those four functions, and three of the four
+    // counters (DAT_000b0aba, DAT_000b0abc, DAT_000b0ae4) have not been
+    // identified - one of them is likely the wall charges.
+
     // ---- font -------------------------------------------------------------
     // Descriptor index of glyph 0 in the panel set (FUN_00039068 walks from
     // DAT_002408c0 + 0x170, which is index 23).

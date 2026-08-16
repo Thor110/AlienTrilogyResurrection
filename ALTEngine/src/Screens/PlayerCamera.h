@@ -3,6 +3,8 @@
 #include <cmath>
 #include <cstdint>
 
+#include "WeaponSystem.h"
+
 namespace ALTEngine::Screens
 {
     // The player's camera - turning, walking, automatic pitch and head bob,
@@ -223,6 +225,10 @@ namespace ALTEngine::Screens
 
             int mouseYaw = 0;        // angle units to add to yaw this tick
             int mouseForward = 0;    // accumulated mouse Y, original's DAT_00404658
+
+            // Ticks left on the terrain-speed pickup (DAT_000b0abc). Non-zero
+            // suppresses the cell 5/9 slowdown entirely.
+            int terrainSpeedTicks = 0;
         };
 
         struct State
@@ -506,12 +512,14 @@ namespace ALTEngine::Screens
             {
                 state.moveAngle = (state.yaw + offset) & ANGLE_MASK;
 
-                // Cell attributes 5 and 9 halve movement again - the original
-                // gates this on DAT_000b0abc being clear as well, which is a
-                // state flag not yet traced, so this applies it unconditionally.
-                // MARKED AS INCOMPLETE: if some state is supposed to suppress
-                // the slowdown, that is the missing piece.
-                const bool sluggishCell = (cellAttribute == 5 || cellAttribute == 9);
+                // Cell attributes 5 and 9 halve movement, but only while
+                // DAT_000b0abc is zero. That is a pickup-granted timer counted
+                // down by FUN_0003e698, and while it runs the player crosses
+                // those cells at full speed. This was marked INCOMPLETE here
+                // because the suppressing state had not been found; it has now.
+                const bool sluggishCell =
+                    ALTEngine::Screens::TerrainEffects::CellSlowsMovement(
+                        cellAttribute, input.terrainSpeedTicks);
 
                 int accel = fullSpeed ? tuning.accel : (tuning.accel >> 1);
                 int maxSpeed = fullSpeed ? tuning.maxSpeed : (tuning.maxSpeed >> 1);

@@ -360,11 +360,19 @@ namespace ALTEngine::Formats
         // Bytes +0x02/+0x03: 255 = wall, 0 = traversable.
         if (cell.unknown3 == 255 || cell.unknown4 == 255) { return true; }
 
-        // No vertical gap means solid - this is how a closed door
-        // blocks: it writes ceiling == floor across its cells. Walls and
-        // out-of-bounds fill are the same shape, so this is the main
-        // blocking test rather than a door special case.
-        if (cell.ceilingHeight <= cell.floorHeight) { return true; }
+        // A gap SMALLER THAN THE PLAYER blocks, not merely a zero gap.
+        //
+        // This tested for ceiling <= floor, which meant a door became passable
+        // the instant it started to lift - one unit of gap was enough. It should
+        // stay solid until it has actually opened enough to walk through
+        // (Edward, 2026).
+        //
+        // The figure is the PLAYER's height in cell height units: 800 world
+        // units tall over 32 world units per height unit is 25. See
+        // MIN_PASSABLE_CLEARANCE - the 8 this used first is the blast's
+        // clearance, not a person's, and let the player through a door that had
+        // only lifted a third of the way.
+        if (cell.ceilingHeight - cell.floorHeight < MIN_PASSABLE_CLEARANCE) { return true; }
 
         // Occupancy (byte 12) blocks: crates, switches and monsters stamp
         // their type here at spawn. 0xFF is the player's own marker and is

@@ -47,6 +47,46 @@ namespace ALTEngine::Screens
         // original skips its whole damage path.
         int16_t damageCooldown = 0;
 
+        // The carried-item counters the HUD's icon stack reads. Each icon is
+        // drawn only when its counter is non-zero (FUN_0003aac8), which is why
+        // they come and go rather than sitting there greyed out.
+        //
+        // Grenades are DAT_000b0ac6's high half, capped at 0x14 (20) by
+        // FUN_000387c0, and their icon is the one tied to the PULSE RIFLE being
+        // in hand - the launcher is underslung on it.
+        static constexpr int GRENADE_MAX = 0x14;
+        int16_t grenades = 0;
+
+        // The other three, identified by WHAT READS THEM rather than by any
+        // name in the binary. None of them is the wall charges.
+        //
+        // DAT_000b0aba - read and written inside the player damage function
+        //   FUN_0003e4a8, and granted by the pickup handler. It absorbs damage:
+        //   ARMOUR. Not a timer; it is spent, not counted down.
+        //
+        // DAT_000b0abc - gates the terrain slowdown. FUN_0003d2b8 and
+        //   FUN_0003d340 only halve movement on cell attributes 5 and 9 when
+        //   this is ZERO, so while it is running the player moves at full speed
+        //   through whatever those cells are. Counted down once per tick by
+        //   FUN_0003e698.
+        //
+        // DAT_000b0ae4 - written by the terrain handler FUN_0003dff0 and read by
+        //   the damage function. Protection against damaging floors, and also on
+        //   the per-tick countdown.
+        //
+        // The last two are timers, which is why their icons appear for a while
+        // and then go.
+        int16_t armourItem = 0;      // DAT_000b0aba
+        int16_t terrainSpeed = 0;    // DAT_000b0abc, ticks remaining
+        int16_t terrainShield = 0;   // DAT_000b0ae4, ticks remaining
+
+        // FUN_0003e698 decrements the timed ones once per logic tick.
+        void TickCarriedItems()
+        {
+            if (terrainSpeed > 0) { terrainSpeed = static_cast<int16_t>(terrainSpeed - 1); }
+            if (terrainShield > 0) { terrainShield = static_cast<int16_t>(terrainShield - 1); }
+        }
+
         bool dead = false; // DAT_000b0cc0 bit 0x20
 
         // What the HUD prints for a weapon, exactly as FUN_0003aac8's switch

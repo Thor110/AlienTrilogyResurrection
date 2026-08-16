@@ -621,6 +621,48 @@ namespace ALTEngine::Renderer
                    HUD_FONT_FIRST_DESCRIPTOR, scaleX, scaleY);
         SDL_SetTextureColorMod(sheet, 255, 255, 255);
 
+        // ---- carried-item stack ----------------------------------------
+        //
+        // A vertical list of indicators, each drawn only when its counter is
+        // non-zero, stepping HUD_ITEM_ROW_STEP rows per entry (FUN_0003aac8).
+        // The grenade slot is tied to the pulse rifle being in hand, because the
+        // launcher is underslung on it.
+        //
+        // THE ARTWORK IS OURS. The original draws each of these through its own
+        // small function (FUN_0003997c and friends) whose sprite descriptors
+        // have not been read, so this uses the rounded box the pause and options
+        // menus already use, with the label left and the count right (Edward,
+        // 2026). Positions and the stacking rule are the original's; the look is
+        // not.
+        {
+            int itemY = HUD_ITEM_STACK_TOP;
+            auto drawItem = [&](const char* label, int count) {
+                if (count <= 0) { return; }
+
+                const SDL_FRect box{ static_cast<float>(HUD_ITEM_X),
+                                     static_cast<float>(itemY),
+                                     static_cast<float>(HUD_ITEM_WIDTH),
+                                     static_cast<float>(HUD_ITEM_HEIGHT) };
+                ALTEngine::Bootstrap::DrawRoundedRect(renderer, box, HUD_ITEM_CORNER, HUD_ITEM_BACKGROUND);
+
+                const std::string text = std::to_string(count);
+                ALTEngine::Bootstrap::DrawBitmapText(renderer, label,
+                                                     HUD_ITEM_X + HUD_ITEM_PADDING,
+                                                     itemY + HUD_ITEM_TEXT_INSET, 1, HUD_ITEM_LABEL);
+                ALTEngine::Bootstrap::DrawBitmapText(renderer, text,
+                                                     HUD_ITEM_X + HUD_ITEM_WIDTH - HUD_ITEM_PADDING
+                                                         - ALTEngine::Bootstrap::TextWidth(text, 1),
+                                                     itemY + HUD_ITEM_TEXT_INSET, 1, HUD_ITEM_COUNT);
+                itemY += HUD_ITEM_ROW_STEP;
+            };
+
+            // Slot 1 is the grenade launcher, and only with the pulse rifle up.
+            if (state.currentWeapon == HUD_GRENADE_WEAPON) { drawItem("GREN", state.grenades); }
+            drawItem("ARMR", state.armourItem);
+            drawItem("SPD",  state.terrainSpeed);
+            drawItem("SHLD", state.terrainShield);
+        }
+
         // Back to the window, and put the whole 320x240 surface on it in one
         // stretch - the single scaling step the original's compositing does.
         SDL_SetRenderTarget(renderer, previousTarget);

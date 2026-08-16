@@ -437,6 +437,7 @@ namespace ALTEngine::Screens
         ALTEngine::Renderer::HudRenderer hud;
         ALTEngine::Renderer::WeaponView weaponView;
         bool firePressedLastTick = false;
+        bool altFirePressedLastTick = false;
         ALTEngine::Screens::WeaponSystem::Runtime weaponRuntime;
         ALTEngine::Screens::Particles::Pool particles;
         ALTEngine::Screens::ExplosionEffects explosions;
@@ -757,6 +758,8 @@ namespace ALTEngine::Screens
                             // that stamp is what reopens the square when the
                             // object is destroyed - see the destruction handler.
                             target.crateIndex = static_cast<int>(ci);
+                            target.facing = crate.rotation;
+                            target.objectType = crate.type;
                             target.cellIndex = static_cast<int>(
                                 static_cast<size_t>(crate.y) * level.header.mapLength + static_cast<size_t>(crate.x));
                             damageTargets.push_back(target);
@@ -1267,6 +1270,7 @@ namespace ALTEngine::Screens
                                || keys[keyBindings.GetKey(InputAction::RunMode)];
 
                     pcInput.turn180 = keys[keyBindings.GetKey(InputAction::Turnaround)];
+                    pcInput.terrainSpeedTicks = hudState.terrainSpeed;
 
                     // Manual look: the original gates look up/down behind a
                     // modifier and reuses the forward/back keys for it. There is
@@ -1455,6 +1459,24 @@ namespace ALTEngine::Screens
                     // Not every state animates. The out-of-ammo arms in
                     // FUN_0003efcc set state 4 and call FUN_000524b0, NOT
                     // FUN_000400fc - the empty state leaves the last frame up.
+                    // Secondary fire. Only the pulse rifle has one that does
+                    // anything yet: FUN_0003efcc's case 2 spends a grenade,
+                    // sets state 3 and starts that state's animation - which is
+                    // the sequence carrying the 0401gren sound cue.
+                    const bool altFireHeld = keys[keyBindings.GetKey(InputAction::Fire2)] || mouseFire2;
+                    const bool altFirePressed = altFireHeld && !altFirePressedLastTick;
+                    altFirePressedLastTick = altFireHeld;
+
+                    if (altFirePressed
+                        && hudState.currentWeapon == ALTEngine::Renderer::HUD_GRENADE_WEAPON
+                        && weaponRuntime.state == WS::STATE_IDLE
+                        && inventory.pulseRifle.grenades > 0)
+                    {
+                        inventory.pulseRifle.grenades--;
+                        weaponRuntime.SetState(WS::STATE_GRENADE);
+                        weaponRuntime.noise = WS::GRENADE_NOISE;
+                    }
+
                     if (weaponRuntime.stateChanged && WS::StateHasAnimation(weaponRuntime.state))
                     {
                         weaponView.PlayState(weaponRuntime.state);
@@ -1481,6 +1503,7 @@ namespace ALTEngine::Screens
                         namespace D = ALTEngine::Screens::Damage;
                         for (D::Target& target : damageTargets) { D::TickTarget(target); }
                         explosions.Tick();
+                        hudState.TickCarriedItems();
 
                         // Destroying something: clear its occupancy so the
                         // square opens up, spill what it held, and - if it was a
@@ -1538,7 +1561,16 @@ namespace ALTEngine::Screens
                                 // The fireball goes off where the barrel stood,
                                 // lifted so it sits around the barrel's middle
                                 // rather than on the floor.
-                                explosions.Spawn(target.x, target.y + EXPLOSION_HEIGHT_OFFSET, target.z);
+                                explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_BARREL,
+                                                 target.x, target.y + EXPLOSION_HEIGHT_OFFSET, target.z);
+                            }
+                            else
+                            {
+                                // A crate breaks into six scattered pieces, on
+                                // an axis chosen by which way it faces - see
+                                // ExplosionEffects::SpawnScatter.
+                                explosions.SpawnScatter(target.x, target.y, target.z,
+                                                        target.facing, target.objectType);
                             }
                         };
 
@@ -1697,6 +1729,10 @@ namespace ALTEngine::Screens
                                     ALTEngine::Screens::Particles::ImpactSound(
                                         levelIdForSfx, ImpactCellAttribute(level, originX, originZ, px, pz)),
                                     digits.c_str(), cdDirectory);
+                                // The impact puff - uv records 25..31, which
+                                // FUN_0002ad48 selects for every projectile type.
+                                explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_IMPACT,
+                                                 px, py, pz);
                                 return true;
                             }
 
@@ -2235,7 +2271,7 @@ namespace ALTEngine::Screens
                         }
                         placedSprites.push_back(spark);
                     }
-                    explosions.Collect(placedSprites);
+                    explosions.Collect(placedSprites, camera.x, camera.z, true);
                 }
 
                 const size_t staticObjectCount = placedObjects.size();
@@ -2347,6 +2383,15 @@ namespace ALTEngine::Screens
                                 mirroredAmmo[w] = current[w];
                             }
                             ammoSeeded = true;
+
+                            // Grenades. The original keeps them in the high half
+                            // of the pulse rifle's own ammo word (DAT_000b0ac6),
+                            // capped at 0x14 - they belong to that weapon, not to
+                            // a slot of their own.
+                            hudState.grenades = static_cast<int16_t>(
+                                inventory.pulseRifle.grenades > ALTEngine::Screens::PlayerHudState::GRENADE_MAX
+                                    ? ALTEngine::Screens::PlayerHudState::GRENADE_MAX
+                                    : inventory.pulseRifle.grenades);
                         }
 
                         // The select keys own this now, in the canonical order

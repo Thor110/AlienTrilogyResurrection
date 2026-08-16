@@ -23,6 +23,25 @@ namespace ALTEngine::Screens
     // is what indexes the per-weapon 8-byte table, so each weapon has one
     // animation sequence per state, and changing state is what plays an
     // animation.
+    // The terrain slowdown, and what turns it off.
+    //
+    // Cell attributes 5 and 9 halve movement - FUN_0003d2b8 halves the forward
+    // set and FUN_0003d340 quarters the lateral one. But BOTH only do it when
+    // DAT_000b0abc is zero. That variable is a pickup-granted timer counted down
+    // by FUN_0003e698, so while it is running the player crosses those cells at
+    // full speed.
+    //
+    // This closes a gap that was marked INCOMPLETE here: the slowdown was being
+    // applied unconditionally because the suppressing state had not been found.
+    namespace TerrainEffects
+    {
+        inline bool CellSlowsMovement(uint8_t cellAttribute, int terrainSpeedTicks)
+        {
+            if (terrainSpeedTicks > 0) { return false; }
+            return cellAttribute == 5 || cellAttribute == 9;
+        }
+    }
+
     namespace WeaponSystem
     {
         // Weapon state, the low half of DAT_000b0aac.

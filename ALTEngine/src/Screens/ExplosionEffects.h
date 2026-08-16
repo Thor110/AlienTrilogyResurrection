@@ -3,9 +3,11 @@
 #include "../Formats/BndTextureLoader.h"
 #include "../Formats/ExplosionGraphics.h"
 #include "../Formats/SpriteAnimator.h"
+#include "ParticleSystem.h"
 #include "../Renderer/ModelRenderer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -66,107 +68,157 @@ namespace ALTEngine::Screens
                 return false;
             }
 
-            const int page = ALTEngine::Formats::ExplosionGraphics::BARREL_PAGE;
-            if (static_cast<size_t>(page) >= set.textures.size()) { return false; }
-            const auto& texture = set.textures[static_cast<size_t>(page)];
-
-            if (!ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
-                    SHEET_KEY, texture.rgba, texture.width, texture.height))
+            // Both pages, as two sheets. The uv rect list is FLAT and global,
+            // so each rectangle carries the page it belongs to and the sprite
+            // key follows from that.
+            for (size_t i = 0; i < set.textures.size() && i < 2; ++i)
             {
-                return false;
-            }
-            sheetWidth = texture.width;
-            sheetHeight = texture.height;
-
-            // Keep only the rectangles belonging to the barrel page, in order.
-            for (const auto& rect : set.uvRects)
-            {
-                if (rect.page == page) { frames.push_back(rect); }
-            }
-
-            // The page is a clean grid, so if the BX chunk is missing or odd the
-            // rectangles can be reconstructed from the geometry rather than
-            // giving up on the effect entirely.
-            if (frames.size() < static_cast<size_t>(ALTEngine::Formats::ExplosionGraphics::BARREL_FRAME_COUNT))
-            {
-                frames.clear();
-                const int size = ALTEngine::Formats::ExplosionGraphics::BARREL_FRAME_SIZE;
-                for (int i = 0; i < ALTEngine::Formats::ExplosionGraphics::BARREL_FRAME_COUNT; ++i)
+                const auto& texture = set.textures[i];
+                if (!ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
+                        SheetKey(static_cast<int>(i)), texture.rgba, texture.width, texture.height))
                 {
-                    ALTEngine::Formats::BxRectangle rect{};
-                    rect.x = (i % 3) * size;
-                    rect.y = (i / 3) * size;
-                    rect.width = size;
-                    rect.height = size;
-                    rect.page = page;
-                    frames.push_back(rect);
+                    return false;
                 }
+                sheetWidth[i] = texture.width;
+                sheetHeight[i] = texture.height;
             }
 
-            sequence = ALTEngine::Formats::SpriteAnim::BuildSequence(
-                ALTEngine::Formats::ExplosionGraphics::FRAME_DURATION_GUESS,
-                [this] {
-                    std::vector<uint16_t> list;
-                    for (size_t i = 0; i < frames.size(); ++i) { list.push_back(static_cast<uint16_t>(i)); }
-                    return list;
-                }(),
-                false);
+            rects = set.uvRects;
+            if (rects.size() < 45) { return false; }
 
             loaded = true;
             return true;
         }
 
-        bool Ready() const { return loaded && !frames.empty(); }
+        bool Ready() const { return loaded && rects.size() >= 45; }
 
-        // Sets one off at a world position. `radius` is the half-size the sprite
-        // is drawn at - a barrel's blast reaches its neighbouring cells, so it is
-        // drawn about a cell across by default.
-        void Spawn(float x, float y, float z, float halfSize = 320.0f)
+        // Sets one off. `table` picks which of the file's effects to play - see
+        // ExplosionGraphics for the full list.
+        void Spawn(const ALTEngine::Formats::ExplosionGraphics::EffectTable& table,
+                   float x, float y, float z)
         {
             if (!Ready()) { return; }
+            if (active.size() >= MAX_ACTIVE) { return; }
+
             Live live;
+            live.table = &table;
             live.x = x;
             live.y = y;
             live.z = z;
-            live.halfSize = halfSize;
-            ALTEngine::Formats::SpriteAnim::Start(live.animator, sequence);
-            active.push_back(live);
+
+            std::vector<uint16_t> frames;
+            for (int i = 0; i < table.frameCount; ++i) { frames.push_back(static_cast<uint16_t>(i)); }
+            live.sequence = ALTEngine::Formats::SpriteAnim::BuildSequence(
+                ALTEngine::Formats::ExplosionGraphics::FRAME_DURATION, frames, false);
+            ALTEngine::Formats::SpriteAnim::Start(live.animator, live.sequence);
+            active.push_back(std::move(live));
         }
 
         // One of the original's logic ticks.
         void Tick()
         {
-            for (Live& live : active)
-            {
-                ALTEngine::Formats::SpriteAnim::Tick(live.animator, sequence);
-            }
+            for (Live& live : active) { ALTEngine::Formats::SpriteAnim::Tick(live.animator, live.sequence); }
             active.erase(std::remove_if(active.begin(), active.end(),
                                         [](const Live& live) { return live.animator.Ended(); }),
                          active.end());
         }
 
-        // Appends this frame's sprites to the render list.
-        void Collect(std::vector<ALTEngine::Renderer::PlacedSprite>& out) const
+        void Collect(std::vector<ALTEngine::Renderer::PlacedSprite>& out,
+                     float cameraX = 0.0f, float cameraZ = 0.0f, bool cull = false) const
         {
             if (!Ready()) { return; }
+            namespace EG = ALTEngine::Formats::ExplosionGraphics;
+
             for (const Live& live : active)
             {
-                size_t index = live.animator.frameIndex;
-                if (index >= frames.size()) { index = frames.size() - 1; }
-                const auto& rect = frames[index];
+                if (cull)
+                {
+                    const float dx = live.x - cameraX;
+                    const float dz = live.z - cameraZ;
+                    const float distance = std::sqrt(dx * dx + dz * dz);
+                    if (distance >= EG::EFFECT_FAR_CUTOFF || distance <= EG::EFFECT_NEAR_CUTOFF) { continue; }
+                }
+
+                int frame = static_cast<int>(live.animator.frameIndex);
+                if (frame >= live.table->frameCount) { frame = live.table->frameCount - 1; }
+                const size_t record = static_cast<size_t>(live.table->firstRecord + frame);
+                if (record >= rects.size()) { continue; }
+                const auto& rect = rects[record];
+
+                const int page = (rect.page >= 0 && rect.page < 2) ? rect.page : 0;
+                const float sheetW = static_cast<float>(sheetWidth[page]);
+                const float sheetH = static_cast<float>(sheetHeight[page]);
 
                 ALTEngine::Renderer::PlacedSprite sprite;
-                sprite.textureKey = SHEET_KEY;
+                sprite.textureKey = SheetKey(page);
                 sprite.x = live.x;
                 sprite.y = live.y;
                 sprite.z = live.z;
-                sprite.halfWidth = live.halfSize;
-                sprite.halfHeight = live.halfSize;
-                sprite.u0 = static_cast<float>(rect.x) / static_cast<float>(sheetWidth);
-                sprite.v0 = static_cast<float>(rect.y) / static_cast<float>(sheetHeight);
-                sprite.u1 = static_cast<float>(rect.x + rect.width) / static_cast<float>(sheetWidth);
-                sprite.v1 = static_cast<float>(rect.y + rect.height) / static_cast<float>(sheetHeight);
+
+                // The original multiplies the rect's size by the table's scale
+                // and divides by distance. A world-space quad only needs the
+                // first half - perspective does the rest.
+                sprite.halfWidth = 0.5f * rect.width
+                                 * (static_cast<float>(live.table->scaleX) / EG::SCALE_ONE)
+                                 * EG::WORLD_UNITS_PER_SCALED_PIXEL;
+                sprite.halfHeight = 0.5f * rect.height
+                                  * (static_cast<float>(live.table->scaleY) / EG::SCALE_ONE)
+                                  * EG::WORLD_UNITS_PER_SCALED_PIXEL;
+
+                sprite.u0 = static_cast<float>(rect.x) / sheetW;
+                sprite.v0 = static_cast<float>(rect.y) / sheetH;
+                sprite.u1 = static_cast<float>(rect.x + rect.width) / sheetW;
+                sprite.v1 = static_cast<float>(rect.y + rect.height) / sheetH;
                 out.push_back(sprite);
+            }
+        }
+
+        // A DESTROYED OBJECT SCATTERS SIX OF THESE, from FUN_00037dd0.
+        //
+        // It does not spawn one effect - it spawns SIX, at random offsets around
+        // the object, and the scatter axis follows the object's facing:
+        //
+        //   facing 0 or 4  x + (random & 0x1ff) - 0x100,  y + random - 0x80
+        //   facing 2 or 6  the same pattern on the other axis
+        //   anything else  a single effect, no scatter
+        //
+        // Object type 0x1d gets ONE instead of six; everything else gets six.
+        // The base position is lifted by 0x200 and by the object's own height
+        // byte before any of that.
+        //
+        // Six flat sprites bursting outward is what reads as a crate breaking
+        // into pieces. Whether the frames themselves are shard-shaped is a
+        // question about the table at DAT_000ad008, which is one of page 0's
+        // sequences and is not identified yet - this uses the barrel page until
+        // it is, so the SCATTER is right and the artwork is not.
+        static constexpr int SCATTER_COUNT = 6;
+        static constexpr int SCATTER_SINGLE_TYPE = 0x1d;
+        static constexpr int SCATTER_SPREAD = 0x100;   // half of the 0x1ff mask
+        static constexpr int SCATTER_CROSS = 0x80;
+        static constexpr int SCATTER_LIFT = 0x200;
+
+        // `facing` is the object's rotation field: 0/4 scatter along X, 2/6
+        // along Z, anything else gives a single effect.
+        void SpawnScatter(float x, float y, float z, int facing, int objectType = 0)
+        {
+            if (!Ready()) { return; }
+
+            const bool alongX = (facing == 0 || facing == 4);
+            const bool alongZ = (facing == 2 || facing == 6);
+            if (!alongX && !alongZ)
+            {
+                Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE, x, y + SCATTER_LIFT, z);
+                return;
+            }
+
+            const int count = (objectType == SCATTER_SINGLE_TYPE) ? 1 : SCATTER_COUNT;
+            for (int i = 0; i < count; ++i)
+            {
+                const float spread = static_cast<float>(rng.Bits(0x1ff) - SCATTER_SPREAD);
+                const float cross = static_cast<float>(rng.Bits(0xff) - SCATTER_CROSS);
+                namespace EG = ALTEngine::Formats::ExplosionGraphics;
+                if (alongX) { Spawn(EG::EFFECT_CRATE, x + spread, y + SCATTER_LIFT + cross, z); }
+                else        { Spawn(EG::EFFECT_CRATE, x, y + SCATTER_LIFT + cross, z + spread); }
             }
         }
 
@@ -176,15 +228,20 @@ namespace ALTEngine::Screens
         struct Live
         {
             float x = 0, y = 0, z = 0;
-            float halfSize = 320.0f;
+            const ALTEngine::Formats::ExplosionGraphics::EffectTable* table = nullptr;
+            std::vector<uint16_t> sequence;
             ALTEngine::Formats::SpriteAnim::Animator animator;
         };
 
+        static const char* SheetKey(int page) { return page == 1 ? "explgfx1" : "explgfx0"; }
+
+        static constexpr size_t MAX_ACTIVE = 32;
+
+        ALTEngine::Screens::Particles::Rng rng;
         bool loaded = false;
-        int sheetWidth = 256;
-        int sheetHeight = 256;
-        std::vector<ALTEngine::Formats::BxRectangle> frames;
-        std::vector<uint16_t> sequence;
+        int sheetWidth[2] = { 256, 256 };
+        int sheetHeight[2] = { 256, 256 };
+        std::vector<ALTEngine::Formats::BxRectangle> rects;
         std::vector<Live> active;
     };
 }
