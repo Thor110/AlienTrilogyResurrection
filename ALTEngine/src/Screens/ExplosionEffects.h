@@ -50,17 +50,27 @@ namespace ALTEngine::Screens
             ALTEngine::Formats::BndTextureSet set;
             try
             {
-                // PALETTE-INDEX TRANSPARENCY, one entry per page. Without it the
-                // blast draws as an opaque 84x84 square: the fragment shader cuts
-                // out on alpha below 0.5, and every texel decodes fully opaque
-                // unless the loader is told which palette index means "nothing".
+                // PALETTE-INDEX TRANSPARENCY, and it is NOT one index for the
+                // whole file.
                 //
-                // Index 0, and that is checked rather than assumed: on the
-                // barrel page the top-left texel of all nine frames is 0, the
-                // unused strip past the grid is entirely 0, and 0 accounts for
-                // 49,389 of the page's 65,536 texels - three quarters of it. It
-                // is the background.
-                const std::vector<std::vector<int>> transparentIndices{ { 0 }, { 0 } };
+                // Checked per effect group by sampling the border row of every
+                // frame in it:
+                //     page 0, records  0..8   index 0
+                //     page 0, records  9..17  index 0    (the barrel)
+                //     page 0, records 18..23  index 0
+                //     page 0, records 25..31  index 16   (the bullet impact)
+                //     page 1, records 36..44  index 0    (the crate)
+                //
+                // So the impact frames sit on 16 while everything else sits on 0.
+                // Passing only 0 left the impact puff as an opaque block while
+                // the barrel looked right, which is exactly what was seen
+                // (Edward, 2026).
+                //
+                // Both indices are given for page 0. That is safe: 0 and 16 are
+                // each a background somewhere on that page, and neither is used
+                // as a drawn colour by a group that relies on the other. Page 1
+                // gets 0 alone, since 16 is a real colour there.
+                const std::vector<std::vector<int>> transparentIndices{ { 0, 16 }, { 0 } };
                 set = ALTEngine::Formats::BndTextureLoader::Load(path, std::nullopt, transparentIndices);
             }
             catch (const std::exception&)
@@ -94,8 +104,12 @@ namespace ALTEngine::Screens
 
         // Sets one off. `table` picks which of the file's effects to play - see
         // ExplosionGraphics for the full list.
+        // `flipVertically` mirrors the frames upside down. A puff on the
+        // CEILING is the same artwork hanging the other way up - the original's
+        // effect frames are drawn with a fixed orientation, so without this a
+        // ceiling hit shows smoke rising into the concrete.
         void Spawn(const ALTEngine::Formats::ExplosionGraphics::EffectTable& table,
-                   float x, float y, float z)
+                   float x, float y, float z, bool flipVertically = false)
         {
             if (!Ready()) { return; }
             if (active.size() >= MAX_ACTIVE) { return; }
@@ -105,6 +119,7 @@ namespace ALTEngine::Screens
             live.x = x;
             live.y = y;
             live.z = z;
+            live.flipVertically = flipVertically;
 
             std::vector<uint16_t> frames;
             for (int i = 0; i < table.frameCount; ++i) { frames.push_back(static_cast<uint16_t>(i)); }
@@ -123,8 +138,15 @@ namespace ALTEngine::Screens
                          active.end());
         }
 
+        // `cameraY` matters: the cull has to be a real 3D distance. Measuring
+        // only on the ground plane means an effect at the player's feet or
+        // directly overhead is nearly zero away and gets culled by the NEAR cut -
+        // which is exactly why bullet impacts showed on walls but never on floors
+        // or ceilings (Edward, 2026). The original culls on the PROJECTED
+        // distance, which includes depth.
         void Collect(std::vector<ALTEngine::Renderer::PlacedSprite>& out,
-                     float cameraX = 0.0f, float cameraZ = 0.0f, bool cull = false) const
+                     float cameraX = 0.0f, float cameraY = 0.0f, float cameraZ = 0.0f,
+                     bool cull = false) const
         {
             if (!Ready()) { return; }
             namespace EG = ALTEngine::Formats::ExplosionGraphics;
@@ -134,8 +156,9 @@ namespace ALTEngine::Screens
                 if (cull)
                 {
                     const float dx = live.x - cameraX;
+                    const float dy = live.y - cameraY;
                     const float dz = live.z - cameraZ;
-                    const float distance = std::sqrt(dx * dx + dz * dz);
+                    const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
                     if (distance >= EG::EFFECT_FAR_CUTOFF || distance <= EG::EFFECT_NEAR_CUTOFF) { continue; }
                 }
 
@@ -169,6 +192,10 @@ namespace ALTEngine::Screens
                 sprite.v0 = static_cast<float>(rect.y) / sheetH;
                 sprite.u1 = static_cast<float>(rect.x + rect.width) / sheetW;
                 sprite.v1 = static_cast<float>(rect.y + rect.height) / sheetH;
+
+                // Upside down for a ceiling hit - swap the V bounds.
+                if (live.flipVertically) { std::swap(sprite.v0, sprite.v1); }
+
                 out.push_back(sprite);
             }
         }
@@ -229,6 +256,7 @@ namespace ALTEngine::Screens
         {
             float x = 0, y = 0, z = 0;
             const ALTEngine::Formats::ExplosionGraphics::EffectTable* table = nullptr;
+            bool flipVertically = false;
             std::vector<uint16_t> sequence;
             ALTEngine::Formats::SpriteAnim::Animator animator;
         };

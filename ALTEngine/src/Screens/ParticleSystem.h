@@ -498,16 +498,34 @@ namespace ALTEngine::Screens
                                        ? static_cast<int>(stepLength / MAX_SUBSTEP) + 1 : 1;
                     const float inv = 1.0f / static_cast<float>(substeps);
 
+                    // The callback gets the candidate position AND the last one
+                    // known clear, because a round is stopped by a surface it has
+                    // ALREADY crossed - the candidate is inside the wall or under
+                    // the floor.
+                    //
+                    // That is what hid the floor impacts: the effect was spawned
+                    // at the candidate, so the sprite sat buried beneath the floor
+                    // with nothing above the surface. A wall hit happened to show
+                    // because half the quad still stuck out toward the player
+                    // (Edward, 2026).
                     bool stopped = false;
                     float nx = p.x, ny = p.y, nz = p.z;
+                    float clearX = p.x, clearY = p.y, clearZ = p.z;
                     for (int step = 0; step < substeps && !stopped; ++step)
                     {
+                        clearX = nx; clearY = ny; clearZ = nz;
                         nx += p.vx * inv;
                         ny += p.vy * inv;
                         nz += p.vz * inv;
-                        if ((isProjectile || p.falls) && blocked(nx, ny, nz, static_cast<int>(p.type), p.life))
+                        if ((isProjectile || p.falls)
+                            && blocked(nx, ny, nz, static_cast<int>(p.type), p.life,
+                                       clearX, clearY, clearZ))
                         {
                             stopped = true;
+                            // Leave the round on the clear side, so the shatter
+                            // and anything else spawned from its position sits on
+                            // the surface rather than through it.
+                            nx = clearX; ny = clearY; nz = clearZ;
                         }
                     }
 

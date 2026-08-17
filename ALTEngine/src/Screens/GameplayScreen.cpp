@@ -478,6 +478,7 @@ namespace ALTEngine::Screens
             autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
             freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
+
             // The cheat's own stored state, so it stays on across levels while
             // Enable Cheats is active.
             if (modern.IsActive(ALTEngine::Bootstrap::ModernFeature::EnableCheats))
@@ -517,6 +518,10 @@ namespace ALTEngine::Screens
         // Camera Sway (the original's DAT_000acea0) gates head bob, view roll
         // and the yaw sway together. Footsteps keep running either way.
         bool cameraSway = cameraSwaySettings.Get();
+
+        // Modern: draw tracers along their real direction of travel rather than
+        // as the original's flat sideways streak.
+
 
         if (mapPath.has_value() && gfxPath.has_value())
         {
@@ -1114,6 +1119,7 @@ namespace ALTEngine::Screens
                         autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
                         freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
                         liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
+
                         ModelRenderer::SetDrawDistanceFade(
                             !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance));
                     }
@@ -1423,13 +1429,30 @@ namespace ALTEngine::Screens
                         // THREE projectiles out per pull, with the later ones
                         // launched faster (0x80 apart) so a burst strings out in
                         // flight rather than travelling as a clump.
+                        // FIRE ALONG WHERE THE PLAYER IS ACTUALLY LOOKING.
+                        //
+                        // This used playerCam.viewPitch, which is only the
+                        // authoritative pitch when the original's automatic ramp
+                        // pitch is driving it. With Free Look on, the mouse writes
+                        // camera.pitch directly and PlayerCamera never touches its
+                        // own - so viewPitch sat at whatever the ramps last left
+                        // it, usually zero, and every round left the barrel flat
+                        // no matter how far up or down the player aimed. Rounds
+                        // travelled on two axes only (Edward, 2026).
+                        //
+                        // camera.pitch is the one the renderer builds the view
+                        // from, so it is the one to fire along. Converted back
+                        // into the 4096-per-turn units the projectile maths uses.
+                        const int firingPitch = static_cast<int>(std::lround(
+                            camera.pitch * (PC::ANGLE_UNITS / 6.28318530718f))) & PC::ANGLE_MASK;
+
                         const int shots = P::ShotsPerPull(projectileType);
                         for (int shot = 0; shot < shots; ++shot)
                         {
                             const int launchSpeed = playerCam.speed + shot * P::BurstSpeedStep;
                             P::Particle* round = particles.SpawnProjectile(
                                 projectileType, camera.x, camera.y, camera.z,
-                                playerCam.viewYaw, playerCam.viewPitch, launchSpeed);
+                                playerCam.viewYaw, firingPitch, launchSpeed);
 
                             // The smartgun's three shots get progressively
                             // shorter lives, so they die at three ranges
@@ -1753,7 +1776,8 @@ namespace ALTEngine::Screens
                             }
                         };
 
-                        particles.Tick([&](float px, float py, float pz, int hitType, int hitLife) {
+                        particles.Tick([&](float px, float py, float pz, int hitType, int hitLife,
+                                           float clearX, float clearY, float clearZ) {
                             // Something destructible first. The damage is the
                             // projectile's SPEED field doubled while the round is
                             // still fresh - see DamageSystem::HitDamage, and note
@@ -1840,8 +1864,47 @@ namespace ALTEngine::Screens
                             // (x >> 9) + width * (z >> 9) and probes that, then
                             // steps once and probes again. No footprint, no
                             // step-up.
-                            if (ALTEngine::Formats::IsCellBlocking(level,
-                                    ToGridSpaceX(px, originX), ToGridSpaceZ(pz, originZ)))
+                            // A round can be stopped by a wall, by the floor OR
+                            // by the ceiling, and all three want the impact
+                            // effect and sound.
+                            //
+                            // This only ran them for a WALL. A floor hit returned
+                            // "blocked" without spawning anything and there was no
+                            // ceiling test at all - so shooting down left no mark
+                            // and shooting up went straight through (Edward,
+                            // 2026).
+                            bool hitCeiling = false;
+                            bool stopped = ALTEngine::Formats::IsCellBlocking(
+                                level, ToGridSpaceX(px, originX), ToGridSpaceZ(pz, originZ));
+
+                            const int gx = ToGridSpaceX(px, originX);
+                            const int gz = ToGridSpaceZ(pz, originZ);
+                            const float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
+                            if (!stopped && py < floorY) { stopped = true; }
+
+                            if (!stopped)
+                            {
+                                // Ceiling. The cell's own ceiling byte, in the
+                                // same height units the floor uses.
+                                const int cx = gx >> 9;
+                                const int cz = gz >> 9;
+                                if (cx >= 0 && cz >= 0 && cx < level.header.mapLength
+                                    && cz < level.header.mapWidth)
+                                {
+                                    const size_t ci = static_cast<size_t>(cz)
+                                                    * static_cast<size_t>(level.header.mapLength)
+                                                    + static_cast<size_t>(cx);
+                                    if (ci < level.collisionGrid.size())
+                                    {
+                                        const float ceiling = static_cast<float>(
+                                            level.collisionGrid[ci].ceilingHeight)
+                                            * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT;
+                                        if (py > ceiling) { stopped = true; hitCeiling = true; }
+                                    }
+                                }
+                            }
+
+                            if (stopped)
                             {
                                 // Impact sound picked by where it landed, not by
                                 // what fired - brick, metal or water.
@@ -1851,14 +1914,12 @@ namespace ALTEngine::Screens
                                     digits.c_str(), cdDirectory);
                                 // The impact puff - uv records 25..31, which
                                 // FUN_0002ad48 selects for every projectile type.
+                                // At the last CLEAR position, not the candidate -
+                                // the candidate is already through the surface.
                                 explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_IMPACT,
-                                                 px, py, pz);
-                                return true;
+                                                 clearX, clearY, clearZ, hitCeiling);
                             }
-
-                            const float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(
-                                level, ToGridSpaceX(px, originX), ToGridSpaceZ(pz, originZ));
-                            return py < floorY;
+                            return stopped;
                         });
                     }
 
@@ -2359,9 +2420,15 @@ namespace ALTEngine::Screens
 
                         // The original's own culling: nothing closer than 0x200,
                         // nothing past 0x1801.
+                        //
+                        // A 3D distance, not a ground-plane one. On the ground
+                        // plane a particle at the player's feet measures as
+                        // almost zero away and the near cut throws it out, which
+                        // hid every impact fired downward.
                         const float dx = particle.x - camera.x;
+                        const float dy = particle.y - camera.y;
                         const float dz = particle.z - camera.z;
-                        const float distance = std::sqrt(dx * dx + dz * dz);
+                        const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
                         if (distance < P::DRAW_NEAR_CUTOFF || distance > P::DRAW_FAR_CUTOFF) { continue; }
 
                         ALTEngine::Renderer::PlacedSprite spark;
@@ -2377,17 +2444,46 @@ namespace ALTEngine::Screens
                         }
                         else
                         {
-                            // Stretched along the direction of travel, by the
-                            // same fraction of the velocity the original's line
-                            // spans.
-                            const float speed = std::sqrt(particle.vx * particle.vx + particle.vz * particle.vz);
+                            // ORIENTED ALONG TRAVEL, not billboarded.
+                            //
+                            // A tracer stretched horizontally on a camera-facing
+                            // quad is a horizontal dash whichever way the round
+                            // is actually going - so firing straight ahead drew
+                            // a bar across the screen and looked like the bullet
+                            // had gone sideways (Edward, 2026). The trajectory
+                            // was right all along; the quad was not.
+                            //
+                            // The original draws a line from the position to
+                            // position + a fraction of the velocity
+                            // (FUN_0002d3e4), so the streak IS the velocity
+                            // vector. Turning the quad to match gives that, and
+                            // a round fired at the camera foreshortens to a dot
+                            // as it should.
+                            const float speed = std::sqrt(particle.vx * particle.vx
+                                                        + particle.vy * particle.vy
+                                                        + particle.vz * particle.vz);
                             const float streak = speed * P::TracerVelocityFraction(particle.type) * 0.5f;
                             spark.halfWidth = (streak > TRACER_MIN_HALF_SIZE) ? streak : TRACER_MIN_HALF_SIZE;
                             spark.halfHeight = TRACER_MIN_HALF_SIZE;
+
+                            // Along the direction of travel. This was briefly a
+                            // Modern option, on the reading that the original's
+                            // flat sideways streak was deliberate - but the streak
+                            // only looked flat because rounds were being fired
+                            // with no vertical velocity at all. With that fixed
+                            // the oriented quad is simply correct, and the option
+                            // had nothing left to toggle.
+                            spark.billboard = false;
+                            // Local +X runs along the quad's width, so yaw it to
+                            // the direction of travel and pitch it by the climb.
+                            spark.rotY = std::atan2(particle.vx, -particle.vz);
+                            const float flat = std::sqrt(particle.vx * particle.vx
+                                                       + particle.vz * particle.vz);
+                            spark.rotZ = std::atan2(particle.vy, flat > 0.001f ? flat : 0.001f);
                         }
                         placedSprites.push_back(spark);
                     }
-                    explosions.Collect(placedSprites, camera.x, camera.z, true);
+                    explosions.Collect(placedSprites, camera.x, camera.y, camera.z, true);
                     enemySprites.Collect(enemies, camera.x, camera.z, placedSprites);
                     shatter.Collect(placedSprites, camera.x, camera.z);
                 }

@@ -303,11 +303,29 @@ namespace ALTEngine::Screens
                 return;
             }
 
-            // Nothing left. Hand off if anything else can fire, otherwise fall
-            // back to the pistol as described above.
+            // Nothing left in the magazine and no spare units.
+            //
+            // THESE ARE TWO DIFFERENT OUTCOMES, and collapsing them into
+            // STATE_EMPTY was wrong. FUN_0003efcc's pistol arm reads:
+            //
+            //     if (FUN_00038c78() == 0) { state = 2; remainder = 1; restart; }
+            //     else                     { state = 4; flag |= 2; FUN_000524b0(0); }
+            //
+            // State 2 is RELOAD, not empty. So when nothing else can be switched
+            // to, the pistol RELOADS with a single round - and because that
+            // repeats every time the round is spent, the player reloads, fires
+            // one, reloads, fires one, indefinitely. That is why the pistol can
+            // never truly run dry.
+            //
+            // Sending it to STATE_EMPTY instead latched it there forever: empty
+            // has no animation, so nothing ever ended to return it to idle, and
+            // TryPrimaryFire only fires from idle. One shot and the weapon was
+            // dead (Edward, 2026).
             if (!canSwitchAway)
             {
                 if (hud.ammoRemainder[0] == 0) { hud.ammoRemainder[0] = 1; }
+                runtime.SetState(STATE_RELOAD);
+                return;
             }
             runtime.SetState(STATE_EMPTY);
         }
