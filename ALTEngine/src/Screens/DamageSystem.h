@@ -237,6 +237,11 @@ namespace ALTEngine::Screens
             int crateIndex = -1;       // its record in level.crates, for its contents
             int facing = 0;            // rotation - picks the debris scatter axis
             int objectType = 0;        // crate type - 0x1d scatters one piece, not six
+
+            // What the object is made of, so it can be torn into its own faces
+            // when destroyed (Formats/ObjectShatter.h).
+            ALTEngine::Renderer::ModelCacheKey modelKey{};
+            float scaleX = 1.0f, scaleY = 1.0f, scaleZ = 1.0f;
         };
 
         // Length of the hit-reaction window - ZERO for static objects, and this

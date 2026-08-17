@@ -147,6 +147,17 @@ namespace ALTEngine::Renderer
         // 1,1,1 for an unlit sprite.
         float r = 1.0f, g = 1.0f, b = 1.0f;
 
+        // ORIENTED QUADS. A billboard always faces the camera; a shard torn off
+        // a crate does not - it tumbles in world space and shows its back half
+        // the time. Setting billboard false builds the quad from these three
+        // angles instead, in radians.
+        //
+        // The original's own shard draw (FUN_0002d054) puts a type-6 particle
+        // through a full 3x3 rotation before drawing its face, so this is the
+        // same idea rather than an addition.
+        bool billboard = true;
+        float rotX = 0.0f, rotY = 0.0f, rotZ = 0.0f;
+
         bool visible = true;
     };
 
@@ -338,6 +349,25 @@ namespace ALTEngine::Renderer
         // fragment shader cuts out texels with alpha below 0.5 - the same
         // colour-key path the cutout models use - so a sprite wants a hard alpha
         // edge, not a soft one.
+        // One quad of a loaded model, in the model's own local space. Used to
+        // tear an object into its faces when it is destroyed - see
+        // Formats/ObjectShatter.h.
+        struct ModelFace
+        {
+            float cx, cy, cz;       // centre, local
+            float halfWidth;
+            float halfHeight;
+            float u0, v0, u1, v1;   // the face's own UV rect
+        };
+
+        // The faces of a loaded model, or nullptr if it was never loaded.
+        // Derived at load from the render mesh's own triangles.
+        static const std::vector<ModelFace>* ModelFaces(const ModelCacheKey& cacheKey);
+
+        // The key its texture is registered under as a sprite sheet, so a shard
+        // can be drawn with the object's own artwork.
+        static std::string ModelSheetKey(const ModelCacheKey& cacheKey);
+
         static bool UploadSpriteSheet(const std::string& key, const std::vector<uint8_t>& rgba,
                                       int width, int height);
 

@@ -8,6 +8,7 @@
 #include "WeaponSystem.h"
 #include "ParticleSystem.h"
 #include "ExplosionEffects.h"
+#include "ShatterEffects.h"
 #include "DamageSystem.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Formats/SoundIds.h"
@@ -441,6 +442,7 @@ namespace ALTEngine::Screens
         ALTEngine::Screens::WeaponSystem::Runtime weaponRuntime;
         ALTEngine::Screens::Particles::Pool particles;
         ALTEngine::Screens::ExplosionEffects explosions;
+        ALTEngine::Screens::ShatterEffects shatter;
 
         // The held weapon. Driven by the select keys below; the pistol is the
         // only thing available at the start of a level.
@@ -760,6 +762,10 @@ namespace ALTEngine::Screens
                             target.crateIndex = static_cast<int>(ci);
                             target.facing = crate.rotation;
                             target.objectType = crate.type;
+                            target.modelKey = placed.cacheKey;
+                            target.scaleX = placed.scaleX;
+                            target.scaleY = placed.scaleY;
+                            target.scaleZ = placed.scaleZ;
                             target.cellIndex = static_cast<int>(
                                 static_cast<size_t>(crate.y) * level.header.mapLength + static_cast<size_t>(crate.x));
                             damageTargets.push_back(target);
@@ -1503,6 +1509,10 @@ namespace ALTEngine::Screens
                         namespace D = ALTEngine::Screens::Damage;
                         for (D::Target& target : damageTargets) { D::TickTarget(target); }
                         explosions.Tick();
+                        shatter.Tick([&](float sx, float sz) {
+                            return ALTEngine::Formats::FindFloorHeightGridSpace(
+                                level, ToGridSpaceX(sx, originX), ToGridSpaceZ(sz, originZ));
+                        });
                         hudState.TickCarriedItems();
 
                         // Destroying something: clear its occupancy so the
@@ -1555,6 +1565,18 @@ namespace ALTEngine::Screens
                             }
                             ClearOccupancy(target.cellIndex);
                             ReleaseContents(target.crateIndex);
+
+                            // Tear the object into pieces of its own mesh. This
+                            // is the real break-up; the effect sprites below are
+                            // a separate system that plays alongside it.
+                            if (const auto* faces = ALTEngine::Renderer::ModelRenderer::ModelFaces(target.modelKey))
+                            {
+                                shatter.Shatter(*faces,
+                                                ALTEngine::Renderer::ModelRenderer::ModelSheetKey(target.modelKey),
+                                                target.x, target.y, target.z,
+                                                target.scaleX, target.scaleY, target.scaleZ,
+                                                target.objectType, target.facing);
+                            }
                             if (target.kind == D::TARGET_BARREL)
                             {
                                 blastQueue.push_back(target.cellIndex);
@@ -2272,6 +2294,7 @@ namespace ALTEngine::Screens
                         placedSprites.push_back(spark);
                     }
                     explosions.Collect(placedSprites, camera.x, camera.z, true);
+                    shatter.Collect(placedSprites, camera.x, camera.z);
                 }
 
                 const size_t staticObjectCount = placedObjects.size();

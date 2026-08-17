@@ -11,6 +11,7 @@
 #include <cctype>
 
 #include <SDL3/SDL.h>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -56,7 +57,8 @@ namespace ALTEngine::Renderer
             uint32_t indexCount = 0;
             SDL_GPUTexture* texture = nullptr;
             float centerX = 0, centerY = 0, centerZ = 0; // AABB center, for auto-framing the camera
-            float radius = 1.0f;                          // AABB bounding-sphere radius
+            float radius = 1.0f;
+        std::vector<ModelRenderer::ModelFace> faces;                          // AABB bounding-sphere radius
             float baseRotationRadians = 0.0f;              // fixed per-model orientation offset - see LoadModel's doc comment
             bool useDoubleSided = false;                   // true for colour-key cutout models - see LoadModel's doc comment
         };
@@ -816,6 +818,54 @@ namespace ALTEngine::Renderer
         device = nullptr;
     }
 
+    namespace
+    {
+        // Six indices per quad, four distinct vertices. The face's extent is
+        // taken as half its diagonal on each axis, which is what a shard needs -
+        // it is drawn as a flat quad of that size, not as the original polygon.
+        std::vector<ModelRenderer::ModelFace> ExtractFaces(const RenderMesh& mesh)
+        {
+            std::vector<ModelRenderer::ModelFace> faces;
+            if (mesh.indices.size() < 6) { return faces; }
+
+            for (size_t i = 0; i + 5 < mesh.indices.size(); i += 6)
+            {
+                float minX = 1e30f, maxX = -1e30f, minY = 1e30f, maxY = -1e30f, minZ = 1e30f, maxZ = -1e30f;
+                float minU = 1e30f, maxU = -1e30f, minV = 1e30f, maxV = -1e30f;
+                bool ok = true;
+
+                for (size_t k = 0; k < 6; ++k)
+                {
+                    const uint32_t vi = mesh.indices[i + k];
+                    if (vi >= mesh.vertices.size()) { ok = false; break; }
+                    const auto& v = mesh.vertices[vi];
+                    minX = std::min(minX, v.x); maxX = std::max(maxX, v.x);
+                    minY = std::min(minY, v.y); maxY = std::max(maxY, v.y);
+                    minZ = std::min(minZ, v.z); maxZ = std::max(maxZ, v.z);
+                    minU = std::min(minU, v.u); maxU = std::max(maxU, v.u);
+                    minV = std::min(minV, v.v); maxV = std::max(maxV, v.v);
+                }
+                if (!ok) { continue; }
+
+                ModelRenderer::ModelFace face;
+                face.cx = (minX + maxX) * 0.5f;
+                face.cy = (minY + maxY) * 0.5f;
+                face.cz = (minZ + maxZ) * 0.5f;
+
+                // A face can be flat on any axis, so its on-screen size is the
+                // larger two extents.
+                float e[3] = { maxX - minX, maxY - minY, maxZ - minZ };
+                std::sort(e, e + 3);
+                face.halfWidth = std::max(e[2], 1.0f) * 0.5f;
+                face.halfHeight = std::max(e[1], 1.0f) * 0.5f;
+
+                face.u0 = minU; face.v0 = minV; face.u1 = maxU; face.v1 = maxV;
+                faces.push_back(face);
+            }
+            return faces;
+        }
+    }
+
     bool ModelRenderer::LoadModel(ModelCacheKey cacheKey, int meshNumber,
                                    const std::filesystem::path& objBndPath, const std::filesystem::path& gfxBndPath,
                                    std::optional<std::array<uint8_t, 3>> transparentRgb,
@@ -932,6 +982,20 @@ namespace ALTEngine::Renderer
         model.radius = radius;
         model.baseRotationRadians = baseRotationRadians;
         model.useDoubleSided = transparentRgb.has_value();
+
+        // Keep the faces so the object can be torn into them when destroyed.
+        // BuildRenderMesh emits a quad as two triangles sharing four vertices,
+        // so six consecutive indices are one face - the same unit the original
+        // shatters (FUN_000464ec turns ONE face into four shards).
+        model.faces = ExtractFaces(renderMesh);
+
+        // And the model's own texture as a sprite sheet, so a shard can carry
+        // the crate's artwork rather than a stand-in.
+        if (!renderMesh.vertices.empty() && tex && !tex->rgba.empty())
+        {
+            UploadSpriteSheet(ModelSheetKey(cacheKey), tex->rgba, tex->width, tex->height);
+        }
+
         loadedModels[cacheKey] = model;
 
         return true;
@@ -1621,6 +1685,18 @@ namespace ALTEngine::Renderer
         it->second.animator.ChangeTexture(static_cast<size_t>(animatorIndex), delta);
     }
 
+    const std::vector<ModelRenderer::ModelFace>* ModelRenderer::ModelFaces(const ModelCacheKey& cacheKey)
+    {
+        auto it = loadedModels.find(cacheKey);
+        if (it == loadedModels.end() || it->second.faces.empty()) { return nullptr; }
+        return &it->second.faces;
+    }
+
+    std::string ModelRenderer::ModelSheetKey(const ModelCacheKey& cacheKey)
+    {
+        return "model:" + DescribeCacheKey(cacheKey);
+    }
+
     bool ModelRenderer::UploadSpriteSheet(const std::string& key, const std::vector<uint8_t>& rgba,
                                           int width, int height)
     {
@@ -1892,14 +1968,52 @@ namespace ALTEngine::Renderer
                             if (!sprite.visible || sprite.textureKey != sheetEntry.first) { continue; }
 
                             const uint32_t base = static_cast<uint32_t>(verts.size());
-                            const float dx = rightX * sprite.halfWidth;
-                            const float dz = rightZ * sprite.halfWidth;
-                            const float dy = sprite.halfHeight;
+                            float px[4], py[4], pz[4];
 
-                            // top-left, top-right, bottom-right, bottom-left
-                            const float px[4] = { sprite.x - dx, sprite.x + dx, sprite.x + dx, sprite.x - dx };
-                            const float py[4] = { sprite.y + dy, sprite.y + dy, sprite.y - dy, sprite.y - dy };
-                            const float pz[4] = { sprite.z - dz, sprite.z + dz, sprite.z + dz, sprite.z - dz };
+                            if (sprite.billboard)
+                            {
+                                const float dx = rightX * sprite.halfWidth;
+                                const float dz = rightZ * sprite.halfWidth;
+                                const float dy = sprite.halfHeight;
+                                // top-left, top-right, bottom-right, bottom-left
+                                px[0] = sprite.x - dx; px[1] = sprite.x + dx; px[2] = sprite.x + dx; px[3] = sprite.x - dx;
+                                py[0] = sprite.y + dy; py[1] = sprite.y + dy; py[2] = sprite.y - dy; py[3] = sprite.y - dy;
+                                pz[0] = sprite.z - dz; pz[1] = sprite.z + dz; pz[2] = sprite.z + dz; pz[3] = sprite.z - dz;
+                            }
+                            else
+                            {
+                                // World-oriented: build the quad flat on XY and
+                                // turn it by the sprite's own angles. A tumbling
+                                // shard needs this - a billboard would keep it
+                                // permanently face-on and it would never look
+                                // like it was spinning.
+                                const float cxr = std::cos(sprite.rotX), sxr = std::sin(sprite.rotX);
+                                const float cyr = std::cos(sprite.rotY), syr = std::sin(sprite.rotY);
+                                const float czr = std::cos(sprite.rotZ), szr = std::sin(sprite.rotZ);
+
+                                const float lx[4] = { -sprite.halfWidth,  sprite.halfWidth,
+                                                       sprite.halfWidth, -sprite.halfWidth };
+                                const float ly[4] = {  sprite.halfHeight, sprite.halfHeight,
+                                                      -sprite.halfHeight, -sprite.halfHeight };
+
+                                for (int corner = 0; corner < 4; ++corner)
+                                {
+                                    // Z, then Y, then X.
+                                    float ax = lx[corner] * czr - ly[corner] * szr;
+                                    float ay = lx[corner] * szr + ly[corner] * czr;
+                                    float az = 0.0f;
+
+                                    float bx = ax * cyr + az * syr;
+                                    float bz = -ax * syr + az * cyr;
+
+                                    float cy2 = ay * cxr - bz * sxr;
+                                    float cz2 = ay * sxr + bz * cxr;
+
+                                    px[corner] = sprite.x + bx;
+                                    py[corner] = sprite.y + cy2;
+                                    pz[corner] = sprite.z + cz2;
+                                }
+                            }
                             const float u[4] = { sprite.u0, sprite.u1, sprite.u1, sprite.u0 };
                             const float v[4] = { sprite.v0, sprite.v0, sprite.v1, sprite.v1 };
 
