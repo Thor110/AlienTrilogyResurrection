@@ -1,0 +1,16 @@
+# No Gs entries: Italian shipped as placeholders in the original
+# .BIN file, so these fall back to English.
+# ---------------------------------------------------------------------------
+# Everything ABOVE this line came out of the original game's LANGUAGE/*.BIN
+# files, which are plain NUL-terminated string lists with no header - the
+# index is the ordinal position. Keys are Gs<Name> and the trailing number in
+# the comment is that original index, so they can be matched back up.
+#
+# Only ENGL, AMER and GERM were ever translated. FREN, ITAL, JAPA and SPAN
+# shipped as 185-of-186 placeholders ("FRENCH TEXT" and so on), so those packs
+# get no Gs entries at all and fall back to English rather than showing the
+# placeholder text.
+#
+# BELOW this line is the port's own menu text, which predates the extraction
+# and covers options the original never had.
+# ---------------------------------------------------------------------------

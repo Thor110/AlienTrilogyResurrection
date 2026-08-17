@@ -150,6 +150,193 @@ namespace ALTEngine::Bootstrap
         case StringId::DescFullyLoaded: return "DescFullyLoaded";
         case StringId::MaximumHealth: return "MaximumHealth";
         case StringId::DescMaximumHealth: return "DescMaximumHealth";
+        case StringId::GsOptions: return "GsOptions";
+        case StringId::GsRedefineKeyboard: return "GsRedefineKeyboard";
+        case StringId::GsRedefineMouse: return "GsRedefineMouse";
+        case StringId::GsPressEscToGoBack: return "GsPressEscToGoBack";
+        case StringId::GsPressEnterToAdjust: return "GsPressEnterToAdjust";
+        case StringId::GsPressEnterToSelect: return "GsPressEnterToSelect";
+        case StringId::GsDefaultPlayerName: return "GsDefaultPlayerName";
+        case StringId::GsCheatInvincible: return "GsCheatInvincible";
+        case StringId::GsCheatAllWeapons: return "GsCheatAllWeapons";
+        case StringId::GsCheatAllAmmo: return "GsCheatAllAmmo";
+        case StringId::GsCheatGotoLevel: return "GsCheatGotoLevel";
+        case StringId::GsCheatMaxLevel: return "GsCheatMaxLevel";
+        case StringId::GsCheatSetEverything: return "GsCheatSetEverything";
+        case StringId::GsCheatWrongGame: return "GsCheatWrongGame";
+        case StringId::GsCheatDoomed: return "GsCheatDoomed";
+        case StringId::GsCheatYouWish: return "GsCheatYouWish";
+        case StringId::GsCheatLookingCool: return "GsCheatLookingCool";
+        case StringId::GsCheatDuking: return "GsCheatDuking";
+        case StringId::GsCheatThatsYou: return "GsCheatThatsYou";
+        case StringId::GsCheatNiceTry: return "GsCheatNiceTry";
+        case StringId::GsCheatOi: return "GsCheatOi";
+        case StringId::GsVolume: return "GsVolume";
+        case StringId::GsControls: return "GsControls";
+        case StringId::GsDifficulty: return "GsDifficulty";
+        case StringId::GsCameraSway: return "GsCameraSway";
+        case StringId::GsCredits: return "GsCredits";
+        case StringId::GsMusic: return "GsMusic";
+        case StringId::GsSfx: return "GsSfx";
+        case StringId::GsKeyboard: return "GsKeyboard";
+        case StringId::GsMouse: return "GsMouse";
+        case StringId::GsJoystick: return "GsJoystick";
+        case StringId::GsGravisGrip: return "GsGravisGrip";
+        case StringId::GsGravisPad: return "GsGravisPad";
+        case StringId::GsSpaceOrb: return "GsSpaceOrb";
+        case StringId::GsVfx1: return "GsVfx1";
+        case StringId::GsDifficultyEasy: return "GsDifficultyEasy";
+        case StringId::GsDifficultyMedium: return "GsDifficultyMedium";
+        case StringId::GsDifficultyHard: return "GsDifficultyHard";
+        case StringId::GsOff: return "GsOff";
+        case StringId::GsOn: return "GsOn";
+        case StringId::GsRedefine: return "GsRedefine";
+        case StringId::GsCalibrate: return "GsCalibrate";
+        case StringId::GsMoveForwards: return "GsMoveForwards";
+        case StringId::GsMoveBackwards: return "GsMoveBackwards";
+        case StringId::GsTurnLeft: return "GsTurnLeft";
+        case StringId::GsTurnRight: return "GsTurnRight";
+        case StringId::GsStrafeLeft: return "GsStrafeLeft";
+        case StringId::GsStrafeRight: return "GsStrafeRight";
+        case StringId::GsStrafeModifier: return "GsStrafeModifier";
+        case StringId::GsFire1: return "GsFire1";
+        case StringId::GsFire2: return "GsFire2";
+        case StringId::GsDoUse: return "GsDoUse";
+        case StringId::GsNextWeapon: return "GsNextWeapon";
+        case StringId::GsLookUp: return "GsLookUp";
+        case StringId::GsLookDown: return "GsLookDown";
+        case StringId::GsTurnAround: return "GsTurnAround";
+        case StringId::GsLeftButton: return "GsLeftButton";
+        case StringId::GsRightButton: return "GsRightButton";
+        case StringId::GsMiddleButton: return "GsMiddleButton";
+        case StringId::GsBlank: return "GsBlank";
+        case StringId::GsAutoMapper: return "GsAutoMapper";
+        case StringId::GsShoulderLamp: return "GsShoulderLamp";
+        case StringId::GsWeapon9mmPistol: return "GsWeapon9mmPistol";
+        case StringId::GsWeaponShotgun: return "GsWeaponShotgun";
+        case StringId::GsWeaponFlamethrower: return "GsWeaponFlamethrower";
+        case StringId::GsWeaponPulseRifle: return "GsWeaponPulseRifle";
+        case StringId::GsWeaponSmartGun: return "GsWeaponSmartGun";
+        case StringId::GsBatteries: return "GsBatteries";
+        case StringId::GsMission: return "GsMission";
+        case StringId::GsOptionsMenu: return "GsOptionsMenu";
+        case StringId::GsSfxVolume: return "GsSfxVolume";
+        case StringId::GsCddaVolume: return "GsCddaVolume";
+        case StringId::GsExitGame: return "GsExitGame";
+        case StringId::GsNightVision: return "GsNightVision";
+        case StringId::GsNoAmmoAvailable: return "GsNoAmmoAvailable";
+        case StringId::GsRoundsAvailable: return "GsRoundsAvailable";
+        case StringId::GsAreYouSure: return "GsAreYouSure";
+        case StringId::GsYes: return "GsYes";
+        case StringId::GsNo: return "GsNo";
+        case StringId::GsSelected: return "GsSelected";
+        case StringId::GsAvailable: return "GsAvailable";
+        case StringId::GsNotAvailable: return "GsNotAvailable";
+        case StringId::GsDoorActivated: return "GsDoorActivated";
+        case StringId::GsDoorPoweredUp: return "GsDoorPoweredUp";
+        case StringId::GsSteamValveClosed: return "GsSteamValveClosed";
+        case StringId::GsFlameJetShutDown: return "GsFlameJetShutDown";
+        case StringId::GsLiftActivated: return "GsLiftActivated";
+        case StringId::GsBatteryRequired: return "GsBatteryRequired";
+        case StringId::GsJoyCentre: return "GsJoyCentre";
+        case StringId::GsJoyLowerRight: return "GsJoyLowerRight";
+        case StringId::GsFaceForward: return "GsFaceForward";
+        case StringId::GsLoadingDataStars: return "GsLoadingDataStars";
+        case StringId::GsLoadingData: return "GsLoadingData";
+        case StringId::GsHitAnyKey: return "GsHitAnyKey";
+        case StringId::GsIncomingTransfer: return "GsIncomingTransfer";
+        case StringId::GsMissionBrief: return "GsMissionBrief";
+        case StringId::GsPleaseWaitStarting: return "GsPleaseWaitStarting";
+        case StringId::GsStartMultiplayer: return "GsStartMultiplayer";
+        case StringId::GsJoinMultiplayer: return "GsJoinMultiplayer";
+        case StringId::GsMultiplayerOptions: return "GsMultiplayerOptions";
+        case StringId::GsStartGame: return "GsStartGame";
+        case StringId::GsMultiplayer: return "GsMultiplayer";
+        case StringId::GsLoadGame: return "GsLoadGame";
+        case StringId::GsContinueGame: return "GsContinueGame";
+        case StringId::GsSaveGame: return "GsSaveGame";
+        case StringId::GsQuitGame: return "GsQuitGame";
+        case StringId::GsMissionAssessment: return "GsMissionAssessment";
+        case StringId::GsAliens: return "GsAliens";
+        case StringId::GsSecrets: return "GsSecrets";
+        case StringId::GsMissionLabel: return "GsMissionLabel";
+        case StringId::GsPressAnyKey: return "GsPressAnyKey";
+        case StringId::GsWaitingForPlayers: return "GsWaitingForPlayers";
+        case StringId::GsScores: return "GsScores";
+        case StringId::GsGameSetup: return "GsGameSetup";
+        case StringId::GsNameOfGame: return "GsNameOfGame";
+        case StringId::GsStartAtLevel: return "GsStartAtLevel";
+        case StringId::GsMinimumGameLength: return "GsMinimumGameLength";
+        case StringId::GsAcidHell: return "GsAcidHell";
+        case StringId::GsSearchingNetGames: return "GsSearchingNetGames";
+        case StringId::GsOpen: return "GsOpen";
+        case StringId::GsClosed: return "GsClosed";
+        case StringId::GsBetweenLevels: return "GsBetweenLevels";
+        case StringId::GsLevel: return "GsLevel";
+        case StringId::GsPlayers: return "GsPlayers";
+        case StringId::GsStatus: return "GsStatus";
+        case StringId::GsEditYourData: return "GsEditYourData";
+        case StringId::GsYourName: return "GsYourName";
+        case StringId::GsFxMessage: return "GsFxMessage";
+        case StringId::GsInvalidSaveFile: return "GsInvalidSaveFile";
+        case StringId::GsErrorWritingSave: return "GsErrorWritingSave";
+        case StringId::GsUnused130: return "GsUnused130";
+        case StringId::GsInsertCd: return "GsInsertCd";
+        case StringId::GsNoPathTxt: return "GsNoPathTxt";
+        case StringId::GsDemo: return "GsDemo";
+        case StringId::GsRunMode: return "GsRunMode";
+        case StringId::GsBattery: return "GsBattery";
+        case StringId::GsReallyQuit: return "GsReallyQuit";
+        case StringId::GsPickup9mmAutomatic: return "GsPickup9mmAutomatic";
+        case StringId::GsPickupShotgun: return "GsPickupShotgun";
+        case StringId::GsPickupPulseRifle: return "GsPickupPulseRifle";
+        case StringId::GsPickupFlamethrower: return "GsPickupFlamethrower";
+        case StringId::GsPickupSmartGun: return "GsPickupSmartGun";
+        case StringId::GsPickupNotUsed: return "GsPickupNotUsed";
+        case StringId::GsPickupSeismicCharges: return "GsPickupSeismicCharges";
+        case StringId::GsPickupBattery: return "GsPickupBattery";
+        case StringId::GsPickupNightVision: return "GsPickupNightVision";
+        case StringId::GsPickup9mmClip: return "GsPickup9mmClip";
+        case StringId::GsPickupShotgunCartridges: return "GsPickupShotgunCartridges";
+        case StringId::GsPickupPulseClip: return "GsPickupPulseClip";
+        case StringId::GsPickupGrenades: return "GsPickupGrenades";
+        case StringId::GsPickupFlamethrowerFuel: return "GsPickupFlamethrowerFuel";
+        case StringId::GsPickupSmartgunAmmo: return "GsPickupSmartgunAmmo";
+        case StringId::GsPickupIdentityTag: return "GsPickupIdentityTag";
+        case StringId::GsPickupAutoMapper: return "GsPickupAutoMapper";
+        case StringId::GsPickupHypoPack: return "GsPickupHypoPack";
+        case StringId::GsPickupAcidVest: return "GsPickupAcidVest";
+        case StringId::GsPickupBodySuit: return "GsPickupBodySuit";
+        case StringId::GsPickupMediKit: return "GsPickupMediKit";
+        case StringId::GsPickupDermPatch: return "GsPickupDermPatch";
+        case StringId::GsPickupProtectiveBoots: return "GsPickupProtectiveBoots";
+        case StringId::GsPickupAdrenalineBurst: return "GsPickupAdrenalineBurst";
+        case StringId::GsPickupShoulderLamp: return "GsPickupShoulderLamp";
+        case StringId::GsNeed8Mb: return "GsNeed8Mb";
+        case StringId::GsFatalServerCrash: return "GsFatalServerCrash";
+        case StringId::GsPressReturnToContinue: return "GsPressReturnToContinue";
+        case StringId::GsPlayerQuit: return "GsPlayerQuit";
+        case StringId::GsPlayerJoined: return "GsPlayerJoined";
+        case StringId::GsPlayerSays: return "GsPlayerSays";
+        case StringId::GsNotInGame: return "GsNotInGame";
+        case StringId::GsKilledHimself: return "GsKilledHimself";
+        case StringId::GsYouKilled: return "GsYouKilled";
+        case StringId::GsKilledOther: return "GsKilledOther";
+        case StringId::GsPlayerCrashed: return "GsPlayerCrashed";
+        case StringId::GsExitSwitchActive: return "GsExitSwitchActive";
+        case StringId::GsThirtySeconds: return "GsThirtySeconds";
+        case StringId::GsSomeoneBeatYou: return "GsSomeoneBeatYou";
+        case StringId::GsSending: return "GsSending";
+        case StringId::GsSecondsToEvacuate: return "GsSecondsToEvacuate";
+        case StringId::GsKilledYou: return "GsKilledYou";
+        case StringId::GsYouWereKilled: return "GsYouWereKilled";
+        case StringId::GsYouKilledYourself: return "GsYouKilledYourself";
+        case StringId::GsLanguage: return "GsLanguage";
+        case StringId::GsLangEnglish: return "GsLangEnglish";
+        case StringId::GsLangFrench: return "GsLangFrench";
+        case StringId::GsLangItalian: return "GsLangItalian";
+        case StringId::GsLangSpanish: return "GsLangSpanish";
+
         default: return "";
         }
     }
@@ -287,6 +474,193 @@ namespace ALTEngine::Bootstrap
         if (name == "DescFullyLoaded") { return StringId::DescFullyLoaded; }
         if (name == "MaximumHealth") { return StringId::MaximumHealth; }
         if (name == "DescMaximumHealth") { return StringId::DescMaximumHealth; }
+        if (name == "GsOptions") { return StringId::GsOptions; }
+        if (name == "GsRedefineKeyboard") { return StringId::GsRedefineKeyboard; }
+        if (name == "GsRedefineMouse") { return StringId::GsRedefineMouse; }
+        if (name == "GsPressEscToGoBack") { return StringId::GsPressEscToGoBack; }
+        if (name == "GsPressEnterToAdjust") { return StringId::GsPressEnterToAdjust; }
+        if (name == "GsPressEnterToSelect") { return StringId::GsPressEnterToSelect; }
+        if (name == "GsDefaultPlayerName") { return StringId::GsDefaultPlayerName; }
+        if (name == "GsCheatInvincible") { return StringId::GsCheatInvincible; }
+        if (name == "GsCheatAllWeapons") { return StringId::GsCheatAllWeapons; }
+        if (name == "GsCheatAllAmmo") { return StringId::GsCheatAllAmmo; }
+        if (name == "GsCheatGotoLevel") { return StringId::GsCheatGotoLevel; }
+        if (name == "GsCheatMaxLevel") { return StringId::GsCheatMaxLevel; }
+        if (name == "GsCheatSetEverything") { return StringId::GsCheatSetEverything; }
+        if (name == "GsCheatWrongGame") { return StringId::GsCheatWrongGame; }
+        if (name == "GsCheatDoomed") { return StringId::GsCheatDoomed; }
+        if (name == "GsCheatYouWish") { return StringId::GsCheatYouWish; }
+        if (name == "GsCheatLookingCool") { return StringId::GsCheatLookingCool; }
+        if (name == "GsCheatDuking") { return StringId::GsCheatDuking; }
+        if (name == "GsCheatThatsYou") { return StringId::GsCheatThatsYou; }
+        if (name == "GsCheatNiceTry") { return StringId::GsCheatNiceTry; }
+        if (name == "GsCheatOi") { return StringId::GsCheatOi; }
+        if (name == "GsVolume") { return StringId::GsVolume; }
+        if (name == "GsControls") { return StringId::GsControls; }
+        if (name == "GsDifficulty") { return StringId::GsDifficulty; }
+        if (name == "GsCameraSway") { return StringId::GsCameraSway; }
+        if (name == "GsCredits") { return StringId::GsCredits; }
+        if (name == "GsMusic") { return StringId::GsMusic; }
+        if (name == "GsSfx") { return StringId::GsSfx; }
+        if (name == "GsKeyboard") { return StringId::GsKeyboard; }
+        if (name == "GsMouse") { return StringId::GsMouse; }
+        if (name == "GsJoystick") { return StringId::GsJoystick; }
+        if (name == "GsGravisGrip") { return StringId::GsGravisGrip; }
+        if (name == "GsGravisPad") { return StringId::GsGravisPad; }
+        if (name == "GsSpaceOrb") { return StringId::GsSpaceOrb; }
+        if (name == "GsVfx1") { return StringId::GsVfx1; }
+        if (name == "GsDifficultyEasy") { return StringId::GsDifficultyEasy; }
+        if (name == "GsDifficultyMedium") { return StringId::GsDifficultyMedium; }
+        if (name == "GsDifficultyHard") { return StringId::GsDifficultyHard; }
+        if (name == "GsOff") { return StringId::GsOff; }
+        if (name == "GsOn") { return StringId::GsOn; }
+        if (name == "GsRedefine") { return StringId::GsRedefine; }
+        if (name == "GsCalibrate") { return StringId::GsCalibrate; }
+        if (name == "GsMoveForwards") { return StringId::GsMoveForwards; }
+        if (name == "GsMoveBackwards") { return StringId::GsMoveBackwards; }
+        if (name == "GsTurnLeft") { return StringId::GsTurnLeft; }
+        if (name == "GsTurnRight") { return StringId::GsTurnRight; }
+        if (name == "GsStrafeLeft") { return StringId::GsStrafeLeft; }
+        if (name == "GsStrafeRight") { return StringId::GsStrafeRight; }
+        if (name == "GsStrafeModifier") { return StringId::GsStrafeModifier; }
+        if (name == "GsFire1") { return StringId::GsFire1; }
+        if (name == "GsFire2") { return StringId::GsFire2; }
+        if (name == "GsDoUse") { return StringId::GsDoUse; }
+        if (name == "GsNextWeapon") { return StringId::GsNextWeapon; }
+        if (name == "GsLookUp") { return StringId::GsLookUp; }
+        if (name == "GsLookDown") { return StringId::GsLookDown; }
+        if (name == "GsTurnAround") { return StringId::GsTurnAround; }
+        if (name == "GsLeftButton") { return StringId::GsLeftButton; }
+        if (name == "GsRightButton") { return StringId::GsRightButton; }
+        if (name == "GsMiddleButton") { return StringId::GsMiddleButton; }
+        if (name == "GsBlank") { return StringId::GsBlank; }
+        if (name == "GsAutoMapper") { return StringId::GsAutoMapper; }
+        if (name == "GsShoulderLamp") { return StringId::GsShoulderLamp; }
+        if (name == "GsWeapon9mmPistol") { return StringId::GsWeapon9mmPistol; }
+        if (name == "GsWeaponShotgun") { return StringId::GsWeaponShotgun; }
+        if (name == "GsWeaponFlamethrower") { return StringId::GsWeaponFlamethrower; }
+        if (name == "GsWeaponPulseRifle") { return StringId::GsWeaponPulseRifle; }
+        if (name == "GsWeaponSmartGun") { return StringId::GsWeaponSmartGun; }
+        if (name == "GsBatteries") { return StringId::GsBatteries; }
+        if (name == "GsMission") { return StringId::GsMission; }
+        if (name == "GsOptionsMenu") { return StringId::GsOptionsMenu; }
+        if (name == "GsSfxVolume") { return StringId::GsSfxVolume; }
+        if (name == "GsCddaVolume") { return StringId::GsCddaVolume; }
+        if (name == "GsExitGame") { return StringId::GsExitGame; }
+        if (name == "GsNightVision") { return StringId::GsNightVision; }
+        if (name == "GsNoAmmoAvailable") { return StringId::GsNoAmmoAvailable; }
+        if (name == "GsRoundsAvailable") { return StringId::GsRoundsAvailable; }
+        if (name == "GsAreYouSure") { return StringId::GsAreYouSure; }
+        if (name == "GsYes") { return StringId::GsYes; }
+        if (name == "GsNo") { return StringId::GsNo; }
+        if (name == "GsSelected") { return StringId::GsSelected; }
+        if (name == "GsAvailable") { return StringId::GsAvailable; }
+        if (name == "GsNotAvailable") { return StringId::GsNotAvailable; }
+        if (name == "GsDoorActivated") { return StringId::GsDoorActivated; }
+        if (name == "GsDoorPoweredUp") { return StringId::GsDoorPoweredUp; }
+        if (name == "GsSteamValveClosed") { return StringId::GsSteamValveClosed; }
+        if (name == "GsFlameJetShutDown") { return StringId::GsFlameJetShutDown; }
+        if (name == "GsLiftActivated") { return StringId::GsLiftActivated; }
+        if (name == "GsBatteryRequired") { return StringId::GsBatteryRequired; }
+        if (name == "GsJoyCentre") { return StringId::GsJoyCentre; }
+        if (name == "GsJoyLowerRight") { return StringId::GsJoyLowerRight; }
+        if (name == "GsFaceForward") { return StringId::GsFaceForward; }
+        if (name == "GsLoadingDataStars") { return StringId::GsLoadingDataStars; }
+        if (name == "GsLoadingData") { return StringId::GsLoadingData; }
+        if (name == "GsHitAnyKey") { return StringId::GsHitAnyKey; }
+        if (name == "GsIncomingTransfer") { return StringId::GsIncomingTransfer; }
+        if (name == "GsMissionBrief") { return StringId::GsMissionBrief; }
+        if (name == "GsPleaseWaitStarting") { return StringId::GsPleaseWaitStarting; }
+        if (name == "GsStartMultiplayer") { return StringId::GsStartMultiplayer; }
+        if (name == "GsJoinMultiplayer") { return StringId::GsJoinMultiplayer; }
+        if (name == "GsMultiplayerOptions") { return StringId::GsMultiplayerOptions; }
+        if (name == "GsStartGame") { return StringId::GsStartGame; }
+        if (name == "GsMultiplayer") { return StringId::GsMultiplayer; }
+        if (name == "GsLoadGame") { return StringId::GsLoadGame; }
+        if (name == "GsContinueGame") { return StringId::GsContinueGame; }
+        if (name == "GsSaveGame") { return StringId::GsSaveGame; }
+        if (name == "GsQuitGame") { return StringId::GsQuitGame; }
+        if (name == "GsMissionAssessment") { return StringId::GsMissionAssessment; }
+        if (name == "GsAliens") { return StringId::GsAliens; }
+        if (name == "GsSecrets") { return StringId::GsSecrets; }
+        if (name == "GsMissionLabel") { return StringId::GsMissionLabel; }
+        if (name == "GsPressAnyKey") { return StringId::GsPressAnyKey; }
+        if (name == "GsWaitingForPlayers") { return StringId::GsWaitingForPlayers; }
+        if (name == "GsScores") { return StringId::GsScores; }
+        if (name == "GsGameSetup") { return StringId::GsGameSetup; }
+        if (name == "GsNameOfGame") { return StringId::GsNameOfGame; }
+        if (name == "GsStartAtLevel") { return StringId::GsStartAtLevel; }
+        if (name == "GsMinimumGameLength") { return StringId::GsMinimumGameLength; }
+        if (name == "GsAcidHell") { return StringId::GsAcidHell; }
+        if (name == "GsSearchingNetGames") { return StringId::GsSearchingNetGames; }
+        if (name == "GsOpen") { return StringId::GsOpen; }
+        if (name == "GsClosed") { return StringId::GsClosed; }
+        if (name == "GsBetweenLevels") { return StringId::GsBetweenLevels; }
+        if (name == "GsLevel") { return StringId::GsLevel; }
+        if (name == "GsPlayers") { return StringId::GsPlayers; }
+        if (name == "GsStatus") { return StringId::GsStatus; }
+        if (name == "GsEditYourData") { return StringId::GsEditYourData; }
+        if (name == "GsYourName") { return StringId::GsYourName; }
+        if (name == "GsFxMessage") { return StringId::GsFxMessage; }
+        if (name == "GsInvalidSaveFile") { return StringId::GsInvalidSaveFile; }
+        if (name == "GsErrorWritingSave") { return StringId::GsErrorWritingSave; }
+        if (name == "GsUnused130") { return StringId::GsUnused130; }
+        if (name == "GsInsertCd") { return StringId::GsInsertCd; }
+        if (name == "GsNoPathTxt") { return StringId::GsNoPathTxt; }
+        if (name == "GsDemo") { return StringId::GsDemo; }
+        if (name == "GsRunMode") { return StringId::GsRunMode; }
+        if (name == "GsBattery") { return StringId::GsBattery; }
+        if (name == "GsReallyQuit") { return StringId::GsReallyQuit; }
+        if (name == "GsPickup9mmAutomatic") { return StringId::GsPickup9mmAutomatic; }
+        if (name == "GsPickupShotgun") { return StringId::GsPickupShotgun; }
+        if (name == "GsPickupPulseRifle") { return StringId::GsPickupPulseRifle; }
+        if (name == "GsPickupFlamethrower") { return StringId::GsPickupFlamethrower; }
+        if (name == "GsPickupSmartGun") { return StringId::GsPickupSmartGun; }
+        if (name == "GsPickupNotUsed") { return StringId::GsPickupNotUsed; }
+        if (name == "GsPickupSeismicCharges") { return StringId::GsPickupSeismicCharges; }
+        if (name == "GsPickupBattery") { return StringId::GsPickupBattery; }
+        if (name == "GsPickupNightVision") { return StringId::GsPickupNightVision; }
+        if (name == "GsPickup9mmClip") { return StringId::GsPickup9mmClip; }
+        if (name == "GsPickupShotgunCartridges") { return StringId::GsPickupShotgunCartridges; }
+        if (name == "GsPickupPulseClip") { return StringId::GsPickupPulseClip; }
+        if (name == "GsPickupGrenades") { return StringId::GsPickupGrenades; }
+        if (name == "GsPickupFlamethrowerFuel") { return StringId::GsPickupFlamethrowerFuel; }
+        if (name == "GsPickupSmartgunAmmo") { return StringId::GsPickupSmartgunAmmo; }
+        if (name == "GsPickupIdentityTag") { return StringId::GsPickupIdentityTag; }
+        if (name == "GsPickupAutoMapper") { return StringId::GsPickupAutoMapper; }
+        if (name == "GsPickupHypoPack") { return StringId::GsPickupHypoPack; }
+        if (name == "GsPickupAcidVest") { return StringId::GsPickupAcidVest; }
+        if (name == "GsPickupBodySuit") { return StringId::GsPickupBodySuit; }
+        if (name == "GsPickupMediKit") { return StringId::GsPickupMediKit; }
+        if (name == "GsPickupDermPatch") { return StringId::GsPickupDermPatch; }
+        if (name == "GsPickupProtectiveBoots") { return StringId::GsPickupProtectiveBoots; }
+        if (name == "GsPickupAdrenalineBurst") { return StringId::GsPickupAdrenalineBurst; }
+        if (name == "GsPickupShoulderLamp") { return StringId::GsPickupShoulderLamp; }
+        if (name == "GsNeed8Mb") { return StringId::GsNeed8Mb; }
+        if (name == "GsFatalServerCrash") { return StringId::GsFatalServerCrash; }
+        if (name == "GsPressReturnToContinue") { return StringId::GsPressReturnToContinue; }
+        if (name == "GsPlayerQuit") { return StringId::GsPlayerQuit; }
+        if (name == "GsPlayerJoined") { return StringId::GsPlayerJoined; }
+        if (name == "GsPlayerSays") { return StringId::GsPlayerSays; }
+        if (name == "GsNotInGame") { return StringId::GsNotInGame; }
+        if (name == "GsKilledHimself") { return StringId::GsKilledHimself; }
+        if (name == "GsYouKilled") { return StringId::GsYouKilled; }
+        if (name == "GsKilledOther") { return StringId::GsKilledOther; }
+        if (name == "GsPlayerCrashed") { return StringId::GsPlayerCrashed; }
+        if (name == "GsExitSwitchActive") { return StringId::GsExitSwitchActive; }
+        if (name == "GsThirtySeconds") { return StringId::GsThirtySeconds; }
+        if (name == "GsSomeoneBeatYou") { return StringId::GsSomeoneBeatYou; }
+        if (name == "GsSending") { return StringId::GsSending; }
+        if (name == "GsSecondsToEvacuate") { return StringId::GsSecondsToEvacuate; }
+        if (name == "GsKilledYou") { return StringId::GsKilledYou; }
+        if (name == "GsYouWereKilled") { return StringId::GsYouWereKilled; }
+        if (name == "GsYouKilledYourself") { return StringId::GsYouKilledYourself; }
+        if (name == "GsLanguage") { return StringId::GsLanguage; }
+        if (name == "GsLangEnglish") { return StringId::GsLangEnglish; }
+        if (name == "GsLangFrench") { return StringId::GsLangFrench; }
+        if (name == "GsLangItalian") { return StringId::GsLangItalian; }
+        if (name == "GsLangSpanish") { return StringId::GsLangSpanish; }
+
         return std::nullopt;
     }
 }

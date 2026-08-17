@@ -5,6 +5,7 @@
 #include "../Formats/LevelLoader.h"
 #include "PlayerHudState.h"
 #include "PickupSystem.h"
+#include "HudMessages.h"
 #include "DroppedPickups.h"
 #include "PlayerCamera.h"
 #include "WeaponSystem.h"
@@ -451,6 +452,7 @@ namespace ALTEngine::Screens
         ALTEngine::Screens::Particles::Pool particles;
         ALTEngine::Screens::Particles::Rng dropRng;
         ALTEngine::Screens::ExplosionEffects explosions;
+        ALTEngine::Screens::HudMessages hudMessages;
         ALTEngine::Screens::ShatterEffects shatter;
         std::vector<ALTEngine::Screens::Enemies::Enemy> enemies;
         ALTEngine::Screens::EnemySprites enemySprites;
@@ -1597,6 +1599,7 @@ namespace ALTEngine::Screens
                                 level, ToGridSpaceX(sx, originX), ToGridSpaceZ(sz, originZ));
                         });
                         hudState.TickCarriedItems();
+                        hudMessages.Tick();
 
                         // Destroying something: clear its occupancy so the
                         // square opens up, spill what it held, and - if it was a
@@ -2173,6 +2176,10 @@ namespace ALTEngine::Screens
                         {
                             SDL_Log("GameplayScreen: pickup type %d has no handler", live.type);
                         }
+
+                        // Type it out on the HUD, using the original's own name
+                        // for the thing - index 137 + type in its string list.
+                        hudMessages.ShowPickup(live.type, language);
                         SDL_Log("GameplayScreen: collected pickup type %d (amount %d)", live.type, amount);
                     }
 

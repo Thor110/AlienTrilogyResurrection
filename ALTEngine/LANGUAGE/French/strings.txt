@@ -1,51 +1,34 @@
-StartGame=Commencer la Partie
-Multiplayer=Multijoueur
-LoadGame=Charger une Partie
-Options=Options
-Volume=Volume
-Music=Musique
-Sfx=Effets Sonores
-Controls=Contrôles
-Keyboard=Clavier
-Mouse=Souris
-Joystick=Joystick
-GravisGrip=Gravis Grip
-GravisPad=Gravis Pad
-SpaceOrb360=SpaceOrb 360
-Vfx1=VFX-1
-Difficulty=Difficulté
-AcidReign=Règne Acide
-RagingTerror=Terreur Déchaînée
-Xenomania=Xénomanie
-CameraSway=Balancement de Caméra
-Off=Désactivé
-On=Activé
+# No Gs entries: French shipped as placeholders in the original
+# .BIN file, so these fall back to English.
+# ---------------------------------------------------------------------------
+# Everything ABOVE this line came out of the original game's LANGUAGE/*.BIN
+# files, which are plain NUL-terminated string lists with no header - the
+# index is the ordinal position. Keys are Gs<Name> and the trailing number in
+# the comment is that original index, so they can be matched back up.
+#
+# Only ENGL, AMER and GERM were ever translated. FREN, ITAL, JAPA and SPAN
+# shipped as 185-of-186 placeholders ("FRENCH TEXT" and so on), so those packs
+# get no Gs entries at all and fall back to English rather than showing the
+# placeholder text.
+#
+# BELOW this line is the port's own menu text, which predates the extraction
+# and covers options the original never had.
+# ---------------------------------------------------------------------------
 Graphics=Graphismes
 Quality=Qualité
 Original=Original
 Smoothed=Lissé
 Resolution=Résolution
-LanguageMenuTitle=Langue
-Credits=Crédits
-LanguageEnglish=English
 LanguageFrench=Français
 LanguageItalian=Italiano
 LanguageSpanish=Español
 LanguageGerman=Deutsch
 LanguageJapanese=Japanese 日本語
-Redefine=Redéfinir
 RestoreDefaults=Réinitialiser
 AreYouSure=ÊTES-VOUS SÛR ? 
-Yes=Oui
-No=Non
 ActionMoveForward=Avancer
 ActionMoveBackward=Reculer
-ActionStrafeLeft=Pas Latéral Gauche
-ActionStrafeRight=Pas Latéral Droit
-ActionFire1=Tir 1
-ActionFire2=Tir 2
 ActionUse=Utiliser
-ActionStrafeModifier=Modificateur de Pas Latéral
 ActionRunMode=Mode Course
 ActionRunModifier=Modificateur de Course
 ActionSelectWeapon1=Sélection Arme 1
@@ -53,33 +36,17 @@ ActionSelectWeapon2=Sélection Arme 2
 ActionSelectWeapon3=Sélection Arme 3
 ActionSelectWeapon4=Sélection Arme 4
 ActionSelectWeapon5=Sélection Arme 5
-ActionNextWeapon=Arme Suivante
 ActionTurnaround=Demi-Tour
 ActionWeaponSelectMenu=Sélection d'Arme
 ActionPause=Pause
-AutoMapper=Cartographe Auto
-ShoulderLamp=Lampe d'Épaule
-Pistol9mm=Pistolet 9mm
-Shotgun=Fusil à Pompe
-Flamethrower=Lance-Flammes
-PulseRifle=Fusil à Impulsions
-SmartGun=Arme Intelligente
-Batteries=Piles
-Mission=Mission
-SaveGame=Sauvegarder la Partie
 ExitGame=Quitter la Partie
 SfxVolume=Volume Effets
 MusicVolume=Volume Musique
-PressEscToGoBack=APPUYEZ SUR ÉCHAP POUR REVENIR
-PressEnterToSelect=APPUYEZ SUR ENTRÉE POUR SÉLECTIONNER
 CreditsTitle=CRÉDITS
 CreditsPlaceholder=(défilement non implémenté - voir CD/GFX/CREDITS.TXT)
 PressAKeyToBind=APPUYEZ SUR UNE TOUCHE POUR ASSIGNER
 PressAMouseButtonOrWheelToBind=APPUYEZ SUR UN BOUTON DE SOURIS OU LA MOLETTE POUR ASSIGNER
 OrEscToCancel=OU ÉCHAP POUR ANNULER
-OptionsTitle=OPTIONS
-NotAvailable=Non disponible
-ExitGameTitle=QUITTER LA PARTIE
 VSync=VSync
 DisplayModeTitle=Mode d'Affichage
 Windowed=Fenêtré

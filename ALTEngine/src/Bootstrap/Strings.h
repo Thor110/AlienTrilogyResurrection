@@ -84,6 +84,85 @@ namespace ALTEngine::Bootstrap
     // Takes `language` explicitly rather than reading some global
     // "current language" - matches how Language is already threaded
     // through the rest of the engine as a parameter, not a global.
+    // Where the port's own key and the ORIGINAL's say the same thing, the
+    // original's wins.
+    //
+    // The .BIN extraction turned out to overlap the port's menu text heavily -
+    // "Difficulty", "Camera Sway", the weapon names, the difficulty tier names,
+    // Yes/No/On/Off. Rather than renumber every menu node, the port's key is
+    // aliased onto the Gs one, so there is a single string to translate and the
+    // Gs keys stay the canonical set with their original index recorded.
+    //
+    // MATCHED ON EXACT TEXT, deliberately. A normalised match found 56 pairs but
+    // several were case variants the menus rely on - CreditsTitle is "CREDITS"
+    // against GsCredits "Credits", and aliasing those would have quietly
+    // lower-cased three menu headings. Requiring the text to match byte for byte
+    // leaves 49, and every one is a genuine duplicate.
+    //
+    // Note the two that look odd but are right: OptionsTitle -> GsOptions (both
+    // "OPTIONS") and Options -> GsOptionsMenu (both "Options"). The original
+    // happens to carry the same word twice in different cases too.
+    inline StringId AliasToOriginal(StringId id)
+    {
+        struct Alias { StringId own; StringId original; };
+        static const Alias aliases[] = {
+            { StringId::AcidReign, StringId::GsDifficultyEasy },
+            { StringId::ActionFire1, StringId::GsFire1 },
+            { StringId::ActionFire2, StringId::GsFire2 },
+            { StringId::ActionNextWeapon, StringId::GsNextWeapon },
+            { StringId::ActionStrafeLeft, StringId::GsStrafeLeft },
+            { StringId::ActionStrafeModifier, StringId::GsStrafeModifier },
+            { StringId::ActionStrafeRight, StringId::GsStrafeRight },
+            { StringId::AutoMapper, StringId::GsAutoMapper },
+            { StringId::Batteries, StringId::GsBatteries },
+            { StringId::CameraSway, StringId::GsCameraSway },
+            { StringId::Controls, StringId::GsControls },
+            { StringId::Credits, StringId::GsCredits },
+            { StringId::Difficulty, StringId::GsDifficulty },
+            { StringId::ExitGameTitle, StringId::GsExitGame },
+            { StringId::Flamethrower, StringId::GsWeaponFlamethrower },
+            { StringId::GravisGrip, StringId::GsGravisGrip },
+            { StringId::GravisPad, StringId::GsGravisPad },
+            { StringId::Joystick, StringId::GsJoystick },
+            { StringId::Keyboard, StringId::GsKeyboard },
+            { StringId::LanguageEnglish, StringId::GsLangEnglish },
+            { StringId::LanguageMenuTitle, StringId::GsLanguage },
+            { StringId::LoadGame, StringId::GsLoadGame },
+            { StringId::Mission, StringId::GsMission },
+            { StringId::Mouse, StringId::GsMouse },
+            { StringId::Multiplayer, StringId::GsMultiplayer },
+            { StringId::Music, StringId::GsMusic },
+            { StringId::No, StringId::GsNo },
+            { StringId::NotAvailable, StringId::GsNotAvailable },
+            { StringId::Off, StringId::GsOff },
+            { StringId::On, StringId::GsOn },
+            { StringId::Options, StringId::GsOptionsMenu },
+            { StringId::OptionsTitle, StringId::GsOptions },
+            { StringId::Pistol9mm, StringId::GsWeapon9mmPistol },
+            { StringId::PressEnterToSelect, StringId::GsPressEnterToSelect },
+            { StringId::PressEscToGoBack, StringId::GsPressEscToGoBack },
+            { StringId::PulseRifle, StringId::GsWeaponPulseRifle },
+            { StringId::RagingTerror, StringId::GsDifficultyMedium },
+            { StringId::Redefine, StringId::GsRedefine },
+            { StringId::SaveGame, StringId::GsSaveGame },
+            { StringId::Sfx, StringId::GsSfx },
+            { StringId::Shotgun, StringId::GsWeaponShotgun },
+            { StringId::ShoulderLamp, StringId::GsShoulderLamp },
+            { StringId::SmartGun, StringId::GsWeaponSmartGun },
+            { StringId::SpaceOrb360, StringId::GsSpaceOrb },
+            { StringId::StartGame, StringId::GsStartGame },
+            { StringId::Vfx1, StringId::GsVfx1 },
+            { StringId::Volume, StringId::GsVolume },
+            { StringId::Xenomania, StringId::GsDifficultyHard },
+            { StringId::Yes, StringId::GsYes },
+        };
+        for (const Alias& alias : aliases)
+        {
+            if (alias.own == id) { return alias.original; }
+        }
+        return id;
+    }
+
     inline std::string Tr(StringId id, Language language)
     {
         // Guard the range before anything indexes the table. StringId::Count is
@@ -95,11 +174,21 @@ namespace ALTEngine::Bootstrap
             return "";
         }
 
-        std::string key = StringKeyName(id);
+        // Try the port's own key first, then the original's equivalent. That
+        // order matters: a pack that deliberately overrides the port's key keeps
+        // working, and only keys with no entry of their own fall through to the
+        // shared original text.
+        const std::string key = StringKeyName(id);
+        const StringId aliased = AliasToOriginal(id);
+        const std::string originalKey = (aliased == id) ? std::string() : StringKeyName(aliased);
 
         if (const LanguagePack* pack = FindLanguagePack(LanguageFolderName(language)))
         {
             if (auto value = pack->Get(key)) { return *value; }
+            if (!originalKey.empty())
+            {
+                if (auto value = pack->Get(originalKey)) { return *value; }
+            }
         }
 
         if (language != Language::English)

@@ -72,7 +72,7 @@ namespace ALTEngine::Formats
                     std::error_code ec;
                     for (const auto& entry : std::filesystem::directory_iterator(*sourceFolder, ec))
                     {
-                        if (entry.is_regular_file()) { ++totalFiles; }
+                        if (entry.is_regular_file() && !folder.IsExcluded(entry.path())) { ++totalFiles; }
                     }
                 }
             }
@@ -122,6 +122,13 @@ namespace ALTEngine::Formats
                 for (const auto& entry : std::filesystem::directory_iterator(*sourceFolder, ec))
                 {
                     if (!entry.is_regular_file()) { continue; }
+
+                    // Skipped by extension - see DiscFolder::excludeExtensions.
+                    // LANGUAGE uses this for *.BIN: the folder still has to be
+                    // copied wholesale for its PNLGFX HUD files, but the language
+                    // binaries are redundant now their text is in the packs.
+                    if (folder.IsExcluded(entry.path())) { continue; }
+
                     std::string filename = entry.path().filename().string();
 
                     bool copied = CopyFileWithRetry(entry.path(), destFolder / filename);
