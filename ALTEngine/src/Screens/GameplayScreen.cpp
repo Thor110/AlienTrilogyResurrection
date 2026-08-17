@@ -12,6 +12,7 @@
 #include "ExplosionEffects.h"
 #include "ShatterEffects.h"
 #include "Enemies.h"
+#include "EnemySprites.h"
 #include "DamageSystem.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Formats/SoundIds.h"
@@ -452,6 +453,7 @@ namespace ALTEngine::Screens
         ALTEngine::Screens::ExplosionEffects explosions;
         ALTEngine::Screens::ShatterEffects shatter;
         std::vector<ALTEngine::Screens::Enemies::Enemy> enemies;
+        ALTEngine::Screens::EnemySprites enemySprites;
 
         // The held weapon. Driven by the select keys below; the pistol is the
         // only thing available at the start of a level.
@@ -1043,10 +1045,18 @@ namespace ALTEngine::Screens
                         enemies = ALTEngine::Screens::Enemies::Build(
                             level, static_cast<int>(difficultySettings.Get()), originX, originZ);
                         {
-                            size_t held = 0;
-                            for (const auto& e : enemies) { if (!e.active) { held++; } }
-                            SDL_Log("GameplayScreen: %zu enemies placed, %zu held in crates",
-                                    enemies.size(), held);
+                            size_t waiting = 0;
+                            for (const auto& e : enemies) { if (!e.active) { waiting++; } }
+                            SDL_Log("GameplayScreen: %zu monsters, %zu active at start, %zu waiting on a trigger",
+                                    enemies.size(), enemies.size() - waiting, waiting);
+                        }
+
+                        // Enemy artwork comes out of the LEVEL's own graphics
+                        // file - the executable names no enemy sprite files at
+                        // all, only the weapons and the level GFX sets.
+                        if (!enemySprites.Load(cdDirectory, digits, enemies))
+                        {
+                            SDL_Log("GameplayScreen: no enemy sprites loaded for level %s", digits.c_str());
                         }
 
                         objectState.assign(level.crates.size(), 0);
@@ -1582,7 +1592,8 @@ namespace ALTEngine::Screens
                                 // pickups, a crate's monster is parked off the
                                 // playable map until something opens the box.
                                 if (!ALTEngine::Screens::Enemies::Release(enemies, crate.drop1,
-                                                                          dropX, dropY, dropZ))
+                                                                          dropX, dropY, dropZ,
+                                                                          crate.rotation))
                                 {
                                     SDL_Log("crate %d: monster %u not in the roster at this difficulty",
                                             crateIndex, crate.drop1);
@@ -2377,6 +2388,7 @@ namespace ALTEngine::Screens
                         placedSprites.push_back(spark);
                     }
                     explosions.Collect(placedSprites, camera.x, camera.z, true);
+                    enemySprites.Collect(enemies, camera.x, camera.z, placedSprites);
                     shatter.Collect(placedSprites, camera.x, camera.z);
                 }
 

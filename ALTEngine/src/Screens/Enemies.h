@@ -34,22 +34,82 @@ namespace ALTEngine::Screens
     // separate trace.
     namespace Enemies
     {
-        // Which monsters a difficulty setting actually places.
+        // ENEMY HEALTH, and difficulty DOES scale it - just not per record.
         //
-        // The record's difficulty byte is 0 Easy, 1 Medium, 2 Hard. A monster
-        // tagged 0 is present on every setting, 1 on medium and hard, 2 on hard
-        // only - which is the reading that matches L111 having 24 type-2
-        // monsters spread across all three values rather than three separate
-        // rosters. MARKED: the gating code itself has not been traced.
-        inline bool PresentAtDifficulty(int recordDifficulty, int selected)
+        // FUN_0002e52c computes the entity's health when it spawns:
+        //
+        //     shift  = (record type == 7) ? 6 : 4
+        //     base   = record health byte
+        //     if the global difficulty is 1 and base != 0   base += 1
+        //     if the global difficulty is 2 and base != 0   base += 2
+        //     health = base << shift
+        //     if health != 0 and health < 0x10   health = 0x10
+        //
+        // So the record carries a SMALL base - L111's facehuggers are 1 and its
+        // type 6 is 30 - and the real figure is that shifted left four places.
+        // Difficulty adds to the base BEFORE the shift, so on Hard a facehugger
+        // goes from 16 to 48: three times the health, not a third more.
+        //
+        // Type 7 shifts by six instead of four, which is sixteen times the
+        // health of the same base elsewhere. Whatever type 7 is, it is meant to
+        // be very hard to kill.
+        //
+        // The difficulty itself is GLOBAL - FUN_00013078 returns it, the same
+        // getter the particle draw dispatch uses. There is no per-monster
+        // difficulty field; that was a misreading of the trigger threshold.
+        inline constexpr int HEALTH_SHIFT_DEFAULT = 4;
+        inline constexpr int HEALTH_SHIFT_TYPE_7 = 6;
+        inline constexpr int HEALTH_SHIFT_TYPE = 7;
+        inline constexpr int HEALTH_MINIMUM = 0x10;
+
+        inline int SpawnHealth(int recordType, int recordHealth, int difficulty)
         {
-            return recordDifficulty <= selected;
+            const int shift = (recordType == HEALTH_SHIFT_TYPE) ? HEALTH_SHIFT_TYPE_7
+                                                                : HEALTH_SHIFT_DEFAULT;
+            int base = recordHealth;
+            if (base != 0)
+            {
+                if (difficulty == 1) { base += 1; }
+                else if (difficulty == 2) { base += 2; }
+            }
+            int health = base << shift;
+            if (health != 0 && health < HEALTH_MINIMUM) { health = HEALTH_MINIMUM; }
+            return health;
         }
 
-        // A monster parked off the playable map, waiting to be let out of a
-        // crate. On L111 every crate-held monster sits at x = 9 in a row at
-        // y = 83/85/87/89, well outside the rooms.
+        // WHEN A MONSTER ENTERS PLAY.
+        //
+        // Not a difficulty setting - a trigger count. FUN_0002f288 increments
+        // the record's byte 7 and activates the monster when it reaches byte 8,
+        // the same gate FUN_0003bf64 uses for pickups. Threshold 0 means it is
+        // already in play when the level starts.
+        //
+        // This was implemented as difficulty gating, which would have removed
+        // three of L111's monsters on Easy for no reason. See the note on
+        // Monster::triggerThreshold.
+        inline bool ActiveAtStart(const ALTEngine::Formats::Monster& record)
+        {
+            return record.triggerThreshold == 0;
+        }
+
+        // A monster waiting to be let out is parked off the playable map - on
+        // L111 all six sit at x = 9, in a row down the edge. Five are named by a
+        // crate; the sixth waits on a script.
         inline constexpr int PARKED_X = 9;
+
+        // The subtypes that spring out of a crate, from FUN_0002f288: it only
+        // does the jump-out setup for entity subtype 2 or 3, starting animation
+        // 10 or 12 respectively, setting the frame duration to 0x60 and the
+        // state to 5.
+        //
+        // Subtype 2 is the one L111 is full of - 24 of its 28 monsters - and it
+        // is what the crates hold. The facehugger.
+        inline constexpr int SPRING_SUBTYPE_A = 2;
+        inline constexpr int SPRING_SUBTYPE_B = 3;
+        inline constexpr int SPRING_ANIM_A = 10;
+        inline constexpr int SPRING_ANIM_B = 12;
+        inline constexpr int SPRING_FRAME_DURATION = 0x60;
+        inline constexpr int SPRING_STATE = 5;
 
         struct Enemy
         {
@@ -60,10 +120,14 @@ namespace ALTEngine::Screens
             int facing = 0;             // 4096-per-turn, from the 8-direction byte
 
             int health = 0;
+            int baseHealth = 0;         // the record's own byte, before the shift
             int speed = 0;
             int state = Damage::STATE_NORMAL;
             int hitCooldown = 0;
             uint8_t drop = 0xFF;        // what it leaves behind
+            uint8_t triggerThreshold = 0;
+            uint8_t triggerCount = 0;
+            bool springing = false;     // playing the jump-out
 
             bool active = false;        // released and in play
             bool alive = true;
@@ -80,7 +144,7 @@ namespace ALTEngine::Screens
         // Builds the roster for a level. Monsters parked off-map start inactive
         // - they are crate contents, and something has to let them out.
         inline std::vector<Enemy> Build(const ALTEngine::Formats::LevelGeometry& level,
-                                        int selectedDifficulty,
+                                        int difficulty,
                                         float originX, float originZ)
         {
             std::vector<Enemy> enemies;
@@ -89,14 +153,14 @@ namespace ALTEngine::Screens
             for (size_t i = 0; i < level.monsters.size(); ++i)
             {
                 const auto& record = level.monsters[i];
-                if (!PresentAtDifficulty(record.difficulty, selectedDifficulty)) { continue; }
-
                 Enemy enemy;
                 enemy.type = record.type;
                 enemy.monsterIndex = static_cast<int>(i);
-                enemy.health = record.health;
+                enemy.baseHealth = record.health;
+                enemy.health = SpawnHealth(record.type, record.health, difficulty);
                 enemy.speed = record.speed;
                 enemy.drop = record.drop;
+                enemy.triggerThreshold = record.triggerThreshold;
                 enemy.facing = FacingFromRotation(record.rotation);
 
                 // Cell centre, the same convention the crates and pickups use.
@@ -107,26 +171,43 @@ namespace ALTEngine::Screens
                     static_cast<int>(record.x) * 512 + 256,
                     static_cast<int>(record.y) * 512 + 256);
 
-                // Parked monsters are crate contents and stay out of play until
-                // released.
-                enemy.active = (record.x != PARKED_X);
+                // Threshold 0 is in play immediately; anything else waits for
+                // whatever triggers it.
+                enemy.active = ActiveAtStart(record);
 
                 enemies.push_back(enemy);
             }
             return enemies;
         }
 
-        // Lets a crate's monster out at the crate's position.
+        // Lets a crate's monster out. Increments the trigger counter and only
+        // activates once it reaches the threshold, as FUN_0002f288 does - and
+        // moves the monster to the releasing object, since it has been parked
+        // off the map until now.
+        //
+        // `facing` is the crate's rotation, which the original copies into the
+        // monster's own two heading fields (<< 9) before starting the jump-out.
         inline bool Release(std::vector<Enemy>& enemies, int monsterIndex,
-                            float x, float y, float z)
+                            float x, float y, float z, int facing)
         {
             for (Enemy& enemy : enemies)
             {
-                if (enemy.monsterIndex != monsterIndex || enemy.active) { continue; }
+                if (enemy.monsterIndex != monsterIndex) { continue; }
+                if (enemy.active) { return false; }
+
+                enemy.triggerCount++;
+                if (enemy.triggerCount < enemy.triggerThreshold) { return false; }
+
                 enemy.active = true;
                 enemy.x = x;
                 enemy.y = y;
                 enemy.z = z;
+                enemy.facing = (facing * (PlayerCamera::ANGLE_UNITS / 8)) & PlayerCamera::ANGLE_MASK;
+
+                // The spring-out. Only subtypes 2 and 3 get it; anything else
+                // simply appears.
+                enemy.springing = (enemy.type == SPRING_SUBTYPE_A || enemy.type == SPRING_SUBTYPE_B);
+                enemy.state = enemy.springing ? SPRING_STATE : Damage::STATE_NORMAL;
                 return true;
             }
             return false;

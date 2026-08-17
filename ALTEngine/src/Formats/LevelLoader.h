@@ -135,8 +135,23 @@ namespace ALTEngine::Formats
         uint8_t rotation = 0; // 8-direction compass: 0=N,1=NE,2=E,3=SE,4=S,5=SW,6=W,7=NW (45 degrees per step)
         uint8_t health = 0;
         uint8_t drop = 0;     // index of object dropped on death
-        uint8_t unknown2 = 0;
-        uint8_t difficulty = 0; // 0=Easy, 1=Medium, 2=Hard
+
+        // TRIGGER COUNTER AND THRESHOLD, not a difficulty setting.
+        //
+        // FUN_0002f288 increments byte 7 and activates the monster only when it
+        // reaches byte 8 - exactly the same gate FUN_0003bf64 uses on pickups
+        // (bytes 5 and 6 there). So byte 8 is "how many times something must
+        // trigger this before it appears", and 0 means it is already in play at
+        // level start.
+        //
+        // This field was named `difficulty` and read as 0=Easy/1=Medium/2=Hard,
+        // which looked right because the values are 0, 1 and 2 - but the data
+        // says otherwise. On L111 every one of the six monsters parked at x=9,
+        // off the playable map, has byte 8 == 1, and five of those are named by
+        // a crate's drop field. A difficulty byte would not correlate with being
+        // parked. The sixth is waiting on a script instead.
+        uint8_t triggerCount = 0;      // byte 7 - runtime counter
+        uint8_t triggerThreshold = 0;  // byte 8 - 0 means active from the start
         uint8_t unknown4 = 0;
         uint8_t unknown5 = 0;
         uint8_t unknown6 = 0;
