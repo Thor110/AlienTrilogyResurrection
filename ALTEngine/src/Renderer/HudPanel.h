@@ -472,6 +472,84 @@ namespace ALTEngine::Renderer
     // value/100 + 0x10, so the digits start at glyph 0x10.
     inline constexpr int HUD_FONT_DIGIT_GLYPH = 0x10;
 
+    // Font C - THE SMALL ONE, and it is what the typed messages want.
+    //
+    // Read straight out of PNL0GFXE.16's BX00 (Edward, 2026). Grouping its 453
+    // rectangles into runs of equal glyph height lays the sheet out plainly, and
+    // the first two runs confirm the constants above rather than restating them:
+    //
+    //     rects  23..113   height  9   90 glyphs   font A - matches
+    //                                              HUD_FONT_FIRST_DESCRIPTOR 23
+    //                                              and GLYPH_COUNT 0x5b
+    //     rects 123..172   height 10   50 glyphs   font B, whose base 114 sits a
+    //                                              few non-glyph entries earlier
+    //     rects 252..342   height  5   86 glyphs   FONT C
+    //     rects 343..452   height  9  110 glyphs   a fourth 9px set, unidentified
+    //
+    // Font C is 5 pixels tall against font A's 9 - a little over half - and its
+    // glyphs are almost all exactly 5 wide, which is what a fixed-pitch readout
+    // font looks like. The handful of 6 and 7 wide entries are punctuation.
+    //
+    // The ASCII mapping is assumed to be the same as font A's (glyph 0 is space
+    // at 0x20, so '0' is glyph 0x10) because the sheet is built the same way -
+    // but unlike font A, nothing traced confirms it for this set. MARKED: if the
+    // messages come out as gibberish, the base or the mapping is the reason.
+    // 91 glyphs, not 86 - the span 252..342 is exactly 91 slots, the same count
+    // as font A. My first pass counted only the 5-pixel-tall ones and missed five
+    // in the middle: glyphs 0x1a..0x1e (':' through '>') are 5x6, a pixel taller
+    // than the rest. So the mapping is font A's exactly, space at glyph 0 through
+    // 'z' at glyph 0x5a - confirmed by rendering the sheet, where 'A', 'B', '0',
+    // '[' and ']' all land where that mapping predicts.
+    inline constexpr int HUD_FONT_C_FIRST_DESCRIPTOR = 252;
+    inline constexpr int HUD_FONT_C_GLYPH_COUNT = 91;
+    inline constexpr int HUD_FONT_C_GLYPH_HEIGHT = 5;
+
+    // FONT C NEEDS A PIXEL OF LETTER SPACING ADDED, unlike font A.
+    //
+    // Font A's advance is its rect width because its 9-pixel region has a blank
+    // 9th column built in - that blank column IS the spacing (see the note in
+    // DrawNumber). Font C has no such column: rendering it out of the sheet shows
+    // 'A' filling all five columns edge to edge, so advancing by the width alone
+    // butts every letter against the next with no gap at all (Edward, 2026).
+    inline constexpr int HUD_FONT_C_LETTER_SPACING = 1;
+
+    // THE TYPING CARET IS GLYPH 0x06 - the seventh character of the font, which
+    // is a solid block rather than any letter (Edward, 2026).
+    //
+    // Rendered out of the sheet it is a filled rectangle of palette index 18:
+    // 2x9 in font A, and the full 5x5 cell in font C. FONT1GFX carries the same
+    // idea as its very first glyph and again just past 'z', where it is a band of
+    // horizontal grey bands in six shades (228-233).
+    //
+    // Two wrong guesses preceded this. '_' first, which is a BLANK cell in the
+    // artwork so nothing drew at all; then "[]", which does render but is just
+    // two bracket characters and not the cursor the font provides. Both were
+    // guesses at which character looks like a cursor instead of looking at what
+    // the font actually contains.
+    inline constexpr int HUD_FONT_CARET_GLYPH = 0x06;
+
+    // The character that maps to it, for callers that draw text rather than
+    // glyphs: glyph 0x06 is character 0x20 + 6.
+    inline constexpr char HUD_MESSAGE_CARET_CHAR = static_cast<char>(0x20 + HUD_FONT_CARET_GLYPH);
+
+    // The panel sheet's transparent palette index is 16, NOT 0 - a font C space
+    // is 25 pixels of index 16. Worth recording alongside EXPLGFX's impact frames,
+    // which key on 16 as well: index 0 is not the universal background it looks
+    // like from the level textures.
+    inline constexpr int HUD_PANEL_TRANSPARENT_INDEX = 16;
+
+    // The big proportional face in FONT1GFX.BND - 164 glyphs at 16, 24 and 35
+    // pixels tall, so three sizes in one sheet. This is almost certainly what the
+    // original's menus use.
+    //
+    // NOT WIRED UP. Switching the menus to it would change their whole look, and
+    // that is a decision to make by eye rather than in passing (Edward, 2026), so
+    // the numbers are recorded and nothing uses them yet.
+    inline constexpr int MENU_FONT_GLYPH_COUNT = 164;
+    inline constexpr int MENU_FONT_HEIGHT_SMALL = 16;
+    inline constexpr int MENU_FONT_HEIGHT_MEDIUM = 24;
+    inline constexpr int MENU_FONT_HEIGHT_LARGE = 35;
+
     // Descriptor index for a glyph, or -1 if out of range.
     inline int HudGlyphDescriptor(int glyphIndex)
     {
@@ -629,6 +707,27 @@ namespace ALTEngine::Renderer
     inline constexpr int HUD_MINIMAP_Y = 19;   // == HUD_OVERLAY_HEALTH_Y, declared below
     inline constexpr int HUD_MINIMAP_W = 98 * HUD_MINIMAP_SCALE;
     inline constexpr int HUD_MINIMAP_H = 34 * HUD_MINIMAP_SCALE;
+
+    // THE TYPED-OUT MESSAGE PANEL, top left of the 320x240 HUD surface.
+    //
+    // The original prints these in a terminal-style box around the top-left HUD
+    // region, revealing a character at a time. POSITION AND STYLE ARE OURS - the
+    // text is the original's (see Screens/HudMessages.h) but nothing traced gives
+    // the box's own bounds, so these are chosen to sit clear of the weapon and
+    // the ammo row.
+    // Sits BELOW the minimap, aligned to its left edge. HUD_MINIMAP_Y plus the
+    // strip and the map's own height puts the minimap's bottom at 92, so this
+    // starts just under it - and it stays put whether or not the Live Minimap
+    // option is on, since the pause map occupies the same region.
+    //
+    // Square corners, not rounded: the menus use rounded boxes for buttons and
+    // this is not one - it is a terminal readout (Edward, 2026).
+    inline constexpr int HUD_MESSAGE_X = HUD_MINIMAP_X;
+    inline constexpr int HUD_MESSAGE_Y = HUD_MINIMAP_Y + HUD_MINIMAP_STRIP_H + HUD_MINIMAP_H + 4;
+    // Line pitch is the HUD font's own glyph height, so lines sit flush the way
+    // the ammo row's digits do. No width or padding: there is no box.
+    // Font C's own height plus a row of leading.
+    inline constexpr int HUD_MESSAGE_LINE_HEIGHT = HUD_FONT_C_GLYPH_HEIGHT + 1;
 
     // ---- over-100 health (derm patches) -------------------------------------
     // Geometry transcribed from FUN_0003a674; see the long note above.

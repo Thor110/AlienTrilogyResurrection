@@ -2632,11 +2632,54 @@ namespace ALTEngine::Screens
                         // frame, and the single blit at the end scales both
                         // together.
                         weaponView.SetWeapon(renderer, cdDirectory, hudState.currentWeapon);
-                        hud.Draw(renderer, hudState, windowW, windowH, [&] {
-                            weaponView.Draw(renderer,
-                                            ALTEngine::Renderer::HUD_VIRTUAL_WIDTH,
-                                            ALTEngine::Renderer::HUD_VIRTUAL_HEIGHT);
-                        });
+                        hud.Draw(renderer, hudState, windowW, windowH,
+                            [&] {
+                                weaponView.Draw(renderer,
+                                                ALTEngine::Renderer::HUD_VIRTUAL_WIDTH,
+                                                ALTEngine::Renderer::HUD_VIRTUAL_HEIGHT);
+                            },
+                            [&] {
+                                // The typed-out messages, at 1:1 in the HUD
+                                // surface so the text lands on whole pixels.
+                                // Newest at the bottom, the way a terminal
+                                // scrolls.
+                                const auto visible = hudMessages.Visible();
+                                if (visible.empty()) { return; }
+
+                                // NO PANEL AT ALL - just the text, the way the
+                                // original prints it. A filled box behind it was
+                                // wrong twice over: rounded first, then square,
+                                // when there should be nothing there (Edward,
+                                // 2026).
+                                //
+                                // Drawn in the game's own SMALL HUD font - font C,
+                                // 5 pixels tall against font A's 9. The menus' 8x8
+                                // face and font A were both too big against a
+                                // 320x240 surface.
+                                namespace R = ALTEngine::Renderer;
+                                int lineY = R::HUD_MESSAGE_Y;
+                                for (size_t i = 0; i < visible.size(); ++i)
+                                {
+                                    const std::string& line = visible[i];
+                                    const int drawn = hud.DrawHudText(
+                                        renderer, line, R::HUD_MESSAGE_X, lineY,
+                                        R::HUD_FONT_C_FIRST_DESCRIPTOR, 1.0f, 1.0f,
+                                        R::HUD_FONT_C_LETTER_SPACING);
+
+                                    // A caret on whichever line is still being
+                                    // revealed, so it reads as being typed.
+                                    if (i == hudMessages.TypingLine())
+                                    {
+                                        // Glyph 0x06, the font's own block cursor.
+                                        const std::string caret(1, R::HUD_MESSAGE_CARET_CHAR);
+                                        hud.DrawHudText(renderer, caret,
+                                                        R::HUD_MESSAGE_X + drawn, lineY,
+                                                        R::HUD_FONT_C_FIRST_DESCRIPTOR, 1.0f, 1.0f,
+                                                        R::HUD_FONT_C_LETTER_SPACING);
+                                    }
+                                    lineY += R::HUD_MESSAGE_LINE_HEIGHT;
+                                }
+                            });
 
                         // Motion tracker. Contacts are world-space offsets from
                         // the player; enemies do not exist yet, so this is empty

@@ -434,6 +434,35 @@ namespace ALTEngine::Renderer
         SDL_RenderTexture(renderer, sheet, &src, &dst);
     }
 
+    int HudRenderer::DrawHudText(SDL_Renderer* renderer, const std::string& text, int x, int y,
+                                 int firstDescriptor, float scaleX, float scaleY,
+                                 int letterSpacing) const
+    {
+        // Same cursor discipline as DrawNumber: step by the glyph's own advance
+        // times the scale the glyph is drawn at, never the other axis's scale.
+        const float glyphScale = scaleY;
+        float cursor = static_cast<float>(x) * scaleX;
+        const float py = static_cast<float>(y) * scaleY;
+        const float startCursor = cursor;
+
+        for (unsigned char raw : text)
+        {
+            // Glyph 0 is space (0x20). Anything below that or past the set is
+            // skipped rather than drawn as garbage.
+            const int glyph = static_cast<int>(raw) - 0x20;
+            if (glyph < 0 || glyph >= HUD_FONT_GLYPH_COUNT) { continue; }
+
+            const int descriptor = firstDescriptor + glyph;
+            DrawDescriptor(renderer, descriptor, cursor, py, scaleX, scaleY);
+            if (static_cast<size_t>(descriptor) < rects.size())
+            {
+                cursor += (static_cast<float>(rects[static_cast<size_t>(descriptor)].width)
+                           + static_cast<float>(letterSpacing)) * glyphScale;
+            }
+        }
+        return static_cast<int>((cursor - startCursor) / (scaleX > 0.0f ? scaleX : 1.0f));
+    }
+
     int HudRenderer::DrawNumber(SDL_Renderer* renderer, int value, int x, int y,
                                 int firstDescriptor, float scaleX, float scaleY) const
     {
@@ -481,7 +510,8 @@ namespace ALTEngine::Renderer
 
     void HudRenderer::Draw(SDL_Renderer* renderer, const ALTEngine::Screens::PlayerHudState& state,
                            int outputWidth, int outputHeight,
-                           const std::function<void()>& drawUnderPanels) const
+                           const std::function<void()>& drawUnderPanels,
+                           const std::function<void()>& drawOverPanels) const
     {
         if (!sheet || rects.empty()) { return; }
         if (outputWidth <= 0 || outputHeight <= 0) { return; }
@@ -662,6 +692,11 @@ namespace ALTEngine::Renderer
             drawItem("SPD",  state.terrainSpeed);
             drawItem("SHLD", state.terrainShield);
         }
+
+        // Last, on top of every panel: the typed-out messages. They belong here
+        // rather than in the underlay because the original's terminal box sits
+        // over the HUD region, not behind it.
+        if (drawOverPanels) { drawOverPanels(); }
 
         // Back to the window, and put the whole 320x240 surface on it in one
         // stretch - the single scaling step the original's compositing does.

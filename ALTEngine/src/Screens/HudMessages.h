@@ -67,18 +67,27 @@ namespace ALTEngine::Screens
         // One of the original's logic ticks.
         void Tick()
         {
+            // ONE LINE AT A TIME, in order. Advancing every incomplete line at
+            // once had three messages appearing letter by letter in parallel,
+            // which does not read as a terminal printing - it reads as three
+            // things happening at once. The oldest unfinished line types until it
+            // is done, then the next starts.
+            bool typedThisTick = false;
             for (Line& line : lines)
             {
                 if (line.revealed < static_cast<int>(line.text.size()))
                 {
+                    if (typedThisTick) { break; }   // it waits its turn
                     if (++line.timer >= TICKS_PER_CHARACTER)
                     {
                         line.timer = 0;
                         line.revealed++;
                     }
+                    typedThisTick = true;
                 }
                 else
                 {
+                    // Only start counting toward expiry once it is complete.
                     line.timer++;
                 }
             }
@@ -99,6 +108,29 @@ namespace ALTEngine::Screens
                 out.push_back(line.text.substr(0, static_cast<size_t>(line.revealed)));
             }
             return out;
+        }
+
+        // True while the newest line is still appearing, so the caller can show
+        // a caret.
+        // True while any line is still appearing, and the caret belongs on that
+        // line rather than always on the last.
+        bool Typing() const
+        {
+            for (const Line& line : lines)
+            {
+                if (line.revealed < static_cast<int>(line.text.size())) { return true; }
+            }
+            return false;
+        }
+
+        // Which line the caret sits on - the oldest unfinished one.
+        size_t TypingLine() const
+        {
+            for (size_t i = 0; i < lines.size(); ++i)
+            {
+                if (lines[i].revealed < static_cast<int>(lines[i].text.size())) { return i; }
+            }
+            return lines.size();
         }
 
         bool Empty() const { return lines.empty(); }

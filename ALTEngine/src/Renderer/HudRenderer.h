@@ -52,6 +52,22 @@ namespace ALTEngine::Renderer
         bool Load(SDL_Renderer* renderer, const std::filesystem::path& cdDirectory, int fileIndex,
                   const std::string& languageFolderName = {});
 
+        // Draws a string in the game's OWN HUD font, the one the ammo row uses.
+        //
+        // Font A holds 91 glyphs and its '0' is glyph 0x10, which puts glyph 0 at
+        // character 0x20 - so the set is printable ASCII from space to 'z' and
+        // covers letters, not only digits. That makes it usable for the typed
+        // messages, and it is the right font for them: the 8x8 bitmap font the
+        // menus use is a different, chunkier face and looks oversized against a
+        // 320x240 HUD.
+        //
+        // Returns the pixel width drawn, in HUD units.
+        // `letterSpacing` is added to every glyph's advance. Font A wants 0 (its
+        // rect carries a blank column already); font C wants 1.
+        int DrawHudText(SDL_Renderer* renderer, const std::string& text, int x, int y,
+                        int firstDescriptor, float scaleX, float scaleY,
+                        int letterSpacing = 0) const;
+
         void Unload();
 
         // Draws the HUD over the current frame. `outputWidth/Height` are the
@@ -65,7 +81,8 @@ namespace ALTEngine::Renderer
         // the screen edge does.
         void Draw(SDL_Renderer* renderer, const ALTEngine::Screens::PlayerHudState& state,
                   int outputWidth, int outputHeight,
-                  const std::function<void()>& drawUnderPanels = {}) const;
+                  const std::function<void()>& drawUnderPanels = {},
+                  const std::function<void()>& drawOverPanels = {}) const;
 
         // Draws the tracker's edge strips above and below an arbitrary box, in
         // 320x240 HUD space. Used to frame the live minimap so it matches the
