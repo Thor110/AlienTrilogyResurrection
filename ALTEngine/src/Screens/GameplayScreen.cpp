@@ -4,11 +4,14 @@
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/LevelLoader.h"
 #include "PlayerHudState.h"
+#include "PickupSystem.h"
+#include "DroppedPickups.h"
 #include "PlayerCamera.h"
 #include "WeaponSystem.h"
 #include "ParticleSystem.h"
 #include "ExplosionEffects.h"
 #include "ShatterEffects.h"
+#include "Enemies.h"
 #include "DamageSystem.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Formats/SoundIds.h"
@@ -406,6 +409,10 @@ namespace ALTEngine::Screens
             // hidden and uncollectable until the crate breaks.
             bool contained = false;
             uint8_t pickupIndex = 0xFF;   // its slot in level.pickups
+
+            // In flight, having just been thrown out of a crate.
+            float vx = 0, vy = 0, vz = 0;
+            bool falling = false;
         };
         std::vector<LivePickup> livePickups;
         // Switch/object state, indexed by object record. Non-zero means
@@ -441,8 +448,10 @@ namespace ALTEngine::Screens
         bool altFirePressedLastTick = false;
         ALTEngine::Screens::WeaponSystem::Runtime weaponRuntime;
         ALTEngine::Screens::Particles::Pool particles;
+        ALTEngine::Screens::Particles::Rng dropRng;
         ALTEngine::Screens::ExplosionEffects explosions;
         ALTEngine::Screens::ShatterEffects shatter;
+        std::vector<ALTEngine::Screens::Enemies::Enemy> enemies;
 
         // The held weapon. Driven by the select keys below; the pistol is the
         // only thing available at the start of a level.
@@ -1028,6 +1037,18 @@ namespace ALTEngine::Screens
                             SDL_Log("GameplayScreen: EXPLGFX.B16 not loaded - explosions will be silent-invisible");
                         }
 
+                        // The enemy roster for this difficulty. Monsters parked
+                        // off the playable map are crate contents and start out
+                        // of play.
+                        enemies = ALTEngine::Screens::Enemies::Build(
+                            level, static_cast<int>(difficultySettings.Get()), originX, originZ);
+                        {
+                            size_t held = 0;
+                            for (const auto& e : enemies) { if (!e.active) { held++; } }
+                            SDL_Log("GameplayScreen: %zu enemies placed, %zu held in crates",
+                                    enemies.size(), held);
+                        }
+
                         objectState.assign(level.crates.size(), 0);
                     }
                 }
@@ -1508,6 +1529,35 @@ namespace ALTEngine::Screens
                     {
                         namespace D = ALTEngine::Screens::Damage;
                         for (D::Target& target : damageTargets) { D::TickTarget(target); }
+                        for (auto& enemy : enemies) { ALTEngine::Screens::Enemies::Tick(enemy); }
+
+                        // Items still in the air after a crate threw them.
+                        for (auto& live : livePickups)
+                        {
+                            if (!live.falling || live.placedIndex >= placedObjects.size()) { continue; }
+                            auto& placed = placedObjects[live.placedIndex];
+
+                            live.vy -= ALTEngine::Screens::DroppedPickups::GRAVITY;
+                            placed.x += live.vx;
+                            placed.y += live.vy;
+                            placed.z += live.vz;
+
+                            const float floor = ALTEngine::Formats::FindFloorHeightGridSpace(
+                                level, ToGridSpaceX(placed.x, originX), ToGridSpaceZ(placed.z, originZ));
+                            if (placed.y <= floor)
+                            {
+                                // Landed. Its cell is wherever it came to rest,
+                                // not where the crate was.
+                                placed.y = floor;
+                                live.falling = false;
+                                const int gx = ToGridSpaceX(placed.x, originX) >> 9;
+                                const int gz = ToGridSpaceZ(placed.z, originZ) >> 9;
+                                if (gx >= 0 && gz >= 0 && gx < level.header.mapLength && gz < level.header.mapWidth)
+                                {
+                                    live.cellIndex = gz * level.header.mapLength + gx;
+                                }
+                            }
+                        }
                         explosions.Tick();
                         shatter.Tick([&](float sx, float sz) {
                             return ALTEngine::Formats::FindFloorHeightGridSpace(
@@ -1519,28 +1569,65 @@ namespace ALTEngine::Screens
                         // square opens up, spill what it held, and - if it was a
                         // barrel - set off the blast, which can take out its
                         // neighbours and start a chain.
-                        auto ReleaseContents = [&](int crateIndex) {
+                        auto ReleaseContents = [&](int crateIndex, float dropX, float dropY, float dropZ,
+                                                   int dropCell) {
                             if (crateIndex < 0 || crateIndex >= static_cast<int>(level.crates.size())) { return; }
                             const auto& crate = level.crates[static_cast<size_t>(crateIndex)];
                             if (crate.drop == 2)
                             {
                                 // Holds an enemy - drop1 indexes the MONSTER
-                                // array, and the monster is parked off the edge
-                                // of the map until released. Enemies do not
-                                // exist yet, so this only records the intent.
-                                SDL_Log("crate %d would release monster %u", crateIndex, crate.drop1);
+                                // array, and that monster is parked off the edge
+                                // of the map until released.
+                                // Let it out AT THE CRATE. Like the held
+                                // pickups, a crate's monster is parked off the
+                                // playable map until something opens the box.
+                                if (!ALTEngine::Screens::Enemies::Release(enemies, crate.drop1,
+                                                                          dropX, dropY, dropZ))
+                                {
+                                    SDL_Log("crate %d: monster %u not in the roster at this difficulty",
+                                            crateIndex, crate.drop1);
+                                }
                                 return;
                             }
+
                             for (uint8_t index : { crate.drop1, crate.drop2 })
                             {
                                 if (index == 0xFF) { continue; }
                                 for (auto& live : livePickups)
                                 {
                                     if (live.pickupIndex != index || !live.contained) { continue; }
+
+                                    // MOVE IT TO THE CRATE. A held pickup is
+                                    // parked somewhere else entirely - crate 1
+                                    // sits at (31,67) while the thing it holds
+                                    // is recorded at (23,97), right across the
+                                    // map. The same trick the crate monsters use,
+                                    // parked at x=9.
+                                    //
+                                    // Revealing it where it was recorded put the
+                                    // item in a corner of the level instead of
+                                    // in front of the player (Edward, 2026), so
+                                    // release has to relocate it as well as
+                                    // unhide it.
                                     live.contained = false;
+                                    live.cellIndex = dropCell;
+
+                                    // Thrown out in the direction the crate
+                                    // faces - see DroppedPickups.
+                                    const auto flight = ALTEngine::Screens::DroppedPickups::Launch(
+                                        crate.rotation, dropRng);
+                                    live.vx = flight.vx;
+                                    live.vy = flight.vy;
+                                    live.vz = flight.vz;
+                                    live.falling = true;
+
                                     if (live.placedIndex < placedObjects.size())
                                     {
-                                        placedObjects[live.placedIndex].visible = true;
+                                        auto& placed = placedObjects[live.placedIndex];
+                                        placed.x = dropX;
+                                        placed.y = dropY + ALTEngine::Screens::DroppedPickups::DropHeight(live.type);
+                                        placed.z = dropZ;
+                                        placed.visible = true;
                                     }
                                 }
                             }
@@ -1564,7 +1651,7 @@ namespace ALTEngine::Screens
                                 placedObjects[static_cast<size_t>(target.placedObjectIndex)].visible = false;
                             }
                             ClearOccupancy(target.cellIndex);
-                            ReleaseContents(target.crateIndex);
+                            ReleaseContents(target.crateIndex, target.x, target.y, target.z, target.cellIndex);
 
                             // Tear the object into pieces of its own mesh. This
                             // is the real break-up; the effect sprites below are
@@ -2001,22 +2088,18 @@ namespace ALTEngine::Screens
                         if (live.placedIndex < placedObjects.size()) { placedObjects[live.placedIndex].visible = false; }
 
                         int amount = static_cast<int>(live.amount) * (live.multiplier == 0 ? 1 : live.multiplier);
-                        switch (live.type)
+
+                        // The whole table, from FUN_000387c0 - see
+                        // Screens/PickupSystem.h. This used to handle a dozen of
+                        // the 26 types and let the rest fall through, which is
+                        // why derm patches did nothing (Edward, 2026), and it
+                        // had the smartgun and flamethrower crossed: pickup type
+                        // 3 fills DAT_000b0aca, which is the SMARTGUN's counter,
+                        // not the flamethrower's.
+                        if (!ALTEngine::Screens::Pickups::Apply(live.type, amount, live.multiplier,
+                                                                inventory, hudState))
                         {
-                        case 0:  inventory.pistol.available = true;       inventory.pistol.ammo += amount;       break;
-                        case 1:  inventory.shotgun.available = true;      inventory.shotgun.ammo += amount;      break;
-                        case 2:  inventory.pulseRifle.available = true;   inventory.pulseRifle.ammo += amount;   break;
-                        case 3:  inventory.flamethrower.available = true; inventory.flamethrower.ammo += amount; break;
-                        case 4:  inventory.smartGun.available = true;     inventory.smartGun.ammo += amount;     break;
-                        case 7:  inventory.batteries += (amount > 0 ? amount : 1); break;
-                        case 9:  inventory.pistol.ammo += amount;       break;
-                        case 10: inventory.shotgun.ammo += amount;      break;
-                        case 11: inventory.pulseRifle.ammo += amount;   break;
-                        case 13: inventory.flamethrower.ammo += amount; break;
-                        case 14: inventory.smartGun.ammo += amount;     break;
-                        case 16: inventory.hasAutoMapper = true;  break;
-                        case 25: inventory.hasShoulderLamp = true; break;
-                        default: break; // health, armour and the rest need player stats we do not have yet
+                            SDL_Log("GameplayScreen: pickup type %d has no handler", live.type);
                         }
                         SDL_Log("GameplayScreen: collected pickup type %d (amount %d)", live.type, amount);
                     }

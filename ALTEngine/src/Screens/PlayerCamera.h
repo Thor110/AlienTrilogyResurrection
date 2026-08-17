@@ -86,15 +86,12 @@ namespace ALTEngine::Screens
             int turnMax;    // DAT_000b0b32
         };
 
-        // DAT_000ace24 is a data-segment initialiser with no write site
-        // anywhere in the decompiled export, so the walking turn cap is the one
-        // value in this struct that is A GUESS. Running is 0x3c (60); this
-        // assumes walking turns at two thirds of that. If turning while walking
-        // feels wrong relative to running, this is the number - and the real
-        // one can be read straight out of Ghidra's listing at 0x000ace24.
-        constexpr int WALK_TURN_MAX_GUESS = 40;   // GUESS - real value at DAT_000ace24
+        // CONFIRMED: 0x20. Read from the image at 0x000ace24. The guess here was
+        // 40, on the assumption that walking turned at two thirds of running's
+        // 0x3c; the real ratio is closer to half.
+        constexpr int WALK_TURN_MAX = 0x20;
 
-        constexpr MoveTuning WALK{ 0x78, 9, 6, WALK_TURN_MAX_GUESS };
+        constexpr MoveTuning WALK{ 0x78, 9, 6, WALK_TURN_MAX };
         constexpr MoveTuning RUN { 0x90, 0xc, 9, 0x3c };
 
         constexpr int TURN_ACCEL = 4;    // FUN_0003efcc: turn rate ramps +4/tick to turnMax
@@ -113,16 +110,29 @@ namespace ALTEngine::Screens
         constexpr int SNAP_TURN_STEP = 0x80;
         constexpr int SNAP_TURN_TICKS = 16;
 
-        // FOUR VALUES THAT COULD NOT BE TRACED. DAT_000b0b36, DAT_000b0b3a,
-        // DAT_000b0b3c and DAT_000b0b42 have NO write site anywhere in the
-        // decompiled export - they are initialised in the data segment. The
-        // values below are GUESSES chosen to be plausible in the units the code
-        // proves they are in (4096 per turn), and are the first thing to
-        // replace once the real initialisers are read out of Ghidra.
-        constexpr int PITCH_RATE_MAX_GUESS = 0x40;   // GUESS - real value at DAT_000b0b36
-        constexpr int PITCH_MIN_GUESS = -0x180;      // GUESS - real value at DAT_000b0b3a (~ -34 degrees)
-        constexpr int PITCH_MAX_GUESS = 0x180;       // GUESS - real value at DAT_000b0b3c (~ +34 degrees)
-        constexpr int PITCH_REST_GUESS = 0;          // GUESS - real value at DAT_000b0b42 (level gaze)
+        // ALL FOUR CONFIRMED. These are not data-segment initialisers after all
+        // - they are written at 0x000406cc-0x0004071d, a run of register loads
+        // that sets up the whole player block at game start:
+        //
+        //     ESI 0x30       -> DAT_000b0b42   pitch rest angle
+        //     EAX 0xffffff80 -> DAT_000b0b3a   pitch minimum
+        //     EDX 0x10       -> DAT_000b0b36   maximum pitch rate
+        //     ECX 0          -> DAT_000b0b38   pitch rate, starts stopped
+        //     EDI 0x80       -> DAT_000b0b3c   pitch maximum
+        //     ESI 0x78       -> DAT_000b0b46   walk speed
+        //
+        // That last one is 0x78, which is the walk speed already read out of
+        // FUN_0003efcc - so this is definitely the right block.
+        //
+        // EVERY ONE OF THE FOUR GUESSES WAS WRONG, and the pitch range is far
+        // tighter than assumed: +/-0x80 is +/-11.25 degrees, not the +/-34 that
+        // was here. The rest angle is 0x30 rather than level, so the view sits
+        // slightly off centre, and the rate cap is 0x10 rather than 0x40 - four
+        // times slower to swing.
+        constexpr int PITCH_RATE_MAX = 0x10;   // DAT_000b0b36
+        constexpr int PITCH_MIN = -0x80;       // DAT_000b0b3a
+        constexpr int PITCH_MAX = 0x80;        // DAT_000b0b3c
+        constexpr int PITCH_REST = 0x30;       // DAT_000b0b42
 
         // Standing eye height above the player's feet. DAT_000b0b4c, set to
         // 0x180 by FUN_0003ee4c, which also eases it back down 0xc per tick
@@ -341,25 +351,25 @@ namespace ALTEngine::Screens
         inline void RecentrePitch(State& state)
         {
             state.pitchRate = 0;
-            if (state.pitch < PITCH_REST_GUESS)
+            if (state.pitch < PITCH_REST)
             {
-                state.pitch = (state.pitch + PITCH_RECENTRE <= PITCH_REST_GUESS)
-                    ? state.pitch + PITCH_RECENTRE : PITCH_REST_GUESS;
+                state.pitch = (state.pitch + PITCH_RECENTRE <= PITCH_REST)
+                    ? state.pitch + PITCH_RECENTRE : PITCH_REST;
             }
-            else if (state.pitch > PITCH_REST_GUESS)
+            else if (state.pitch > PITCH_REST)
             {
-                state.pitch = (PITCH_REST_GUESS <= state.pitch - PITCH_RECENTRE)
-                    ? state.pitch - PITCH_RECENTRE : PITCH_REST_GUESS;
+                state.pitch = (PITCH_REST <= state.pitch - PITCH_RECENTRE)
+                    ? state.pitch - PITCH_RECENTRE : PITCH_REST;
             }
         }
 
         // Shared by manual look and ramp pitch: ramp the rate up, then apply.
         inline void ApplyPitch(State& state, int direction)
         {
-            if (state.pitchRate < PITCH_RATE_MAX_GUESS) { state.pitchRate += PITCH_ACCEL; }
-            if (state.pitchRate > PITCH_RATE_MAX_GUESS) { state.pitchRate = PITCH_RATE_MAX_GUESS; }
+            if (state.pitchRate < PITCH_RATE_MAX) { state.pitchRate += PITCH_ACCEL; }
+            if (state.pitchRate > PITCH_RATE_MAX) { state.pitchRate = PITCH_RATE_MAX; }
             state.pitch += direction * state.pitchRate;
-            state.pitch = Clamp(state.pitch, PITCH_MIN_GUESS, PITCH_MAX_GUESS);
+            state.pitch = Clamp(state.pitch, PITCH_MIN, PITCH_MAX);
         }
 
         // ------------------------------------------------------------------
