@@ -18,68 +18,133 @@ namespace ALTEngine::Screens
 {
     // Drawing enemies.
     //
-    // WHERE THEIR ARTWORK LIVES: cd\NME\<NAME>.B16, one file per creature.
+    // WHERE THEIR ARTWORK LIVES: cd\NME\<NAME>.B16, one file per creature, with a
+    // .BND alongside. Fifteen of them, listed in a 12-byte-per-entry table at
+    // 0x000a5e10.
     //
-    // My first pass concluded there was no enemy sprite file, because a scan of
-    // the image for filename-shaped strings found only the weapons and the level
-    // GFX sets. That scan was simply incomplete - the byte capture misses part
-    // of the string region, and the paths are stored with a directory prefix
-    // ("cd\NME\HUGGER.B16") which the pattern I used did not match. Fifteen of
-    // them are there, each with a .BND alongside.
+    // MONSTER TYPE -> CREATURE, from Edward's ALTViewer notes:
     //
-    // The index is a 12-byte-per-entry table at 0x000a5e10, filename pointer
-    // first:
-    //     0 DOG        1 HUGGER    2 WAR       3 EGGS      4 HANDLER
-    //     5 SYNTH      6 GUARD     7 SOLDIER   8 BURSTER   9 BAMBI
-    //    10 FINGERS   11 WARCEIL  12 QUEEN    13 DOGCEIL  14 COLONIST
+    //     0x01 Egg                 EGGS        0x09 Ceiling Dog Alien  DOGCEIL
+    //     0x02 Face Hugger         HUGGER      0x0a Colonist           COLONIST
+    //     0x03 Chest Burster       BURSTER     0x0b Guard              GUARD
+    //     0x04 Bambi               BAMBI       0x0c Soldier            SOLDIER
+    //     0x05 Dog Alien           DOG         0x0d Synthetic          SYNTH
+    //     0x06 Warrior Drone       WAR         0x0e Handler            HANDLER
+    //     0x07 Queen               QUEEN       0x0f unused in every level
+    //     0x08 Ceiling Warrior     WARCEIL
     //
-    // MARKED: whether the monster record's type byte indexes this table
-    // directly is NOT traced. It probably does not - L111's roster is types 2
-    // and 6, which would be WAR and GUARD, but the type-2 monsters are the ones
-    // crates spring at the player and the game's own sound bank gives level 1
-    // the SYNDIE/SYNFALL/SYNHIT set. HUGGER and SYNTH are the creatures that
-    // fit, and those are indices 1 and 5 - one less than the record's type in
-    // both cases. So a one-based type is the likely reading and is what is used
-    // here, but it rests on two data points and should be checked.
-    inline constexpr const char* ENEMY_FILES[] = {
-        "DOG", "HUGGER", "WAR", "EGGS", "HANDLER", "SYNTH", "GUARD", "SOLDIER",
-        "BURSTER", "BAMBI", "FINGERS", "WARCEIL", "QUEEN", "DOGCEIL", "COLONIST",
+    // THIS WAS WRONG, and the way it was wrong is worth recording. I had been
+    // indexing the FILE TABLE by type - 1. That table's order is its own
+    // (DOG, HUGGER, WAR, EGGS, HANDLER, SYNTH, ...) and is not the type order -
+    // but type 2 lands on HUGGER under both readings, and that single coincidence
+    // made the whole scheme look confirmed. Level 1-1's other creature is type 6,
+    // the Warrior Drone, and it was loading SYNTH instead (Edward, 2026: "the
+    // aliens in the first level have the wrong sprite").
+    //
+    // The lesson is the same one as the barrel/crate effect tables: one matching
+    // data point is not a confirmed mapping, and I should have said so at the
+    // time rather than calling it likely.
+    //
+    // FINGERS.B16 has no monster type because it is NOT a creature in the world:
+    // it is the overlay of a face hugger crawling onto the camera (Edward, 2026).
+    // The pounce draws it - see EnemyBehaviour's note on FUN_000303ec, which
+    // claims two sprite slots and reads its frames from the creature's animation
+    // table at +0x88 and +0x8c.
+    //
+    // TYPES 0x10-0x13 ARE THE VENTS - horizontal and vertical steam and flame.
+    // They occupy monster slots rather than being separate scenery, which places
+    // the "Steam valve closed" and "Flame jet shut down" notices (string indices
+    // 84 and 85) in the monster system rather than a hazard one of their own.
+    inline constexpr const char* ENEMY_FILE_FOR_TYPE[] = {
+        nullptr,      // 0x00
+        "EGGS",       // 0x01
+        "HUGGER",     // 0x02
+        "BURSTER",    // 0x03
+        "BAMBI",      // 0x04
+        "DOG",        // 0x05
+        "WAR",        // 0x06
+        "QUEEN",      // 0x07
+        "WARCEIL",    // 0x08
+        "DOGCEIL",    // 0x09
+        "COLONIST",   // 0x0a
+        "GUARD",      // 0x0b
+        "SOLDIER",    // 0x0c
+        "SYNTH",      // 0x0d
+        "HANDLER",    // 0x0e
+        nullptr,      // 0x0f
     };
-    inline constexpr int ENEMY_FILE_COUNT = 15;
+    inline constexpr int ENEMY_TYPE_COUNT = 16;
 
-    // GUESS - see above. Type 2 gives HUGGER, type 6 gives SYNTH.
-    inline const char* EnemyFileForType(int monsterType)
+    inline constexpr int VENT_STEAM_HORIZONTAL = 0x10;
+    inline constexpr int VENT_FLAME_HORIZONTAL = 0x11;
+    inline constexpr int VENT_STEAM_VERTICAL = 0x12;
+    inline constexpr int VENT_FLAME_VERTICAL = 0x13;
+
+    inline bool IsVent(int monsterType)
     {
-        const int index = monsterType - 1;
-        if (index < 0 || index >= ENEMY_FILE_COUNT) { return nullptr; }
-        return ENEMY_FILES[index];
+        return monsterType >= VENT_STEAM_HORIZONTAL && monsterType <= VENT_FLAME_VERTICAL;
     }
 
-    // SECTIONS ARE POSES, NOT VIEWS. The override dump for EGGS shows six
-    // sections with 3, 3, 5, 6, 8 and 8 frames - so an F0## section is an
-    // animation (idle, attack, death and so on) and the frames within it are
-    // that animation's frames. An earlier version of this file assumed a section
-    // held the five view angles, which is wrong.
+    inline const char* EnemyFileForType(int monsterType)
+    {
+        if (monsterType < 0 || monsterType >= ENEMY_TYPE_COUNT) { return nullptr; }
+        return ENEMY_FILE_FOR_TYPE[monsterType];
+    }
+
+    // FRAMES: WHAT IS ESTABLISHED, AND WHAT IS NOT.
     //
-    // Which section is which pose is not traced. Section 0 is used here as the
-    // resting pose.
+    // TRACED. FUN_0002f4b0 starts an animation on an entity:
+    //     pair = entity[+0x7c] + animIndex * 8
+    //     entity[+0x94] = pair[0]     the frame table
+    //     entity[+0x98] = pair[1] + 1 the sequence program counter
+    //     entity[+0xb2] = pair[1][0]  the frame duration
+    //     entity[+0xc4] = animIndex
+    // then calls FUN_00028a6c - THE SAME ANIMATOR THE WEAPONS USE. It operates on
+    // entity+0x80 as its struct base, which is why every field above is exactly
+    // 0x80 above the weapon animator's equivalent.
     //
-    // EIGHT VIEWS, FIVE FRAMES. The frame shown depends on the angle between
-    // where the enemy faces and where it is being looked at from, quantised to
-    // eight. Views 5, 6 and 7 are views 3, 2 and 1 mirrored - the artwork only
-    // holds front, front-quarter, side, back-quarter and back, and the engine
-    // flips the other three. That is the standard scheme for this era and the
-    // port's own notes already record it for these sprites.
+    // And the animator resolves a frame as:
+    //     entity[+0x90] = entity[+0x94] + sequenceFrameIndex * 0xc
+    // so 12 bytes per record, indexed straight by the sequence's frame number.
+    // That confirms the record layout and that enemies and weapons share one
+    // animation system.
     //
-    // MARKED: the section index per enemy type, and which section holds which
-    // pose, are NOT traced. Section == type is the assumption, and it is the one
-    // to check first if the wrong creature appears.
+    // NOT ESTABLISHED: where the eight view directions come from.
+    //
+    // They are not in the animator - it applies no view offset at all - and they
+    // are not spare capacity in the frame tables, which are sized exactly to the
+    // frames their sequence indexes (the first creature's animation 0 has an
+    // 8-entry table for an 8-frame sequence, with nothing left over). So the view
+    // must be applied by the draw call, and I have not found it.
+    //
+    // Because of that, THE VIEW CODE BELOW IS NOT USED FOR CHOOSING ARTWORK yet.
+    // It computed a view index and loaded frames 0-4 of section 0 as if they were
+    // the five stored views, which was simply wrong - sections are poses and the
+    // frames inside them are animation, as the EGGS override dump shows (six
+    // sections of 3, 3, 5, 6, 8 and 8 frames). That mistake is what put the wrong
+    // starting frame on screen.
+    //
+    // Until the view mechanism is found, one frame is loaded per creature - the
+    // first frame of section 0 - so the right creature appears in its resting
+    // pose rather than an arbitrary frame of an arbitrary pose. The view helpers
+    // are kept because the eight-view, five-frame mirroring scheme is recorded in
+    // the port's own earlier notes and will be needed once the draw is traced.
+    //
+    // THE ONE THING THAT WOULD SETTLE IT: the F0## section and frame inventory of
+    // HUGGER.B16. If a section holds eight times its animation length, the views
+    // live inside the section and the frame index is a stride. If it holds exactly
+    // the animation length, the views are separate sections and the animation
+    // index carries them.
+
     class EnemySprites
     {
     public:
         static constexpr int VIEW_COUNT = 8;
         static constexpr int UNIQUE_VIEWS = 5;   // the rest are mirrored
         static constexpr int REST_SECTION = 0;   // GUESS - which pose section is idle
+
+        // One frame until the view mechanism is traced - see the note above.
+        static constexpr int FRAMES_TO_LOAD = 1;
 
         // Which stored view a given eighth maps to, and whether it is flipped.
         // 0..4 are held as artwork; 5, 6 and 7 are 3, 2 and 1 mirrored.
@@ -133,7 +198,7 @@ namespace ALTEngine::Screens
                 }
 
                 TypeFrames frames;
-                for (int frameIndex = 0; frameIndex < UNIQUE_VIEWS; ++frameIndex)
+                for (int frameIndex = 0; frameIndex < FRAMES_TO_LOAD; ++frameIndex)
                 {
                     std::optional<ALTEngine::Formats::SpriteFrameInfo> frame;
                     try
@@ -181,15 +246,11 @@ namespace ALTEngine::Screens
 
                 const float dx = cameraX - enemy.x;
                 const float dz = cameraZ - enemy.z;
-                const int eighth = ViewIndex(enemy.facing, dx, dz);
-                int view = ViewFrame(eighth);
-                if (!it->second.present[view])
-                {
-                    // Fall back to whatever the type does have rather than
-                    // dropping the enemy entirely.
-                    view = 0;
-                    if (!it->second.present[0]) { continue; }
-                }
+                // The view is computed but NOT used to pick artwork - see the
+                // note above. Only frame 0 is loaded, so that is what draws.
+                (void)dx; (void)dz;
+                const int view = 0;
+                if (!it->second.present[0]) { continue; }
 
                 ALTEngine::Renderer::PlacedSprite sprite;
                 sprite.textureKey = SheetKey(enemy.type, view);
@@ -201,8 +262,7 @@ namespace ALTEngine::Screens
                 // Standing on the floor, not centred on it.
                 sprite.y = enemy.y + sprite.halfHeight;
 
-                // Mirrored views are the same artwork with the UVs swapped.
-                if (ViewMirrored(eighth)) { sprite.u0 = 1.0f; sprite.u1 = 0.0f; }
+
                 out.push_back(sprite);
             }
         }

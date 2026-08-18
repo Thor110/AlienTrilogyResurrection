@@ -25,6 +25,15 @@ namespace ALTEngine::Renderer
         // the HUD actually samples PANEL.PAL at runtime; if it turns out it does,
         // this becomes a palette read and the value should agree.
         constexpr SDL_Color BAR_FILL{ 72, 164, 72, 255 };
+
+        // The bars flash RED while taking damage - health and ammunition both.
+        // Sampled from the original (Edward, 2026).
+        constexpr SDL_Color BAR_FILL_DAMAGED{ 165, 0, 0, 255 };
+
+        // Behind the lit segments the bar is BLACK, not the panel artwork. The
+        // empty part of the run was being left as whatever the frame showed
+        // through, so a half-empty bar read as half-lit rather than half-spent.
+        constexpr SDL_Color BAR_EMPTY{ 0, 0, 0, 255 };
         constexpr SDL_Color BAR_FRAME{ 24, 24, 16, 255 };
 
         // The counters read GREY in the original, not white (Edward, 2026). The
@@ -607,14 +616,43 @@ namespace ALTEngine::Renderer
                      frameX + last.x + last.width, frameY + bottom + 2, c);
         };
 
+        // The unlit remainder of a bar, drawn black behind where the frame's
+        // segments show through. Takes the same slot list and draws from the
+        // first UNLIT slot to the end.
+        auto drawEmptySlots = [&](const std::vector<BarSlot>& slots, int frameX, int frameY, int lit) {
+            const int total = static_cast<int>(slots.size());
+            if (lit >= total) { return; }
+            const int startIndex = (lit < 0) ? 0 : lit;
+
+            const BarSlot& first = slots[static_cast<size_t>(startIndex)];
+            const BarSlot& last = slots[static_cast<size_t>(total - 1)];
+
+            int top = first.top;
+            int bottom = first.bottom;
+            for (int i = startIndex; i < total; ++i)
+            {
+                top = std::min(top, slots[static_cast<size_t>(i)].top);
+                bottom = std::max(bottom, slots[static_cast<size_t>(i)].bottom);
+            }
+
+            fillRect(frameX + first.x, frameY + top - 1,
+                     frameX + last.x + last.width, frameY + bottom + 2, BAR_EMPTY);
+        };
+
+        // Both bars turn red together while the damage flash is running.
+        const SDL_Color barColor = (state.damageCooldown > 0) ? BAR_FILL_DAMAGED : BAR_FILL;
+
         // ---- health row ----------------------------------------------------
         // Order: bar, then the frame artwork OVER it, then the number. The frame
         // is keyed transparent where the bar should show through, so it has to be
         // on top - it is what trims a pixel off the bar's corners and separates
         // the segments.
+        drawEmptySlots(healthSlots, HUD_OVERLAY_HEALTH_X + healthFrame.insetX,
+                       HUD_OVERLAY_HEALTH_Y + healthFrame.insetY,
+                       HudHealthLitSlots(state.health));
         drawSlots(healthSlots, HUD_OVERLAY_HEALTH_X + healthFrame.insetX,
                   HUD_OVERLAY_HEALTH_Y + healthFrame.insetY,
-                  HudHealthLitSlots(state.health), BAR_FILL);
+                  HudHealthLitSlots(state.health), barColor);
 
         DrawFrame(renderer, healthFrame, HUD_OVERLAY_HEALTH_X, HUD_OVERLAY_HEALTH_Y, scaleX, scaleY);
 
@@ -640,9 +678,12 @@ namespace ALTEngine::Renderer
 
         // ---- ammo row ------------------------------------------------------
         int ammo = state.CurrentAmmoTotal();
+        drawEmptySlots(ammoSlots, HUD_OVERLAY_AMMO_X + ammoFrame.insetX,
+                       HUD_OVERLAY_AMMO_Y + ammoFrame.insetY,
+                       HudAmmoLitSlots(ammo));
         drawSlots(ammoSlots, HUD_OVERLAY_AMMO_X + ammoFrame.insetX,
                   HUD_OVERLAY_AMMO_Y + ammoFrame.insetY,
-                  HudAmmoLitSlots(ammo), BAR_FILL);
+                  HudAmmoLitSlots(ammo), barColor);
 
         DrawFrame(renderer, ammoFrame, HUD_OVERLAY_AMMO_X, HUD_OVERLAY_AMMO_Y, scaleX, scaleY);
 

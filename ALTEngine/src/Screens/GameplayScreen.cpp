@@ -13,6 +13,7 @@
 #include "ExplosionEffects.h"
 #include "ShatterEffects.h"
 #include "Enemies.h"
+#include "../Formats/CellTriggers.h"
 #include "EnemySprites.h"
 #include "DamageSystem.h"
 #include "../Audio/SfxPlayer.h"
@@ -148,6 +149,11 @@ namespace ALTEngine::Screens
         // Where the fireball sits relative to the barrel's base. GUESS - the
         // original's explosion carries its own position which has not been read.
         constexpr float EXPLOSION_HEIGHT_OFFSET = 256.0f;
+
+        // How tall an enemy is for the purposes of being shot. GUESS - the
+        // original takes its half-extents from the entity template's +0x08/+0x0a/
+        // +0x0c, which has not been read.
+        constexpr float ENEMY_HIT_HEIGHT = 300.0f;
 
         constexpr float FRAGMENT_HALF_SIZE = 6.0f;
         constexpr float TRACER_MIN_HALF_SIZE = 5.0f;
@@ -376,6 +382,9 @@ namespace ALTEngine::Screens
             // distance check with no such distinction - so this is
             // behavioural until that is traced.
             bool switchOperated = false;
+            // Lifts run the same state machine as doors here, so the notice has
+            // to be told which it is.
+            bool isLift = false;
             // Unlock progress is reset when the door finishes closing in
             // both ordinary branches. Only doors with flag 0x40 keep it,
             // and those go through a cooldown counted in hold ticks.
@@ -455,6 +464,13 @@ namespace ALTEngine::Screens
         ALTEngine::Screens::HudMessages hudMessages;
         ALTEngine::Screens::ShatterEffects shatter;
         std::vector<ALTEngine::Screens::Enemies::Enemy> enemies;
+
+        // The trigger the player last fired, so a trigger runs once on entry
+        // rather than every tick it is stood on.
+        int playerLastTrigger = 0;
+        // Contacts for the MOTION TRACKER - the dish in the HUD's bottom right,
+        // not the minimap. Rebuilt each tick from the live enemies.
+        std::vector<ALTEngine::Renderer::TrackerContact> trackerContacts;
         ALTEngine::Screens::EnemySprites enemySprites;
 
         // The held weapon. Driven by the select keys below; the pistol is the
@@ -1564,7 +1580,174 @@ namespace ALTEngine::Screens
                     {
                         namespace D = ALTEngine::Screens::Damage;
                         for (D::Target& target : damageTargets) { D::TickTarget(target); }
-                        for (auto& enemy : enemies) { ALTEngine::Screens::Enemies::Tick(enemy); }
+                        // The footprint probe from FUN_000315f0: the candidate is
+                        // pushed MOVE_PROBE_LEAD along the axis of travel, and
+                        // three cells are sampled across the other axis at -200,
+                        // 0 and +200. A creature therefore needs a 400-unit span
+                        // clear, which is why they do not clip corners.
+                        auto enemyAxisClear = [&](float x, float z, bool alongX, float velocity) {
+                            namespace EB = ALTEngine::Screens::EnemyBehaviour;
+                            const float lead = (velocity >= 0.0f) ? EB::MOVE_PROBE_LEAD
+                                                                  : -EB::MOVE_PROBE_LEAD;
+                            const float probeX = alongX ? x + lead : x;
+                            const float probeZ = alongX ? z : z + lead;
+
+                            for (int side = -1; side <= 1; ++side)
+                            {
+                                const float offset = static_cast<float>(side) * EB::MOVE_FOOTPRINT_HALF;
+                                const float sx = alongX ? probeX : probeX + offset;
+                                const float sz = alongX ? probeZ + offset : probeZ;
+
+                                const int gx = ToGridSpaceX(sx, originX) >> 9;
+                                const int gz = ToGridSpaceZ(sz, originZ) >> 9;
+                                if (gx < 0 || gz < 0 || gx >= level.header.mapLength
+                                    || gz >= level.header.mapWidth) { return false; }
+
+                                const size_t ci = static_cast<size_t>(gz)
+                                                * static_cast<size_t>(level.header.mapLength)
+                                                + static_cast<size_t>(gx);
+                                if (ci >= level.collisionGrid.size()) { return false; }
+                                const auto& cell = level.collisionGrid[ci];
+
+                                if (EB::AttributeBlocks(cell.attribute)) { return false; }
+                                if (cell.unknown13 != 0) { return false; }   // something is standing there
+                            }
+                            return true;
+                        };
+
+                        // ---- cell-entry triggers ------------------------
+                        //
+                        // FUN_0004129c, reached from the mover whenever an
+                        // entity's cell changes. Runs the action chain for the
+                        // new cell's trigger, once on entry.
+                        //
+                        // This is what was missing entirely: the tables were
+                        // parsed but nothing ever fired them, so every monster
+                        // with a non-zero trigger threshold stayed unspawned.
+                        auto fireCellTriggers = [&](int cellIndex, int& lastTriggerId) {
+                            namespace CT = ALTEngine::Formats::CellTriggers;
+                            if (cellIndex < 0 || cellIndex >= static_cast<int>(level.collisionGrid.size())) { return; }
+
+                            // THE CELL BYTE IS AN OFFSET, NOT AN INDEX. Every
+                            // non-zero value on L111 is a multiple of 4 - 36, 40,
+                            // 68, 80, 100, 112 - and dividing by 4 brings them
+                            // into 9..28, inside the 64-entry table. Used
+                            // directly they run off the end of it.
+                            //
+                            // FUN_0004129c multiplies the byte by 4 and then
+                            // indexes BYTES, so the byte is the index and the
+                            // multiply is the record stride. That reads the other
+                            // way from the data. MARKED: the division is what the
+                            // data supports and the disassembly is what it is;
+                            // one of the two readings is incomplete.
+                            const int triggerId =
+                                level.collisionGrid[static_cast<size_t>(cellIndex)].scriptAction / 4;
+                            if (!CT::ShouldFire(lastTriggerId, triggerId)) { lastTriggerId = triggerId; return; }
+                            lastTriggerId = triggerId;
+
+                            if (triggerId >= static_cast<int>(level.actions.size())) { return; }
+                            const auto& trigger = level.actions[static_cast<size_t>(triggerId)];
+                            if ((trigger.activationMask & CT::TRIGGER_ENABLED_FLAG) == 0) { return; }
+                            if (trigger.enable == 0) { return; }
+
+                            int step = trigger.commandStart;
+                            for (int guard = 0; guard < 32 && step != CT::ACTION_LIST_END; ++guard)
+                            {
+                                if (step < 0 || step >= static_cast<int>(level.logics.size())) { break; }
+                                const auto& logic = level.logics[static_cast<size_t>(step)];
+
+                                switch (logic.action)
+                                {
+                                case CT::ACTION_SPAWN_MONSTER:
+                                    // arg2 names the monster, arg1 is added to
+                                    // its trigger counter.
+                                    if (ALTEngine::Screens::Enemies::TriggerSpawn(
+                                            enemies, logic.objectIndex, logic.modifier))
+                                    {
+                                        SDL_Log("trigger %d spawned monster %u", triggerId, logic.objectIndex);
+                                    }
+                                    break;
+                                default:
+                                    // The other actions are doors, lifts and the
+                                    // level exit - not wired here yet.
+                                    break;
+                                }
+                                step = logic.nextStep;
+                            }
+                        };
+
+                        {
+                            const int gx = ToGridSpaceX(camera.x, originX) >> 9;
+                            const int gz = ToGridSpaceZ(camera.z, originZ) >> 9;
+                            if (gx >= 0 && gz >= 0 && gx < level.header.mapLength
+                                && gz < level.header.mapWidth)
+                            {
+                                fireCellTriggers(gz * level.header.mapLength + gx, playerLastTrigger);
+                            }
+                        }
+
+                        trackerContacts.clear();
+                        for (auto& enemy : enemies)
+                        {
+                            if (enemy.active)
+                            {
+                                ALTEngine::Renderer::TrackerContact contact;
+                                contact.worldX = enemy.x;
+                                contact.worldZ = enemy.z;
+                                contact.type = enemy.type;
+                                contact.state = enemy.state;
+                                // Moving = any velocity component non-zero, which
+                                // is what the original tests.
+                                contact.moving = (enemy.stepX != 0.0f || enemy.stepZ != 0.0f);
+                                trackerContacts.push_back(contact);
+                            }
+                            ALTEngine::Screens::Enemies::Tick(enemy, camera.x, camera.y, camera.z);
+
+                            // Each axis resolved separately, as the original's two
+                            // step helpers do - so a creature blocked on one axis
+                            // still slides along the other.
+                            if (enemy.stepX != 0.0f && enemyAxisClear(enemy.x, enemy.z, true, enemy.stepX))
+                            {
+                                enemy.x += enemy.stepX;
+                            }
+                            if (enemy.stepZ != 0.0f && enemyAxisClear(enemy.x, enemy.z, false, enemy.stepZ))
+                            {
+                                enemy.z += enemy.stepZ;
+                            }
+
+                            // Stand on the floor, or hang below the ceiling.
+                            {
+                                namespace EB = ALTEngine::Screens::EnemyBehaviour;
+                                const int gx = ToGridSpaceX(enemy.x, originX);
+                                const int gz = ToGridSpaceZ(enemy.z, originZ);
+                                const float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
+                                enemy.y = floorY + EB::STAND_CLEARANCE;
+                            }
+                            if (enemy.pendingDamage > 0)
+                            {
+                                hudState.health = static_cast<int16_t>(
+                                    hudState.health - enemy.pendingDamage);
+                                hudState.damageCooldown = 8;
+                                if (hudState.health < 0) { hudState.health = 0; }
+                            }
+                            if (enemy.spawnDeathEffect)
+                            {
+                                enemy.spawnDeathEffect = false;
+
+                                // NO EXPLOSION. A creature dying was spawning the
+                                // crate-shatter effect, which is plainly wrong -
+                                // they have their own death frames and fall to the
+                                // floor (Edward, 2026).
+                                //
+                                // The original's death path is FUN_00030b04: it
+                                // sets state 7, clears the ceiling flag so a
+                                // ceiling creature drops, and starts the death
+                                // ANIMATION. Playing that needs the animation
+                                // index, which is the same unresolved piece that
+                                // stops any enemy animating - so nothing is drawn
+                                // here rather than something wrong.
+                            }
+                        }
 
                         // Items still in the air after a crate threw them.
                         for (auto& live : livePickups)
@@ -1786,6 +1969,42 @@ namespace ALTEngine::Screens
                             // still fresh - see DamageSystem::HitDamage, and note
                             // that the field named like strength is not the one
                             // used as damage.
+                            // ---- rounds against ENEMIES ------------------
+                            //
+                            // The same box test the objects get. This was simply
+                            // absent - projectiles only ever tested crates and
+                            // barrels, so enemies could not be shot at all and
+                            // the only thing they did was drain health (Edward,
+                            // 2026).
+                            for (auto& enemy : enemies)
+                            {
+                                if (!enemy.active || !enemy.alive) { continue; }
+
+                                const float ex = px - enemy.x;
+                                const float ez = pz - enemy.z;
+                                const float ehalf = D::HitHalfExtent(hitType);
+                                if (ex > ehalf || ex < -ehalf || ez > ehalf || ez < -ehalf) { continue; }
+
+                                // Vertical too - a round passing over a
+                                // facehugger's head should miss it.
+                                const float ey = py - enemy.y;
+                                if (ey < -ENEMY_HIT_HEIGHT || ey > ENEMY_HIT_HEIGHT) { continue; }
+
+                                const auto edef = ALTEngine::Screens::Particles::DefFor(hitType);
+                                const int edamage = D::HitDamage(edef.speed, hitLife, edef.strength);
+                                // ApplyHit sets STATE_DYING itself and leaves the
+                                // creature alive for one more tick, so the tick's
+                                // own arm spawns the death effect where the body
+                                // ended up.
+                                ALTEngine::Screens::Enemies::ApplyHit(enemy, edamage);
+                                ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                    ALTEngine::Screens::Particles::ImpactSound(levelIdForSfx, 0),
+                                    digits.c_str(), cdDirectory);
+                                explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_IMPACT,
+                                                 clearX, clearY, clearZ);
+                                return true;
+                            }
+
                             for (D::Target& target : damageTargets)
                             {
                                 if (target.destroyed) { continue; }
@@ -2311,7 +2530,24 @@ namespace ALTEngine::Screens
                                 // alone - the original needs no fresh trigger
                                 // here, because closing resets the counter.
                                 if (ds.cooldown > 0) { ds.cooldown--; }
-                                else if (ds.unlockProgress >= ds.threshold) { ds.phase = DoorState::Phase::Opening; }
+                                else if (ds.unlockProgress >= ds.threshold)
+                                {
+                                    ds.phase = DoorState::Phase::Opening;
+
+                                    // The notice. A switch-operated door reads as
+                                    // "powered up", one you reach yourself as
+                                    // "activated" - see HudMessages for why that
+                                    // split and how confident it is.
+                                    // isLift is always false for now - nothing
+                                    // builds lift states yet, level.lifts is
+                                    // parsed but unused - so this only ever says
+                                    // the door lines. The branch is here so that
+                                    // when lifts arrive the notice comes with
+                                    // them rather than being forgotten.
+                                    if (ds.isLift) { hudMessages.ShowLiftActivated(language); }
+                                    else if (ds.switchOperated) { hudMessages.ShowDoorPoweredUp(language); }
+                                    else { hudMessages.ShowDoorActivated(language); }
+                                }
                                 break;
                             case DoorState::Phase::Opening:
                                 ds.progress++;
@@ -2639,6 +2875,33 @@ namespace ALTEngine::Screens
                                                 ALTEngine::Renderer::HUD_VIRTUAL_HEIGHT);
                             },
                             [&] {
+                                // ---- motion tracker contacts ------------
+                                //
+                                // The dish in the bottom right, NOT the map. I
+                                // put these on the minimap first, which is a
+                                // different thing entirely (Edward, 2026).
+                                //
+                                // Range, scale and rotation are all traced - see
+                                // TrackerBlipPosition. 2x2 points in ff,7f,00.
+                                {
+                                    namespace R = ALTEngine::Renderer;
+                                    SDL_SetRenderDrawColor(renderer,
+                                        R::HUD_TRACKER_BLIP_R, R::HUD_TRACKER_BLIP_G,
+                                        R::HUD_TRACKER_BLIP_B, 255);
+                                    for (const auto& contact : trackerContacts)
+                                    {
+                                        if (!R::TrackerVisible(contact)) { continue; }
+                                        float bx = 0.0f, by = 0.0f;
+                                        if (!R::TrackerBlipPosition(contact, camera.x, camera.z,
+                                                                    camera.yaw, bx, by)) { continue; }
+                                        SDL_FRect blip{ bx - R::HUD_TRACKER_BLIP_SIZE * 0.5f,
+                                                        by - R::HUD_TRACKER_BLIP_SIZE * 0.5f,
+                                                        static_cast<float>(R::HUD_TRACKER_BLIP_SIZE),
+                                                        static_cast<float>(R::HUD_TRACKER_BLIP_SIZE) };
+                                        SDL_RenderFillRect(renderer, &blip);
+                                    }
+                                }
+
                                 // The typed-out messages, at 1:1 in the HUD
                                 // surface so the text lands on whole pixels.
                                 // Newest at the bottom, the way a terminal

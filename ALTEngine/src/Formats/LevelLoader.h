@@ -152,6 +152,31 @@ namespace ALTEngine::Formats
         // parked. The sixth is waiting on a script instead.
         uint8_t triggerCount = 0;      // byte 7 - runtime counter
         uint8_t triggerThreshold = 0;  // byte 8 - 0 means active from the start
+
+        // BYTES 16-19 ARE TWO 16-BIT DISTANCES, and they are the per-creature
+        // thresholds the AI's distance banding uses - the ones that were being
+        // guessed at.
+        //
+        // The evidence is a match against a traced constant. FUN_00033cbc gates
+        // the face hugger's pounce on range < 0x601, and bytes 16/17 read as a
+        // little-endian u16 are 1536 = 0x600 on most of L111's huggers - exactly
+        // that gate. Bytes 18/19 are 768 = 0x300 on nearly all of them, half the
+        // other, and a near threshold below a middle one is the order the banding
+        // needs.
+        //
+        // They also explain the symptom: 768 and 1536 against the 2048 and 4096 I
+        // had guessed is why huggers were reaching across a room.
+        //
+        // The type-6 records differ (1035 and 768), which is what "per creature"
+        // should look like.
+        uint16_t nearThreshold = 0;    // bytes 18,19
+        uint16_t middleThreshold = 0;  // bytes 16,17
+
+        // Still unidentified. Bytes 10/11 read as a u16 are often exactly 512;
+        // bytes 12/13 range 1879..9061 and could be a sight or wake range.
+        uint8_t unk4 = 0;              // byte 9, constant 0 across L111
+        uint16_t unknownA = 0;         // bytes 10,11
+        uint16_t unknownB = 0;         // bytes 12,13
         uint8_t unknown4 = 0;
         uint8_t unknown5 = 0;
         uint8_t unknown6 = 0;
@@ -379,6 +404,30 @@ namespace ALTEngine::Formats
 
     // The blast's own figure, kept separate now that they are known to differ.
     inline constexpr int MIN_BLAST_CLEARANCE = 8;
+
+    // THE TRIGGER SYSTEM IS ALREADY PARSED - it is ActionGroup and LogicGroup.
+    //
+    // I went looking for "the trigger tables" and started writing new structures
+    // for them before noticing the loader has read both since the level work:
+    //
+    //     ActionGroup  64 records  = the TRIGGER table. A cell's byte at +0x0f is
+    //                  an index into it. `activationMask` is the flags byte
+    //                  FUN_0004129c tests bit 2 of, `commandStart` is the head of
+    //                  the action chain, `enable` is the remaining-uses count.
+    //     LogicGroup   64 records  = the ACTION list. `action` is the opcode,
+    //                  `nextStep` the next entry (0xFF ends the chain),
+    //                  `modifier` and `objectIndex` the two arguments.
+    //
+    // The names differ from what the code does, which is why I did not recognise
+    // them. What was missing was never the parsing - it was that nothing FIRES
+    // them. See Formats/CellTriggers.h.
+    //
+    // VERIFIED ON L111, and the two halves agree without fudging:
+    //     ActionGroup 0 -> LogicGroup 43: action 3, spawn monster 8
+    //     ActionGroup 1 -> LogicGroup 11: action 1, door 5, then two more
+    // and the spawn actions across the list name monsters 3, 8 and 13 - exactly
+    // the three whose trigger threshold is non-zero and which therefore never
+    // appeared in play.
 
     bool IsCellBlocking(const LevelGeometry& level, int gameX, int gameZ);
 }

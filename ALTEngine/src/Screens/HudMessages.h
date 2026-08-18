@@ -133,6 +133,56 @@ namespace ALTEngine::Screens
             return lines.size();
         }
 
+        // ---------------------------------------------------------------
+        // The world notices
+        // ---------------------------------------------------------------
+        //
+        // Six of them, at the original's string indices 82-87, now the Gs keys:
+        //     GsDoorActivated     "Door activated"
+        //     GsDoorPoweredUp     "Door powered up"
+        //     GsSteamValveClosed  "Steam valve closed"
+        //     GsFlameJetShutDown  "Flame jet shut down"
+        //     GsLiftActivated     "Lift activated"
+        //     GsBatteryRequired   "Battery required"
+        //
+        // WHICH ACTION PRINTS WHICH IS INFERRED FROM THE TEXT, not traced. I
+        // could not find the call site: the strings live in a pointer array
+        // loaded from the .BIN, and nothing in the export indexes it with 82-87,
+        // so the printer is reached some way I have not identified. The pairings
+        // below are the obvious reading of the words and no more than that.
+        //
+        // The distinction that matters, and the reason there are two door
+        // strings: "activated" reads as the door itself opening, "powered up" as
+        // a switch enabling it - which is exactly the difference the port's door
+        // state already tracks in `switchOperated`. So a switch throw says
+        // powered up, and a door reaching its threshold says activated. If the
+        // original does it the other way round, those two lines swap and nothing
+        // else changes.
+        void ShowDoorActivated(ALTEngine::Bootstrap::Language language)
+        {
+            Show(ALTEngine::Bootstrap::StringId::GsDoorActivated, language);
+        }
+        void ShowDoorPoweredUp(ALTEngine::Bootstrap::Language language)
+        {
+            Show(ALTEngine::Bootstrap::StringId::GsDoorPoweredUp, language);
+        }
+        void ShowLiftActivated(ALTEngine::Bootstrap::Language language)
+        {
+            Show(ALTEngine::Bootstrap::StringId::GsLiftActivated, language);
+        }
+        void ShowBatteryRequired(ALTEngine::Bootstrap::Language language)
+        {
+            Show(ALTEngine::Bootstrap::StringId::GsBatteryRequired, language);
+        }
+        void ShowSteamValveClosed(ALTEngine::Bootstrap::Language language)
+        {
+            Show(ALTEngine::Bootstrap::StringId::GsSteamValveClosed, language);
+        }
+        void ShowFlameJetShutDown(ALTEngine::Bootstrap::Language language)
+        {
+            Show(ALTEngine::Bootstrap::StringId::GsFlameJetShutDown, language);
+        }
+
         bool Empty() const { return lines.empty(); }
         void Clear() { lines.clear(); }
 

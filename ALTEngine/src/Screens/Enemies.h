@@ -3,8 +3,10 @@
 #include "../Formats/LevelLoader.h"
 #include "../Formats/SpriteAnimator.h"
 #include "DamageSystem.h"
+#include "EnemyBehaviour.h"
 #include "PlayerCamera.h"
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -77,6 +79,26 @@ namespace ALTEngine::Screens
             return health;
         }
 
+
+        // How fast a creature turns toward the player, and how its record's speed
+        // byte converts to world units. BOTH GUESSES - the original turns through
+        // FUN_00032f78 and stores its velocities in fields fed by the entity
+        // template, neither of which has been read.
+        inline constexpr int TURN_RATE = 0x60;
+
+        // How close to facing the player a creature must be before it advances.
+        // 0x200 of 4096 is about 45 degrees either side. GUESS.
+        inline constexpr int ALIGN_BEFORE_MOVING = 0x200;
+        inline constexpr float SPEED_SCALE = 0.5f;
+
+
+        // A melee creature's bands. 0x400 is the original's own contact range
+        // (MODE_TOUCHING_RANGE), so a hugger is at mode 0 while touching, mode 1
+        // just outside, and mode 2 barely beyond that - which is as far as its
+        // 1-damage nibble can land. GUESSES, but bounded by a traced number.
+        inline constexpr int MELEE_NEAR_THRESHOLD = 0x500;
+        inline constexpr int MELEE_MIDDLE_THRESHOLD = 0x600;
+
         // WHEN A MONSTER ENTERS PLAY.
         //
         // Not a difficulty setting - a trigger count. FUN_0002f288 increments
@@ -129,6 +151,42 @@ namespace ALTEngine::Screens
             uint8_t triggerCount = 0;
             bool springing = false;     // playing the jump-out
 
+            // Perception, refreshed every tick (FUN_00032154).
+            float separationX = 0, separationY = 0, separationZ = 0;
+            int distance = 0;
+            int mode = 4;               // the distance band, 0 closest
+            int ticks = 0;
+            bool spawnDeathEffect = false;
+
+            // Damage to apply to the player this tick, 0 for none.
+            int pendingDamage = 0;
+            int attackCooldown = 0;
+
+            // This tick's intended movement, before collision. The caller applies
+            // it, because only it can probe the level.
+            float stepX = 0, stepZ = 0;
+
+            // The two per-creature distance thresholds the mode banding uses.
+            // GUESSES - the original reads them from entity fields +0x48 and
+            // +0x46, populated from the entity template, which has not been read.
+            //
+            // MELEE CREATURES GET MUCH SHORTER ONES. The attack table lets
+            // subtypes 2 and 3 hit at mode 2 as well as 0 and 1, and with these
+            // set generously that meant a face hugger clawing at the player from
+            // 4096 units away (Edward, 2026: "they seem to shoot me or damage me
+            // from a distance"). The table is traced and right; the thresholds
+            // feeding it were mine and far too wide.
+            //
+            // Set from the subtype in Build(), so a hugger has to be nearly
+            // touching before even its mode-2 nibble lands.
+            int nearThreshold = 0x800;
+            int middleThreshold = 0x1000;
+
+            // The attack cone half-width, the original's +0x40. Also from the
+            // entity template, so also a GUESS - 0x200 of 4096 is about 17
+            // degrees either side.
+            int coneHalfWidth = 0x200;
+
             bool active = false;        // released and in play
             bool alive = true;
 
@@ -139,6 +197,14 @@ namespace ALTEngine::Screens
         inline int FacingFromRotation(uint8_t rotation)
         {
             return (static_cast<int>(rotation) * (PlayerCamera::ANGLE_UNITS / 8)) & PlayerCamera::ANGLE_MASK;
+        }
+
+        // The bearing from an enemy to a point, in the 4096-unit angle space.
+        inline int BearingTo(const Enemy& enemy, float x, float z)
+        {
+            return static_cast<int>(std::lround(
+                std::atan2(x - enemy.x, -(z - enemy.z))
+                * (PlayerCamera::ANGLE_UNITS / 6.28318530718))) & PlayerCamera::ANGLE_MASK;
         }
 
         // Builds the roster for a level. Monsters parked off-map start inactive
@@ -162,6 +228,12 @@ namespace ALTEngine::Screens
                 enemy.drop = record.drop;
                 enemy.triggerThreshold = record.triggerThreshold;
                 enemy.facing = FacingFromRotation(record.rotation);
+
+                // The record's own thresholds - bytes 18/19 and 16/17. No longer
+                // guessed, and no longer needing a melee special case: a hugger's
+                // are 768 and 1536 because that is what the level says.
+                if (record.nearThreshold > 0) { enemy.nearThreshold = record.nearThreshold; }
+                if (record.middleThreshold > 0) { enemy.middleThreshold = record.middleThreshold; }
 
                 // Cell centre, the same convention the crates and pickups use.
                 enemy.x = static_cast<float>(record.x) * 512.0f + 256.0f - originX;
@@ -213,8 +285,33 @@ namespace ALTEngine::Screens
             return false;
         }
 
+        // A trigger asking for a monster to appear, from FUN_0002f224: add to
+        // its counter, clamp to its threshold, and spawn when they meet.
+        inline bool TriggerSpawn(std::vector<Enemy>& enemies, int monsterIndex, int amount)
+        {
+            for (Enemy& enemy : enemies)
+            {
+                if (enemy.monsterIndex != monsterIndex || enemy.active) { continue; }
+
+                enemy.triggerCount = static_cast<uint8_t>(enemy.triggerCount + amount);
+                if (enemy.triggerCount > enemy.triggerThreshold)
+                {
+                    enemy.triggerCount = enemy.triggerThreshold;
+                }
+                if (enemy.triggerCount != enemy.triggerThreshold) { return false; }
+
+                enemy.active = true;
+                return true;
+            }
+            return false;
+        }
+
         // Damage, through the same model the crates use - including the hit
         // window, which enemies genuinely have and objects do not.
+        // How often a creature can land a hit. GUESS - the original gates this
+        // with FUN_00033a1c, which has not been read.
+        inline constexpr int ATTACK_INTERVAL_TICKS = 30;
+
         inline constexpr int HIT_REACTION_TICKS = 6;   // GUESS - the real one is
                                                        // the reaction animation's
                                                        // own length
@@ -231,16 +328,167 @@ namespace ALTEngine::Screens
                 enemy.hitCooldown = HIT_REACTION_TICKS;
                 return false;
             }
-            enemy.state = Damage::STATE_DYING;
-            enemy.alive = false;
+            // Leave it alive for one more tick: the original checks health in
+            // the tick's acting arm and moves to the dying state there, which is
+            // what puts the death effect a tick later and at the body's final
+            // position.
+            enemy.state = EnemyBehaviour::STATE_DYING;
             return true;
         }
 
-        inline void Tick(Enemy& enemy)
+        // One entity tick, following FUN_000358a4's order: perception first, then
+        // the distance cull, then the state machine.
+        //
+        // `playerX/Y/Z` are the player's world position. The thresholds come from
+        // the entity's own fields in the original (+0x46 and +0x48); those are not
+        // read from the level file and are not in the image as constants, so the
+        // defaults below are OURS and marked.
+        inline void Tick(Enemy& enemy, float playerX, float playerY, float playerZ)
         {
-            if (enemy.hitCooldown > 0 && --enemy.hitCooldown == 0)
+            if (!enemy.active) { return; }
+
+            // Perception - the axis separations and the banded distance.
+            enemy.separationX = std::fabs(playerX - enemy.x);
+            enemy.separationY = std::fabs(playerY - enemy.y);
+            enemy.separationZ = std::fabs(playerZ - enemy.z);
+            const float dx = playerX - enemy.x;
+            const float dz = playerZ - enemy.z;
+            enemy.distance = static_cast<int>(std::lround(std::sqrt(dx * dx + dz * dz)));
+
+            enemy.mode = EnemyBehaviour::ModeForDistance(
+                enemy.distance, enemy.nearThreshold, enemy.middleThreshold);
+
+            // NOT SIMULATED BEYOND THIS. FUN_000358a4 returns immediately when the
+            // perceived distance exceeds 0x1e00, so an enemy across the level does
+            // nothing at all - it does not path, does not turn, does not count
+            // down. Worth having: without it every enemy on the map would be
+            // walking toward the player from the moment the level loads.
+            if (enemy.distance > EnemyBehaviour::SIMULATION_CUTOFF) { return; }
+
+            enemy.ticks++;
+
+            // ---- movement, from FUN_00031f3c --------------------------
+            //
+            // Turn toward the player, then step. The original stores a heading
+            // and two axis velocities and lets the two step helpers resolve each
+            // axis separately; this does the same, using the traced footprint
+            // probe for each.
+            if (enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive && enemy.mode <= 2)
             {
-                if (enemy.alive) { enemy.state = Damage::STATE_NORMAL; }
+                const int bearing = BearingTo(enemy, playerX, playerZ);
+
+                // Turn at a limited rate rather than snapping - the original
+                // turns through FUN_00032f78 before starting a move animation.
+                int delta = (bearing - enemy.facing) & PlayerCamera::ANGLE_MASK;
+                if (delta > PlayerCamera::ANGLE_UNITS / 2) { delta -= PlayerCamera::ANGLE_UNITS; }
+                const int turn = (delta > TURN_RATE) ? TURN_RATE
+                               : (delta < -TURN_RATE) ? -TURN_RATE : delta;
+                enemy.facing = (enemy.facing + turn) & PlayerCamera::ANGLE_MASK;
+
+                // TURN FIRST, THEN ADVANCE. Stepping along the heading while
+                // still turning made a creature walk AWAY from the player for the
+                // first twenty ticks - it kept its old facing, moved backwards,
+                // and only curved round once the turn caught up. Requiring rough
+                // alignment before moving fixes that.
+                //
+                // MARKED AS OURS. The original steers through FUN_00032f78 and
+                // keeps its velocities in separate fields, so it may well move
+                // and turn at once with a much faster turn; without those fields
+                // read, turn-then-advance is the behaviour that does not look
+                // broken.
+                const bool aligned = (delta > -ALIGN_BEFORE_MOVING && delta < ALIGN_BEFORE_MOVING);
+
+                // Only close in while not already touching. Mode 0 is contact
+                // range, where the creature attacks instead of advancing.
+                // Mode 0 is CONTACT range - 0x400, and that is where the
+                // creature stops advancing and attacks instead. Note this leaves
+                // it a full 0x400 (1024 units) away, which looks like a standoff
+                // rather than a mauling; the original almost certainly closes
+                // further, and the gap is probably the entity's own body radius
+                // being subtracted somewhere I have not read. MARKED.
+                if (enemy.mode >= 1 && aligned)
+                {
+                    const float speed = static_cast<float>(enemy.speed) * SPEED_SCALE;
+                    enemy.stepX = PlayerCamera::Sin(enemy.facing) / 4096.0f * speed;
+                    enemy.stepZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * speed;
+                }
+                else
+                {
+                    enemy.stepX = enemy.stepZ = 0.0f;
+                }
+            }
+            else
+            {
+                enemy.stepX = enemy.stepZ = 0.0f;
+            }
+
+            // The attack, from FUN_00033ff8. Two gates in the original - "can it
+            // attack" and "is the player in front" - stand in here as a cooldown
+            // and a facing test, both marked, since neither FUN_00033a1c nor
+            // FUN_0003231c has been read.
+            enemy.pendingDamage = 0;
+            if (enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive)
+            {
+                if (enemy.attackCooldown > 0) { enemy.attackCooldown--; }
+                else
+                {
+                    // The facing cone is the original's own gate; the visibility
+                    // and line-of-fire tests are not implemented yet, so a
+                    // creature here will attack through a wall it should not.
+                    const int bearing = static_cast<int>(std::lround(
+                        std::atan2(playerX - enemy.x, -(playerZ - enemy.z))
+                        * (PlayerCamera::ANGLE_UNITS / 6.28318530718)))
+                        & PlayerCamera::ANGLE_MASK;
+
+                    int delta = ((enemy.facing - bearing) & PlayerCamera::ANGLE_MASK);
+                    if (delta > PlayerCamera::ANGLE_UNITS / 2) { delta = PlayerCamera::ANGLE_UNITS - delta; }
+
+                    const int damage = EnemyBehaviour::WithinAttackCone(0, delta, enemy.coneHalfWidth)
+                                     ? EnemyBehaviour::AttackDamage(enemy.type, enemy.mode)
+                                     : 0;
+                    if (damage > 0)
+                    {
+                        enemy.pendingDamage = damage;
+                        enemy.attackCooldown = ATTACK_INTERVAL_TICKS;
+                    }
+                }
+            }
+
+            switch (enemy.state)
+            {
+            case EnemyBehaviour::STATE_ACTING:
+                // Death is checked here, not at the moment of the hit.
+                if (enemy.health <= 0)
+                {
+                    enemy.state = EnemyBehaviour::STATE_DEAD;
+                    enemy.alive = false;
+                    enemy.ticks = 0;
+                }
+                break;
+
+            case EnemyBehaviour::STATE_HIT_RECOVER:
+                // The reaction has played out: back to acting.
+                enemy.state = EnemyBehaviour::STATE_ACTING;
+                enemy.ticks = 0;
+                break;
+
+            case EnemyBehaviour::STATE_DYING:
+                // The original spawns the death effect here rather than on the
+                // killing blow, so it lands a tick later and at the position the
+                // body ended up at.
+                enemy.spawnDeathEffect = true;
+                enemy.state = EnemyBehaviour::STATE_DEAD;
+                enemy.alive = false;
+                break;
+
+            case EnemyBehaviour::STATE_DEAD:
+                break;
+
+            default:
+                // Anything unexpected drops to the hit reaction, as the original's
+                // default arm does.
+                enemy.state = EnemyBehaviour::STATE_HIT_RECOVER;
+                break;
             }
         }
     }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cmath>
+
 #include "../Bootstrap/Font8x8.h"
 
 // HUD PANEL GRAPHICS - decoded, not yet implemented.
@@ -629,6 +631,7 @@ namespace ALTEngine::Renderer
     inline constexpr int HUD_TRACKER_CENTRE_X = 0x108;  // 264
     inline constexpr int HUD_TRACKER_CENTRE_Y = 0xc0;   // 192
 
+
     // Dish extent and its two edge strips.
     inline constexpr int HUD_TRACKER_LEFT = 0xdf;        // 223
     inline constexpr int HUD_TRACKER_RIGHT = 0x131;      // 305
@@ -644,6 +647,118 @@ namespace ALTEngine::Renderer
     // Ping sounds: index 0 when nothing is in range, 1 on contact.
     inline constexpr int HUD_TRACKER_SOUND_CLEAR = 0x15;
     inline constexpr int HUD_TRACKER_SOUND_CONTACT = 0x16;
+
+    // A contact on the tracker, all traced from FUN_0003a008.
+    //
+    // RANGE: |dx| and |dz| must both be under 0x3001 - 12288 world units, 24
+    // cells - so the dish sees a square, not a circle, and 24 cells on each axis.
+    // Anything outside is not drawn at all.
+    //
+    // SCALE: the delta is shifted right by 9, the world-to-cell shift, so one
+    // cell of separation is one unit on the dish.
+    //
+    // ROTATION: through `-playerYaw & 0xfff`, so the display is always
+    // player-forward and contacts swing round as you turn.
+    //
+    // A blip is a 2x2 point in colour ff,7f,00 - the same orange as the player
+    // marker on the map.
+    // HUD_TRACKER_RANGE and HUD_TRACKER_BLIP_SIZE are already defined further
+    // down - I duplicated both before noticing. Only the colour and the shift
+    // are new here.
+    inline constexpr int HUD_TRACKER_WORLD_TO_CELL_SHIFT = 9;
+    // WHITE. The ff,7f,00 I read out of that draw belongs to something else in
+    // it - the dish or the sweep - not the contacts (Edward, 2026).
+    inline constexpr int HUD_TRACKER_BLIP_R = 0xff;
+    inline constexpr int HUD_TRACKER_BLIP_G = 0xff;
+    inline constexpr int HUD_TRACKER_BLIP_B = 0xff;
+
+    // ONE PIXEL PER CELL. The original shifts the delta right by 9 and uses the
+    // result directly - there is no further scaling - so a cell of separation is
+    // a pixel on the dish. At 1.4 the contacts spread far too wide (Edward,
+    // 2026), which is what an invented scale factor does.
+    inline constexpr float HUD_TRACKER_CELL_PIXELS = 1.0f;
+
+    // IT ONLY SHOWS THINGS THAT ARE MOVING. Traced from FUN_0003a008, and it is
+    // the whole point of the device - I had been drawing every living enemy,
+    // so contacts were visible from the moment a level loaded (Edward, 2026).
+    //
+    // Two filters, both after the range gate.
+    //
+    // WHAT IS ELIGIBLE AT ALL:
+    //     not (type == 0x0a and state == 4)   the colonist, in one state
+    //     state < 7                           so dying and dead are excluded
+    //     type < 0x0f                         so the VENTS, 0x10-0x13, never
+    //                                         appear - they are entities but not
+    //                                         contacts
+    //
+    // WHAT IS DRAWN:
+    //     type == 0x0a                        the colonist always shows, moving
+    //                                         or not
+    //     OR any of the entity's three velocity fields is non-zero:
+    //         +0x30, +0x32, +0x34 - the two horizontal steps and the vertical,
+    //         the same fields the mover writes
+    //
+    // So a standing creature is invisible and starts blipping the moment it
+    // takes a step. That is why nothing shows until you walk up the first
+    // hallway and something begins to move.
+    inline constexpr int TRACKER_ALWAYS_VISIBLE_TYPE = 0x0a;   // colonist
+    inline constexpr int TRACKER_ALWAYS_VISIBLE_STATE = 4;
+    inline constexpr int TRACKER_MAX_STATE = 7;
+    inline constexpr int TRACKER_MAX_TYPE = 0x0f;
+
+    struct TrackerContact
+    {
+        float worldX = 0;
+        float worldZ = 0;
+        int type = 0;
+        int state = 0;
+        bool moving = false;    // any velocity component non-zero
+    };
+
+    // The eligibility filter - whether this entity can appear at all.
+    inline bool TrackerEligible(const TrackerContact& contact)
+    {
+        if (contact.type == TRACKER_ALWAYS_VISIBLE_TYPE
+            && contact.state == TRACKER_ALWAYS_VISIBLE_STATE) { return false; }
+        if (contact.state >= TRACKER_MAX_STATE) { return false; }
+        if (contact.type >= TRACKER_MAX_TYPE) { return false; }
+        return true;
+    }
+
+    // And whether it is actually drawn this frame.
+    inline bool TrackerVisible(const TrackerContact& contact)
+    {
+        if (!TrackerEligible(contact)) { return false; }
+        return contact.type == TRACKER_ALWAYS_VISIBLE_TYPE || contact.moving;
+    }
+
+    // Where a contact lands on the dish, in HUD pixels, given the player's
+    // position and yaw. Returns false when it is out of range.
+    inline bool TrackerBlipPosition(const TrackerContact& contact,
+                                    float playerX, float playerZ, float playerYaw,
+                                    float& outX, float& outY)
+    {
+        const float dx = contact.worldX - playerX;
+        const float dz = contact.worldZ - playerZ;
+        if (dx >= HUD_TRACKER_RANGE || dx <= -HUD_TRACKER_RANGE) { return false; }
+        if (dz >= HUD_TRACKER_RANGE || dz <= -HUD_TRACKER_RANGE) { return false; }
+
+        // Into cells, then rotated by the negated yaw so the dish is
+        // player-forward.
+        const float cellsX = dx / 512.0f;
+        const float cellsZ = dz / 512.0f;
+        const float c = std::cos(-playerYaw);
+        const float s = std::sin(-playerYaw);
+
+        // Screen up is forward, so the rotated Z runs up the dish negated.
+        const float rx = cellsX * c - cellsZ * s;
+        const float rz = cellsX * s + cellsZ * c;
+
+        outX = HUD_TRACKER_CENTRE_X + rx * HUD_TRACKER_CELL_PIXELS;
+        outY = HUD_TRACKER_CENTRE_Y + rz * HUD_TRACKER_CELL_PIXELS;
+        return true;
+    }
+
 
     // Dish geometry: four 40x32 quadrants around the centre.
     inline constexpr int HUD_TRACKER_DISH_LEFT = HUD_TRACKER_CENTRE_X - HUD_TRACKER_QUADRANT_W; // 224

@@ -61,6 +61,10 @@ namespace ALTEngine::Formats
             FLAG_USER1 = 0x01,       // set/cleared by opcodes 3 and 4
             FLAG_ENDED = 0x02,       // opcode 6, or a loop counter running out
             FLAG_ENDED_ALT = 0x04,   // opcode 8
+            // NOT the entity status flag of the same number. This byte is the
+            // ANIMATOR's, at +0x36 of the animator struct - which for an entity
+            // sits at +0x80, so at entity +0xb6. The entity's own flags byte is
+            // at +0x6c and its bit 8 is the ceiling-hang flag. Unrelated.
             FLAG_USER8 = 0x08,       // opcode 9
             FLAG_EVENT = 0x10,       // opcode 1 fired THIS tick; cleared every tick
 

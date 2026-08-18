@@ -178,6 +178,11 @@ namespace ALTEngine::Formats
             Monster m;
             m.type = data[pos + 0]; m.x = data[pos + 1]; m.y = data[pos + 2]; m.z = data[pos + 3]; m.rotation = data[pos + 4];
             m.health = data[pos + 5]; m.drop = data[pos + 6]; m.triggerCount = data[pos + 7]; m.triggerThreshold = data[pos + 8];
+            m.unk4 = data[pos + 9];
+            m.unknownA = static_cast<uint16_t>(data[pos + 10] | (data[pos + 11] << 8));
+            m.unknownB = static_cast<uint16_t>(data[pos + 12] | (data[pos + 13] << 8));
+            m.middleThreshold = static_cast<uint16_t>(data[pos + 16] | (data[pos + 17] << 8));
+            m.nearThreshold = static_cast<uint16_t>(data[pos + 18] | (data[pos + 19] << 8));
             m.unknown4 = data[pos + 9]; m.unknown5 = data[pos + 10]; m.unknown6 = data[pos + 11]; m.unknown7 = data[pos + 12];
             m.unknown8 = data[pos + 13]; m.speed = data[pos + 14]; m.unknown9 = data[pos + 15]; m.unknown10 = data[pos + 16];
             m.unknown11 = data[pos + 17]; m.unknown12 = data[pos + 18]; m.unknown13 = data[pos + 19];

@@ -40,6 +40,7 @@ namespace ALTEngine::Renderer
         constexpr SDL_Color BORDER{ 33, 65, 33, 255 };
         constexpr SDL_Color PLAYER{ 255, 127, 0, 255 };   // ff,7f,00, from the code
 
+
         void SetColor(SDL_Renderer* renderer, const SDL_Color& c, Uint8 alpha)
         {
             Uint8 a = static_cast<Uint8>(c.a * alpha / 255);
