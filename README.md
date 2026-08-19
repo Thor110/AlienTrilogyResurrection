@@ -16,7 +16,6 @@ This optional step has been removed as it needs revising sometime in the future,
 
 - Engine Reimplementation
 	- Gameplay Mechanics
-	- Sounds & Music
 	- Multiplayer
 - Text Editor
 	- UI text viewing .BIN files plaintext.
