@@ -51,11 +51,16 @@ namespace ALTEngine::Screens
     // So being mauled and being blown up give different clips, which is the whole
     // point of having six.
     //
-    // STILL UNVERIFIED: whether GAMEOVER.AVI plays after the death clip.
-    // FUN_00015a68 plays exactly one video and does not chain a second, so on the
-    // evidence it may be that GAMEOVER belongs to a different path - quitting, or
-    // running out of lives - rather than to a single death. Kept in the sequence
-    // because Edward thought it played, and marked so it is easy to drop.
+    // GAMEOVER.AVI IS NOT PART OF DYING. It plays when the GAME IS COMPLETED
+    // (Edward, 2026, after checking), which fits the code: FUN_00015a68 plays
+    // exactly one video and chains nothing after it.
+    //
+    // So it belongs to whatever decides there is no next level - a completion
+    // check the port does not have yet. There is a level list in
+    // data/LevelManifest.json and a Level Select that walks it, but nothing that
+    // advances from one level to the next in play, so there is no place to hang
+    // this on. When that arrives, GAMEOVER goes at the end of it, NOT here.
+    inline constexpr const char* GAME_COMPLETE_VIDEO = "GAMEOVER";
     namespace GameOverSequence
     {
         inline constexpr int DEATH_VIDEO_COUNT = 6;
@@ -88,7 +93,6 @@ namespace ALTEngine::Screens
             // Ids 2..7 are DEATH1..DEATH6.
             return videoId - 1;
         }
-        inline constexpr const char* GAME_OVER_BASE_NAME = "GAMEOVER";
 
         // "DEATH1" .. "DEATH6", one-based as the files are.
         inline std::string DeathVideoBaseName(int index)
@@ -116,7 +120,7 @@ namespace ALTEngine::Screens
             return ALTEngine::Video::VideoPlayer::Play(path);
         }
 
-        // The whole sequence: one of the six deaths, then GAMEOVER.
+        // The death sequence: the one clip that matches how the player died.
         //
         // `deathIndex` is one-based; pass 0 to have one picked. The caller supplies
         // the choice so it can be seeded or forced for testing rather than this
@@ -127,8 +131,8 @@ namespace ALTEngine::Screens
         {
             if (deathIndex < 1 || deathIndex > DEATH_VIDEO_COUNT) { deathIndex = 1; }
 
-            if (!PlayOne(cdDirectory, language, DeathVideoBaseName(deathIndex))) { return false; }
-            return PlayOne(cdDirectory, language, GAME_OVER_BASE_NAME);
+            // ONE video. GAMEOVER is not part of this - see the note above.
+            return PlayOne(cdDirectory, language, DeathVideoBaseName(deathIndex));
         }
     }
 }

@@ -7,6 +7,7 @@
 #include "PickupSystem.h"
 #include "HudMessages.h"
 #include "GameOverSequence.h"
+#include "FaceHugOverlay.h"
 #include "DroppedPickups.h"
 #include "PlayerCamera.h"
 #include "WeaponSystem.h"
@@ -463,6 +464,8 @@ namespace ALTEngine::Screens
         ALTEngine::Screens::Particles::Rng dropRng;
         ALTEngine::Screens::ExplosionEffects explosions;
         ALTEngine::Screens::HudMessages hudMessages;
+        ALTEngine::Screens::FaceHugOverlay faceHug;
+        std::vector<std::string> faceHugSheets;
         ALTEngine::Screens::ShatterEffects shatter;
         std::vector<ALTEngine::Screens::Enemies::Enemy> enemies;
 
@@ -1081,6 +1084,27 @@ namespace ALTEngine::Screens
                         // Enemy artwork comes out of the LEVEL's own graphics
                         // file - the executable names no enemy sprite files at
                         // all, only the weapons and the level GFX sets.
+                        // The face-crawl overlay. Its two halves are animations 16
+                        // and 17 of the hugger's own table, with frames in
+                        // FINGERS.B16.
+                        if (faceHug.Load(cdDirectory))
+                        {
+                            faceHugSheets.clear();
+                            const auto pieces = faceHug.AllFrames();
+                            for (size_t i = 0; i < pieces.size(); ++i)
+                            {
+                                const std::string key = "facehug:" + std::to_string(i);
+                                ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
+                                    key, faceHug.ToRgba(*pieces[i]), pieces[i]->width, pieces[i]->height);
+                                faceHugSheets.push_back(key);
+                            }
+                            SDL_Log("FaceHugOverlay: %zu frames ready", faceHugSheets.size());
+                        }
+                        else
+                        {
+                            SDL_Log("FaceHugOverlay: FINGERS.B16 not loaded");
+                        }
+
                         if (!enemySprites.Load(cdDirectory, digits, enemies))
                         {
                             SDL_Log("GameplayScreen: no enemy sprites loaded for level %s", digits.c_str());
@@ -1799,6 +1823,31 @@ namespace ALTEngine::Screens
                         });
                         hudState.TickCarriedItems();
                         hudMessages.Tick();
+                        faceHug.Tick();
+
+                        // The crawl runs while a hugger is pouncing.
+                        {
+                            // ONE CLOCK. The overlay starts when a pounce starts and
+                            // then runs on its own - it must NOT be ended when the
+                            // creature finishes, because the crawl outlasts it. That
+                            // is what made the two drift out of time.
+                            bool anyPouncing = false;
+                            for (const auto& enemy : enemies)
+                            {
+                                if (enemy.pouncing) { anyPouncing = true; break; }
+                            }
+                            if (anyPouncing && !faceHug.Active()) { faceHug.Begin(); }
+
+                            // The creature dies when the crawl has slid back off,
+                            // which is what LAB_00030918 waits for.
+                            if (faceHug.Finished())
+                            {
+                                for (auto& enemy : enemies)
+                                {
+                                    if (enemy.pouncing) { enemy.overlayFinished = true; }
+                                }
+                            }
+                        }
 
                         // Destroying something: clear its occupancy so the
                         // square opens up, spill what it held, and - if it was a
@@ -2891,6 +2940,27 @@ namespace ALTEngine::Screens
                                                 ALTEngine::Renderer::HUD_VIRTUAL_HEIGHT);
                             },
                             [&] {
+                                // ---- the face hugger on the camera --------
+                                //
+                                // Two halves of one mirrored sprite, meeting at
+                                // x=0xa0, climbing from 0x154 below the screen.
+                                // Drawn over the panels because it is on the
+                                // camera, not behind the HUD.
+                                if (faceHug.Active())
+                                {
+                                    for (const auto& piece : faceHug.Visible())
+                                    {
+                                        if (piece.sheetIndex < 0
+                                            || piece.sheetIndex >= static_cast<int>(faceHugSheets.size())
+                                            || !piece.frame) { continue; }
+
+                                        ALTEngine::Renderer::ModelRenderer::DrawSpriteSheet2D(
+                                            renderer, faceHugSheets[static_cast<size_t>(piece.sheetIndex)],
+                                            static_cast<float>(piece.x), static_cast<float>(piece.y),
+                                            piece.width, piece.height);
+                                    }
+                                }
+
                                 // The typed-out messages, at 1:1 in the HUD
                                 // surface so the text lands on whole pixels.
                                 // Newest at the bottom, the way a terminal

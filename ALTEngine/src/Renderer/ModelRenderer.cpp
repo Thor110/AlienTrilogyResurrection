@@ -128,6 +128,10 @@ namespace ALTEngine::Renderer
         };
         std::unordered_map<std::string, SpriteSheet> spriteSheets;
 
+        struct OverlayPixels { std::vector<uint8_t> rgba; int width; int height; };
+        std::unordered_map<std::string, OverlayPixels> overlayPixels;
+        std::unordered_map<std::string, SDL_Texture*> overlayTextures;
+
         // One dynamic vertex/index buffer, grown on demand, refilled each frame
         // with the billboard quads. Sprites are transient by nature, so there is
         // nothing to cache between frames.
@@ -1697,6 +1701,38 @@ namespace ALTEngine::Renderer
         return "model:" + DescribeCacheKey(cacheKey);
     }
 
+    bool ModelRenderer::DrawSpriteSheet2D(SDL_Renderer* renderer, const std::string& key,
+                                          float x, float y, float width, float height)
+    {
+        // The GPU sheets live on the GPU device, not the SDL_Renderer, so this
+        // keeps a parallel SDL texture per key - created on first use from the
+        // same RGBA. Overlays are few and small, so the duplication is cheap.
+        auto it = overlayTextures.find(key);
+        if (it == overlayTextures.end())
+        {
+            auto pixels = overlayPixels.find(key);
+            if (pixels == overlayPixels.end()) { return false; }
+
+            SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+                                                     SDL_TEXTUREACCESS_STATIC,
+                                                     pixels->second.width, pixels->second.height);
+            if (!texture) { return false; }
+            SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+
+            // NEAREST, not linear. SDL defaults to linear filtering, which blends
+            // across the seam where the two halves of the face crawl meet and
+            // softens every edge - the blur Edward saw down the middle. Everything
+            // else in this port is pixel-exact and this has to match.
+            SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+            SDL_UpdateTexture(texture, nullptr, pixels->second.rgba.data(),
+                              pixels->second.width * 4);
+            it = overlayTextures.emplace(key, texture).first;
+        }
+
+        SDL_FRect dst{ x, y, width, height };
+        return SDL_RenderTexture(renderer, it->second, nullptr, &dst);
+    }
+
     bool ModelRenderer::UploadSpriteSheet(const std::string& key, const std::vector<uint8_t>& rgba,
                                           int width, int height)
     {
@@ -1752,6 +1788,10 @@ namespace ALTEngine::Renderer
         SDL_ReleaseGPUTransferBuffer(device, transfer);
 
         spriteSheets[key] = SpriteSheet{ texture, width, height };
+
+        // Keep the pixels too, so DrawSpriteSheet2D can make an SDL texture for
+        // the same art when it is needed as a flat overlay.
+        overlayPixels[key] = OverlayPixels{ rgba, width, height };
         return true;
     }
 

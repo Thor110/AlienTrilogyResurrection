@@ -241,6 +241,13 @@ namespace ALTEngine::Screens
             {
                 if (!enemy.active || !enemy.alive) { continue; }
 
+                // NOT DRAWN IN THE WORLD WHILE POUNCING. The original replaces the
+                // creature's handler with LAB_00030918 for the duration, so
+                // FUN_000300a4 - the draw dispatcher - is no longer reached for it
+                // at all. The creature is on your face, not on the floor, and
+                // leaving it standing there was plainly wrong (Edward, 2026).
+                if (enemy.pouncing) { continue; }
+
                 auto it = byType.find(enemy.type);
                 if (it == byType.end()) { continue; }
 

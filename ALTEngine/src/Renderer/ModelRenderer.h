@@ -1,5 +1,7 @@
 #pragma once
 
+#include <SDL3/SDL.h>
+
 #include "../Formats/BndTextureLoader.h"
 #include "../Formats/RenderMesh.h"
 
@@ -367,6 +369,12 @@ namespace ALTEngine::Renderer
         // The key its texture is registered under as a sprite sheet, so a shard
         // can be drawn with the object's own artwork.
         static std::string ModelSheetKey(const ModelCacheKey& cacheKey);
+
+        // Draws an uploaded sprite sheet as a flat 2D rectangle in whatever
+        // render target is bound - used for HUD overlays like the face hugger
+        // crawl, which is on the camera rather than in the world.
+        static bool DrawSpriteSheet2D(SDL_Renderer* renderer, const std::string& key,
+                                      float x, float y, float width, float height);
 
         static bool UploadSpriteSheet(const std::string& key, const std::vector<uint8_t>& rgba,
                                       int width, int height);

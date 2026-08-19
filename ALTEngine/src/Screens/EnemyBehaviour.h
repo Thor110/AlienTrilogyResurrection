@@ -564,9 +564,64 @@ namespace ALTEngine::Screens
         //
         // NOT IMPLEMENTED. What is here is the entry condition and where the
         // frames live, not the overlay itself.
+        // THE OVERLAY IS TWO ANIMATIONS, and they are the last two of the
+        // creature's own table - FUN_000303ec reads pairs at +0x80/+0x84 and
+        // +0x88/+0x8c, which for the hugger's table at 0x000ac3d0 are animation
+        // indices 16 and 17.
+        //
+        // That closes a loose end: those were exactly the two animations that
+        // failed to resolve against HUGGER.B16 when every other one decoded
+        // cleanly. They failed because their frames are not in HUGGER.B16 at all -
+        // they are in FINGERS.B16, which has two sections and eight frames, one
+        // section per overlay animation.
+        //
+        // Both are set up as independent animators (&DAT_00247998 and
+        // &DAT_00247758) at screen position 0xa0, 0x154 - so the face crawl is TWO
+        // sprites playing at once, not one.
         inline constexpr int POUNCE_SLOTS_NEEDED = 2;
-        inline constexpr int ANIM_TABLE_FACE_FRAMES_A = 0x88;
-        inline constexpr int ANIM_TABLE_FACE_FRAMES_B = 0x8c;
+        inline constexpr int ANIM_TABLE_OVERLAY_A_FRAMES = 0x80;
+        inline constexpr int ANIM_TABLE_OVERLAY_A_SEQUENCE = 0x84;
+        inline constexpr int ANIM_TABLE_OVERLAY_B_FRAMES = 0x88;
+        inline constexpr int ANIM_TABLE_OVERLAY_B_SEQUENCE = 0x8c;
+        inline constexpr int OVERLAY_ANIMATION_A = 16;
+        inline constexpr int OVERLAY_ANIMATION_B = 17;
+        inline constexpr int OVERLAY_SCREEN_X = 0xa0;
+        inline constexpr int OVERLAY_SCREEN_Y = 0x154;
+
+        // While a pounce runs, the creature's own handler is REPLACED by
+        // LAB_00030918 - it stops running the ordinary state machine entirely.
+        // That is what stops it standing at the player's feet chewing: it is no
+        // longer in the attack path at all.
+        //
+        // The global exclusivity bit lives in DAT_000b0ab4 and FUN_00033cbc sets
+        // it before handing over, so a second creature cannot start one until the
+        // first finishes.
+        inline constexpr int POUNCE_HANDOVER_TIMER = 0x40;
+
+        // THE POUNCE IS A ONE-SHOT AND THE CREATURE DIES AT THE END OF IT.
+        //
+        // Read from LAB_00030918's tail, and it changes the whole behaviour:
+        //
+        //   - it picks a landing spot near the player, jittered by a couple of
+        //     units either way from playerPos - 0x200
+        //   - it REJECTS that spot if the cell is occupied (+0xc non-zero), if the
+        //     cell's attribute is 0x14 or above (a wall), or if the floor there
+        //     differs from the player's by 0x100 or more - so it will not land
+        //     inside geometry or on a different level
+        //   - it moves the creature there, sets its floor and ceiling samples and
+        //     stands it 0x20 above the floor
+        //   - then it CALLS FUN_00030b04 - the death function
+        //   - clears the global pounce bit (AND with 0xfe on DAT_000b0ab4+1)
+        //   - installs LAB_000342b4 as the handler and frees BOTH sprite slots
+        //
+        // So a face hugger leaps once, lands on your face, and is spent. It does
+        // not sit at your feet clawing repeatedly - it cannot, because it is dead.
+        // That is the single biggest difference between what the port was doing
+        // and the original (Edward, 2026).
+        inline constexpr int POUNCE_LANDING_SPREAD = 0x200;
+        inline constexpr int POUNCE_LANDING_MAX_FLOOR_STEP = 0x100;
+        inline constexpr int POUNCE_LANDING_MAX_ATTRIBUTE = 0x14;
+        inline constexpr int POUNCE_LANDING_STAND_HEIGHT = 0x20;
 
         // ---------------------------------------------------------------
         // FOLLOW UP: the ceiling creatures

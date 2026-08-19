@@ -171,6 +171,16 @@ namespace ALTEngine::Screens
             // (FUN_00033ff8 zeroes both axes) or dies. That alternation is the
             // per-contact flicker.
             bool velocityActive = false;
+
+            // Mid-leap. While set the creature is out of the ordinary state
+            // machine, as the original's handler swap does.
+            bool pouncing = false;
+            int pounceTicks = 0;
+
+            // Set by the caller when the overlay has slid back off. The creature
+            // dies then, not on a timer - FUN_000307c0 writes state 2 at the
+            // bottom of the fall and LAB_00030918 is waiting for exactly that.
+            bool overlayFinished = false;
             float lastX = 0, lastZ = 0;
 
             // The two per-creature distance thresholds the mode banding uses.
@@ -357,6 +367,10 @@ namespace ALTEngine::Screens
         // the entity's own fields in the original (+0x46 and +0x48); those are not
         // read from the level file and are not in the image as constants, so the
         // defaults below are OURS and marked.
+        // The global pounce lock - DAT_000b0ab4's bit in the original. One
+        // creature at a time, everywhere on the level.
+        inline bool pounceLockHeld = false;
+
         inline void Tick(Enemy& enemy, float playerX, float playerY, float playerZ)
         {
             if (!enemy.active) { return; }
@@ -434,6 +448,62 @@ namespace ALTEngine::Screens
             else
             {
                 enemy.stepX = enemy.stepZ = 0.0f;
+            }
+
+            // ---- the pounce -------------------------------------------
+            //
+            // A face hugger inside POUNCE_RANGE leaps instead of standing there
+            // clawing. FUN_00033cbc's subtype 2 arm checks the range, takes a
+            // GLOBAL exclusivity bit so only one creature can be doing it at a
+            // time, and then REPLACES the creature's handler with LAB_00030918 -
+            // it leaves the ordinary state machine completely.
+            //
+            // That is what was wrong: without it a hugger reached contact range,
+            // stopped, and stayed in the attack path landing a hit every
+            // ATTACK_INTERVAL_TICKS forever (Edward, 2026: "they still just sit at
+            // your feet and do too much damage, they also don't leap").
+            if (enemy.pouncing)
+            {
+                // Out of the normal machine while the leap plays, and at the end
+                // of it the creature DIES - LAB_00030918 calls the death function
+                // outright. A hugger gets exactly one leap.
+                enemy.pendingDamage = 0;
+                enemy.stepX = enemy.stepZ = 0.0f;
+
+                // The creature is spent when the CLIMB finishes, not on a timer of
+                // its own - the two were running independently and drifting apart
+                // (Edward, 2026: "it all happens a bit out of time"). The overlay
+                // owns the clock; this follows it.
+                if (enemy.overlayFinished || --enemy.pounceTicks <= 0)
+                {
+                    enemy.pouncing = false;
+                    pounceLockHeld = false;
+
+                    // Lands next to the player and expires there, as
+                    // LAB_00030918 does.
+                    enemy.x = playerX;
+                    enemy.z = playerZ;
+                    enemy.state = EnemyBehaviour::STATE_DYING;
+                    enemy.health = 0;
+                }
+                return;
+            }
+
+            if (EnemyBehaviour::AttackForSubtype(enemy.type).melee
+                && enemy.state == EnemyBehaviour::STATE_ACTING
+                && enemy.alive
+                && enemy.distance < EnemyBehaviour::POUNCE_RANGE
+                && !pounceLockHeld)
+            {
+                pounceLockHeld = true;
+                enemy.pouncing = true;
+                enemy.pounceTicks = EnemyBehaviour::POUNCE_HANDOVER_TIMER;
+
+                // The leap's own hit, landed ONCE at the start rather than
+                // repeatedly. A hugger that pounces deals its damage and is done.
+                enemy.pendingDamage = EnemyBehaviour::AttackForSubtype(enemy.type).closeDamage;
+                enemy.stepX = enemy.stepZ = 0.0f;
+                return;
             }
 
             // The attack, from FUN_00033ff8. Two gates in the original - "can it
