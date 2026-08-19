@@ -459,6 +459,87 @@ namespace ALTEngine::Screens
         }
 
         // ---------------------------------------------------------------
+        // ANIMATION INDEX BY BEHAVIOUR AND SUBTYPE
+        // ---------------------------------------------------------------
+        //
+        // This is the piece that was blocking everything: the animation tables
+        // and the frame records were readable, but nothing said WHICH animation a
+        // creature should be playing. The three behaviours that pick one all do
+        // it with a switch on the subtype at +0x74.
+        //
+        // ACTING - FUN_00033cbc, the near branch (mode below 2):
+        //     2 -> 10    3 -> 12    4 -> 12    5 -> 10    6 -> 11
+        //     7 -> random of 11, 14, 14 and 12
+        //     8 -> 9 and 9 -> 8, both through the other starter
+        //     11, 12 -> 9    13 -> 16    14 -> 11
+        //
+        // TAKING A HIT - FUN_000310ac:
+        //     1 -> 3, and 2 through 6 -> 8, 7 through 10 -> 8, default -> 9 or 4
+        //   So nearly every creature shares animation 8 for its flinch.
+        //
+        // DYING - FUN_00030b04:
+        //     1 -> 1     2 -> 9     3 -> 11    4 -> 11    5 -> 13
+        //     6 -> 10    7 -> 15    8 -> 8     9 -> 10    10 -> 25
+        //     default -> 10
+        //
+        // So a face hugger walks on 10, flinches on 8 and dies on 9. A warrior
+        // drone walks on 11, flinches on 8 and dies on 10.
+        //
+        // TWO SUBTYPES REWRITE THEMSELVES AS THEY DIE. In FUN_00030b04, one arm
+        // sets +0x74 = 6 before starting animation 8 and another sets +0x74 = 5
+        // before animation 10 - so the creature becomes a different subtype on
+        // death. That is presumably how a ceiling creature turns into its ground
+        // form to fall, and it is worth knowing before treating the subtype as
+        // fixed.
+        inline int ActingAnimation(int subtype)
+        {
+            switch (subtype)
+            {
+            case 2:  return 10;
+            case 3:  return 12;
+            case 4:  return 12;
+            case 5:  return 10;
+            case 6:  return 11;
+            case 11:
+            case 12: return 9;
+            case 13: return 16;
+            case 14: return 11;
+            default: return -1;   // 7 is random, 8 and 9 use the other starter
+            }
+        }
+
+        inline int HitAnimation(int subtype)
+        {
+            if (subtype == 1) { return 3; }
+            if (subtype >= 2 && subtype <= 10) { return 8; }
+            return 9;
+        }
+
+        inline int DeathAnimation(int subtype)
+        {
+            switch (subtype)
+            {
+            case 1:  return 1;
+            case 2:  return 9;
+            case 3:  return 11;
+            case 4:  return 11;
+            case 5:  return 13;
+            case 6:  return 10;
+            case 7:  return 15;
+            case 8:  return 8;
+            case 9:  return 10;
+            case 10: return 25;
+            default: return 10;
+            }
+        }
+
+        // THE DECISION TIMER. FUN_00033cbc writes +0x68 = 0x3c on entry and
+        // nothing in the entity region decrements it - the only reference to that
+        // field anywhere in 0x2e000..0x37000 is that one write. So the countdown
+        // is consumed somewhere not yet read, and 0x3c is what it starts at.
+        inline constexpr int DECISION_INTERVAL_TICKS = 0x3c;
+
+        // ---------------------------------------------------------------
         // THE FACE HUGGER ON THE CAMERA - FINGERS.B16
         // ---------------------------------------------------------------
         //

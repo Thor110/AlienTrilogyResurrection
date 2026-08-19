@@ -870,6 +870,12 @@ namespace ALTEngine::Renderer
 
     void HudRenderer::TickTracker()
     {
+        // The original's counter decrements every tick and gates all of its work
+        // on the low bit, so everything here runs at half rate.
+        // The original's counter decrements every tick and gates all of its work
+        // on the low bit, so the sweep and its pause both run at half rate.
+        trackerTick++;
+        if ((trackerTick & 1) == 0) { return; }
         HudTrackerAdvance(trackerFrame, trackerTimer, trackerPause);
     }
 
@@ -943,23 +949,51 @@ namespace ALTEngine::Renderer
         // Contacts. Range gate, world-to-cell shift and rotation by the player's
         // facing, all as FUN_0003a008 does - so the dish is always
         // player-forward.
-        SDL_SetRenderDrawColor(renderer, 255, 127, 0, 255);
+        // WHITE and fully opaque. The original writes ff,7f,00 into the display
+        // entry here, but in play the contacts read as pure white (Edward, 2026) -
+        // so either those bytes modulate a white source (0x80 is neutral in this
+        // renderer, which the dish itself uses) or they belong to another field of
+        // the entry. Going with what the game looks like.
+        //
+        // BLENDMODE_NONE because the message panel drawn earlier leaves BLEND set,
+        // which washed these out.
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         float sinYaw = std::sin(-playerYaw);
         float cosYaw = std::cos(-playerYaw);
 
         for (const Contact& c : contacts)
         {
+            // ONLY THINGS THAT ARE MOVING, plus the colonist exception - see
+            // TrackerVisible. The device is a MOTION tracker and this is the
+            // clause that makes it one.
+            if (!c.moving && c.type != TRACKER_ALWAYS_VISIBLE_TYPE) { continue; }
+            if (c.type == TRACKER_ALWAYS_VISIBLE_TYPE
+                && c.state == TRACKER_ALWAYS_VISIBLE_STATE) { continue; }
+            if (c.state >= TRACKER_MAX_STATE || c.type >= TRACKER_MAX_TYPE) { continue; }
+
             if (std::fabs(c.dx) > HUD_TRACKER_RANGE || std::fabs(c.dz) > HUD_TRACKER_RANGE) { continue; }
 
             // >> 9 is the world-to-cell shift; the dish is 32 cells across its
             // 64-pixel height, so a cell is two pixels.
-            float cellX = c.dx / 512.0f;
-            float cellZ = c.dz / 512.0f;
+            // Two pixels per cell - the dish is 32 cells across its 64 rows.
+            float cellX = c.dx / 512.0f * HUD_TRACKER_PIXELS_PER_CELL;
+            float cellZ = c.dz / 512.0f * HUD_TRACKER_PIXELS_PER_CELL;
             float rx = cellX * cosYaw - cellZ * sinYaw;
             float rz = cellX * sinYaw + cellZ * cosYaw;
 
             float px = HUD_TRACKER_CENTRE_X + rx;
             float pz = HUD_TRACKER_CENTRE_Y + rz;
+
+            // CLIPPED TO THE DISH. The original draws these through a projected
+            // viewport (FUN_0004e4d4 at 0x108,0xc0 size 0x100), so anything
+            // landing off the dish is clipped by it rather than drawn at the edge.
+            // Without this, a contact 24 cells away - the full range gate - still
+            // appeared, just near the rim (Edward, 2026).
+            if (px < HUD_TRACKER_CENTRE_X - HUD_TRACKER_QUADRANT_W
+                || px > HUD_TRACKER_CENTRE_X + HUD_TRACKER_QUADRANT_W
+                || pz < HUD_TRACKER_CENTRE_Y - HUD_TRACKER_QUADRANT_H
+                || pz > HUD_TRACKER_CENTRE_Y + HUD_TRACKER_QUADRANT_H) { continue; }
             SDL_FRect blip = SnapToPixels(px * scaleX, pz * scaleY,
                                           HUD_TRACKER_BLIP_SIZE * scaleX,
                                           HUD_TRACKER_BLIP_SIZE * scaleY);

@@ -166,6 +166,13 @@ namespace ALTEngine::Screens
             // it, because only it can probe the level.
             float stepX = 0, stepZ = 0;
 
+            // THE VELOCITY FLAG the motion tracker tests. Not a latch after all:
+            // set when the creature moves, and cleared when it ATTACKS
+            // (FUN_00033ff8 zeroes both axes) or dies. That alternation is the
+            // per-contact flicker.
+            bool velocityActive = false;
+            float lastX = 0, lastZ = 0;
+
             // The two per-creature distance thresholds the mode banding uses.
             // GUESSES - the original reads them from entity fields +0x48 and
             // +0x46, populated from the entity template, which has not been read.
@@ -238,6 +245,13 @@ namespace ALTEngine::Screens
                 // Cell centre, the same convention the crates and pickups use.
                 enemy.x = static_cast<float>(record.x) * 512.0f + 256.0f - originX;
                 enemy.z = static_cast<float>(record.y) * 512.0f + 256.0f - originZ;
+
+                // Seed the movement reference to where it starts, or the first
+                // tick reads as a move and every creature on the map registers as
+                // a contact from the moment the level loads (Edward, 2026: "I can
+                // still see enemies from ages away when I start the level").
+                enemy.lastX = enemy.x;
+                enemy.lastZ = enemy.z;
                 enemy.y = ALTEngine::Formats::FindFloorHeightGridSpace(
                     level,
                     static_cast<int>(record.x) * 512 + 256,
@@ -450,6 +464,11 @@ namespace ALTEngine::Screens
                     {
                         enemy.pendingDamage = damage;
                         enemy.attackCooldown = ATTACK_INTERVAL_TICKS;
+
+                        // Attacking clears the velocity, so the contact goes dark
+                        // until the creature moves again - see the note in
+                        // HudPanel.h.
+                        enemy.velocityActive = false;
                     }
                 }
             }

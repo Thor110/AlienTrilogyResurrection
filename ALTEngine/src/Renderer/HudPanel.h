@@ -627,6 +627,9 @@ namespace ALTEngine::Renderer
     inline constexpr int HUD_TRACKER_QUADRANT_W = 40;
     inline constexpr int HUD_TRACKER_QUADRANT_H = 32;
 
+    // Pixels per cell of separation on the dish: 32 cells across 64 rows.
+    inline constexpr float HUD_TRACKER_PIXELS_PER_CELL = 2.0f;
+
     // Dish centre, from the viewport FUN_0003a008 sets for the blip pass.
     inline constexpr int HUD_TRACKER_CENTRE_X = 0x108;  // 264
     inline constexpr int HUD_TRACKER_CENTRE_Y = 0xc0;   // 192
@@ -672,11 +675,18 @@ namespace ALTEngine::Renderer
     inline constexpr int HUD_TRACKER_BLIP_G = 0xff;
     inline constexpr int HUD_TRACKER_BLIP_B = 0xff;
 
-    // ONE PIXEL PER CELL. The original shifts the delta right by 9 and uses the
-    // result directly - there is no further scaling - so a cell of separation is
-    // a pixel on the dish. At 1.4 the contacts spread far too wide (Edward,
-    // 2026), which is what an invented scale factor does.
-    inline constexpr float HUD_TRACKER_CELL_PIXELS = 1.0f;
+    // TWO PIXELS PER CELL, which is what the port already had before I changed it:
+    // the dish is 32 cells across its 64-pixel height. I dropped it to 1 to stop
+    // contacts spreading too wide, which was solving the wrong problem - the
+    // spread was fine, the RANGE was too long.
+    //
+    // The range gate is genuinely 0x3000 world units - 24 cells - read from
+    // FUN_0003a008. But the original draws blips through a projected viewport
+    // (FUN_0004e4d4 at 0x108,0xc0 size 0x100), so the viewport CLIPS anything
+    // landing outside the dish. At two pixels per cell, 24 cells is 48 pixels
+    // against a 32-pixel half-height, so the far half of that range clips away -
+    // which is the effective range, and it comes out of the geometry rather than
+    // from a number I picked.
 
     // IT ONLY SHOWS THINGS THAT ARE MOVING. Traced from FUN_0003a008, and it is
     // the whole point of the device - I had been drawing every living enemy,
@@ -701,63 +711,29 @@ namespace ALTEngine::Renderer
     // So a standing creature is invisible and starts blipping the moment it
     // takes a step. That is why nothing shows until you walk up the first
     // hallway and something begins to move.
+    // THE VELOCITY FIELDS ARE STICKY, and that is why contacts stay on the dish.
+    //
+    // There is no decay table and no per-contact timer - FUN_0003a1d0 keeps only a
+    // COUNT, used to pick between the two ping sounds. So the persistence is not
+    // in the tracker at all; it is in what the tracker tests.
+    //
+    // Searching every write to the velocity fields +0x30 and +0x34 across the
+    // whole export, exactly ONE function zeroes them: FUN_00030b04, the death
+    // path. Nothing else ever clears them. So once an entity has moved, its
+    // velocity stays non-zero for the rest of its life, and it therefore keeps
+    // blipping - including when it has closed to your feet and stopped to attack,
+    // which is exactly the behaviour observed (Edward, 2026).
+    //
+    // That also corrects two of my own attempts. Testing this frame's movement
+    // intent flickers; testing whether the position changed since last tick loses
+    // the contact the moment it stops. Neither is what the original does - it
+    // tests a latch that is set by moving and cleared only by dying.
     inline constexpr int TRACKER_ALWAYS_VISIBLE_TYPE = 0x0a;   // colonist
     inline constexpr int TRACKER_ALWAYS_VISIBLE_STATE = 4;
     inline constexpr int TRACKER_MAX_STATE = 7;
     inline constexpr int TRACKER_MAX_TYPE = 0x0f;
 
-    struct TrackerContact
-    {
-        float worldX = 0;
-        float worldZ = 0;
-        int type = 0;
-        int state = 0;
-        bool moving = false;    // any velocity component non-zero
-    };
 
-    // The eligibility filter - whether this entity can appear at all.
-    inline bool TrackerEligible(const TrackerContact& contact)
-    {
-        if (contact.type == TRACKER_ALWAYS_VISIBLE_TYPE
-            && contact.state == TRACKER_ALWAYS_VISIBLE_STATE) { return false; }
-        if (contact.state >= TRACKER_MAX_STATE) { return false; }
-        if (contact.type >= TRACKER_MAX_TYPE) { return false; }
-        return true;
-    }
-
-    // And whether it is actually drawn this frame.
-    inline bool TrackerVisible(const TrackerContact& contact)
-    {
-        if (!TrackerEligible(contact)) { return false; }
-        return contact.type == TRACKER_ALWAYS_VISIBLE_TYPE || contact.moving;
-    }
-
-    // Where a contact lands on the dish, in HUD pixels, given the player's
-    // position and yaw. Returns false when it is out of range.
-    inline bool TrackerBlipPosition(const TrackerContact& contact,
-                                    float playerX, float playerZ, float playerYaw,
-                                    float& outX, float& outY)
-    {
-        const float dx = contact.worldX - playerX;
-        const float dz = contact.worldZ - playerZ;
-        if (dx >= HUD_TRACKER_RANGE || dx <= -HUD_TRACKER_RANGE) { return false; }
-        if (dz >= HUD_TRACKER_RANGE || dz <= -HUD_TRACKER_RANGE) { return false; }
-
-        // Into cells, then rotated by the negated yaw so the dish is
-        // player-forward.
-        const float cellsX = dx / 512.0f;
-        const float cellsZ = dz / 512.0f;
-        const float c = std::cos(-playerYaw);
-        const float s = std::sin(-playerYaw);
-
-        // Screen up is forward, so the rotated Z runs up the dish negated.
-        const float rx = cellsX * c - cellsZ * s;
-        const float rz = cellsX * s + cellsZ * c;
-
-        outX = HUD_TRACKER_CENTRE_X + rx * HUD_TRACKER_CELL_PIXELS;
-        outY = HUD_TRACKER_CENTRE_Y + rz * HUD_TRACKER_CELL_PIXELS;
-        return true;
-    }
 
 
     // Dish geometry: four 40x32 quadrants around the centre.
@@ -770,6 +746,34 @@ namespace ALTEngine::Renderer
 
     // Advances the sweep. `frame` cycles 0..7; `timer` is caller-owned state.
     // Returns the frame to draw.
+    // THE WHOLE TRACKER RUNS AT HALF RATE. FUN_00039f8c decrements its own
+    // counter every tick but only does any work when `(counter & 1) != 0` - so the
+    // sweep advances, the pause counts down and the ping fires on alternate ticks
+    // only.
+    //
+    // THERE IS NO BLINK TIMER AT ALL. The flicker is emergent, and each contact
+    // has its own phase because each creature is on its own cycle.
+    //
+    // I tried two invented blinks - the tick parity (a 15Hz strobe) and the sweep
+    // pause (one global on/off) - and both were wrong in the way Edward described:
+    // too constant, and every dot in lockstep. The answer is in what CLEARS an
+    // entity's velocity, which the decompiler had folded away and the raw
+    // disassembly shows plainly:
+    //
+    //     00032f7f  MOV word ptr [EAX + 0x30],0x0   in FUN_00032f78, the turn
+    //     00032f8c  MOV word ptr [EAX + 0x34],BX     - clears one axis, sets other
+    //     0003439f  MOV word ptr [ECX + 0x30],0x0   in FUN_00033ff8, the ATTACK
+    //     000343b2  MOV word ptr [EAX + 0x34],0x0    - clears BOTH
+    //
+    // So ATTACKING ZEROES THE VELOCITY. A creature alternates between moving -
+    // velocity set, blip on - and attacking, which clears it and the blip goes
+    // dark until it moves again. Turning clears one axis and sets the other, so a
+    // turning creature can flicker too.
+    //
+    // Each creature therefore blinks on its own rhythm, offset by whenever it last
+    // decided to act. That is why the overall effect is irregular rather than
+    // repetitive, and it needs no timer in the tracker whatsoever.
+
     inline int HudTrackerAdvance(int& frame, int& timer, int& pause)
     {
         if (pause > 0) { pause--; return frame; }

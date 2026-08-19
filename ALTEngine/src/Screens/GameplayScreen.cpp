@@ -6,6 +6,7 @@
 #include "PlayerHudState.h"
 #include "PickupSystem.h"
 #include "HudMessages.h"
+#include "GameOverSequence.h"
 #include "DroppedPickups.h"
 #include "PlayerCamera.h"
 #include "WeaponSystem.h"
@@ -468,9 +469,12 @@ namespace ALTEngine::Screens
         // The trigger the player last fired, so a trigger runs once on entry
         // rather than every tick it is stood on.
         int playerLastTrigger = 0;
-        // Contacts for the MOTION TRACKER - the dish in the HUD's bottom right,
-        // not the minimap. Rebuilt each tick from the live enemies.
-        std::vector<ALTEngine::Renderer::TrackerContact> trackerContacts;
+
+        // Set when health reaches zero; the sequence plays once the frame is done
+        // rather than mid-tick, so the last frame the player saw is the one that
+        // killed them.
+        bool playerDead = false;
+        int deathVideoIndex = 1;
         ALTEngine::Screens::EnemySprites enemySprites;
 
         // The held weapon. Driven by the select keys below; the pistol is the
@@ -1686,21 +1690,8 @@ namespace ALTEngine::Screens
                             }
                         }
 
-                        trackerContacts.clear();
                         for (auto& enemy : enemies)
                         {
-                            if (enemy.active)
-                            {
-                                ALTEngine::Renderer::TrackerContact contact;
-                                contact.worldX = enemy.x;
-                                contact.worldZ = enemy.z;
-                                contact.type = enemy.type;
-                                contact.state = enemy.state;
-                                // Moving = any velocity component non-zero, which
-                                // is what the original tests.
-                                contact.moving = (enemy.stepX != 0.0f || enemy.stepZ != 0.0f);
-                                trackerContacts.push_back(contact);
-                            }
                             ALTEngine::Screens::Enemies::Tick(enemy, camera.x, camera.y, camera.z);
 
                             // Each axis resolved separately, as the original's two
@@ -1714,6 +1705,16 @@ namespace ALTEngine::Screens
                             {
                                 enemy.z += enemy.stepZ;
                             }
+
+                            // Moving sets the velocity flag; attacking and dying
+                            // clear it. Nothing else touches it, so a creature's
+                            // blip follows its own move/attack rhythm.
+                            if (enemy.x != enemy.lastX || enemy.z != enemy.lastZ)
+                            {
+                                enemy.velocityActive = true;
+                            }
+                            enemy.lastX = enemy.x;
+                            enemy.lastZ = enemy.z;
 
                             // Stand on the floor, or hang below the ceiling.
                             {
@@ -1729,6 +1730,21 @@ namespace ALTEngine::Screens
                                     hudState.health - enemy.pendingDamage);
                                 hudState.damageCooldown = 8;
                                 if (hudState.health < 0) { hudState.health = 0; }
+
+                                // Dead. One of the six death videos then GAMEOVER,
+                                // and back to the menu - see GameOverSequence for
+                                // which parts of that are read and which are not.
+                                if (hudState.health == 0 && !playerDead)
+                                {
+                                    playerDead = true;
+                                    running = false;
+                                    // The clip is chosen by HOW you died, not at
+                                    // random - an enemy's attack is cause 4.
+                                    namespace GO = ALTEngine::Screens::GameOverSequence;
+                                    deathVideoIndex = GO::DeathVideoForCause(GO::CAUSE_ENEMY_ATTACK);
+                                    SDL_Log("player killed by an enemy attack - DEATH%d",
+                                            deathVideoIndex);
+                                }
                             }
                             if (enemy.spawnDeathEffect)
                             {
@@ -2875,33 +2891,6 @@ namespace ALTEngine::Screens
                                                 ALTEngine::Renderer::HUD_VIRTUAL_HEIGHT);
                             },
                             [&] {
-                                // ---- motion tracker contacts ------------
-                                //
-                                // The dish in the bottom right, NOT the map. I
-                                // put these on the minimap first, which is a
-                                // different thing entirely (Edward, 2026).
-                                //
-                                // Range, scale and rotation are all traced - see
-                                // TrackerBlipPosition. 2x2 points in ff,7f,00.
-                                {
-                                    namespace R = ALTEngine::Renderer;
-                                    SDL_SetRenderDrawColor(renderer,
-                                        R::HUD_TRACKER_BLIP_R, R::HUD_TRACKER_BLIP_G,
-                                        R::HUD_TRACKER_BLIP_B, 255);
-                                    for (const auto& contact : trackerContacts)
-                                    {
-                                        if (!R::TrackerVisible(contact)) { continue; }
-                                        float bx = 0.0f, by = 0.0f;
-                                        if (!R::TrackerBlipPosition(contact, camera.x, camera.z,
-                                                                    camera.yaw, bx, by)) { continue; }
-                                        SDL_FRect blip{ bx - R::HUD_TRACKER_BLIP_SIZE * 0.5f,
-                                                        by - R::HUD_TRACKER_BLIP_SIZE * 0.5f,
-                                                        static_cast<float>(R::HUD_TRACKER_BLIP_SIZE),
-                                                        static_cast<float>(R::HUD_TRACKER_BLIP_SIZE) };
-                                        SDL_RenderFillRect(renderer, &blip);
-                                    }
-                                }
-
                                 // The typed-out messages, at 1:1 in the HUD
                                 // surface so the text lands on whole pixels.
                                 // Newest at the bottom, the way a terminal
@@ -2944,11 +2933,27 @@ namespace ALTEngine::Screens
                                 }
                             });
 
-                        // Motion tracker. Contacts are world-space offsets from
-                        // the player; enemies do not exist yet, so this is empty
-                        // and the dish draws with its sweep and no blips. Wiring
-                        // it now means the enemy work only has to fill the list.
+                        // Motion tracker. DrawTracker draws the dish AND its
+                        // blips, in that order, so the contacts land on top of the
+                        // artwork.
+                        //
+                        // I had drawn them through the over-panels hook instead,
+                        // which runs BEFORE the dish - so the dish covered them
+                        // (Edward, 2026). The plumbing for this was already here
+                        // and empty; I should have filled it rather than adding a
+                        // second path.
                         std::vector<ALTEngine::Renderer::HudRenderer::Contact> contacts;
+                        for (const auto& enemy : enemies)
+                        {
+                            if (!enemy.active) { continue; }
+                            ALTEngine::Renderer::HudRenderer::Contact c;
+                            c.dx = enemy.x - camera.x;
+                            c.dz = enemy.z - camera.z;
+                            c.type = enemy.type;
+                            c.state = enemy.state;
+                            c.moving = enemy.velocityActive;
+                            contacts.push_back(c);
+                        }
                         hud.DrawTracker(renderer, contacts, camera.yaw, windowW, windowH);
 
                         // Live Minimap (Modern option). Drawn over the
@@ -3041,6 +3046,17 @@ namespace ALTEngine::Screens
         }
 
         SDL_SetWindowRelativeMouseMode(app.Window(), false);
+
+        // The game over sequence, after the level is done being drawn so the last
+        // frame the player saw is the one that killed them.
+        if (playerDead)
+        {
+            ModelRenderer::UnloadLevels();
+            ALTEngine::Screens::GameOverSequence::Play(cdDirectory, language, deathVideoIndex);
+            result.outcome = GameplayOutcome::ExitGame;
+            return result;
+        }
+
         ModelRenderer::UnloadLevels();
         return result;
     }

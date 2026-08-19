@@ -109,9 +109,22 @@ namespace ALTEngine::Renderer
         // offsets from the player, already in the game's units; they are gated
         // by range, converted to cells and rotated by the player's facing here,
         // exactly as FUN_0003a008 does.
-        struct Contact { float dx, dz; };
+        // A tracker contact: the world-space offset from the player, plus what
+        // the original's own filter tests - the entity's type, its state, and
+        // whether any of its velocity fields is non-zero.
+        struct Contact
+        {
+            float dx = 0, dz = 0;
+            int type = 0;
+            int state = 0;
+            bool moving = false;
+        };
         void DrawTracker(SDL_Renderer* renderer, const std::vector<Contact>& contacts,
                          float playerYaw, int outputWidth, int outputHeight) const;
+
+        // The half-rate counter FUN_00039f8c keeps. Drives both the sweep and the
+        // blip blink.
+        int TrackerTick() const { return trackerTick; }
 
         bool Ready() const { return sheet != nullptr; }
 
@@ -176,6 +189,7 @@ namespace ALTEngine::Renderer
         int trackerFrame = 0;
         int trackerTimer = 0;
         int trackerPause = 0;
+        int trackerTick = 0;
 
         Frame healthFrame;
         Frame ammoFrame;
