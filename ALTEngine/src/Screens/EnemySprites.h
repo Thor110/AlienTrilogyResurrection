@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <memory>
+#include "../Formats/EnemyAnimData.h"
 #include <map>
 #include <string>
 #include <vector>
@@ -173,6 +175,8 @@ namespace ALTEngine::Screens
         bool Load(const std::filesystem::path& cdDirectory, const std::string& /*levelDigits*/,
                   const std::vector<Enemies::Enemy>& enemies)
         {
+            namespace AD = ALTEngine::Formats::EnemyAnimData;
+
             std::vector<int> wanted;
             for (const auto& enemy : enemies)
             {
@@ -185,47 +189,68 @@ namespace ALTEngine::Screens
             int loadedTypes = 0;
             for (int type : wanted)
             {
-                const char* name = EnemyFileForType(type);
-                if (!name) { SDL_Log("EnemySprites: monster type %d has no file", type); continue; }
+                const AD::Creature* creature = AD::ForType(type);
+                if (!creature) { continue; }
 
-                std::filesystem::path path = cdDirectory / "NME" / (std::string(name) + ".B16");
+                std::filesystem::path path = cdDirectory / "NME" / (std::string(creature->file) + ".B16");
                 std::error_code ec;
-                if (!std::filesystem::exists(path, ec))
+                if (!std::filesystem::exists(path, ec)) { continue; }
+
+                auto set = std::make_shared<ALTEngine::Formats::EnemySpriteSet>();
+                if (!set->Load(path)) { continue; }
+
+                // Decode every animation the behaviour switches can ask for, so a
+                // creature never stalls waiting for artwork mid-fight.
+                TypeArt art;
+                art.sprites = set;
+                int decodedAnims = 0;
+
+                for (int a = 0; a < creature->count; ++a)
                 {
-                    SDL_Log("EnemySprites: %s not found for monster type %d",
-                            path.string().c_str(), type);
-                    continue;
+                    const AD::Anim& anim = creature->anims[a];
+                    if (anim.count <= 0) { continue; }
+
+                    std::vector<ALTEngine::Formats::EnemySpriteSet::Frame> records;
+                    for (int i = 0; i < anim.count; ++i)
+                    {
+                        ALTEngine::Formats::EnemySpriteSet::Frame f;
+                        f.offsetX = anim.frames[i].ox;
+                        f.offsetY = anim.frames[i].oy;
+                        f.width = anim.frames[i].w;
+                        f.height = anim.frames[i].h;
+                        f.compressedOffset = anim.frames[i].off;
+                        records.push_back(f);
+                    }
+
+                    auto decoded = set->DecodeAnimation(records);
+                    if (decoded.empty()) { continue; }
+
+                    // Upload each frame as its own sheet.
+                    Animation entry;
+                    for (size_t i = 0; i < decoded.size(); ++i)
+                    {
+                        const std::string key = SheetKey(type, a, static_cast<int>(i));
+                        if (!ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
+                                key, ToRgba(*set, decoded[i]), decoded[i].width, decoded[i].height))
+                        {
+                            continue;
+                        }
+                        entry.frames.push_back(Frame{ key, decoded[i].width, decoded[i].height,
+                                                      decoded[i].offsetX, decoded[i].offsetY });
+                    }
+                    if (!entry.frames.empty())
+                    {
+                        art.animations[a] = std::move(entry);
+                        decodedAnims++;
+                    }
                 }
 
-                TypeFrames frames;
-                for (int frameIndex = 0; frameIndex < FRAMES_TO_LOAD; ++frameIndex)
+                if (decodedAnims > 0)
                 {
-                    std::optional<ALTEngine::Formats::SpriteFrameInfo> frame;
-                    try
-                    {
-                        frame = ALTEngine::Formats::SpriteFrameLoader::LoadFrame(
-                            path, name, REST_SECTION, frameIndex);
-                    }
-                    catch (const std::exception&) { break; }
-
-                    if (!frame || frame->width <= 0 || frame->height <= 0 || frame->rgba.empty()) { break; }
-
-                    const std::string key = SheetKey(type, frameIndex);
-                    if (!ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
-                            key, frame->rgba, frame->width, frame->height))
-                    {
-                        break;
-                    }
-                    frames.width[frameIndex] = frame->width;
-                    frames.height[frameIndex] = frame->height;
-                    frames.present[frameIndex] = true;
-                    frames.any = true;
-                }
-                if (frames.any)
-                {
-                    byType[type] = frames;
+                    byType[type] = std::move(art);
                     loadedTypes++;
-                    SDL_Log("EnemySprites: monster type %d -> %s.B16", type, name);
+                    SDL_Log("EnemySprites: type %d -> %s.B16, %d animations decoded",
+                            type, creature->file, decodedAnims);
                 }
             }
             return loadedTypes > 0;
@@ -241,59 +266,93 @@ namespace ALTEngine::Screens
             {
                 if (!enemy.active || !enemy.alive) { continue; }
 
-                // NOT DRAWN IN THE WORLD WHILE POUNCING. The original replaces the
-                // creature's handler with LAB_00030918 for the duration, so
-                // FUN_000300a4 - the draw dispatcher - is no longer reached for it
-                // at all. The creature is on your face, not on the floor, and
-                // leaving it standing there was plainly wrong (Edward, 2026).
+                // NOT DRAWN IN THE WORLD WHILE POUNCING - the original replaces
+                // the creature's handler, so its draw is never reached. It is on
+                // your face, not on the floor.
                 if (enemy.pouncing) { continue; }
 
                 auto it = byType.find(enemy.type);
                 if (it == byType.end()) { continue; }
 
-                const float dx = cameraX - enemy.x;
-                const float dz = cameraZ - enemy.z;
-                // The view is computed but NOT used to pick artwork - see the
-                // note above. Only frame 0 is loaded, so that is what draws.
-                (void)dx; (void)dz;
-                const int view = 0;
-                if (!it->second.present[0]) { continue; }
+                auto anim = it->second.animations.find(enemy.animation);
+                if (anim == it->second.animations.end() || anim->second.frames.empty())
+                {
+                    continue;
+                }
+
+                // Wrap, so an animation that outlives its frame count loops rather
+                // than falling off the end.
+                const auto& frames = anim->second.frames;
+                const size_t index = static_cast<size_t>(enemy.animationFrame)
+                                   % frames.size();
+                const Frame& frame = frames[index];
 
                 ALTEngine::Renderer::PlacedSprite sprite;
-                sprite.textureKey = SheetKey(enemy.type, view);
+                sprite.textureKey = frame.key;
                 sprite.x = enemy.x;
                 sprite.z = enemy.z;
-                sprite.halfWidth = it->second.width[view] * 0.5f * WORLD_UNITS_PER_PIXEL;
-                sprite.halfHeight = it->second.height[view] * 0.5f * WORLD_UNITS_PER_PIXEL;
+                sprite.halfWidth = frame.width * 0.5f * WORLD_UNITS_PER_PIXEL;
+                sprite.halfHeight = frame.height * 0.5f * WORLD_UNITS_PER_PIXEL;
 
-                // Standing on the floor, not centred on it.
+                // Standing on the floor. The frame's own offsetY is a draw offset
+                // from the creature's anchor, in the original's screen space, so
+                // it is not applied here - the sprite is placed in the world.
                 sprite.y = enemy.y + sprite.halfHeight;
-
 
                 out.push_back(sprite);
             }
         }
 
     private:
-        struct TypeFrames
+        struct Frame
         {
-            int width[UNIQUE_VIEWS] = { 0, 0, 0, 0, 0 };
-            int height[UNIQUE_VIEWS] = { 0, 0, 0, 0, 0 };
-            bool present[UNIQUE_VIEWS] = { false, false, false, false, false };
-            bool any = false;
+            std::string key;
+            int width = 0;
+            int height = 0;
+            int offsetX = 0;
+            int offsetY = 0;
         };
 
-        // Sprite pixels to world units. GUESS - the original scales its sprites
-        // by distance in screen space, so there is no world size to read. Tuned
-        // so a facehugger-sized frame is roughly ankle height in a 1536-unit
-        // room.
+        struct Animation { std::vector<Frame> frames; };
+
+        struct TypeArt
+        {
+            std::shared_ptr<ALTEngine::Formats::EnemySpriteSet> sprites;
+            std::map<int, Animation> animations;
+        };
+
+        // Sprite pixels to world units. GUESS - the original scales by distance in
+        // screen space, so there is no world size to read.
         static constexpr float WORLD_UNITS_PER_PIXEL = 8.0f;
 
-        static std::string SheetKey(int type, int view)
+        static std::string SheetKey(int type, int animation, int frame)
         {
-            return "enemy:" + std::to_string(type) + ":" + std::to_string(view);
+            return "enemy:" + std::to_string(type) + ":" + std::to_string(animation)
+                 + ":" + std::to_string(frame);
         }
 
-        std::map<int, TypeFrames> byType;
+        // Palette indices to RGBA, using the creature file's own C000 palette.
+        // Index 0 is transparent, as everywhere else in these files.
+        static std::vector<uint8_t> ToRgba(const ALTEngine::Formats::EnemySpriteSet& set,
+                                           const ALTEngine::Formats::EnemySpriteSet::Frame& f)
+        {
+            std::vector<uint8_t> rgba(static_cast<size_t>(f.width) * f.height * 4, 0);
+            const auto& pal = set.Palette();
+            for (size_t i = 0; i < f.pixels.size() && i * 4 + 3 < rgba.size(); ++i)
+            {
+                const uint8_t index = f.pixels[i];
+                if (index == 0) { continue; }
+                const size_t p = static_cast<size_t>(index) * 2;
+                if (p + 1 >= pal.size()) { continue; }
+                const uint16_t entry = static_cast<uint16_t>(pal[p] | (pal[p + 1] << 8));
+                rgba[i * 4 + 0] = static_cast<uint8_t>((entry & 0x1f) << 3);
+                rgba[i * 4 + 1] = static_cast<uint8_t>(((entry >> 5) & 0x1f) << 3);
+                rgba[i * 4 + 2] = static_cast<uint8_t>(((entry >> 10) & 0x1f) << 3);
+                rgba[i * 4 + 3] = 255;
+            }
+            return rgba;
+        }
+
+        std::map<int, TypeArt> byType;
     };
 }

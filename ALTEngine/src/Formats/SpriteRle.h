@@ -33,6 +33,18 @@ namespace ALTEngine::Formats
     //
     // The decoder returns the number of pixels written, which is how the caller
     // knows the frame's size without the record having to agree.
+    // NOTHING USES THIS, AND THAT IS THE POINT OF KEEPING IT.
+    //
+    // FUN_00028350 is a real decoder in the original and this is a faithful
+    // transcription of it - but the enemy and weapon sprites turned out to be
+    // LZSS, decoded by SpriteFrameDecompressor, and running this at a frame
+    // record's offset yields nothing. So whatever FUN_00028350 decodes, it is not
+    // the frames.
+    //
+    // Kept because it is correct and cost real effort to establish, and because
+    // some asset in the game is in this format - most likely something not yet
+    // loaded at all. Delete it only once that is known.
+
     // HOW THIS SITS WITH THE PORT'S EXISTING DECODER - and this is the part I
     // cannot settle without a real file.
     //

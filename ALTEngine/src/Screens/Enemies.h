@@ -92,13 +92,6 @@ namespace ALTEngine::Screens
         inline constexpr float SPEED_SCALE = 0.5f;
 
 
-        // A melee creature's bands. 0x400 is the original's own contact range
-        // (MODE_TOUCHING_RANGE), so a hugger is at mode 0 while touching, mode 1
-        // just outside, and mode 2 barely beyond that - which is as far as its
-        // 1-damage nibble can land. GUESSES, but bounded by a traced number.
-        inline constexpr int MELEE_NEAR_THRESHOLD = 0x500;
-        inline constexpr int MELEE_MIDDLE_THRESHOLD = 0x600;
-
         // WHEN A MONSTER ENTERS PLAY.
         //
         // Not a difficulty setting - a trigger count. FUN_0002f288 increments
@@ -181,6 +174,15 @@ namespace ALTEngine::Screens
             // dies then, not on a timer - FUN_000307c0 writes state 2 at the
             // bottom of the fall and LAB_00030918 is waiting for exactly that.
             bool overlayFinished = false;
+
+            // WHICH ANIMATION IS PLAYING, and where in it. The original starts an
+            // animation through FUN_0002f4b0 whenever behaviour changes and the
+            // shared VM advances it; this tracks the same thing so the sprite has
+            // something to draw.
+            int animation = -1;
+            int animationFrame = 0;
+            int animationTimer = 0;
+            bool animationChanged = false;
             float lastX = 0, lastZ = 0;
 
             // The two per-creature distance thresholds the mode banding uses.
@@ -332,9 +334,14 @@ namespace ALTEngine::Screens
 
         // Damage, through the same model the crates use - including the hit
         // window, which enemies genuinely have and objects do not.
-        // How often a creature can land a hit. GUESS - the original gates this
-        // with FUN_00033a1c, which has not been read.
-        inline constexpr int ATTACK_INTERVAL_TICKS = 30;
+        // Sixty ticks between attacks - EnemyBehaviour::ATTACK_TIMER_RELOAD,
+        // traced. No longer a guess.
+        inline constexpr int ATTACK_INTERVAL_TICKS = EnemyBehaviour::ATTACK_TIMER_RELOAD;
+
+        // How long a frame is held. OURS - the real duration is entry 0 of the
+        // animation's own sequence, which the VM reads; this stands in until the
+        // sequences are wired through it.
+        inline constexpr int ANIMATION_TICKS_PER_FRAME = 6;
 
         inline constexpr int HIT_REACTION_TICKS = 6;   // GUESS - the real one is
                                                        // the reaction animation's
@@ -371,6 +378,39 @@ namespace ALTEngine::Screens
         // creature at a time, everywhere on the level.
         inline bool pounceLockHeld = false;
 
+        // Starts an animation, as FUN_0002f4b0 does - resetting the frame and the
+        // timer. Re-starting the one already playing is ignored, which is what
+        // stops a walk restarting every tick.
+        inline void PlayAnimation(Enemy& enemy, int animation)
+        {
+            if (animation < 0 || enemy.animation == animation) { return; }
+            enemy.animation = animation;
+            enemy.animationFrame = 0;
+            enemy.animationTimer = 0;
+            enemy.animationChanged = true;
+        }
+
+        // Chooses the animation the creature's current behaviour calls for. The
+        // three switches are traced - see EnemyBehaviour - and this is the routing
+        // between them.
+        inline void UpdateAnimation(Enemy& enemy)
+        {
+            if (!enemy.active) { return; }
+
+            if (enemy.state == EnemyBehaviour::STATE_DYING
+                || enemy.state == EnemyBehaviour::STATE_DEAD)
+            {
+                PlayAnimation(enemy, EnemyBehaviour::DeathAnimation(enemy.type));
+                return;
+            }
+            if (enemy.state == EnemyBehaviour::STATE_HIT_RECOVER)
+            {
+                PlayAnimation(enemy, EnemyBehaviour::HitAnimation(enemy.type));
+                return;
+            }
+            PlayAnimation(enemy, EnemyBehaviour::ActingAnimation(enemy.type));
+        }
+
         inline void Tick(Enemy& enemy, float playerX, float playerY, float playerZ)
         {
             if (!enemy.active) { return; }
@@ -394,6 +434,16 @@ namespace ALTEngine::Screens
             if (enemy.distance > EnemyBehaviour::SIMULATION_CUTOFF) { return; }
 
             enemy.ticks++;
+
+            // Pick the animation for whatever the creature is doing, then advance
+            // it. The frame duration comes from the sequence in the original; a
+            // fixed rate stands in until the sequences are fed through the VM.
+            UpdateAnimation(enemy);
+            if (++enemy.animationTimer >= ANIMATION_TICKS_PER_FRAME)
+            {
+                enemy.animationTimer = 0;
+                enemy.animationFrame++;
+            }
 
             // ---- movement, from FUN_00031f3c --------------------------
             //
@@ -527,9 +577,16 @@ namespace ALTEngine::Screens
                     int delta = ((enemy.facing - bearing) & PlayerCamera::ANGLE_MASK);
                     if (delta > PlayerCamera::ANGLE_UNITS / 2) { delta = PlayerCamera::ANGLE_UNITS - delta; }
 
-                    const int damage = EnemyBehaviour::WithinAttackCone(0, delta, enemy.coneHalfWidth)
-                                     ? EnemyBehaviour::AttackDamage(enemy.type, enemy.mode)
-                                     : 0;
+                    // CONTACT RANGE ONLY, and within 0x600 vertically. Both are
+                    // the original's own gates, and both were missing - a creature
+                    // could reach from the middle band and from any height.
+                    const bool inReach = (enemy.mode == 0)
+                        && (enemy.separationY <= EnemyBehaviour::ATTACK_MAX_VERTICAL);
+
+                    const int damage = (inReach
+                        && EnemyBehaviour::WithinAttackCone(0, delta, enemy.coneHalfWidth))
+                        ? EnemyBehaviour::AttackDamage(enemy.type, enemy.mode)
+                        : 0;
                     if (damage > 0)
                     {
                         enemy.pendingDamage = damage;

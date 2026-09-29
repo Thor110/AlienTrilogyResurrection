@@ -10,7 +10,7 @@ namespace ALTEngine::Screens
     //   FUN_000313b0  applies it - the whole damage model in one function
     //   FUN_000310ac  survived: play the hit reaction
     //   FUN_00030b04  died: destroy
-    //   FUN_00027b90  spawn: copies health and subtype out of the entity template
+    //   FUN_00027b90  NOT AN ENTITY TEMPLATE - see the correction below
     //
     // Entity fields this touches, all offsets from the entity base:
     //   +0x4e  a busy flag; non-zero blocks damage
@@ -117,6 +117,28 @@ namespace ALTEngine::Screens
         // bug report. The cause was HIT_REACTION_TICKS below - see the note
         // there - and inflating the health to match hid it instead of fixing it.
         //
+        // CORRECTION: THERE IS NO "ENTITY TEMPLATE" AT FUN_00027b90.
+        //
+        // I had this function down as the thing that copies an entity's health and
+        // hitbox out of a per-creature template, and pointed at it repeatedly as
+        // the one dump that would retire half the guesses in this file. Reading it
+        // properly, it is the LEVEL HEADER PARSER: `param_1` is the level, the
+        // pointer at +0xa4 is the raw map data, and the copies are header fields
+        // followed by section pointers computed by walking the counts -
+        //
+        //     puVar3 += 0x12                              past the header
+        //     puVar3 += (vertexCount) * 4                 vertices
+        //     puVar3 += (quadCount) * 10                  quads
+        //     puVar3 += mapLength * mapWidth * 8           the collision grid
+        //
+        // which is exactly the layout LevelLoader already parses. The offsets it
+        // writes (+0x4c, +0x68, +0x6a...) are the level's fields, not an entity's,
+        // and their resemblance to entity offsets is coincidence.
+        //
+        // So the crate and barrel health, the hitbox extents and the attack cone
+        // are still unknown, and the thing I said would settle them does not
+        // exist. They have to be found somewhere else.
+
         // THE REAL VALUE IS READABLE, BUT NOT FROM THE .MAP. FUN_00027b90 copies
         // health out of the entity's TEMPLATE record - the uint16 at byte offset
         // 0x14 (word index 10), with the subtype byte at 0x0d and the alternate

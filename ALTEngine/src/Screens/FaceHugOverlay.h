@@ -241,8 +241,38 @@ namespace ALTEngine::Screens
         // anywhere, only the position is.
         static constexpr float DRAW_SCALE = 2.0f;
 
-        static constexpr int START_Y = 0x154;   // 340, below the screen
-        static constexpr int REST_Y = 0x78;     // 120 - my 190 was a guess
+        // THE TRACED Y VALUES ARE IN THE ORIGINAL'S SPACE, NOT OURS, and that is
+        // why 0x78 put the creature too high up the view (Edward, 2026).
+        //
+        // Two differences compound. The original renders 320x200 - VGA mode 13h -
+        // where 0x78 is 60% down the screen; our HUD space is 320x240, so the same
+        // number lands 40 rows high. And we draw the art at DRAW_SCALE, which
+        // doubles the frame's own offsetY on top of that.
+        //
+        // Rather than carry the original's number and then fight it, the rest
+        // position is derived from the requirement it exists to satisfy: the
+        // creature's BOTTOM pixels sit on the bottom of the view when it has
+        // arrived. That is what the original looks like and it is what 0x78
+        // produces in its own 200-row space.
+        //
+        // START_Y is derived the same way - far enough below that the whole sprite
+        // is off-screen - which comes out close to the traced 0x154, a good sign
+        // the reasoning is right rather than a coincidence being fitted.
+        static constexpr int VIEW_HEIGHT = 240;
+        static constexpr int TYPICAL_FRAME_HEIGHT = 88;
+        static constexpr int TYPICAL_OFFSET_Y = -53;
+
+        static constexpr int REST_Y = VIEW_HEIGHT
+                                    + static_cast<int>(-TYPICAL_OFFSET_Y * DRAW_SCALE)
+                                    - static_cast<int>(TYPICAL_FRAME_HEIGHT * DRAW_SCALE);
+        static constexpr int START_Y = VIEW_HEIGHT
+                                     + static_cast<int>(-TYPICAL_OFFSET_Y * DRAW_SCALE);
+
+        // Rows a tick, straight from FUN_000307c0 - it falls off twice as fast as
+        // it climbs on. The travel is longer in our taller space, so at the same
+        // step rate the whole thing takes proportionally longer, which is the
+        // right way round: it was too fast before because it had less distance to
+        // cover.
         static constexpr int CLIMB_STEP = 8;
         static constexpr int FALL_STEP = 0x10;
 

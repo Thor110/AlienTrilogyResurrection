@@ -429,5 +429,41 @@ namespace ALTEngine::Formats
     // the three whose trigger threshold is non-zero and which therefore never
     // appeared in play.
 
+    // Cell lookup, one place instead of nineteen.
+    //
+    // The same shape was written out by hand all over GameplayScreen - bounds
+    // check the pair, multiply by mapLength, bounds check the index, then index
+    // the grid. Every copy was correct but each was an opportunity to get the
+    // width wrong or forget one of the two checks, and two of them did omit the
+    // size test.
+    //
+    // Returns nullptr rather than a reference so callers keep their existing
+    // "skip if out of range" flow.
+    inline const CollisionNode* CellAt(const LevelGeometry& level, int cellX, int cellZ)
+    {
+        if (cellX < 0 || cellZ < 0
+            || cellX >= level.header.mapLength || cellZ >= level.header.mapWidth) { return nullptr; }
+
+        const size_t index = static_cast<size_t>(cellZ) * static_cast<size_t>(level.header.mapLength)
+                           + static_cast<size_t>(cellX);
+        if (index >= level.collisionGrid.size()) { return nullptr; }
+        return &level.collisionGrid[index];
+    }
+
+    inline CollisionNode* CellAt(LevelGeometry& level, int cellX, int cellZ)
+    {
+        return const_cast<CollisionNode*>(
+            CellAt(static_cast<const LevelGeometry&>(level), cellX, cellZ));
+    }
+
+    // The flat index for a cell, or -1. For callers that need to store it.
+    inline int CellIndex(const LevelGeometry& level, int cellX, int cellZ)
+    {
+        if (cellX < 0 || cellZ < 0
+            || cellX >= level.header.mapLength || cellZ >= level.header.mapWidth) { return -1; }
+        const int index = cellZ * level.header.mapLength + cellX;
+        return (static_cast<size_t>(index) < level.collisionGrid.size()) ? index : -1;
+    }
+
     bool IsCellBlocking(const LevelGeometry& level, int gameX, int gameZ);
 }

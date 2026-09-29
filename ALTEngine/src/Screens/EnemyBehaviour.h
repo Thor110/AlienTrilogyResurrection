@@ -533,11 +533,38 @@ namespace ALTEngine::Screens
             }
         }
 
-        // THE DECISION TIMER. FUN_00033cbc writes +0x68 = 0x3c on entry and
-        // nothing in the entity region decrements it - the only reference to that
-        // field anywhere in 0x2e000..0x37000 is that one write. So the countdown
-        // is consumed somewhere not yet read, and 0x3c is what it starts at.
-        inline constexpr int DECISION_INTERVAL_TICKS = 0x3c;
+        // THE ATTACK TIMER, and it is fully traced now. I had said nothing
+        // decrements +0x68; that was a search of the DECOMPILED text, and the
+        // decrement is plain in the disassembly:
+        //
+        //     000342ee  MOV EDX,[ECX + 0x68]      read
+        //     000342f1  TEST EDX,EDX              if non-zero
+        //     000342f5  LEA EBX,[EDX + -0x1]      minus one
+        //     000342f8  MOV [ECX + 0x68],EBX      write back
+        //
+        // and the gate that consumes it, a little further on:
+        //
+        //     000345c6  TEST [ECX + 0x6c],4       skip if entity flag 4 is set
+        //     000345d0  CMP  [ECX + 0x68],0       skip unless the timer has run out
+        //     000345d6  CMP  [ECX + 0x73],0       skip unless mode is 0 - CONTACT
+        //     000345dc  CMP  [ECX + 0x14],0x600   skip if the VERTICAL separation
+        //                                         exceeds 0x600
+        //     000345e7  MOV  [ECX + 0x68],0x3c    reload to 60 and act
+        //
+        // THREE THINGS THE PORT HAD WRONG:
+        //   - the interval is 0x3c, sixty ticks, not the 30 I guessed. Enemies
+        //     were attacking twice as often as they should.
+        //   - it requires MODE 0, not mode 0-2. A creature only lands this attack
+        //     at contact range, whatever the damage table says about the middle
+        //     band.
+        //   - it checks the VERTICAL separation at +0x14 against 0x600, so
+        //     something on a walkway above cannot reach you.
+        //
+        // Same lesson as the ceiling flag and the velocity clear: a search of the
+        // decompiled text coming back empty is not evidence of absence.
+        inline constexpr int ATTACK_TIMER_RELOAD = 0x3c;
+        inline constexpr int ATTACK_MAX_VERTICAL = 0x600;
+        inline constexpr int ATTACK_BLOCKED_FLAG = 4;   // bit 4 of the +0x6c flags
 
         // ---------------------------------------------------------------
         // THE FACE HUGGER ON THE CAMERA - FINGERS.B16

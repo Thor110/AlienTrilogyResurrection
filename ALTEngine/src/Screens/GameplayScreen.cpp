@@ -152,10 +152,15 @@ namespace ALTEngine::Screens
         // original's explosion carries its own position which has not been read.
         constexpr float EXPLOSION_HEIGHT_OFFSET = 256.0f;
 
-        // How tall an enemy is for the purposes of being shot. GUESS - the
-        // original takes its half-extents from the entity template's +0x08/+0x0a/
-        // +0x0c, which has not been read.
-        constexpr float ENEMY_HIT_HEIGHT = 300.0f;
+        // How tall an enemy is for the purposes of being shot, measured UP from
+        // its feet.
+        //
+        // GUESS, but a bounded one: a warrior drone's frames are 88 pixels tall
+        // and the sprite scale is 8 world units per pixel, which puts its head at
+        // about 704 units - so a round at chest height lands inside it. The
+        // original reads real half-extents from a per-creature record I have not
+        // found, so this is one number standing in for all of them.
+        constexpr float ENEMY_HIT_HEIGHT = 704.0f;
 
         constexpr float FRAGMENT_HALF_SIZE = 6.0f;
         constexpr float TRACER_MIN_HALF_SIZE = 5.0f;
@@ -205,11 +210,8 @@ namespace ALTEngine::Screens
         {
             int cx = ToGridSpaceX(worldX, originX) >> 9;
             int cz = ToGridSpaceZ(worldZ, originZ) >> 9;
-            if (cx < 0 || cz < 0 || cx >= level.header.mapLength || cz >= level.header.mapWidth) { return 0; }
-            size_t ci = static_cast<size_t>(cz) * static_cast<size_t>(level.header.mapLength)
-                      + static_cast<size_t>(cx);
-            if (ci >= level.collisionGrid.size()) { return 0; }
-            return level.collisionGrid[ci].attribute;
+            const auto* cell = ALTEngine::Formats::CellAt(level, cx, cz);
+            return cell ? cell->attribute : 0;
         }
 
         bool CanOccupy(const ALTEngine::Formats::LevelGeometry& level,
@@ -892,11 +894,10 @@ namespace ALTEngine::Screens
                             {
                                 int cx = anchorX + (alongZ ? 0 : step);
                                 int cz = anchorZ + (alongZ ? step : 0);
-                                if (cx < 0 || cz < 0 || cx >= level.header.mapLength || cz >= level.header.mapWidth) { continue; }
-                                size_t ci = static_cast<size_t>(cz) * level.header.mapLength + static_cast<size_t>(cx);
-                                if (ci >= level.collisionGrid.size()) { continue; }
-                                level.collisionGrid[ci].floorHeight = static_cast<uint8_t>(cellFloor);
-                                level.collisionGrid[ci].ceilingHeight = static_cast<uint8_t>(ceilingUnits);
+                                auto* cell = ALTEngine::Formats::CellAt(level, cx, cz);
+                                if (!cell) { continue; }
+                                cell->floorHeight = static_cast<uint8_t>(cellFloor);
+                                cell->ceilingHeight = static_cast<uint8_t>(ceilingUnits);
                             }
 
                             DoorState ds;
@@ -916,9 +917,8 @@ namespace ALTEngine::Screens
                             {
                                 int cx = anchorX + (alongZ ? 0 : step);
                                 int cz = anchorZ + (alongZ ? step : 0);
-                                if (cx < 0 || cz < 0 || cx >= level.header.mapLength || cz >= level.header.mapWidth) { continue; }
-                                size_t ci = static_cast<size_t>(cz) * level.header.mapLength + static_cast<size_t>(cx);
-                                if (ci < level.collisionGrid.size()) { ds.cells[static_cast<size_t>(ds.cellCount++)] = ci; }
+                                const int ci = ALTEngine::Formats::CellIndex(level, cx, cz);
+                                if (ci >= 0) { ds.cells[static_cast<size_t>(ds.cellCount++)] = static_cast<size_t>(ci); }
                             }
                             ds.placedFirst = placedObjects.size();
                             ds.placedCount = 5;
@@ -1387,11 +1387,9 @@ namespace ALTEngine::Screens
                     {
                         int cx = ToGridSpaceX(camera.x, originX) >> 9;
                         int cz = ToGridSpaceZ(camera.z, originZ) >> 9;
-                        if (cx >= 0 && cz >= 0 && cx < level.header.mapLength && cz < level.header.mapWidth)
+                        if (const auto* cell = ALTEngine::Formats::CellAt(level, cx, cz))
                         {
-                            size_t ci = static_cast<size_t>(cz) * static_cast<size_t>(level.header.mapLength)
-                                      + static_cast<size_t>(cx);
-                            if (ci < level.collisionGrid.size()) { cellAttribute = level.collisionGrid[ci].attribute; }
+                            cellAttribute = cell->attribute;
                         }
                     }
                     // The hazard flag selects which footstep sound plays. The
@@ -1626,19 +1624,35 @@ namespace ALTEngine::Screens
                                 const float sx = alongX ? probeX : probeX + offset;
                                 const float sz = alongX ? probeZ + offset : probeZ;
 
-                                const int gx = ToGridSpaceX(sx, originX) >> 9;
-                                const int gz = ToGridSpaceZ(sz, originZ) >> 9;
-                                if (gx < 0 || gz < 0 || gx >= level.header.mapLength
-                                    || gz >= level.header.mapWidth) { return false; }
+                                const auto* cell = ALTEngine::Formats::CellAt(
+                                    level, ToGridSpaceX(sx, originX) >> 9, ToGridSpaceZ(sz, originZ) >> 9);
+                                if (!cell) { return false; }
 
-                                const size_t ci = static_cast<size_t>(gz)
-                                                * static_cast<size_t>(level.header.mapLength)
-                                                + static_cast<size_t>(gx);
-                                if (ci >= level.collisionGrid.size()) { return false; }
-                                const auto& cell = level.collisionGrid[ci];
+                                if (EB::AttributeBlocks(cell->attribute)) { return false; }
 
-                                if (EB::AttributeBlocks(cell.attribute)) { return false; }
-                                if (cell.unknown13 != 0) { return false; }   // something is standing there
+                                // THE OCCUPANCY TEST IS OUT, because the field it
+                                // reads is not what I took it for.
+                                //
+                                // FUN_000315f0 refuses a step when the cell's byte
+                                // at +0xc is non-zero, and FUN_000368c8 treats that
+                                // same byte as "what is standing here" - 0xff the
+                                // player, 1-0x0f a monster, above that an object.
+                                // So blocking on it looked obviously right.
+                                //
+                                // On L111 it is non-zero in 1341 cells, and 900 of
+                                // those are ordinary WALKABLE FLOOR with a
+                                // non-blocking attribute - including 25 of the 49
+                                // cells around the player's own start. Enemies
+                                // could barely take a step (Edward, 2026: "the
+                                // facehuggers appear to walk on the spot").
+                                //
+                                // So either the field carries something else as
+                                // well as occupancy, or the runtime clears it at
+                                // load and only writes live entities into it, and
+                                // the map's own values are stale. Blocking on the
+                                // raw map value is wrong either way. The attribute
+                                // test above is doing the real work - 596 blocking
+                                // cells, which is a believable wall count.
                             }
                             return true;
                         };
@@ -1707,11 +1721,8 @@ namespace ALTEngine::Screens
                         {
                             const int gx = ToGridSpaceX(camera.x, originX) >> 9;
                             const int gz = ToGridSpaceZ(camera.z, originZ) >> 9;
-                            if (gx >= 0 && gz >= 0 && gx < level.header.mapLength
-                                && gz < level.header.mapWidth)
-                            {
-                                fireCellTriggers(gz * level.header.mapLength + gx, playerLastTrigger);
-                            }
+                            fireCellTriggers(ALTEngine::Formats::CellIndex(level, gx, gz),
+                                             playerLastTrigger);
                         }
 
                         for (auto& enemy : enemies)
@@ -1810,10 +1821,8 @@ namespace ALTEngine::Screens
                                 live.falling = false;
                                 const int gx = ToGridSpaceX(placed.x, originX) >> 9;
                                 const int gz = ToGridSpaceZ(placed.z, originZ) >> 9;
-                                if (gx >= 0 && gz >= 0 && gx < level.header.mapLength && gz < level.header.mapWidth)
-                                {
-                                    live.cellIndex = gz * level.header.mapLength + gx;
-                                }
+                                const int landed = ALTEngine::Formats::CellIndex(level, gx, gz);
+                                if (landed >= 0) { live.cellIndex = landed; }
                             }
                         }
                         explosions.Tick();
@@ -2050,10 +2059,15 @@ namespace ALTEngine::Screens
                                 const float ehalf = D::HitHalfExtent(hitType);
                                 if (ex > ehalf || ex < -ehalf || ez > ehalf || ez < -ehalf) { continue; }
 
-                                // Vertical too - a round passing over a
-                                // facehugger's head should miss it.
-                                const float ey = py - enemy.y;
-                                if (ey < -ENEMY_HIT_HEIGHT || ey > ENEMY_HIT_HEIGHT) { continue; }
+                                // THE ANCHOR IS THE CREATURE'S FEET, not its
+                                // middle. Testing a symmetric window about it put
+                                // the whole box below the floor: rounds fly at
+                                // about 704 units and an enemy anchors at floor +
+                                // 0x20, so every shot missed by 672 and warrior
+                                // drones could not be hit at all (Edward, 2026).
+                                //
+                                // The body runs UPWARD from the anchor.
+                                if (py < enemy.y || py > enemy.y + ENEMY_HIT_HEIGHT) { continue; }
 
                                 const auto edef = ALTEngine::Screens::Particles::DefFor(hitType);
                                 const int edamage = D::HitDamage(edef.speed, hitLife, edef.strength);
