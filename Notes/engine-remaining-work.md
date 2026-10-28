@@ -54,10 +54,10 @@ The port samples five points and treats bytes `+2`/`+3` as walls. The clearance 
 ## 3. Lifts
 
 Done as `Game::Lifts` (see section "Settled"). Still to check against a retail map that has lifts:
-- that record byte 12 indexes the `L0` meshes in file order, and where the mesh's vertical origin sits;
+- that record byte 12 indexes the `L0` meshes in file order;
 - sound slots `0x5e`/`0x5f` are blank in the demo's name table;
 - a fast lift (2 units a tick) with an odd travel is clamped at the ends. The original only stops on an exact match, so it would overshoot.
-- **Reported:** on a retail level the lift stops just under the landing, and the player sinks partly out of the level. The original's handlers, setup and floor lookup (`FUN_00027e28`, a plain floor byte × 32) all match the port, so the cause is still open. ALTViewer's survey of the high byte (24, 27, 31, 32, 43, 44, 46, 47, 48, 50, 52, 56, 63, 64, 68, 79, 80, 84, 95, 224) has many values one below a common floor height (31/32, 47/48, 63/64…). The game now logs each lift's record with its own and surrounding floors to compare.
+- **Fixed:** the record's low and high are not absolute. `FUN_00041b30` runs as the level loads: it sets low to the floor of the lift's first cell and adds that floor to high. Checked against 3.5.1's 17 lifts, where floor + travel meets the landing (64 + 32 = 96, 15/16 + 48 = 63/64). The game logs each lift's record with its own and surrounding floors.
 
 ## 4. Enemy behaviour per type
 
@@ -108,13 +108,13 @@ Status in the port:
 ## Settled this round (see the code comments for the evidence)
 
 - **Lifts** (`FUN_000423e8` setup, handlers `0x42238` idle, `0x420ec` ascend, `0x41fa0` descend, `0x41ed0` wait; now `Game::Lifts`):
-  - **Record:** x, z, width, depth, low, high, flags, auto-dwell, dwell, threshold, counter, model.
+  - **Record:** x, z, width, depth, low, high, flags, auto-dwell, dwell, threshold, counter, model. On disc low is 0 and high is the travel; at load `FUN_00041b30` adds the first cell's floor to both.
   - **Floor:** every cell of the lift's w×h area gets its floor byte (+0xb) set to the height each tick (`FUN_00041e80`), so the player rides it with no extra code.
   - **Starting it:** command 7 (`FUN_00041dd8`) adds to the counter; command 5 (`FUN_00041e20`) adds only as the final increment. Both refuse while the lift moves or once the counter has reached the threshold. At the threshold the idle lift sets off (sound `0x5e`) and stops with `0x5f`.
   - **First run:** sets flag 0x80, adds one to `DAT_000b0b2a` and shows the lift notice. No other direct reference to that counter was found.
   - **Cycling:** a non-zero auto-dwell makes the lift wait and go back by itself.
   - **Returning:** without that, a lift with a dwell waits at the far end, goes back to where it started, and is idle there. Arriving at the top checks flag 0x20 the opposite way to arriving at the bottom.
-  - **Drawing:** `FUN_00041ba4` only draws the platform, at (x + w·256, height·32 + 0x10, z + d·256).
+  - **Drawing:** `FUN_00041ba4` only draws the platform, unrotated, at the centre of the lift's first cell (x·512 + 0x100, height·32 + 0x10, z·512 + 0x100: record words 0, 2 and 4). The block's centre (x·512 + w·256, words 0x1c/0x20) and half the mesh's height (word 0x1e) are only for its visibility test.
 
 - **Creature AI, common task** (`LAB_000342b4`):
   - **Waking:** creatures idle for 0x20 ticks, then chase.

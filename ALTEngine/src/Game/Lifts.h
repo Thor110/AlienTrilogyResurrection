@@ -25,12 +25,14 @@ namespace ALTEngine::Game::Lifts
     // Arriving at either end plays 0x5f; setting off plays 0x5e. On arrival a
     // lift that cycles on its own (record byte 8 non-zero: flag 0x40) waits and
     // goes back; one with no dwell (byte 9 zero) resets its trigger counter and
-    // idles; one that started high (flag 0x20) and has a dwell waits and
-    // returns; anything else resets and idles.
+    // idles; any other waits, goes back to where it started and idles there.
     //
     // Record layout (16 bytes; the loader's field names predate this):
     //   0 cell x   1 cell z   2 width   3 depth   4 low   5 high   6 -
     //   7 flags    8 auto dwell   9 dwell   10 threshold   11 counter   12 model
+    // On disc "low" is 0 and "high" is the travel: as the level loads,
+    // FUN_00041b30 sets low to the floor of the lift's first cell and adds
+    // that floor to high.
     // Flags: 1 at the top, 2 rising, 4 at the bottom, 8 falling, 0x10 fast,
     // 0x20 started at the top, 0x40 cycles by itself, 0x80 has run once.
     enum class Phase { Idle, Ascend, Descend, Wait };
@@ -60,9 +62,13 @@ namespace ALTEngine::Game::Lifts
         int height = 0;                 // the floor byte it is at now
         Phase phase = Phase::Idle;
 
-        // Grid-space centre of the platform, and its Y (height * 32 + 0x10).
-        float CentreX() const { return static_cast<float>(cellX * 512 + width * 256); }
-        float CentreZ() const { return static_cast<float>(cellZ * 512 + depth * 256); }
+        // Where the platform mesh is drawn, in grid space: the centre of the
+        // lift's FIRST cell (record words 0 and 4, x * 512 + 0x100), as
+        // FUN_00041ba4 hands the record itself to the transform. The centre
+        // of the whole block (words 0x1c/0x20) is only for its visibility
+        // test. Y is height * 32 + 0x10.
+        float DrawX() const { return static_cast<float>(cellX * 512 + 256); }
+        float DrawZ() const { return static_cast<float>(cellZ * 512 + 256); }
         float PlatformY() const { return static_cast<float>(height * 32 + 0x10); }
         bool Moving() const { return (flags & (RISING | FALLING)) != 0; }
     };

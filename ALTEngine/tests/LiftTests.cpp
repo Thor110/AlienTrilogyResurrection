@@ -35,7 +35,8 @@ TEST_CASE("Lifts: a lift starting at the top sets its cells there")
     CHECK_EQ(FloorAt(level, 2, 1), 8);
     CHECK_EQ(FloorAt(level, 3, 1), 0);   // outside it
     CHECK(lifts[0].flags & L::STARTED_HIGH);
-    CHECK_EQ(lifts[0].CentreX(), 1 * 512 + 2 * 256.0f);
+    CHECK_EQ(lifts[0].DrawX(), 1 * 512 + 256.0f);   // the first cell's centre
+    CHECK_EQ(lifts[0].DrawZ(), 1 * 512 + 256.0f);
     CHECK_EQ(lifts[0].PlatformY(), 8 * 32 + 0x10.0p0f);
 }
 
@@ -127,4 +128,20 @@ TEST_CASE("Lifts: a called lift with a dwell goes back to where it started, then
     while (!L::Tick(highLifts[0], high).stopped && ticks < 50) { ++ticks; }
     CHECK(highLifts[0].flags & L::AT_TOP);
     CHECK(highLifts[0].phase == L::Phase::Idle);
+}
+
+TEST_CASE("Lifts: the record's heights are a travel above the map's own floor")
+{
+    // As 3.5.1's lift 3: map floor 64, travel 32, landing at 96.
+    LevelGeometry level = WithLift(L::AT_BOTTOM, 0, 0, 1);
+    for (auto& cell : level.collisionGrid) { cell.floorHeight = 64; }
+    level.lifts[0].unknown3 = 32;
+    auto lifts = L::Build(level);
+    CHECK_EQ(lifts[0].low, 64);
+    CHECK_EQ(lifts[0].high, 96);
+    CHECK_EQ(FloorAt(level, 1, 1), 64);      // starts where the map has it
+    REQUIRE(L::AddToCounter(lifts[0], 1, false));
+    int ticks = 0;
+    while (!L::Tick(lifts[0], level).stopped && ticks < 100) { ++ticks; }
+    CHECK_EQ(FloorAt(level, 2, 1), 96);
 }

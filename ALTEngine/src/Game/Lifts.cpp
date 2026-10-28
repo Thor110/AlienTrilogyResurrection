@@ -59,8 +59,14 @@ namespace ALTEngine::Game::Lifts
             lift.cellZ = record.y;
             lift.width = record.z;
             lift.depth = record.unknown1;
-            lift.low = record.unknown2;
-            lift.high = record.unknown3;
+            // FUN_00041b30, run on the records as the level loads: the
+            // floor byte of the lift's first cell becomes its low height and
+            // is added to the high one, so the file's high byte is a travel
+            // above the map's own floor (byte 4 is always 0 on disc).
+            const auto* base = Formats::CellAt(level, record.x, record.y);
+            const int baseFloor = base ? base->floorHeight : 0;
+            lift.low = baseFloor;
+            lift.high = (record.unknown3 + baseFloor) & 0xff;
             lift.flags = record.unknown5;
             lift.dwellCounter = record.unknown6;
             lift.dwell = record.unknown7;

@@ -866,7 +866,7 @@ namespace ALTEngine::Screens
 
                     // Lifts. Their cells take the starting floor now; their
                     // platforms are the "L0" meshes in this .MAP (as ALTViewer
-                    // reads them), drawn at the centre of the lift's block at
+                    // reads them), drawn at the centre of the lift's first cell at
                     // its floor + 0x10, as FUN_00041ba4 draws them. Which mesh
                     // a lift uses is its record's byte 12 - an index into a
                     // model table (0x1a8354) the original fills from these
@@ -927,9 +927,9 @@ namespace ALTEngine::Screens
                                 {
                                     ALTEngine::Renderer::PlacedObject placed;
                                     placed.cacheKey = { ALTEngine::Renderer::ModelCatalog::LevelLift, mesh * 8 + page };
-                                    placed.x = lift.CentreX() - originX;
+                                    placed.x = lift.DrawX() - originX;
                                     placed.y = lift.PlatformY();
-                                    placed.z = lift.CentreZ() - originZ;
+                                    placed.z = lift.DrawZ() - originZ;
                                     placedObjects.push_back(placed);
                                 }
                                 liftPlaced.emplace_back(first, placedObjects.size() - first);
