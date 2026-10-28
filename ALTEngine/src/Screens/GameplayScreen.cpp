@@ -1673,6 +1673,8 @@ namespace ALTEngine::Screens
                         // three cells are sampled across the other axis at -200,
                         // 0 and +200. A creature therefore needs a 400-unit span
                         // clear, which is why they do not clip corners.
+                        const int playerCellX = ToGridSpaceX(camera.x, originX) >> 9;
+                        const int playerCellZ = ToGridSpaceZ(camera.z, originZ) >> 9;
                         auto enemyAxisClear = [&](float x, float z, bool alongX, float velocity) {
                             namespace EB = ALTEngine::Screens::EnemyBehaviour;
                             const float lead = (velocity >= 0.0f) ? EB::MOVE_PROBE_LEAD
@@ -1686,11 +1688,20 @@ namespace ALTEngine::Screens
                                 const float sx = alongX ? probeX : probeX + offset;
                                 const float sz = alongX ? probeZ + offset : probeZ;
 
-                                const auto* cell = ALTEngine::Formats::CellAt(
-                                    level, ToGridSpaceX(sx, originX) >> 9, ToGridSpaceZ(sz, originZ) >> 9);
+                                const int cellX = ToGridSpaceX(sx, originX) >> 9;
+                                const int cellZ = ToGridSpaceZ(sz, originZ) >> 9;
+                                const auto* cell = ALTEngine::Formats::CellAt(level, cellX, cellZ);
                                 if (!cell) { return false; }
 
                                 if (EB::AttributeBlocks(cell->attribute)) { return false; }
+
+                                // THE PLAYER'S CELL IS OCCUPIED. The player stamps
+                                // 0xff into its cell's +0xc every tick (0x3e3d6),
+                                // and this probe refuses any occupied cell - so a
+                                // creature stops at the edge of the player's cell,
+                                // and a leaping hugger drops there rather than
+                                // sailing past.
+                                if (cellX == playerCellX && cellZ == playerCellZ) { return false; }
 
                                 // THE OCCUPANCY TEST IS OUT, because the field it
                                 // reads is not what I took it for.
@@ -1748,13 +1759,19 @@ namespace ALTEngine::Screens
                             enemy.lastX = enemy.x;
                             enemy.lastZ = enemy.z;
 
-                            // Stand on the floor, or hang below the ceiling.
+                            // Stand on the floor - or, mid-leap, rise and fall
+                            // under gravity (FUN_00031f3c's vertical half).
                             {
-                                namespace EB = ALTEngine::Screens::EnemyBehaviour;
                                 const int gx = ToGridSpaceX(enemy.x, originX);
                                 const int gz = ToGridSpaceZ(enemy.z, originZ);
                                 const float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
-                                enemy.y = floorY + EB::STAND_CLEARANCE;
+                                const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
+                                const float ceilingY = cell
+                                    ? static_cast<float>(cell->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT
+                                    : floorY + 0x10000;
+                                const float halfHeight = static_cast<float>(
+                                    ALTEngine::Game::ProjectileCollision::CreatureExtents(enemy.type).y);
+                                ALTEngine::Screens::Enemies::SettleVertical(enemy, floorY, ceilingY, halfHeight);
                             }
                             if (enemy.pendingDamage > 0)
                             {

@@ -625,6 +625,40 @@ namespace ALTEngine::Screens
         // first finishes.
         inline constexpr int POUNCE_HANDOVER_TIMER = 0x40;
 
+        // ---------------------------------------------------------------
+        // THE MELEE ATTACK IS A LEAP - FUN_00033cbc
+        // ---------------------------------------------------------------
+        //
+        // The creature task's state 4 (0x3476e) calls FUN_00033cbc once the
+        // creature faces the player exactly (+0x42 == +0x44) and, for the
+        // ordinary types, while the mode is below 3, the vertical separation is
+        // within the task's reach (0x400, or 0x1000 with flag 8) and the line of
+        // fire is clear. FUN_00033cbc reloads the attack timer (+0x68 = 0x3c),
+        // enters state 5, and for a face hugger (type 2):
+        //
+        //   - mode 0, vertical separation <= 0x600, the global lock free and two
+        //     overlay slots available: the face hug (POUNCE_* above);
+        //   - otherwise, in every mode: FUN_00032f78 sets the horizontal velocity
+        //     to 0x60 along its heading, animation 10 starts, and if it is not
+        //     already in the air its vertical velocity becomes 0x80.
+        //
+        // Type 3 always leaps, with animation 12. The mover then takes 0xc off
+        // the vertical velocity each tick and lands the creature at floor +
+        // 0x20. State 5 ends the leap (0x34874): both velocities cleared, then
+        // FUN_00033ff8, the attack's damage, runs - so the hit lands when the
+        // leap does.
+        //
+        // The end of the leap is a flag (+0xb6 bit 2) set by the animation
+        // script, which is not read yet; the port ends it on landing.
+        inline constexpr int LEAP_SPEED = 0x60;
+        inline constexpr int LEAP_LIFT = 0x80;
+        inline constexpr int GRAVITY = 0xc;
+        inline constexpr int ATTACK_REACH_VERTICAL = 0x400;
+        inline constexpr int FACE_HUG_MAX_VERTICAL = 0x600;
+        inline constexpr int LEAP_ANIMATION_TYPE_2 = 10;
+        inline constexpr int LEAP_ANIMATION_TYPE_3 = 12;
+        inline constexpr int FAR_MODE = 3;   // mode 3 and up: no attack, back to the chase
+
         // THE POUNCE IS A ONE-SHOT AND THE CREATURE DIES AT THE END OF IT.
         //
         // Read from LAB_00030918's tail, and it changes the whole behaviour:

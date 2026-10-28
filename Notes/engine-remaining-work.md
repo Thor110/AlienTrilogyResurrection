@@ -10,7 +10,8 @@ The port runs two clocks:
 - 30 Hz: the player, weapons, enemies and particles. `PlayerCamera::TICK_HZ` is a guess.
 - 60 Hz: doors, lights, HUD timers (including the 0x1e damage cooldown) and the motion tracker.
 
-The original has one. Leads:
+The original has one. This matters more now: the creature leap is per tick (vertical 0x80, gravity 0xc, horizontal 0x60), so its height and length on screen depend on the rate. Leads:
+- The game never calls the sound library's timer API itself. The only frequency set through it is 100 Hz (`0x64f68`), on the library's own internal callback (`0x54d2a`). The game's clock is somewhere else: the task list run by `FUN_000124f4`'s scheduler, or its own interrupt handler.
 - The timer is a sound-library service. `0x72060` programs the PIT (mode `0x36`) from a divisor. `0x72090` takes a period in µs (divisor = µs × 10000 / 8380). `0x720c3` picks the fastest registered period. `0x72844` registers a slot, called through the wrapper at `0x65aef`.
 - Game tasks are registered with `FUN_000124f4(priority, handler)` (see `FUN_00010694`). Find the event that drives them and its period.
 
@@ -47,10 +48,14 @@ The port samples five points and treats bytes `+2`/`+3` as walls. The clearance 
 | 0x12 / 0x13 | `LAB_00035b68` / `LAB_00035b28` |
 
 Status in the port:
+- **The creature task's state machine** (`LAB_000342b4`, jump table at `0x34270`, states 0-8) isn't followed state by state. The port has its own ACTING / HIT / DYING states, with the original's attack logic (state 4 → `FUN_00033cbc` → state 5) mapped onto them.
+- **Line of fire** (`FUN_0003231c`) and the visibility test in `FUN_00033a1c` aren't implemented, so a creature can attack through a wall.
+- **Leap end:** the original ends a leap when the animation script sets `+0xb6` bit 2. The port ends it on landing.
+- **Walking off a ledge** gives a creature a small hop (`vy = 0x3c`, `FUN_000315f0`). Not implemented.
 - **Movement:** enemies still walk straight at the player.
 - **Path network:** `Game::PathGraph` loads and routes it, tested, but nothing uses it yet.
 - **Hit and death animations:** `FUN_0002f4b0` starts an animation and `FUN_00030b04` is death.
-- **Cell occupancy:** a creature stamps its cell (`+0xc` = type, `+4` = index) at spawn and as it moves. The port doesn't, so barrel blasts find creatures by position instead.
+- **Cell occupancy:** a creature stamps its cell (`+0xc` = type, `+4` = index) at spawn and as it moves, and the step probe refuses any occupied cell. The port now blocks only the player's own cell (the player stamps `0xff`, `0x3e3d6`). Creatures still overlap each other, and barrel blasts find creatures by position instead.
 
 ## 5. Weapons still approximated
 
@@ -73,6 +78,15 @@ Status in the port:
 - **Multiplayer:** the menus exist, but there is no networking.
 
 ## Settled this round (see the code comments for the evidence)
+
+- **Melee creatures leap** (`FUN_00033cbc`, called from creature-task state 4 at `0x3476e`):
+  - **When:** the creature faces the player exactly, is in a mode below 3, is within 0x400 vertically, and its attack timer has run out (reloaded to 0x3c).
+  - **Face hug:** a face hugger in mode 0, within 0x600 vertically, with the lock free, face-hugs.
+  - **Leap:** otherwise it leaps, with horizontal 0x60 along its heading (`FUN_00032f78`), vertical 0x80 and gravity 0xc (`FUN_00031f3c`). Type 3 always leaps.
+  - **Landing:** the hit is the ordinary attack check (`FUN_00033ff8`), run when the leap ends.
+  - **Effect:** a hugger rises through level fire mid-leap, so it can be shot without the look keys.
+- **Creatures can't step into the player's cell:** the player stamps `0xff` into its cell, and `FUN_000315f0` refuses any occupied cell. So a leap stops at the player instead of sailing past.
+- **Creature mode thresholds:** the creature task reads them as shorts at `+0x4a` (mode 1) and `+0x48` (mode 2). The perception routine is `FUN_00032154`, and `+0x14` is the vertical separation.
 
 - **Eye height and field of view:**
   - The standing eye is floor + `0x300`, set by player setup at `0x4078f`; the player's Y is the floor itself (`FUN_0003dff0`, `FUN_0003d00c`).

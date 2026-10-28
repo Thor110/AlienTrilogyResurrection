@@ -277,6 +277,13 @@ namespace ALTEngine::Screens
                 auto anim = it->second.animations.find(enemy.animation);
                 if (anim == it->second.animations.end() || anim->second.frames.empty())
                 {
+                    // A creature whose sprite set lacks this animation (a leap,
+                    // say) still shows, in its ordinary one, rather than
+                    // vanishing while it can still be shot.
+                    anim = it->second.animations.find(EnemyBehaviour::ActingAnimation(enemy.type));
+                }
+                if (anim == it->second.animations.end() || anim->second.frames.empty())
+                {
                     continue;
                 }
 

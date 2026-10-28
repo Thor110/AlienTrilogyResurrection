@@ -170,6 +170,16 @@ namespace ALTEngine::Screens
             bool pouncing = false;
             int pounceTicks = 0;
 
+            // THE LEAP, the attack every melee creature makes when it is not
+            // face-hugging (FUN_00033cbc). Vertical velocity is the entity's
+            // +0x32 and the mover (FUN_00031f3c) applies it with gravity; the
+            // horizontal velocity is set once at take-off and held. This is what
+            // makes a hugger hittable with level fire: mid-leap it rises right
+            // through the line rounds fly along.
+            bool leaping = false;
+            float vy = 0;
+            float leapX = 0, leapZ = 0;
+
             // Set by the caller when the overlay has slid back off. The creature
             // dies then, not on a timer - FUN_000307c0 writes state 2 at the
             // bottom of the fall and LAB_00030918 is waiting for exactly that.
@@ -421,7 +431,52 @@ namespace ALTEngine::Screens
                 PlayAnimation(enemy, EnemyBehaviour::HitAnimation(enemy.type));
                 return;
             }
+            if (enemy.leaping)
+            {
+                // FUN_00033cbc starts animation 10 for a hugger's leap and 12 for
+                // type 3's.
+                PlayAnimation(enemy, enemy.type == 3 ? EnemyBehaviour::LEAP_ANIMATION_TYPE_3
+                                                     : EnemyBehaviour::LEAP_ANIMATION_TYPE_2);
+                return;
+            }
             PlayAnimation(enemy, EnemyBehaviour::ActingAnimation(enemy.type));
+        }
+
+        // The vertical half of FUN_00031f3c, run after the creature has moved.
+        // `floorY` and `ceilingY` are sampled under its new position.
+        //
+        //   - On the ground (no vertical velocity) it stands at floor + 0x20.
+        //   - In the air it moves by its velocity. Reaching the ceiling (less its
+        //     own half height) stops it there; dropping below floor + 0x20 lands
+        //     it; otherwise gravity takes 0xc off, never leaving exactly 0, so a
+        //     creature at the top of its arc still reads as airborne.
+        //
+        // The ceiling case is the original's: velocity 0 at the ceiling, and the
+        // next tick puts it back on the floor.
+        inline void SettleVertical(Enemy& enemy, float floorY, float ceilingY, float halfHeight)
+        {
+            namespace EB = EnemyBehaviour;
+            float y = floorY + EB::STAND_CLEARANCE;
+            if (enemy.vy != 0.0f)
+            {
+                const float next = enemy.y + enemy.vy;
+                if (ceilingY - halfHeight < next)
+                {
+                    enemy.vy = 0.0f;
+                    y = ceilingY - halfHeight;
+                }
+                else if (next < floorY + EB::STAND_CLEARANCE)
+                {
+                    enemy.vy = 0.0f;
+                }
+                else
+                {
+                    y = next;
+                    enemy.vy -= EB::GRAVITY;
+                    if (enemy.vy == 0.0f) { enemy.vy = -EB::GRAVITY; }
+                }
+            }
+            enemy.y = y;
         }
 
         inline void Tick(Enemy& enemy, float playerX, float playerY, float playerZ)
@@ -552,65 +607,129 @@ namespace ALTEngine::Screens
                 return;
             }
 
+            // ---- melee creatures: the leap ------------------------------
+            //
+            // Types 2 and 3 never claw from where they stand. Their attack is
+            // FUN_00033cbc: a face hug from contact range, or a leap at the
+            // player from anywhere nearer than mode 3, whose damage lands with
+            // it. See LEAP_* in EnemyBehaviour.h.
             if (EnemyBehaviour::AttackForSubtype(enemy.type).melee
                 && enemy.state == EnemyBehaviour::STATE_ACTING
-                && enemy.alive
-                && enemy.distance < EnemyBehaviour::POUNCE_RANGE
-                && !pounceLockHeld)
+                && enemy.alive)
             {
-                pounceLockHeld = true;
-                enemy.pouncing = true;
-                enemy.pounceTicks = EnemyBehaviour::POUNCE_HANDOVER_TIMER;
+                namespace EB = EnemyBehaviour;
+                enemy.pendingDamage = 0;
 
-                // The leap's own hit, landed ONCE at the start rather than
-                // repeatedly. A hugger that pounces deals its damage and is done.
-                enemy.pendingDamage = EnemyBehaviour::AttackForSubtype(enemy.type).closeDamage;
-                enemy.stepX = enemy.stepZ = 0.0f;
-                return;
-            }
-
-            // The attack, from FUN_00033ff8. Two gates in the original - "can it
-            // attack" and "is the player in front" - stand in here as a cooldown
-            // and a facing test, both marked, since neither FUN_00033a1c nor
-            // FUN_0003231c has been read.
-            enemy.pendingDamage = 0;
-            if (enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive)
-            {
-                if (enemy.attackCooldown > 0) { enemy.attackCooldown--; }
-                else
+                if (enemy.leaping)
                 {
-                    // The facing cone is the original's own gate; the visibility
-                    // and line-of-fire tests are not implemented yet, so a
-                    // creature here will attack through a wall it should not.
-                    const int bearing = static_cast<int>(std::lround(
-                        std::atan2(playerX - enemy.x, -(playerZ - enemy.z))
-                        * (PlayerCamera::ANGLE_UNITS / 6.28318530718)))
-                        & PlayerCamera::ANGLE_MASK;
-
-                    int delta = ((enemy.facing - bearing) & PlayerCamera::ANGLE_MASK);
-                    if (delta > PlayerCamera::ANGLE_UNITS / 2) { delta = PlayerCamera::ANGLE_UNITS - delta; }
-
-                    // CONTACT RANGE ONLY, and within 0x600 vertically. Both are
-                    // the original's own gates, and both were missing - a creature
-                    // could reach from the middle band and from any height.
-                    const bool inReach = (enemy.mode == 0)
-                        && (enemy.separationY <= EnemyBehaviour::ATTACK_MAX_VERTICAL);
-
-                    const int damage = (inReach
-                        && EnemyBehaviour::WithinAttackCone(0, delta, enemy.coneHalfWidth))
-                        ? EnemyBehaviour::AttackDamage(enemy.type, enemy.mode)
-                        : 0;
-                    if (damage > 0)
+                    if (enemy.vy != 0.0f)
                     {
-                        enemy.pendingDamage = damage;
-                        enemy.attackCooldown = ATTACK_INTERVAL_TICKS;
-
-                        // Attacking clears the velocity, so the contact goes dark
-                        // until the creature moves again - see the note in
-                        // HudPanel.h.
+                        // Still in the air: the take-off velocity carries it.
+                        enemy.stepX = enemy.leapX;
+                        enemy.stepZ = enemy.leapZ;
+                    }
+                    else
+                    {
+                        // Down. Velocities cleared, then FUN_00033ff8 - the same
+                        // gates as any other attack: contact range, within reach
+                        // vertically, and facing the player.
+                        enemy.leaping = false;
+                        enemy.leapX = enemy.leapZ = 0.0f;
+                        enemy.stepX = enemy.stepZ = 0.0f;
                         enemy.velocityActive = false;
+                        int delta = (enemy.facing - BearingTo(enemy, playerX, playerZ)) & PlayerCamera::ANGLE_MASK;
+                        if (delta > PlayerCamera::ANGLE_UNITS / 2) { delta = PlayerCamera::ANGLE_UNITS - delta; }
+                        if (enemy.mode == 0
+                            && enemy.separationY <= EB::ATTACK_MAX_VERTICAL
+                            && EB::WithinAttackCone(0, delta, enemy.coneHalfWidth))
+                        {
+                            enemy.pendingDamage = EB::AttackDamage(enemy.type, enemy.mode);
+                        }
                     }
                 }
+                else
+                {
+                    if (enemy.attackCooldown > 0) { enemy.attackCooldown--; }
+                    const bool facingPlayer = enemy.facing == BearingTo(enemy, playerX, playerZ);
+                    if (enemy.attackCooldown == 0
+                        && facingPlayer
+                        && enemy.mode < EB::FAR_MODE
+                        && enemy.separationY <= EB::ATTACK_REACH_VERTICAL)
+                    {
+                        enemy.attackCooldown = ATTACK_INTERVAL_TICKS;
+
+                        if (enemy.type == 2
+                            && enemy.mode == 0
+                            && enemy.separationY <= EB::FACE_HUG_MAX_VERTICAL
+                            && !pounceLockHeld)
+                        {
+                            pounceLockHeld = true;
+                            enemy.pouncing = true;
+                            enemy.pounceTicks = EB::POUNCE_HANDOVER_TIMER;
+
+                            // The face hug's own hit, landed ONCE at the start.
+                            // A hugger that gets on your face deals its damage
+                            // and is done.
+                            enemy.pendingDamage = EB::AttackForSubtype(enemy.type).closeDamage;
+                            enemy.stepX = enemy.stepZ = 0.0f;
+                            return;
+                        }
+
+                        enemy.leaping = true;
+                        enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * EB::LEAP_SPEED;
+                        enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * EB::LEAP_SPEED;
+                        if (enemy.vy == 0.0f) { enemy.vy = EB::LEAP_LIFT; }
+                        enemy.stepX = enemy.leapX;
+                        enemy.stepZ = enemy.leapZ;
+                    }
+                }
+            }
+            else
+            {
+                // The attack, from FUN_00033ff8. Two gates in the original - "can it
+                // attack" and "is the player in front" - stand in here as a cooldown
+                // and a facing test, both marked, since neither FUN_00033a1c nor
+                // FUN_0003231c has been read.
+                enemy.pendingDamage = 0;
+                if (enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive)
+                {
+                    if (enemy.attackCooldown > 0) { enemy.attackCooldown--; }
+                    else
+                    {
+                        // The facing cone is the original's own gate; the visibility
+                        // and line-of-fire tests are not implemented yet, so a
+                        // creature here will attack through a wall it should not.
+                        const int bearing = static_cast<int>(std::lround(
+                            std::atan2(playerX - enemy.x, -(playerZ - enemy.z))
+                            * (PlayerCamera::ANGLE_UNITS / 6.28318530718)))
+                            & PlayerCamera::ANGLE_MASK;
+
+                        int delta = ((enemy.facing - bearing) & PlayerCamera::ANGLE_MASK);
+                        if (delta > PlayerCamera::ANGLE_UNITS / 2) { delta = PlayerCamera::ANGLE_UNITS - delta; }
+
+                        // CONTACT RANGE ONLY, and within 0x600 vertically. Both are
+                        // the original's own gates, and both were missing - a creature
+                        // could reach from the middle band and from any height.
+                        const bool inReach = (enemy.mode == 0)
+                            && (enemy.separationY <= EnemyBehaviour::ATTACK_MAX_VERTICAL);
+
+                        const int damage = (inReach
+                            && EnemyBehaviour::WithinAttackCone(0, delta, enemy.coneHalfWidth))
+                            ? EnemyBehaviour::AttackDamage(enemy.type, enemy.mode)
+                            : 0;
+                        if (damage > 0)
+                        {
+                            enemy.pendingDamage = damage;
+                            enemy.attackCooldown = ATTACK_INTERVAL_TICKS;
+
+                            // Attacking clears the velocity, so the contact goes dark
+                            // until the creature moves again - see the note in
+                            // HudPanel.h.
+                            enemy.velocityActive = false;
+                        }
+                    }
+                }
+
             }
 
             switch (enemy.state)

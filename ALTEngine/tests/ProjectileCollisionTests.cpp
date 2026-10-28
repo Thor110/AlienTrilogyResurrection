@@ -2,6 +2,7 @@
 
 #include "Formats/LevelLoader.h"
 #include "Game/ProjectileCollision.h"
+#include "Screens/EnemyBehaviour.h"
 #include "Screens/ParticleSystem.h"
 #include "Screens/PlayerCamera.h"
 #include "Screens/PlayerHudState.h"
@@ -114,7 +115,7 @@ TEST_CASE("ProjectileCollision: creature boxes are per type and centred")
     CHECK_EQ(PCol::CreatureExtents(5).y, 0x300);
 }
 
-TEST_CASE("ProjectileCollision: aiming at floor creatures takes the look-down keys")
+TEST_CASE("ProjectileCollision: a hugger on the floor needs the look keys, a leaping one does not")
 {
     // The original's numbers end to end: eye at floor + 0x300, rounds 0x60
     // lower. At the rest pitch (0x30, slightly up) a round passes over a
@@ -130,6 +131,26 @@ TEST_CASE("ProjectileCollision: aiming at floor creatures takes the look-down ke
     CHECK(!PCol::OverlapsCreature(0, yAt(PC::PITCH_REST, range), range, 0, 32, range, 2, PCol::TYPE_PISTOL));
     CHECK(PCol::OverlapsCreature(0, yAt(PC::PITCH_MIN, range), range, 0, 32, range, 2, PCol::TYPE_PISTOL));
     CHECK(PCol::OverlapsCreature(0, yAt(PC::PITCH_REST, range), range, 0, 32, range, 5, PCol::TYPE_PISTOL));
+
+    // But a hugger does not stay on the floor: it attacks by leaping
+    // (FUN_00033cbc, vertical velocity 0x80 less 0xc a tick), and for most of
+    // the leap level fire passes through its box. That is why the original
+    // never needed the look keys to shoot one.
+    namespace EB = ALTEngine::Screens::EnemyBehaviour;
+    float y = EB::STAND_CLEARANCE, vy = EB::LEAP_LIFT;
+    int hittableTicks = 0, airborneTicks = 0;
+    while (vy != 0.0f)
+    {
+        const float next = y + vy;
+        if (next < EB::STAND_CLEARANCE) { break; }
+        y = next;
+        vy -= EB::GRAVITY;
+        if (vy == 0.0f) { vy = -EB::GRAVITY; }
+        ++airborneTicks;
+        if (PCol::OverlapsCreature(0, yAt(PC::PITCH_REST, range), range, 0, y, range, 2, PCol::TYPE_PISTOL)) { ++hittableTicks; }
+    }
+    CHECK(airborneTicks > 15);
+    CHECK(hittableTicks * 2 > airborneTicks);
 }
 
 TEST_CASE("ProjectileCollision: zones and targetability")
