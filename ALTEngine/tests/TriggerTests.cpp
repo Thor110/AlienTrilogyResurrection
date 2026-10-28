@@ -237,3 +237,66 @@ TEST_CASE("Triggers: a trigger without the player flag never fires")
     CHECK(!system.OnEnterCell(latch, 1, rec.Handlers()));
     CHECK(rec.log.empty());
 }
+
+TEST_CASE("Triggers: a round sets off flag-0x02 triggers, once per round")
+{
+    // L111 trigger 12 has flags 0x03 - walk OR shoot - and spawns monster 8.
+    LevelGeometry level = LevelLoader::Load(AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
+    Triggers::System system(level);
+    Recorder rec;
+    const auto handlers = rec.Handlers();
+    const int cell = FirstCellWithTrigger(level, 12);
+    REQUIRE(cell >= 0);
+    int latch = 0;
+    CHECK(system.OnShotEnterCell(latch, cell, handlers));
+    CHECK_EQ(latch, 12);
+    REQUIRE(rec.log.size() == 1);
+    CHECK(rec.log[0] == "spawn 8+1");
+    // The trigger had one use, so a second round finds it spent.
+    int other = 0;
+    CHECK(!system.OnShotEnterCell(other, cell, handlers));
+}
+
+TEST_CASE("Triggers: walk-only triggers ignore rounds")
+{
+    // L111 trigger 9 (the level exit) is flag 0x01 only.
+    LevelGeometry level = LevelLoader::Load(AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
+    Triggers::System system(level);
+    Recorder rec;
+    int latch = 0;
+    CHECK(!system.OnShotEnterCell(latch, FirstCellWithTrigger(level, 9), rec.Handlers()));
+    CHECK(rec.log.empty());
+}
+
+TEST_CASE("Triggers: a round skips switch commands and retries a failed chain")
+{
+    LevelGeometry level = SyntheticLevel({ { Triggers::ACTIVATE_OBJECT, 0, 1, 4 }, { Triggers::OPEN_DOOR, 0, 1, 0 } });
+    level.actions[1].activationMask = Triggers::FLAG_SHOT;
+    Triggers::System system(level);
+    Recorder rec;
+    rec.doorsSucceed = false;
+    const auto handlers = rec.Handlers();
+    int latch = 0;
+    CHECK(!system.OnShotEnterCell(latch, 1, handlers));
+    CHECK_EQ(latch, 0);                       // cleared, so the next tick tries again
+    CHECK(rec.log.size() == 1 && rec.log[0] == "open 0+1");   // no "object 4"
+    rec.doorsSucceed = true;
+    CHECK(system.OnShotEnterCell(latch, 1, handlers));
+    CHECK_EQ(latch, 1);
+}
+
+TEST_CASE("Triggers: Spawn Pickup reaches its handler and never fails the chain")
+{
+    LevelGeometry level = SyntheticLevel({ { Triggers::SPAWN_PICKUP, 0, 1, 6 }, { Triggers::END_LEVEL, 0, 0, 0 } });
+    Triggers::System system(level);
+    std::vector<std::pair<int, int>> spawned;
+    bool ended = false;
+    Triggers::Handlers h;
+    h.spawnPickup = [&](int pickup, int amount) { spawned.push_back({ pickup, amount }); };
+    h.endLevel = [&]() { ended = true; };
+    CHECK(system.Run(1, Source::WalkOn, h));
+    REQUIRE(spawned.size() == 1);
+    CHECK_EQ(spawned[0].first, 6);
+    CHECK_EQ(spawned[0].second, 1);
+    CHECK(ended);
+}

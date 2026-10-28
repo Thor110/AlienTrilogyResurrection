@@ -347,10 +347,14 @@ namespace ALTEngine::Screens
                                                        // the reaction animation's
                                                        // own length
 
-        inline bool ApplyHit(Enemy& enemy, int damage)
+        // `ignoreStun` is the Modern "Stunned Enemies" option: hits land during
+        // the hit reaction as well, instead of the creature being immune until
+        // it recovers.
+        inline bool ApplyHit(Enemy& enemy, int damage, bool ignoreStun = false)
         {
             if (!enemy.alive || !enemy.active) { return false; }
-            if (!Damage::CanBeDamaged(enemy.state, enemy.hitCooldown, 0)) { return false; }
+            const bool stunned = enemy.state == Damage::STATE_HIT || enemy.hitCooldown != 0;
+            if (!(ignoreStun && stunned) && !Damage::CanBeDamaged(enemy.state, enemy.hitCooldown, 0)) { return false; }
 
             enemy.health -= damage;
             if (enemy.health > 0)

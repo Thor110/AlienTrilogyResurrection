@@ -408,9 +408,20 @@ int main(int, char**)
             checkpoint.inventory = playerInventory;
             SetCheckpoint(checkpoint);
 
-            EndLevelPromptResult prompt = EndLevelPromptScreen::Run(cdDirectory);
-            if (prompt.windowClosed) { return CampaignEnd::WindowClosed; }
-            if (prompt.choice == EndLevelPromptChoice::Quit) { return CampaignEnd::BackToMenu; }
+            // The Modern "Skip End Level Screen" option goes straight on to the
+            // next mission without offering Continue / Save / Quit.
+            bool skipPrompt = false;
+            {
+                ALTEngine::Bootstrap::Config modernConfig;
+                ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
+                skipPrompt = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SkipEndLevelScreen);
+            }
+            if (!skipPrompt)
+            {
+                EndLevelPromptResult prompt = EndLevelPromptScreen::Run(cdDirectory);
+                if (prompt.windowClosed) { return CampaignEnd::WindowClosed; }
+                if (prompt.choice == EndLevelPromptChoice::Quit) { return CampaignEnd::BackToMenu; }
+            }
             digits = next->digits;
         }
     };

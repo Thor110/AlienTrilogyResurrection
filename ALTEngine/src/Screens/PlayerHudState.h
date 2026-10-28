@@ -16,10 +16,10 @@ namespace ALTEngine::Screens
     {
         static constexpr int WEAPON_COUNT = 5;
 
-        // 0x000b0ab8 and 0x000b0aba. Armour absorbs damage FIRST; health is only
-        // touched once armour is gone.
+        // 0x000b0ab8. (Armour, 0x000b0aba, is armourItem below - it used to be
+        // here a second time as well, and the copy damage read was one nothing
+        // ever set, so armour pickups protected against nothing.)
         int16_t health = 100;
-        int16_t armour = 0;
 
         // 0x000b0aae. Which weapon's ammo the HUD shows.
         int16_t currentWeapon = 0;
@@ -87,23 +87,25 @@ namespace ALTEngine::Screens
 
         int CurrentAmmoTotal() const { return currentAmmoDisplay; }
 
-        // Applies damage the original's way: cooldown gates it entirely, armour
-        // absorbs before health, both clamp at zero, and reaching zero health
-        // sets `dead`.
+        // FUN_0003e4a8, which EVERY source of player damage goes through - enemy
+        // attacks (cause 4), barrel blasts, acid blood and burning floors
+        // (cause 5) alike:
         //
-        // Returns true if the hit landed (i.e. was not swallowed by the
-        // cooldown), so a caller can decide whether to play a reaction.
-        bool ApplyDamage(int amount, int cooldownTicks = 30)
+        //   - nothing at all while the damage cooldown (DAT_000b0b30) or the
+        //     terrain shield (DAT_000b0ae4) is running;
+        //   - otherwise armour (DAT_000b0aba) takes the WHOLE hit if there is
+        //     any - it does not spill over into health - and only once it is
+        //     gone does health (DAT_000b0ab8) drop, dying below 1;
+        //   - either way the cooldown restarts at 0x1e.
+        //
+        // Returns true if the hit landed. `cause` picks the death clip.
+        static constexpr int DAMAGE_COOLDOWN = 0x1e;
+        int lastDamageCause = -1;
+        bool ApplyDamage(int amount, int cause)
         {
-            if (damageCooldown > 0) { return false; }
-            if (amount <= 0) { return false; }
-
-            if (armour > 0)
-            {
-                armour = static_cast<int16_t>(armour - amount);
-                if (armour < 0) { armour = 0; }
-            }
-            else
+            if (damageCooldown > 0 || terrainShield > 0) { return false; }
+            lastDamageCause = cause;
+            if (armourItem == 0)
             {
                 health = static_cast<int16_t>(health - amount);
                 if (health < 1)
@@ -112,9 +114,53 @@ namespace ALTEngine::Screens
                     dead = true;
                 }
             }
-
-            damageCooldown = static_cast<int16_t>(cooldownTicks);
+            else
+            {
+                armourItem = static_cast<int16_t>(armourItem - amount);
+                if (armourItem < 1) { armourItem = 0; }
+            }
+            damageCooldown = DAMAGE_COOLDOWN;
             return true;
+        }
+
+        // FUN_0003e3e4: the same gates, but straight off health - armour does
+        // not help. What a pit uses.
+        bool ApplyHealthDamage(int amount, int cause)
+        {
+            if (damageCooldown > 0 || terrainShield > 0) { return false; }
+            lastDamageCause = cause;
+            health = static_cast<int16_t>(health - amount);
+            if (health < 1)
+            {
+                health = 0;
+                dead = true;
+            }
+            damageCooldown = DAMAGE_COOLDOWN;
+            return true;
+        }
+
+        // FUN_0003dff0's floor hazards, applied while the player is standing on
+        // the floor (their height did not change this tick). Burning (7),
+        // acid (8) and attribute 0xc hurt, unless the terrain speed item or
+        // shield is running; a pit (10) kills regardless, clearing both
+        // protections first.
+        void ApplyFloorHazard(uint8_t attribute)
+        {
+            if (attribute == 10)
+            {
+                damageCooldown = 0;
+                terrainShield = 0;
+                ApplyHealthDamage(health, 5);
+                return;
+            }
+            if (terrainSpeed != 0 || terrainShield != 0) { return; }
+            switch (attribute)
+            {
+            case 7: ApplyDamage(5, 5); break;
+            case 8: ApplyDamage(10, 5); break;
+            case 0x0c: ApplyDamage(1, 5); break;
+            default: break;
+            }
         }
 
         // One gameplay tick of the cooldown.

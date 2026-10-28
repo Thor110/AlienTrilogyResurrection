@@ -256,6 +256,7 @@ namespace ALTEngine::Screens
             int state = STATE_NORMAL;
             int hitCooldown = 0;   // ticks left in the hit reaction
             bool destroyed = false;
+            bool indestructible = false;   // FUN_00037184's flag - rounds stop, nothing breaks
             int placedObjectIndex = -1;
             int cellIndex = -1;        // collision cell this object stamps as occupied
             int crateIndex = -1;       // its record in level.crates, for its contents

@@ -372,11 +372,10 @@ namespace ALTEngine::Formats
         // stay solid until it has actually opened enough to walk through
         // (Edward, 2026).
         //
-        // The figure is the PLAYER's height in cell height units: 800 world
-        // units tall over 32 world units per height unit is 25. See
-        // MIN_PASSABLE_CLEARANCE - the 8 this used first is the blast's
-        // clearance, not a person's, and let the player through a door that had
-        // only lifted a third of the way.
+        // The figure is the original player mover's own 0x300 world units, 24
+        // height units - see MIN_PASSABLE_CLEARANCE. The 8 this used first is
+        // the blast's clearance, not a person's, and let the player through a
+        // door that had only lifted a third of the way.
         if (cell.ceilingHeight - cell.floorHeight < MIN_PASSABLE_CLEARANCE) { return true; }
 
         // Occupancy (byte 12) blocks: crates, switches and monsters stamp

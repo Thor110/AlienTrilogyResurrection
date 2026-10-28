@@ -26,7 +26,8 @@ namespace ALTEngine::Game::Triggers
         if (!level_ || triggerId <= 0 || static_cast<size_t>(triggerId) >= level_->actions.size()) { return false; }
         const auto& trigger = level_->actions[static_cast<size_t>(triggerId)];
         uint8_t& uses = uses_[static_cast<size_t>(triggerId)];
-        if ((trigger.activationMask & FLAG_PLAYER) == 0 || uses == 0) { return false; }
+        const uint8_t needed = (source == Source::Shot) ? FLAG_SHOT : FLAG_PLAYER;
+        if ((trigger.activationMask & needed) == 0 || uses == 0) { return false; }
 
         const auto& commands = level_->logics;
         int step = trigger.commandStart;
@@ -61,10 +62,15 @@ namespace ALTEngine::Game::Triggers
                 if (handlers.spawnMonster) { handlers.spawnMonster(target, amount); }
                 break;
             case ACTIVATE_OBJECT:
+                // A round cannot throw a switch: FUN_000414f0 has no arm for
+                // this command and simply moves on to the next.
+                if (source == Source::Shot) { break; }
                 ok = source == Source::Interact && handlers.activateObject && handlers.activateObject(target);
                 if (ok) { sawActivateObject = true; }
                 break;
-            case ACTION_2:
+            case SPAWN_PICKUP:
+                // Like Spawn Monster, never fails the chain.
+                if (handlers.spawnPickup) { handlers.spawnPickup(target, signedAmount); }
                 break;
             case END_LEVEL:
                 if (handlers.endLevel) { handlers.endLevel(); }
@@ -87,6 +93,17 @@ namespace ALTEngine::Game::Triggers
 
         if (uses != USES_UNLIMITED) { uses--; }
         return true;
+    }
+
+    bool System::OnShotEnterCell(int& roundLatch, int cellIndex, const Handlers& handlers)
+    {
+        if (!level_) { return false; }
+        const int id = CellTriggerId(*level_, cellIndex);
+        if (id == 0) { roundLatch = 0; return false; }
+        if (id == roundLatch) { return false; }
+        if (Run(id, Source::Shot, handlers)) { roundLatch = id; return true; }
+        roundLatch = 0;
+        return false;
     }
 
     bool System::OnEnterCell(int& lastId, int cellIndex, const Handlers& handlers)

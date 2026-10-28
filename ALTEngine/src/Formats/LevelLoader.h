@@ -389,18 +389,25 @@ namespace ALTEngine::Formats
 
     // How much vertical gap the player needs to fit through.
     //
-    // The player is STAND_OFFSET + EYE_HEIGHT tall, 800 world units, which is 25
-    // height units. That is the figure - not the 8 this used first.
+    // 0x300 world units - 24 height units. The original's player mover
+    // (FUN_0003d85c / FUN_0003dc44) refuses a step when the destination's
+    // ceiling (FUN_00027fb0) is below the player's Y + 0x300. This was 25,
+    // worked out from the port's old 800-unit eye height rather than read.
     //
+    // (The original compares against the player's CURRENT floor, this compares
+    // a cell's ceiling with that cell's own floor; they agree on level ground
+    // and on doors, which is where this matters.)
+    //
+    // Not the 8 this used first:
     // 8 came from FUN_000368c8, but that is the test for whether an EXPLOSION
     // can pass through a gap, not a person. Reusing it let the player through a
     // door that had lifted a third of the way (Edward, 2026). A blast squeezing
     // through a gap a player cannot is entirely reasonable behaviour for the
     // original to have; borrowing the number across was the mistake.
     //
-    // 25 against a standard room's 48 leaves plenty of margin, so no ordinary
+    // 24 against a standard room's 48 leaves plenty of margin, so no ordinary
     // cell becomes impassable.
-    inline constexpr int MIN_PASSABLE_CLEARANCE = 25;
+    inline constexpr int MIN_PASSABLE_CLEARANCE = 0x300 / WORLD_UNITS_PER_HEIGHT_UNIT;
 
     // The blast's own figure, kept separate now that they are known to differ.
     inline constexpr int MIN_BLAST_CLEARANCE = 8;

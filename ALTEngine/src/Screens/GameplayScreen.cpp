@@ -17,6 +17,7 @@
 #include "Enemies.h"
 #include "../Game/Blast.h"
 #include "../Game/Doors.h"
+#include "../Game/ProjectileCollision.h"
 #include "../Game/Triggers.h"
 #include "SaveSlotScreen.h"
 #include "EnemySprites.h"
@@ -155,15 +156,6 @@ namespace ALTEngine::Screens
         // original's explosion carries its own position which has not been read.
         constexpr float EXPLOSION_HEIGHT_OFFSET = 256.0f;
 
-        // How tall an enemy is for the purposes of being shot, measured UP from
-        // its feet.
-        //
-        // GUESS, but a bounded one: a warrior drone's frames are 88 pixels tall
-        // and the sprite scale is 8 world units per pixel, which puts its head at
-        // about 704 units - so a round at chest height lands inside it. The
-        // original reads real half-extents from a per-creature record I have not
-        // found, so this is one number standing in for all of them.
-        constexpr float ENEMY_HIT_HEIGHT = 704.0f;
 
         constexpr float FRAGMENT_HALF_SIZE = 6.0f;
         constexpr float TRACER_MIN_HALF_SIZE = 5.0f;
@@ -194,8 +186,9 @@ namespace ALTEngine::Screens
 
         constexpr float COLLISION_RADIUS = 200.0f; // 400-unit footprint, sampled at -r, centre, +r
         constexpr float MAX_STEP_UP = 256.0f;      // a rise steeper than this blocks movement
-        constexpr float EYE_HEIGHT = 768.0f;       // camera sits this far above the player's feet
-        constexpr float STAND_OFFSET = 32.0f;      // feet sit this far above the floor
+        // The player's feet are ON the floor and the eye is 0x180 above them -
+        // see PlayerCamera::EYE_HEIGHT_ORIGINAL for how that was settled.
+        constexpr float EYE_HEIGHT = static_cast<float>(ALTEngine::Screens::PlayerCamera::EYE_HEIGHT_ORIGINAL);
 
         // World space -> grid space, where cell = coord >> 9. Inverts the
         // crate placement used above, so player and objects agree.
@@ -206,16 +199,6 @@ namespace ALTEngine::Screens
         // the centre and the four corners of the +/-200 box: every point
         // must be non-blocking, and no point may rise more than the
         // step-up limit above the floor the player is currently on.
-        // The cell attribute under a world position, for picking the impact
-        // sound (attributes 8 and 9 are the wet ones).
-        inline uint8_t ImpactCellAttribute(const ALTEngine::Formats::LevelGeometry& level,
-                                           float originX, float originZ, float worldX, float worldZ)
-        {
-            int cx = ToGridSpaceX(worldX, originX) >> 9;
-            int cz = ToGridSpaceZ(worldZ, originZ) >> 9;
-            const auto* cell = ALTEngine::Formats::CellAt(level, cx, cz);
-            return cell ? cell->attribute : 0;
-        }
 
         bool CanOccupy(const ALTEngine::Formats::LevelGeometry& level,
                        float originX, float originZ,
@@ -398,6 +381,13 @@ namespace ALTEngine::Screens
             // In flight, having just been thrown out of a crate.
             float vx = 0, vy = 0, vz = 0;
             bool falling = false;
+
+            // Waiting for a trigger. A pickup whose record byte 6 is non-zero
+            // and that no crate holds appears when Spawn Pickup commands
+            // (FUN_0003bb14) have added up to that byte: byte 5 is the counter.
+            bool waitingOnTrigger = false;
+            uint8_t triggerCount = 0;
+            uint8_t triggerThreshold = 0;
         };
         std::vector<LivePickup> livePickups;
         // Switch/object state, indexed by object record. Non-zero means
@@ -418,6 +408,8 @@ namespace ALTEngine::Screens
         // it mid-game takes effect without a restart.
         bool freeLook = false;
         bool liveMinimap = false;
+        // Modern "Stunned Enemies": hits land during a creature's hit reaction.
+        bool ignoreStun = false;
         bool cheatFullyLoaded = false;
         bool cheatMaximumHealth = false;
         // Cells the player has seen, for the map's fog of war. One byte per
@@ -466,6 +458,7 @@ namespace ALTEngine::Screens
             autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
             freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
+            ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
 
             // The cheat's own stored state, so it stays on across levels while
             // Enable Cheats is active.
@@ -509,6 +502,10 @@ namespace ALTEngine::Screens
         // Without this, movement on a 60Hz+ display stepped visibly at the
         // 30Hz tick rate.
         float prevCamX = 0.0f, prevCamZ = 0.0f, prevCamYaw = 0.0f;
+
+        // The player's Y in the original's sense (DAT_000b0a4a): the floor under
+        // them. The camera sits EYE_HEIGHT above this.
+        float playerFeetY = 0.0f;
         bool prevCamValid = false;
         // Camera Sway (the original's DAT_000acea0) gates head bob, view roll
         // and the yaw sway together. Footsteps keep running either way.
@@ -551,11 +548,12 @@ namespace ALTEngine::Screens
                     // coordinate space with them.
                     camera.x = static_cast<float>(level.header.playerStartX) * 512.0f + 256.0f - originX;
                     camera.z = static_cast<float>(level.header.playerStartY) * 512.0f + 256.0f - originZ;
-                    camera.y = ALTEngine::Formats::FindFloorHeightGridSpace(
+                    playerFeetY = ALTEngine::Formats::FindFloorHeightGridSpace(
                                    level,
                                    ToGridSpaceX(camera.x, originX),
-                                   ToGridSpaceZ(camera.z, originZ))
-                               + STAND_OFFSET + EYE_HEIGHT;
+                                   ToGridSpaceZ(camera.z, originZ));
+                    camera.y = playerFeetY + EYE_HEIGHT;
+                    camera.fovYRadians = ALTEngine::Screens::PlayerCamera::VIEW_FOV_Y_RADIANS;
 
                     // playerStartAngle uses the same 8-step compass the crates
                     // do (0=N, 2=E, 4=S, 6=W), not the 4096-step space entity
@@ -763,9 +761,11 @@ namespace ALTEngine::Screens
                             const bool isBarrel = (crate.type == 23);
                             target.kind = isBarrel ? ALTEngine::Screens::Damage::TARGET_BARREL
                                                    : ALTEngine::Screens::Damage::TARGET_CRATE;
-                            target.health = isBarrel
-                                          ? ALTEngine::Screens::Damage::BARREL_HEALTH_UNKNOWN
-                                          : ALTEngine::Screens::Damage::CRATE_HEALTH_DERIVED;
+                            // The record's own health and indestructible flag
+                            // (FUN_00037184) - crates range from 16 to 80 on the
+                            // first levels, barrels are 16.
+                            target.health = ALTEngine::Game::ProjectileCollision::ObjectHealth(crate);
+                            target.indestructible = ALTEngine::Game::ProjectileCollision::ObjectIndestructible(crate);
                             target.placedObjectIndex = static_cast<int>(placedObjects.size());
                             // The cell this object stamps as occupied. Clearing
                             // that stamp is what reopens the square when the
@@ -887,7 +887,7 @@ namespace ALTEngine::Screens
                             // Crate contents are therefore created here and
                             // hidden; anything else still gated stays skipped.
                             const bool heldByCrate = crateHeldPickups.count(static_cast<uint8_t>(pickupSlot)) != 0;
-                            if (pickup.z != 0 && !heldByCrate) { continue; }
+                            const bool waitsOnTrigger = (pickup.z != 0 && !heldByCrate);
 
                             // Type 24 is remapped to 21 for both model and
                             // scale lookup.
@@ -922,13 +922,18 @@ namespace ALTEngine::Screens
                             live.type = pickup.type;
                             live.amount = pickup.amount;
                             live.multiplier = pickup.multiplier;
+                            live.waitingOnTrigger = waitsOnTrigger;
+                            live.triggerCount = pickup.unknown1;
+                            live.triggerThreshold = pickup.z;
                             livePickups.push_back(live);
 
+                            // Hidden until its trigger count is reached.
+                            placed.visible = !waitsOnTrigger;
                             pickupPlaced.push_back(placedObjects.size());
                             placedObjects.push_back(placed);
-                            spawned++;
+                            if (!waitsOnTrigger) { spawned++; }
                         }
-                        SDL_Log("GameplayScreen: %d of %zu pickups placed (rest are script-spawned)",
+                        SDL_Log("GameplayScreen: %d of %zu pickups placed (rest are in crates or wait on a trigger)",
                                 spawned, level.pickups.size());
                         // Seal the pickups that crates hold.
                         //
@@ -1048,6 +1053,18 @@ namespace ALTEngine::Screens
         bool running = true;
         bool levelComplete = false;
 
+        // Dead: one of the six death videos then GAMEOVER, and back to the menu
+        // - see GameOverSequence. The clip is chosen by HOW you died, which
+        // ApplyDamage records. Checked wherever damage is dealt; the sequence
+        // itself runs once the frame is done.
+        auto checkPlayerDeath = [&]() {
+            if (!hudState.dead || playerDead) { return; }
+            playerDead = true;
+            running = false;
+            deathVideoIndex = ALTEngine::Screens::GameOverSequence::DeathVideoForCause(hudState.lastDamageCause);
+            SDL_Log("player killed (cause %d) - DEATH%d", hudState.lastDamageCause, deathVideoIndex);
+        };
+
         // The 3D frame's texture, kept across frames (see the present below).
         SDL_Texture* frameTexture = nullptr;
         int frameTextureW = 0;
@@ -1082,6 +1099,24 @@ namespace ALTEngine::Screens
             if (ALTEngine::Screens::Enemies::TriggerSpawn(enemies, monster, amount))
             {
                 SDL_Log("GameplayScreen: trigger spawned monster %d", monster);
+            }
+        };
+        triggerHandlers.spawnPickup = [&](int pickupIndex, int amount) {
+            // FUN_0003bb14: add to the counter, clamped to the threshold, and the
+            // pickup appears once they meet.
+            for (auto& live : livePickups)
+            {
+                if (live.pickupIndex != pickupIndex || !live.waitingOnTrigger) { continue; }
+                int count = live.triggerCount + amount;
+                if (count > live.triggerThreshold) { count = live.triggerThreshold; }
+                if (count < 0) { count = 0; }
+                live.triggerCount = static_cast<uint8_t>(count);
+                if (live.triggerCount == live.triggerThreshold)
+                {
+                    live.waitingOnTrigger = false;
+                    if (live.placedIndex < placedObjects.size()) { placedObjects[live.placedIndex].visible = true; }
+                    SDL_Log("GameplayScreen: trigger spawned pickup %d", pickupIndex);
+                }
             }
         };
         triggerHandlers.activateObject = [&](int objectIndex) {
@@ -1145,6 +1180,7 @@ namespace ALTEngine::Screens
                         autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
                         freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
                         liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
+                        ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
 
                         ModelRenderer::SetDrawDistanceFade(
                             !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance));
@@ -1414,6 +1450,24 @@ namespace ALTEngine::Screens
                         }
                     }
 
+                    // Harmful floors (FUN_0003dff0), only while standing on the
+                    // floor - the height under the player did not change this
+                    // tick.
+                    if (levelReady)
+                    {
+                        const int fgx = ToGridSpaceX(camera.x, originX);
+                        const int fgz = ToGridSpaceZ(camera.z, originZ);
+                        const float floorNow = ALTEngine::Formats::FindFloorHeightGridSpace(level, fgx, fgz);
+                        if (floorNow == playerFeetY)
+                        {
+                            if (const auto* underfoot = ALTEngine::Formats::CellAt(level, fgx >> 9, fgz >> 9))
+                            {
+                                hudState.ApplyFloorHazard(underfoot->attribute);
+                                checkPlayerDeath();
+                            }
+                        }
+                    }
+
                     // ---- weapon ----------------------------------------
                     // The original keeps two input words and reads the fire key
                     // from a DIFFERENT one depending on the weapon: DAT_000b0cc4
@@ -1486,18 +1540,35 @@ namespace ALTEngine::Screens
                         const int shots = P::ShotsPerPull(projectileType);
                         for (int shot = 0; shot < shots; ++shot)
                         {
-                            const int launchSpeed = playerCam.speed + shot * P::BurstSpeedStep;
+                            // Every pulse round costs one (FUN_0002bc18 decrements
+                            // per projectile and stops when the magazine runs
+                            // dry). TryPrimaryFire has paid for the first.
+                            if (shot > 0 && projectileType == P::TYPE_PULSE)
+                            {
+                                if (inventory.pulseRifle.rounds <= 0) { break; }
+                                inventory.pulseRifle.rounds--;
+                            }
+
+                            // The pulse rifle's later rounds go faster, so a burst
+                            // strings out; the smartgun has its own scatter (see
+                            // SpawnProjectile).
+                            const int launchSpeed = (projectileType == P::TYPE_SMARTGUN)
+                                ? playerCam.speed : playerCam.speed + shot * P::BurstSpeedStep;
                             P::Particle* round = particles.SpawnProjectile(
                                 projectileType, camera.x, camera.y, camera.z,
                                 playerCam.viewYaw, firingPitch, launchSpeed);
 
-                            // The smartgun's three shots get progressively
-                            // shorter lives, so they die at three ranges
-                            // (FUN_0002bcac: +0x1c = 0x10 - n).
+                            // Smartgun round n (1, 2) lives 0x10 - n ticks and
+                            // starts n steps out (FUN_0002bcac). The pre-steps
+                            // here skip the wall test FUN_0002bcac makes on each.
                             if (round && projectileType == P::TYPE_SMARTGUN)
                             {
+                                const int n = shot + 1;
                                 round->life = P::SmartgunLife(shot);
                                 round->strength = round->life;
+                                round->x += round->vx * n;
+                                round->y += round->vy * n;
+                                round->z += round->vz * n;
                             }
                         }
 
@@ -1653,7 +1724,9 @@ namespace ALTEngine::Screens
 
                         for (auto& enemy : enemies)
                         {
-                            ALTEngine::Screens::Enemies::Tick(enemy, camera.x, camera.y, camera.z);
+                            // The player's FEET, not the eye: FUN_00032154 measures
+                            // the vertical separation from DAT_000b0a4a.
+                            ALTEngine::Screens::Enemies::Tick(enemy, camera.x, playerFeetY, camera.z);
 
                             // Each axis resolved separately, as the original's two
                             // step helpers do - so a creature blocked on one axis
@@ -1687,25 +1760,12 @@ namespace ALTEngine::Screens
                             }
                             if (enemy.pendingDamage > 0)
                             {
-                                hudState.health = static_cast<int16_t>(
-                                    hudState.health - enemy.pendingDamage);
-                                hudState.damageCooldown = 8;
-                                if (hudState.health < 0) { hudState.health = 0; }
-
-                                // Dead. One of the six death videos then GAMEOVER,
-                                // and back to the menu - see GameOverSequence for
-                                // which parts of that are read and which are not.
-                                if (hudState.health == 0 && !playerDead)
-                                {
-                                    playerDead = true;
-                                    running = false;
-                                    // The clip is chosen by HOW you died, not at
-                                    // random - an enemy's attack is cause 4.
-                                    namespace GO = ALTEngine::Screens::GameOverSequence;
-                                    deathVideoIndex = GO::DeathVideoForCause(GO::CAUSE_ENEMY_ATTACK);
-                                    SDL_Log("player killed by an enemy attack - DEATH%d",
-                                            deathVideoIndex);
-                                }
+                                // Through the one damage routine, so the cooldown,
+                                // the terrain shield and armour all apply - this
+                                // used to subtract health directly.
+                                hudState.ApplyDamage(enemy.pendingDamage,
+                                                     ALTEngine::Screens::GameOverSequence::CAUSE_ENEMY_ATTACK);
+                                checkPlayerDeath();
                             }
                             if (enemy.spawnDeathEffect)
                             {
@@ -1906,14 +1966,48 @@ namespace ALTEngine::Screens
                         // Walk the blast out from a cell, two rings, gated the
                         // way FUN_000368c8 gates it.
                         auto RunBlast = [&](int originCell) {
-                            const std::vector<int> hit = ALTEngine::Game::Blast::ReachedCells(level, originCell);
+                            namespace Blast = ALTEngine::Game::Blast;
+                            const Blast::Rings rings = Blast::ReachedRings(level, originCell);
+                            auto inRing = [](const std::vector<int>& ring, int cell) {
+                                return std::find(ring.begin(), ring.end(), cell) != ring.end();
+                            };
+
+                            // The player: 0x32 in the inner ring, 0x19 in the outer.
+                            const int playerCell = ALTEngine::Formats::CellIndex(
+                                level, ToGridSpaceX(camera.x, originX) >> 9, ToGridSpaceZ(camera.z, originZ) >> 9);
+                            if (inRing(rings.inner, playerCell))
+                            {
+                                hudState.ApplyDamage(Blast::PLAYER_DAMAGE_INNER, Blast::DAMAGE_CAUSE);
+                            }
+                            else if (inRing(rings.outer, playerCell))
+                            {
+                                hudState.ApplyDamage(Blast::PLAYER_DAMAGE_OUTER, Blast::DAMAGE_CAUSE);
+                            }
+                            checkPlayerDeath();
+
+                            // Creatures in either ring take their whole health,
+                            // except type 7.
+                            for (auto& creature : enemies)
+                            {
+                                if (!creature.active || !creature.alive || creature.type == Blast::IMMUNE_CREATURE_TYPE) { continue; }
+                                const int creatureCell = ALTEngine::Formats::CellIndex(
+                                    level, ToGridSpaceX(creature.x, originX) >> 9, ToGridSpaceZ(creature.z, originZ) >> 9);
+                                if (inRing(rings.inner, creatureCell) || inRing(rings.outer, creatureCell))
+                                {
+                                    ALTEngine::Screens::Enemies::ApplyHit(creature, creature.health);
+                                }
+                            }
+
+                            std::vector<int> hit = rings.inner;
+                            hit.insert(hit.end(), rings.outer.begin(), rings.outer.end());
                             for (int cell : hit)
                             {
                                 for (D::Target& other : damageTargets)
                                 {
                                     // Objects caught in a blast are removed
-                                    // outright - no health check.
-                                    if (!other.destroyed && other.cellIndex == cell)
+                                    // outright - no health check - unless they
+                                    // are flagged indestructible.
+                                    if (!other.destroyed && !other.indestructible && other.cellIndex == cell)
                                     {
                                         other.destroyed = true;
                                         other.state = D::STATE_DYING;
@@ -1923,191 +2017,130 @@ namespace ALTEngine::Screens
                             }
                         };
 
+                        // How a particle meets the world, in the original's own order
+                        // - see Game/ProjectileCollision.h. Returns 0 to keep going,
+                        // 1 to stop (a round shatters), 2 to stop without shattering.
                         particles.Tick([&](float px, float py, float pz, int hitType, int hitLife,
-                                           float clearX, float clearY, float clearZ) {
-                            // Something destructible first. The damage is the
-                            // projectile's SPEED field doubled while the round is
-                            // still fresh - see DamageSystem::HitDamage, and note
-                            // that the field named like strength is not the one
-                            // used as damage.
-                            // ---- rounds against ENEMIES ------------------
-                            //
-                            // The same box test the objects get. This was simply
-                            // absent - projectiles only ever tested crates and
-                            // barrels, so enemies could not be shot at all and
-                            // the only thing they did was drain health (Edward,
-                            // 2026).
-                            for (auto& enemy : enemies)
-                            {
-                                if (!enemy.active || !enemy.alive) { continue; }
-
-                                const float ex = px - enemy.x;
-                                const float ez = pz - enemy.z;
-                                const float ehalf = D::HitHalfExtent(hitType);
-                                if (ex > ehalf || ex < -ehalf || ez > ehalf || ez < -ehalf) { continue; }
-
-                                // THE ANCHOR IS THE CREATURE'S FEET, not its
-                                // middle. Testing a symmetric window about it put
-                                // the whole box below the floor: rounds fly at
-                                // about 704 units and an enemy anchors at floor +
-                                // 0x20, so every shot missed by 672 and warrior
-                                // drones could not be hit at all (Edward, 2026).
-                                //
-                                // The body runs UPWARD from the anchor.
-                                if (py < enemy.y || py > enemy.y + ENEMY_HIT_HEIGHT) { continue; }
-
-                                const auto edef = ALTEngine::Screens::Particles::DefFor(hitType);
-                                const int edamage = D::HitDamage(edef.speed, hitLife, edef.strength);
-                                // ApplyHit sets STATE_DYING itself and leaves the
-                                // creature alive for one more tick, so the tick's
-                                // own arm spawns the death effect where the body
-                                // ended up.
-                                ALTEngine::Screens::Enemies::ApplyHit(enemy, edamage);
-                                ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                    ALTEngine::Screens::Particles::ImpactSound(levelIdForSfx, 0),
-                                    digits.c_str(), cdDirectory);
-                                explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_IMPACT,
-                                                 clearX, clearY, clearZ);
-                                return true;
-                            }
-
-                            for (D::Target& target : damageTargets)
-                            {
-                                if (target.destroyed) { continue; }
-                                const float dx = px - target.x;
-                                const float dz = pz - target.z;
-                                // Per-axis box, as FUN_0002a628 does - and the
-                                // box doubles for shotgun pellets. The extents
-                                // are a placeholder until the entity template is
-                                // read; the SHAPE of the test is traced.
-                                const float half = D::HitHalfExtent(hitType);
-                                if (dx > half || dx < -half || dz > half || dz < -half) { continue; }
-
-                                // The damage comes from THIS round's own type,
-                                // not the pistol's. It was hardcoded to the
-                                // pistol's numbers, which made every weapon hit
-                                // for 32 - wrong for all four of the others, and
-                                // it would have hidden the barrel rule entirely.
-                                // Falloff: the round's remaining life against
-                                // what it started with. Full damage over the
-                                // first half of the flight, half over the second
-                                // (FUN_0002a628).
-                                const auto def = ALTEngine::Screens::Particles::DefFor(hitType);
-                                const int damage = D::HitDamage(def.speed, hitLife, def.strength);
-
-                                if (D::ApplyHit(target, damage, hitType))
-                                {
-                                    if (target.placedObjectIndex >= 0
-                                        && target.placedObjectIndex < static_cast<int>(placedObjects.size()))
-                                    {
-                                        placedObjects[static_cast<size_t>(target.placedObjectIndex)].visible = false;
-                                    }
-
-                                    // Clear the occupancy stamp so the square
-                                    // becomes walkable. A crate blocks by writing
-                                    // its type into byte 12 of its cell at spawn
-                                    // (IsCellBlocking treats any non-zero,
-                                    // non-0xFF value there as solid), so removing
-                                    // the crate has to remove the stamp too -
-                                    // otherwise the wreckage keeps blocking a
-                                    // square that is visibly empty.
-                                    //
-                                    // Byte 4, which carries the crate's record
-                                    // index, is cleared with it: it only has
-                                    // meaning while byte 12 identifies an object.
-                                    // Barrels explode, crates break apart.
-                                    ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                        target.kind == D::TARGET_BARREL
-                                            ? ALTEngine::Formats::SoundIds::BARREL_EXPLODE
-                                            : ALTEngine::Formats::SoundIds::CRATE_BREAK,
-                                        digits.c_str(), cdDirectory);
-
-                                    DestroyTarget(target);
-
-                                    // Run every blast this set off, including
-                                    // ones started by the chain itself.
-                                    for (size_t q = 0; q < blastQueue.size(); ++q)
-                                    {
-                                        ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                            ALTEngine::Formats::SoundIds::BARREL_EXPLODE,
-                                            digits.c_str(), cdDirectory);
-                                        RunBlast(blastQueue[q]);
-                                    }
-                                    blastQueue.clear();
-                                }
-                                return true; // the round stops here and shatters
-                            }
-
-                            // A PROJECTILE IS A POINT IN ONE CELL. It was going
-                            // through CanOccupy, which is the PLAYER's test: a
-                            // 400x400 footprint sampled at five points plus a
-                            // step-up rule. That stopped rounds as soon as any
-                            // corner of an imaginary body came within 200 units
-                            // of a wall, which in a corridor is almost at once -
-                            // hence only being able to break a crate from right
-                            // next to it.
-                            //
-                            // The original tests one cell and no radius:
-                            // FUN_0002b534 derives a single index as
-                            // (x >> 9) + width * (z >> 9) and probes that, then
-                            // steps once and probes again. No footprint, no
-                            // step-up.
-                            // A round can be stopped by a wall, by the floor OR
-                            // by the ceiling, and all three want the impact
-                            // effect and sound.
-                            //
-                            // This only ran them for a WALL. A floor hit returned
-                            // "blocked" without spawning anything and there was no
-                            // ceiling test at all - so shooting down left no mark
-                            // and shooting up went straight through (Edward,
-                            // 2026).
-                            bool hitCeiling = false;
-                            bool stopped = ALTEngine::Formats::IsCellBlocking(
-                                level, ToGridSpaceX(px, originX), ToGridSpaceZ(pz, originZ));
-
+                                           float clearX, float clearY, float clearZ, int& roundLatch) -> int {
+                            namespace PCol = ALTEngine::Game::ProjectileCollision;
+                            namespace P = ALTEngine::Screens::Particles;
                             const int gx = ToGridSpaceX(px, originX);
                             const int gz = ToGridSpaceZ(pz, originZ);
-                            const float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
-                            if (!stopped && py < floorY) { stopped = true; }
 
-                            if (!stopped)
+                            // ---- blood ----------------------------------------
+                            // Acid burns the player it lands on; any drop that
+                            // reaches the floor leaves a splat and is gone.
+                            if (P::IsBlood(hitType))
                             {
-                                // Ceiling. The cell's own ceiling byte, in the
-                                // same height units the floor uses.
-                                const int cx = gx >> 9;
-                                const int cz = gz >> 9;
-                                if (cx >= 0 && cz >= 0 && cx < level.header.mapLength
-                                    && cz < level.header.mapWidth)
+                                if (hitType != P::TYPE_BLOOD_WHITE
+                                    && PCol::AcidTouchesPlayer(px, py, pz, camera.x, playerFeetY, camera.z))
                                 {
-                                    const size_t ci = static_cast<size_t>(cz)
-                                                    * static_cast<size_t>(level.header.mapLength)
-                                                    + static_cast<size_t>(cx);
-                                    if (ci < level.collisionGrid.size())
+                                    hudState.ApplyDamage(1, PCol::ACID_DAMAGE_CAUSE);
+                                    checkPlayerDeath();
+                                    return 2;
+                                }
+                                const float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
+                                if (py < floorY)
+                                {
+                                    explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_IMPACT,
+                                                     clearX, floorY, clearZ);
+                                    return 2;
+                                }
+                                return 0;
+                            }
+
+                            // ---- casings: come to rest on the floor -----------
+                            if (hitType == P::TYPE_CASING_A || hitType == P::TYPE_CASING_B)
+                            {
+                                const bool wall = ALTEngine::Formats::IsCellBlocking(level, gx, gz);
+                                return (wall || py < ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz)) ? 1 : 0;
+                            }
+
+                            // ---- the player's rounds --------------------------
+                            const auto def = P::DefFor(hitType);
+
+                            // 1. The cell: walls, floor, ceiling, liquids, objects.
+                            const PCol::CellResult cell = PCol::TestCell(level, gx, gz, py, hitType, def.speed);
+                            if (cell.blocked)
+                            {
+                                if (cell.objectHit >= 0)
+                                {
+                                    for (D::Target& target : damageTargets)
                                     {
-                                        const float ceiling = static_cast<float>(
-                                            level.collisionGrid[ci].ceilingHeight)
-                                            * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT;
-                                        if (py > ceiling) { stopped = true; hitCeiling = true; }
+                                        if (target.crateIndex != cell.objectHit || target.destroyed) { continue; }
+                                        if (target.indestructible) { break; }
+                                        target.health -= cell.damage;
+                                        if (target.health > 0) { break; }
+
+                                        target.state = D::STATE_DYING;
+                                        target.destroyed = true;
+                                        // Barrels explode, crates break apart.
+                                        ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                            target.kind == D::TARGET_BARREL
+                                                ? ALTEngine::Formats::SoundIds::BARREL_EXPLODE
+                                                : ALTEngine::Formats::SoundIds::CRATE_BREAK,
+                                            digits.c_str(), cdDirectory);
+                                        DestroyTarget(target);
+
+                                        // Run every blast this set off, including
+                                        // ones started by the chain itself.
+                                        for (size_t q = 0; q < blastQueue.size(); ++q)
+                                        {
+                                            ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                                ALTEngine::Formats::SoundIds::BARREL_EXPLODE,
+                                                digits.c_str(), cdDirectory);
+                                            RunBlast(blastQueue[q]);
+                                        }
+                                        blastQueue.clear();
+                                        break;
                                     }
                                 }
-                            }
 
-                            if (stopped)
-                            {
-                                // Impact sound picked by where it landed, not by
-                                // what fired - brick, metal or water.
+                                // Impact sound by where it landed - brick, metal or
+                                // water - and the puff at the last clear position,
+                                // flipped if it was the ceiling that stopped it.
+                                const auto* hitCell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
+                                const bool hitCeiling = hitCell
+                                    && py > static_cast<float>(hitCell->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT;
                                 ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                    ALTEngine::Screens::Particles::ImpactSound(
-                                        levelIdForSfx, ImpactCellAttribute(level, originX, originZ, px, pz)),
+                                    P::ImpactSound(levelIdForSfx, hitCell ? hitCell->attribute : 0),
                                     digits.c_str(), cdDirectory);
-                                // The impact puff - uv records 25..31, which
-                                // FUN_0002ad48 selects for every projectile type.
-                                // At the last CLEAR position, not the candidate -
-                                // the candidate is already through the surface.
                                 explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_IMPACT,
                                                  clearX, clearY, clearZ, hitCeiling);
+                                return 1;
                             }
-                            return stopped;
+
+                            // 2. Creatures: a box per creature type, centred on it,
+                            // and only if the two cells share a zone.
+                            const int roundCell = ALTEngine::Formats::CellIndex(level, gx >> 9, gz >> 9);
+                            bool hitAny = false;
+                            for (auto& enemy : enemies)
+                            {
+                                // From the hit reaction on, rounds pass straight
+                                // through - unless the Stunned Enemies option is on.
+                                const bool targetable = PCol::CreatureTargetable(enemy.state)
+                                    || (ignoreStun && enemy.state == D::STATE_HIT);
+                                if (!enemy.active || !enemy.alive || !targetable) { continue; }
+                                if (!PCol::OverlapsCreature(px, py, pz, enemy.x, enemy.y, enemy.z, enemy.type, hitType)) { continue; }
+                                const int enemyCell = ALTEngine::Formats::CellIndex(
+                                    level, ToGridSpaceX(enemy.x, originX) >> 9, ToGridSpaceZ(enemy.z, originZ) >> 9);
+                                if (!PCol::ShareZone(level, roundCell, enemyCell)) { continue; }
+
+                                // Double damage while the round is fresh (FUN_0002a628).
+                                // ApplyHit leaves a dying creature alive for one
+                                // more tick, so its own arm runs the death.
+                                ALTEngine::Screens::Enemies::ApplyHit(
+                                    enemy, D::HitDamage(def.speed, hitLife, def.strength), ignoreStun);
+                                const int blood = PCol::BloodTypeForCreature(enemy.type);
+                                if (blood >= 0) { particles.SpawnBlood(blood, px, py, pz); }
+                                hitAny = true;
+                                if (PCol::StopsAtFirstCreature(hitType)) { return 2; }
+                            }
+                            if (hitAny) { return 2; }
+
+                            // 3. Triggers a round can set off (flag 0x02).
+                            triggers.OnShotEnterCell(roundLatch, roundCell, triggerHandlers);
+                            return 0;
                         });
                     }
 
@@ -2190,7 +2223,7 @@ namespace ALTEngine::Screens
                     // script is still picked up.
                     for (auto& live : livePickups)
                     {
-                        if (live.collected || live.contained || live.cellIndex != cellIndex) { continue; }
+                        if (live.collected || live.contained || live.waitingOnTrigger || live.cellIndex != cellIndex) { continue; }
                         live.collected = true;
                         if (live.placedIndex < placedObjects.size()) { placedObjects[live.placedIndex].visible = false; }
 
@@ -2370,14 +2403,8 @@ namespace ALTEngine::Screens
                     // min(sin p, sin p+180), which is -|sin p| - so the camera
                     // never rises above eye level, only sinks up to 64 units
                     // below it twice per stride. See PlayerCamera.h.
-                    //
-                    // STAND_OFFSET + EYE_HEIGHT is kept as-is rather than
-                    // replaced with the original's DAT_000b0b4c (0x180 = 384),
-                    // because 384 against this 800 is an unexplained factor of
-                    // two and the current value is known to look right. See the
-                    // note on EYE_HEIGHT_ORIGINAL in PlayerCamera.h.
-                    camera.y = floorY + STAND_OFFSET + EYE_HEIGHT
-                             + static_cast<float>(playerCam.bobOffsetY);
+                    playerFeetY = floorY;
+                    camera.y = floorY + EYE_HEIGHT + static_cast<float>(playerCam.bobOffsetY);
                 }
             }
 

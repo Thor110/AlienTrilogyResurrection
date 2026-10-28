@@ -138,16 +138,30 @@ namespace ALTEngine::Screens
         // 0x180 by FUN_0003ee4c, which also eases it back down 0xc per tick
         // after it has been displaced.
         //
-        // NOTE THE DISCREPANCY. GameplayScreen currently uses STAND_OFFSET +
-        // EYE_HEIGHT == 800 for the same quantity, and the world scale is not
-        // in question (both the original and the port put 512 units in a cell
-        // and derive the cell index with >> 9). 0x180 is 384. Either the
-        // original's player Y already carries part of the offset out of
-        // FUN_00027e28, or one of the two numbers is wrong. Until that is
-        // settled this is NOT applied - GameplayScreen keeps its own working
-        // eye height and only the bob offset below is added to it.
-        constexpr int EYE_HEIGHT_ORIGINAL = 0x180;   // 384 - see note, currently unused
+        // SETTLED, and applied. The player's Y (DAT_000b0a4a) is the floor
+        // height itself - FUN_0003dff0 writes FUN_00027e28's result straight
+        // into it, no offset - and the eye is DAT_000b0a22 = DAT_000b0a4a +
+        // DAT_000b0b4c (+ the sway term, FUN_0003d00c). So the eye is 384 above
+        // the floor, and every projectile leaves from 0x60 below that.
+        //
+        // The port used 800 because it looked right - which it did, because the
+        // view was also far wider than the original's (see VIEW_FOV_Y_RADIANS).
+        // At 70 degrees a 384 eye looks like crawling; at the original's 50
+        // degrees it looks like the original.
+        constexpr int EYE_HEIGHT_ORIGINAL = 0x180;   // 384
         constexpr int EYE_HEIGHT_RECOVERY = 0xc;     // per tick, FUN_0003ee4c
+
+        // The original's projection. FUN_0004884c divides by depth and scales by
+        // the focal length DAT_00400168, which gameplay sets to 0x100
+        // (FUN_00010e38 -> FUN_0004e4e8(0x100)), around a centre of (0xa0, 0x78)
+        // (FUN_0004e4d4) - i.e. a 320x240 view with square pixels. One focal
+        // length for both axes, so the vertical field of view is
+        // 2 * atan(120 / 256), about 50.2 degrees. Wider windows keep this
+        // vertical angle and see more at the sides.
+        constexpr int VIEW_FOCAL_LENGTH = 0x100;
+        constexpr int VIEW_HALF_HEIGHT = 0x78;
+        inline const float VIEW_FOV_Y_RADIANS =
+            2.0f * std::atan(static_cast<float>(VIEW_HALF_HEIGHT) / static_cast<float>(VIEW_FOCAL_LENGTH));
 
         // The two ids FUN_0003d00c plays each half-stride.
         //

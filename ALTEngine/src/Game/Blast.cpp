@@ -6,9 +6,16 @@ namespace ALTEngine::Game::Blast
 {
     std::vector<int> ReachedCells(const Formats::LevelGeometry& level, int originCell)
     {
+        Rings rings = ReachedRings(level, originCell);
+        rings.inner.insert(rings.inner.end(), rings.outer.begin(), rings.outer.end());
+        return rings.inner;
+    }
+
+    Rings ReachedRings(const Formats::LevelGeometry& level, int originCell)
+    {
         namespace D = ALTEngine::Screens::Damage;
-        std::vector<int> hit;
-        if (originCell < 0 || originCell >= static_cast<int>(level.collisionGrid.size())) { return hit; }
+        Rings rings;
+        if (originCell < 0 || originCell >= static_cast<int>(level.collisionGrid.size())) { return rings; }
 
         const int width = level.header.mapLength;
         const int ox = originCell % width;
@@ -29,14 +36,14 @@ namespace ALTEngine::Game::Blast
         for (int i = 0; i < 8; ++i)
         {
             const int cell = reachable(D::BLAST_RING1[i].dx, D::BLAST_RING1[i].dz);
-            if (cell >= 0) { ringOneOpen[i] = true; hit.push_back(cell); }
+            if (cell >= 0) { ringOneOpen[i] = true; rings.inner.push_back(cell); }
         }
         for (const auto& outer : D::BLAST_RING2)
         {
             if (!ringOneOpen[outer.parent]) { continue; }
             const int cell = reachable(outer.offset.dx, outer.offset.dz);
-            if (cell >= 0) { hit.push_back(cell); }
+            if (cell >= 0) { rings.outer.push_back(cell); }
         }
-        return hit;
+        return rings;
     }
 }

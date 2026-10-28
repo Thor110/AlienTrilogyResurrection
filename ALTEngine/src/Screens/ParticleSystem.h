@@ -45,6 +45,12 @@ namespace ALTEngine::Screens
             TYPE_SMARTGUN = 3,
             TYPE_FLAME = 4,
             TYPE_FRAGMENT = 7,   // what a projectile shatters INTO
+            // Blood a creature sprays when a round hits it (FUN_0002ada4), the
+            // type chosen by creature (Game::ProjectileCollision::
+            // BloodTypeForCreature). 9 and 10 are acid and burn the player.
+            TYPE_BLOOD_WHITE = 8,
+            TYPE_BLOOD_ACID = 9,
+            TYPE_BLOOD_ACID_B = 10,
             TYPE_CASING_B = 0x14,
             TYPE_CASING_A = 0x15,
         };
@@ -64,8 +70,10 @@ namespace ALTEngine::Screens
             switch (type)
             {
             case TYPE_PULSE:
-            case TYPE_FLAME:
-            case TYPE_SMARTGUN: return 3;
+            case TYPE_FLAME:    return 3;
+            // FUN_0002c0a0: FUN_0002bcac(1), then a loop from 2 while < 3 -
+            // two rounds, not three.
+            case TYPE_SMARTGUN: return 2;
             default:            return 1;
             }
         }
@@ -107,7 +115,16 @@ namespace ALTEngine::Screens
         // The smartgun's, from FUN_0002bcac: +0x1a = 0x50, and +0x1c is
         // 0x10 - n where n is which of the three shots it is. The strength here
         // is the FIRST shot's; SmartgunLife below gives the rest.
-        inline constexpr ProjectileDef PROJECTILE_SMARTGUN{ 0x0f, 0x50, 0x00 };
+        // Its muzzle sits 0x38 to the side (FUN_0002bcac's own offset vector).
+        inline constexpr ProjectileDef PROJECTILE_SMARTGUN{ 0x0f, 0x50, 0x38 };
+
+        // The smartgun builds its own launch rather than going through
+        // FUN_0002b534: 0x80 below the eye plus up to 0x1f of jitter, and forward
+        // at the player's speed + 0x80 + up to 0x3f - a scatter, not a line.
+        inline constexpr int SMARTGUN_MUZZLE_DROP = 0x80;
+        inline constexpr int SMARTGUN_HEIGHT_JITTER = 0x1f;
+        inline constexpr int SMARTGUN_VELOCITY = 0x80;
+        inline constexpr int SMARTGUN_VELOCITY_JITTER = 0x3f;
 
         inline constexpr int SmartgunLife(int shotIndex) { return 0x10 - (shotIndex + 1); }
 
@@ -201,6 +218,16 @@ namespace ALTEngine::Screens
         inline constexpr int CASING_SPIN_Y = 0x38;   // GUESS
         inline constexpr int CASING_GRAVITY = 12;    // GUESS - world units/tick^2
 
+        // Blood falls 4 a tick (the type 8/9/10 arms of the particle task,
+        // 0x2e171 and 0x2e1da: `sub word [velocity + 2], 4`).
+        inline constexpr int BLOOD_GRAVITY = 4;
+        inline constexpr int BLOOD_DROPS = 0x10;       // 0x40 for the 0x0b/0x0c/0x13 sources
+
+        inline constexpr bool IsBlood(int type)
+        {
+            return type == TYPE_BLOOD_WHITE || type == TYPE_BLOOD_ACID || type == TYPE_BLOOD_ACID_B;
+        }
+
         // HOW THE ORIGINAL DRAWS THESE - all traced, from the aggressive
         // re-export. FUN_0002d6ec is the per-particle draw dispatch: it projects
         // the position with FUN_0004884c, keeps the distance, and switches on
@@ -272,6 +299,8 @@ namespace ALTEngine::Screens
             int angleX = 0, angleY = 0, angleZ = 0;
             int spinX = 0, spinY = 0, spinZ = 0;
             bool falls = false;          // gravity applies - casings only
+            bool isBlood = false;        // falls at BLOOD_GRAVITY and is gone when it lands
+            int lastTrigger = 0;         // +0x1f, the shot-trigger latch (FUN_000414f0)
 
             uint8_t type = TYPE_PISTOL;  // +0x1e
             int strength = 0;            // +0x1d, the value life started at
@@ -352,6 +381,12 @@ namespace ALTEngine::Screens
                 p->y = eyeY - MUZZLE_DROP;
                 p->z = eyeZ;
                 if (type == TYPE_FLAME) { p->y -= HEAVY_EXTRA_DROP; }
+                int forwardSpeed = playerSpeed + MUZZLE_VELOCITY;
+                if (type == TYPE_SMARTGUN)
+                {
+                    p->y = eyeY - SMARTGUN_MUZZLE_DROP + static_cast<float>(rng.Bits(SMARTGUN_HEIGHT_JITTER));
+                    forwardSpeed = playerSpeed + SMARTGUN_VELOCITY + rng.Bits(SMARTGUN_VELOCITY_JITTER);
+                }
 
                 // Lateral muzzle offset, rotated into the world by the facing.
                 const float s = static_cast<float>(PlayerCamera::Sin(viewYaw)) / PlayerCamera::TRIG_ONE;
@@ -361,7 +396,7 @@ namespace ALTEngine::Screens
 
                 // Forward velocity, pitched. The player's own speed is added, so
                 // firing on the move throws the round faster.
-                const float forward = static_cast<float>(playerSpeed + MUZZLE_VELOCITY);
+                const float forward = static_cast<float>(forwardSpeed);
                 const float pitchCos = static_cast<float>(PlayerCamera::Cos(viewPitch)) / PlayerCamera::TRIG_ONE;
                 const float pitchSin = static_cast<float>(PlayerCamera::Sin(viewPitch)) / PlayerCamera::TRIG_ONE;
 
@@ -416,6 +451,33 @@ namespace ALTEngine::Screens
 
             // FUN_0002abe0. The shatter: two pieces for a pistol round, eight
             // for a shotgun pellet, three for anything unrecognised.
+            // FUN_0002ada4: sixteen drops from where the round struck, each on a
+            // random heading, thrown 0x10-0x1f up and 0x10-0x2f outward, living
+            // 0x20-0x2f ticks. Strength 1 - the damage an acid drop does.
+            void SpawnBlood(int bloodType, float x, float y, float z)
+            {
+                for (int i = 0; i < BLOOD_DROPS; ++i)
+                {
+                    Particle* p = Take();
+                    if (!p) { return; }
+                    p->type = static_cast<uint8_t>(bloodType);
+                    p->isBlood = true;
+                    p->speed = 1;
+                    p->life = rng.Bits(0x0f) + 0x20;
+                    p->strength = p->life;
+                    p->x = x; p->y = y; p->z = z;
+
+                    const int heading = rng.Bits(PlayerCamera::ANGLE_MASK);
+                    const float rise = static_cast<float>(rng.Bits(0x0f) + 0x10);
+                    const float out = static_cast<float>(rng.Bits(0x1f) + 0x10);
+                    const float s = static_cast<float>(PlayerCamera::Sin(heading)) / PlayerCamera::TRIG_ONE;
+                    const float c = static_cast<float>(PlayerCamera::Cos(heading)) / PlayerCamera::TRIG_ONE;
+                    p->vx = out * s;
+                    p->vy = rise;
+                    p->vz = out * c;
+                }
+            }
+
             void Shatter(const Particle& source, bool wideSpread)
             {
                 const int count = FragmentCount(source.type);
@@ -482,6 +544,7 @@ namespace ALTEngine::Screens
                         p.angleZ = (p.angleZ + p.spinZ) & PlayerCamera::ANGLE_MASK;
                     }
                     if (p.falls) { p.vy -= CASING_GRAVITY; }
+                    if (p.isBlood) { p.vy -= BLOOD_GRAVITY; }
 
                     const bool isProjectile = (p.type == TYPE_PISTOL || p.type == TYPE_SHOTGUN
                                             || p.type == TYPE_PULSE || p.type == TYPE_SMARTGUN
@@ -508,7 +571,11 @@ namespace ALTEngine::Screens
                     // with nothing above the surface. A wall hit happened to show
                     // because half the quad still stuck out toward the player
                     // (Edward, 2026).
+                    // The callback answers CLEAR (0), STOP (1, and a round
+                    // shatters) or STOP_QUIETLY (2: a round that hit a creature
+                    // sprays blood instead, and leaves no fragments).
                     bool stopped = false;
+                    bool shatter = true;
                     float nx = p.x, ny = p.y, nz = p.z;
                     float clearX = p.x, clearY = p.y, clearZ = p.z;
                     for (int step = 0; step < substeps && !stopped; ++step)
@@ -517,11 +584,14 @@ namespace ALTEngine::Screens
                         nx += p.vx * inv;
                         ny += p.vy * inv;
                         nz += p.vz * inv;
-                        if ((isProjectile || p.falls)
-                            && blocked(nx, ny, nz, static_cast<int>(p.type), p.life,
-                                       clearX, clearY, clearZ))
+                        const int verdict = (isProjectile || p.falls || p.isBlood)
+                            ? static_cast<int>(blocked(nx, ny, nz, static_cast<int>(p.type), p.life,
+                                                       clearX, clearY, clearZ, p.lastTrigger))
+                            : 0;
+                        if (verdict != 0)
                         {
                             stopped = true;
+                            shatter = (verdict != 2);
                             // Leave the round on the clear side, so the shatter
                             // and anything else spawned from its position sits on
                             // the surface rather than through it.
@@ -542,11 +612,15 @@ namespace ALTEngine::Screens
                         continue;
                     }
 
+                    // Blood is gone the moment it lands (or burns the player);
+                    // the callback has already left its splat.
+                    if (p.isBlood && stopped) { p.alive = false; continue; }
+
                     if (isProjectile && stopped)
                     {
                         Particle hit = p;   // copy: Shatter reuses the pool and may move memory
                         p.alive = false;
-                        Shatter(hit, true);
+                        if (shatter) { Shatter(hit, true); }
                         continue;
                     }
 

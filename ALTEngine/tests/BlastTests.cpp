@@ -60,3 +60,15 @@ TEST_CASE("Blast: cells off the map are never reached")
     for (int cell : cells) { CHECK(cell >= 0 && cell < 81); }
     CHECK_EQ(cells.size(), size_t(8));                // 3 ring one + 5 ring two
 }
+
+TEST_CASE("Blast: the rings split 8 inner cells from 16 outer ones")
+{
+    LevelGeometry level = OpenFloor(9);
+    const auto rings = Blast::ReachedRings(level, 4 * 9 + 4);
+    CHECK_EQ(rings.inner.size(), size_t(8));
+    CHECK_EQ(rings.outer.size(), size_t(16));
+    CHECK(Contains(rings.inner, 3 * 9 + 4));
+    CHECK(Contains(rings.outer, 2 * 9 + 4));
+    CHECK_EQ(Blast::PLAYER_DAMAGE_INNER, 0x32);
+    CHECK_EQ(Blast::PLAYER_DAMAGE_OUTER, 0x19);
+}
