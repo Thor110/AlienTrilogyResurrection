@@ -19,6 +19,7 @@
 #include "../Game/Doors.h"
 #include "../Game/ProjectileCollision.h"
 #include "SmartgunTargeting.h"
+#include "../Game/CreatureSight.h"
 #include "../Game/Triggers.h"
 #include "SaveSlotScreen.h"
 #include "EnemySprites.h"
@@ -1760,8 +1761,35 @@ namespace ALTEngine::Screens
                         // three cells are sampled across the other axis at -200,
                         // 0 and +200. A creature therefore needs a 400-unit span
                         // clear, which is why they do not clip corners.
-                        const int playerCellX = ToGridSpaceX(camera.x, originX) >> 9;
-                        const int playerCellZ = ToGridSpaceZ(camera.z, originZ) >> 9;
+                        // CELL OCCUPANCY (+0x0c), kept the original's way: the
+                        // player's cell carries 0xff (its mover sets it every
+                        // tick, 0x3e3d6) and every live creature marks its own.
+                        // A creature lifts its own mark before it moves or looks
+                        // (FUN_00031f3c, FUN_0003231c) and marks wherever it ends
+                        // up, so creatures queue behind one another, stop at the
+                        // player, and block each other's line of fire.
+                        //
+                        // Rebuilt every tick rather than read from the map: the
+                        // map's own +0x0c bytes are stale (see below), so the
+                        // runtime must be writing live entities over them.
+                        std::vector<uint8_t> occupancy(level.collisionGrid.size(), 0);
+                        auto occupancyCell = [&](float x, float z) {
+                            return ALTEngine::Formats::CellIndex(level, ToGridSpaceX(x, originX) >> 9,
+                                                                 ToGridSpaceZ(z, originZ) >> 9);
+                        };
+                        auto mark = [&](int index, uint8_t value) {
+                            if (index >= 0 && static_cast<size_t>(index) < occupancy.size()) { occupancy[static_cast<size_t>(index)] = value; }
+                        };
+                        auto marked = [&](int index) {
+                            return index >= 0 && static_cast<size_t>(index) < occupancy.size()
+                                && occupancy[static_cast<size_t>(index)] != 0;
+                        };
+                        mark(occupancyCell(camera.x, camera.z), 0xff);
+                        for (const auto& other : enemies)
+                        {
+                            if (other.active && other.alive) { mark(occupancyCell(other.x, other.z), 1); }
+                        }
+
                         auto enemyAxisClear = [&](float x, float z, bool alongX, float velocity) {
                             namespace EB = ALTEngine::Screens::EnemyBehaviour;
                             const float lead = (velocity >= 0.0f) ? EB::MOVE_PROBE_LEAD
@@ -1782,13 +1810,13 @@ namespace ALTEngine::Screens
 
                                 if (EB::AttributeBlocks(cell->attribute)) { return false; }
 
-                                // THE PLAYER'S CELL IS OCCUPIED. The player stamps
-                                // 0xff into its cell's +0xc every tick (0x3e3d6),
-                                // and this probe refuses any occupied cell - so a
-                                // creature stops at the edge of the player's cell,
+                                // AN OCCUPIED CELL IS REFUSED (FUN_000315f0): the
+                                // player's, so a creature stops at the edge of it
                                 // and a leaping hugger drops there rather than
-                                // sailing past.
-                                if (cellX == playerCellX && cellZ == playerCellZ) { return false; }
+                                // sailing past, and other creatures'. The mover's
+                                // own mark is already lifted - in a cell shared
+                                // with the player, the player's with it.
+                                if (marked(ALTEngine::Formats::CellIndex(level, cellX, cellZ))) { return false; }
 
                                 // THE OCCUPANCY TEST IS OUT, because the field it
                                 // reads is not what I took it for.
@@ -1822,6 +1850,42 @@ namespace ALTEngine::Screens
                         {
                             // The player's FEET, not the eye: FUN_00032154 measures
                             // the vertical separation from DAT_000b0a4a.
+                            // What the creature can see of the player, for its attack
+                            // gates (FUN_0003231c, FUN_00033a1c). Only worth working
+                            // out inside the line-of-fire range.
+                            // Lift this creature's own mark before it looks or moves.
+                            const bool marks = enemy.active && enemy.alive;
+                            if (marks) { mark(occupancyCell(enemy.x, enemy.z), 0); }
+
+                            if (enemy.active && enemy.alive)
+                            {
+                                namespace CS = ALTEngine::Game::CreatureSight;
+                                const int egx = ToGridSpaceX(enemy.x, originX);
+                                const int egz = ToGridSpaceZ(enemy.z, originZ);
+                                const int pgx = ToGridSpaceX(camera.x, originX);
+                                const int pgz = ToGridSpaceZ(camera.z, originZ);
+                                enemy.zoneVisible = CS::ZoneVisible(level,
+                                    ALTEngine::Formats::CellIndex(level, egx >> 9, egz >> 9),
+                                    ALTEngine::Formats::CellIndex(level, pgx >> 9, pgz >> 9));
+                                if (enemy.distance <= CS::MAX_DISTANCE)
+                                {
+                                    CS::Query q;
+                                    q.x = static_cast<float>(egx);
+                                    q.y = enemy.y;
+                                    q.z = static_cast<float>(egz);
+                                    q.targetX = static_cast<float>(pgx);
+                                    q.targetZ = static_cast<float>(pgz);
+                                    q.distance = enemy.distance;
+                                    q.halfHeight = ALTEngine::Game::ProjectileCollision::CreatureExtents(enemy.type).y;
+                                    q.tallType = (enemy.type == 7);
+                                    q.occupancy = &occupancy;
+                                    enemy.lineOfFire = CS::LineOfFire(level, q);
+                                }
+                                else
+                                {
+                                    enemy.lineOfFire = false;
+                                }
+                            }
                             ALTEngine::Screens::Enemies::Tick(enemy, camera.x, playerFeetY, camera.z);
 
                             // Each axis resolved separately, as the original's two
@@ -1835,6 +1899,9 @@ namespace ALTEngine::Screens
                             {
                                 enemy.z += enemy.stepZ;
                             }
+
+                            // And mark wherever it ended up.
+                            if (marks && enemy.alive) { mark(occupancyCell(enemy.x, enemy.z), 1); }
 
                             // Moving sets the velocity flag; attacking and dying
                             // clear it. Nothing else touches it, so a creature's

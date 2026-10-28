@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Formats/OriginalTables.h"
+
 #include <cmath>
 #include <cstdint>
 
@@ -38,30 +40,10 @@ namespace ALTEngine::Screens
         constexpr int TRIG_ONE = 4096;         // 0x1000
 
         // The sine table at DAT_000a7804: 4096 signed 16-bit entries indexed
-        // (angle & 0xfff) * 2.
-        //
-        // RECONSTRUCTED, NOT DUMPED. The table's index range, entry size and
-        // fixed-point scale are all read from the code, so the shape is
-        // certain; the entry VALUES are generated here as an ideal sine rather
-        // than lifted from the binary. If the original's table is hand-tweaked
-        // or uses a different rounding, small differences would show up as a
-        // slightly different bob shape - dumping 8192 bytes at 0x000a7804 would
-        // settle it. Nothing else in this file depends on the values being
-        // exact.
-        inline const int16_t* SineTable()
-        {
-            static const int16_t* table = []
-            {
-                static int16_t values[ANGLE_UNITS];
-                for (int i = 0; i < ANGLE_UNITS; ++i)
-                {
-                    double radians = (2.0 * 3.14159265358979323846 * i) / ANGLE_UNITS;
-                    values[i] = static_cast<int16_t>(std::lround(std::sin(radians) * TRIG_ONE));
-                }
-                return values;
-            }();
-            return table;
-        }
+        // (angle & 0xfff) * 2. DUMPED now (Formats/OriginalTables.h): it differs
+        // from a rounded ideal sine by one in 41 entries, and integer results
+        // that land on a cell edge depend on it.
+        inline const int16_t* SineTable() { return ALTEngine::Formats::OriginalTables::SINE; }
 
         inline int Sin(int angle) { return SineTable()[angle & ANGLE_MASK]; }
         inline int Cos(int angle) { return SineTable()[(angle + ANGLE_QUARTER) & ANGLE_MASK]; }

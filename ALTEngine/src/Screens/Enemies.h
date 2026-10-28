@@ -5,6 +5,7 @@
 #include "DamageSystem.h"
 #include "EnemyBehaviour.h"
 #include "PlayerCamera.h"
+#include "../Game/OriginalMath.h"
 
 #include <cmath>
 #include <cstdint>
@@ -178,6 +179,12 @@ namespace ALTEngine::Screens
             // through the line rounds fly along.
             bool leaping = false;
             bool engaged = false;       // in the original's attack state (4)
+
+            // Set by the caller each tick, since only it can see the level:
+            // FUN_0003231c's clear straight line to the player, and
+            // FUN_00033a1c's zone test. Every attack needs both.
+            bool lineOfFire = true;
+            bool zoneVisible = true;
             float vy = 0;
             float leapX = 0, leapZ = 0;
 
@@ -229,11 +236,12 @@ namespace ALTEngine::Screens
         }
 
         // The bearing from an enemy to a point, in the 4096-unit angle space.
+        // The original's own (FUN_00026b64, an arcsine table - up to four units
+        // off a true atan2), since the attack waits for the facing to equal it.
         inline int BearingTo(const Enemy& enemy, float x, float z)
         {
-            return static_cast<int>(std::lround(
-                std::atan2(x - enemy.x, -(z - enemy.z))
-                * (PlayerCamera::ANGLE_UNITS / 6.28318530718))) & PlayerCamera::ANGLE_MASK;
+            return ALTEngine::Game::OriginalMath::Bearing(
+                static_cast<int>(std::lround(enemy.x - x)), static_cast<int>(std::lround(enemy.z - z)));
         }
 
         // Builds the roster for a level. Monsters parked off-map start inactive
@@ -497,9 +505,9 @@ namespace ALTEngine::Screens
             enemy.separationX = std::fabs(playerX - enemy.x);
             enemy.separationY = std::fabs(playerY - enemy.y);
             enemy.separationZ = std::fabs(playerZ - enemy.z);
-            const float dx = playerX - enemy.x;
-            const float dz = playerZ - enemy.z;
-            enemy.distance = static_cast<int>(std::lround(std::sqrt(dx * dx + dz * dz)));
+            // FUN_000320f8's distance, with its table square root.
+            enemy.distance = ALTEngine::Game::OriginalMath::Distance(
+                static_cast<int>(std::lround(playerX - enemy.x)), static_cast<int>(std::lround(playerZ - enemy.z)));
 
             enemy.mode = EnemyBehaviour::ModeForDistance(
                 enemy.distance, enemy.nearThreshold, enemy.middleThreshold);
@@ -668,11 +676,15 @@ namespace ALTEngine::Screens
                     // 0 and the creature is within 0x600 vertically; state 4
                     // attacks from any mode below 3 and gives up at mode 3.
                     if (enemy.mode >= EB::FAR_MODE) { enemy.engaged = false; }
-                    else if (enemy.mode == 0 && enemy.separationY <= EB::FACE_HUG_MAX_VERTICAL) { enemy.engaged = true; }
+                    else if (enemy.mode == 0 && enemy.separationY <= EB::FACE_HUG_MAX_VERTICAL && enemy.lineOfFire)
+                    {
+                        enemy.engaged = true;
+                    }
 
                     if (enemy.attackCooldown > 0) { enemy.attackCooldown--; }
                     const bool facingPlayer = enemy.facing == BearingTo(enemy, playerX, playerZ);
                     if (enemy.engaged
+                        && enemy.lineOfFire
                         && enemy.attackCooldown == 0
                         && facingPlayer
                         && enemy.mode < EB::FAR_MODE
@@ -718,9 +730,8 @@ namespace ALTEngine::Screens
                     if (enemy.attackCooldown > 0) { enemy.attackCooldown--; }
                     else
                     {
-                        // The facing cone is the original's own gate; the visibility
-                        // and line-of-fire tests are not implemented yet, so a
-                        // creature here will attack through a wall it should not.
+                        // The facing cone, the zone test (FUN_00033a1c) and the
+                        // line of fire (FUN_0003231c) - all three, or no attack.
                         const int bearing = static_cast<int>(std::lround(
                             std::atan2(playerX - enemy.x, -(playerZ - enemy.z))
                             * (PlayerCamera::ANGLE_UNITS / 6.28318530718)))
@@ -733,7 +744,8 @@ namespace ALTEngine::Screens
                         // the original's own gates, and both were missing - a creature
                         // could reach from the middle band and from any height.
                         const bool inReach = (enemy.mode == 0)
-                            && (enemy.separationY <= EnemyBehaviour::ATTACK_MAX_VERTICAL);
+                            && (enemy.separationY <= EnemyBehaviour::ATTACK_MAX_VERTICAL)
+                            && enemy.zoneVisible && enemy.lineOfFire;
 
                         const int damage = (inReach
                             && EnemyBehaviour::WithinAttackCone(0, delta, enemy.coneHalfWidth))

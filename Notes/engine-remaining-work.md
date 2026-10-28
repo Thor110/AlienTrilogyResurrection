@@ -4,6 +4,30 @@ Checked against `TRILOGY.EXE` (DOS/4GW LE: code object at `0x10000`, data object
 
 Ordered by how much they change play.
 
+## Checklist
+
+Details for each item are in the numbered sections below.
+
+| # | Item | Can be done from the binary alone | Status |
+|---|---|---|---|
+| 1 | One logic tick rate (find the game's clock) | yes | open |
+| 2 | Player movement exactly (`FUN_0003d85c` / `FUN_0003dc44`) | yes | open |
+| 3 | Lifts (trigger commands 5 and 7) | yes, but the demo maps have none to test with | open |
+| 4a | Creature line of fire and visibility before attacking (`FUN_0003231c`, `FUN_00033a1c`) | yes | done (zone test approximated) |
+| 4b | Creature chase via the path network (state 2/3) | yes | open |
+| 4c | Creatures blocking each other (cell occupancy) | yes | done (barrel blasts still find creatures by position) |
+| 4d | Hit, death and leap-end animations | needs the animation scripts | open |
+| 4e | Per-type tasks for types 1, 7, 10, 0x10-0x13 | yes | open |
+| 5 | Flame pre-steps damaging objects | yes | open |
+| 6 | Player Jumping option | modern | open |
+| 7a | Secrets counter on the assessment screen | yes | open |
+| 7b | Mid-level saves | modern | open |
+| 7c | Death clip choice | yes | open |
+| 7d | Field renames in `LevelLoader.h` | tidy-up | open |
+| 7e | Direct-to-window rendering | needs real hardware | open |
+| 7f | Multiplayer | large | open |
+| A | Open question: pistol rounds against a standing hugger | needs a check in the original | open |
+
 ## 1. One logic tick rate
 
 The port runs two clocks:
@@ -49,17 +73,16 @@ The port samples five points and treats bytes `+2`/`+3` as walls. The clearance 
 
 Status in the port:
 - **The creature task's state machine** (`LAB_000342b4`, jump table at `0x34270`, states 0-8) isn't followed state by state. The port has its own ACTING / HIT / DYING states, with the original's attack logic (state 4 → `FUN_00033cbc` → state 5) mapped onto them.
-- **Line of fire** (`FUN_0003231c`) and the visibility test in `FUN_00033a1c` aren't implemented, so a creature can attack through a wall.
+- **Visibility mask:** `FUN_00033a1c`'s zone test uses the zones of the player's own cell. The original's mask is every zone the renderer drew that frame (`0x274c2` onward).
 - **Leap end:** the original ends a leap when the animation script sets `+0xb6` bit 2. The port ends it on landing.
 - **Walking off a ledge** gives a creature a small hop (`vy = 0x3c`, `FUN_000315f0`). Not implemented.
 - **Movement:** enemies still walk straight at the player.
 - **Path network:** `Game::PathGraph` loads and routes it, tested, but nothing uses it yet.
 - **Hit and death animations:** `FUN_0002f4b0` starts an animation and `FUN_00030b04` is death.
-- **Cell occupancy:** a creature stamps its cell (`+0xc` = type, `+4` = index) at spawn and as it moves, and the step probe refuses any occupied cell. The port now blocks only the player's own cell (the player stamps `0xff`, `0x3e3d6`). Creatures still overlap each other, and barrel blasts find creatures by position instead.
+- **Cell occupancy:** rebuilt every tick in the original's pattern: the player's cell is marked `0xff`, and each live creature lifts its own mark before it looks or moves, then marks where it ends up. Movement and line of fire both refuse marked cells. Barrel blasts still find creatures by position instead of by the mark's type and index.
 
 ## 5. Weapons still approximated
 
-- **Flamethrower ammo:** `FUN_0002c0a0` takes one per particle it gets out. The port takes one per pull.
 - **Flame pre-steps:** they don't damage objects the way the original's cell test (`FUN_00036e9c`) does.
 - **Shotgun shell model:** model 26 is used for the ejected shell. This is inferred, not traced.
 
@@ -78,6 +101,19 @@ Status in the port:
 - **Multiplayer:** the menus exist, but there is no networking.
 
 ## Settled this round (see the code comments for the evidence)
+
+- **Creatures need a clear line to attack** (`FUN_0003231c`, now `Game::CreatureSight`):
+  - **Probes:** two, 200 either side of the line to the player, in 0x100 steps, distance >> 8 of them. The 0x400 side goes first.
+  - **Refused by:** walls, occupied cells (the creature's own cell, and so a shared one, excepted), low ceilings, rises over 0x100 and drops over 0x400.
+  - **Checked:** against the original routine run in an emulator on about 8,000 random rooms, with no differences.
+- **The original's integer maths** (`Game::OriginalMath`):
+  - **Bearing:** `FUN_00026b64`, an arcsine table, up to 4 units off a true atan2.
+  - **Square root:** `FUN_0004de04`, a table plus recursion, which runs low for large values.
+  - **Distance:** `FUN_000320f8`.
+  - **Yaw rotation:** the one `FUN_00026a20` performs.
+  - **Use:** creature distance and bearing now use them.
+  - **Sine table:** the port's own is now the original's (data `0x7804`), dumped into `Formats/OriginalTables.h` with the arcsine table. A rounded sine differs from it in 41 entries.
+- **The player's cell really is marked every tick:** the mover clears it at the start (`0x3e008`) and sets it at the end (`0x3e3d6`). A creature in the same cell is not held by it, because the creature lifts its own cell's mark first.
 
 - **Weapon slots 3 and 4 were crossed.** The original's internal slot (`DAT_000b0aae`) is 0 pistol, 1 shotgun, 2 pulse rifle, **3 smartgun, 4 flamethrower**:
   - **Graphics:** `FUN_000401d0`'s jump table at `0x401bc` sends slot 3 to the table at `0x0ace88` (smartgun sounds) and slot 4 to `0x0ace70` (flamethrower sounds). An earlier reading took the cases in address order.
