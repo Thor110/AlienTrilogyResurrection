@@ -24,24 +24,20 @@ namespace ALTEngine::Screens
         // 0x000b0aae. Which weapon's ammo the HUD shows.
         int16_t currentWeapon = 0;
 
-        // Ammo is NOT one counter per weapon. Two weapons store a unit count
-        // plus a remainder and the HUD adds them together; the other three are a
-        // single counter. Kept in that shape rather than flattened to one number
-        // per weapon, because pickups add to the unit counter and firing
-        // decrements the remainder - flattening would lose that distinction and
-        // make reload behaviour impossible to reproduce.
+        // Ammo is NOT one counter per weapon in the original. Two weapons
+        // store a unit count plus a remainder and the HUD adds them together;
+        // the other three are a single counter:
         //
         //   weapon 0: units x 15  + remainder   (0x000b0ac0, 0x000b0abe)
         //   weapon 1: remainder only            (0x000b0ac2)
         //   weapon 2: units x 100 + remainder   (0x000b0ac6, 0x000b0ac4)
         //   weapon 3: units x 100 + remainder   (0x000b0ace, 0x000b0acc)
         //   weapon 4: remainder only            (0x000b0aca)
-        std::array<int16_t, WEAPON_COUNT> ammoUnits{ 0, 0, 0, 0, 0 };
-        std::array<int16_t, WEAPON_COUNT> ammoRemainder{ 0, 0, 0, 0, 0 };
-
-        // Rounds per unit for each weapon; 0 means the weapon has no unit
-        // counter and its total is the remainder alone.
-        static constexpr std::array<int, WEAPON_COUNT> ROUNDS_PER_UNIT{ 15, 0, 100, 100, 0 };
+        //
+        // Those counters live in PlayerInventoryState (WeaponState::rounds and
+        // ::units), which persists across levels. This is only the number the
+        // HUD prints, refreshed from the inventory every frame.
+        int currentAmmoDisplay = 0;
 
         // 0x000b0b30. Ticks of invulnerability after a hit - while non-zero the
         // original skips its whole damage path.
@@ -89,16 +85,7 @@ namespace ALTEngine::Screens
 
         bool dead = false; // DAT_000b0cc0 bit 0x20
 
-        // What the HUD prints for a weapon, exactly as FUN_0003aac8's switch
-        // computes it.
-        int AmmoTotal(int weapon) const
-        {
-            if (weapon < 0 || weapon >= WEAPON_COUNT) { return 0; }
-            size_t i = static_cast<size_t>(weapon);
-            return ROUNDS_PER_UNIT[i] * ammoUnits[i] + ammoRemainder[i];
-        }
-
-        int CurrentAmmoTotal() const { return AmmoTotal(currentWeapon); }
+        int CurrentAmmoTotal() const { return currentAmmoDisplay; }
 
         // Applies damage the original's way: cooldown gates it entirely, armour
         // absorbs before health, both clamp at zero, and reaching zero health

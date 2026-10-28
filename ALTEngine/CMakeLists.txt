@@ -36,9 +36,6 @@ add_library(ALTFormats STATIC
     src/Formats/CddaRipper.cpp
     src/Formats/OverrideImage.cpp
     src/Formats/ModelLoader.cpp
-    src/Renderer/WeaponView.cpp
-    src/Renderer/HudRenderer.cpp
-    src/Renderer/Minimap.cpp
     src/Formats/LevelList.cpp
     src/Tools/LevelLightScanner.cpp
     src/Formats/ObjLoader.cpp
@@ -54,6 +51,52 @@ add_library(ALTFormats STATIC
 )
 target_include_directories(ALTFormats PUBLIC src)
 target_link_libraries(ALTFormats PRIVATE nlohmann_json::nlohmann_json)
+
+# ---------------------------------------------------------------------------
+# ALTGame - gameplay rules (triggers, doors, ...) pulled out of
+# GameplayScreen so they can be tested. Same rule as ALTFormats: no SDL, no
+# rendering. The screen owns presentation and calls into this.
+# ---------------------------------------------------------------------------
+add_library(ALTGame STATIC
+    src/Game/Blast.cpp
+    src/Game/Doors.cpp
+    src/Game/PathGraph.cpp
+    src/Game/Progression.cpp
+    src/Game/SaveGame.cpp
+    src/Game/Triggers.cpp
+)
+target_include_directories(ALTGame PUBLIC src)
+target_link_libraries(ALTGame PUBLIC ALTFormats)
+target_link_libraries(ALTGame PRIVATE nlohmann_json::nlohmann_json)
+
+# ---------------------------------------------------------------------------
+# Tests. SDL-free, so they build and run anywhere ALTFormats does:
+#   ctest --test-dir <build dir>      or run ALTEngineTests directly
+# Level fixtures come from the demo disc copy under Notes/; a test whose
+# fixture is missing is reported as skipped, not failed.
+# ---------------------------------------------------------------------------
+option(ALTENGINE_BUILD_TESTS "Build the ALTEngineTests unit test executable" ON)
+if (ALTENGINE_BUILD_TESTS)
+    enable_testing()
+    add_executable(ALTEngineTests
+        tests/TestMain.cpp
+        tests/LevelLoaderTests.cpp
+        tests/TriggerTests.cpp
+        tests/DoorTests.cpp
+        tests/InventoryTests.cpp
+        tests/EnemyTests.cpp
+        tests/SaveGameTests.cpp
+        tests/ProgressionTests.cpp
+        tests/BlastTests.cpp
+        tests/PathGraphTests.cpp
+    )
+    target_include_directories(ALTEngineTests PRIVATE src tests)
+    target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats)
+    target_compile_definitions(ALTEngineTests PRIVATE
+        ALT_TEST_DEMO_ROOT="${CMAKE_SOURCE_DIR}/../Notes/repack-disc-comparison/DEMO"
+        ALT_TEST_DATA_ROOT="${CMAKE_SOURCE_DIR}/data")
+    add_test(NAME ALTEngineTests COMMAND ALTEngineTests)
+endif()
 
 find_package(SDL3 CONFIG REQUIRED)
 
@@ -205,6 +248,12 @@ add_executable(ALTEngine
     src/Renderer/Mat4.h
     src/Renderer/ModelRenderer.cpp
     src/Renderer/ModelPreview.cpp
+    # These three draw with SDL_Renderer, so they belong to the executable
+    # rather than ALTFormats - the data layer does not link SDL, and only
+    # built before because vcpkg puts SDL on every target's include path.
+    src/Renderer/WeaponView.cpp
+    src/Renderer/HudRenderer.cpp
+    src/Renderer/Minimap.cpp
 )
 
 # MSVC's linker auto-generates and embeds its own default manifest
@@ -218,7 +267,7 @@ if (MSVC)
 endif()
 
 target_include_directories(ALTEngine PRIVATE src)
-target_link_libraries(ALTEngine PRIVATE ALTFormats)
+target_link_libraries(ALTEngine PRIVATE ALTGame ALTFormats)
 target_link_libraries(ALTEngine PRIVATE SDL3::SDL3)
 target_link_libraries(ALTEngine PRIVATE PkgConfig::FFMPEG)
 
@@ -230,13 +279,10 @@ set_target_properties(ALTEngine PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:ALTEngine>"
 )
 
-# Many installs (Program Files, Program Files (x86), Collection Chamber's
-# defaults among them) are UAC-protected: reads succeed but writes fail
-# silently without elevation. Rather than relying on VS/the user happening
-# to run elevated, ask Windows for it directly.
-if (MSVC)
-    target_link_options(ALTEngine PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
-endif()
+# No elevation request here. The embedded app.manifest (AppManifest.rc)
+# asks for asInvoker, and /MANIFEST:NO above means a linker-level
+# /MANIFESTUAC would be ignored anyway - so the manifest is the one place
+# the execution level is decided.
 
 # Ship data/ (Patches.json etc.) next to the built executable, so it can be
 # found at runtime relative to the exe regardless of build type/generator.

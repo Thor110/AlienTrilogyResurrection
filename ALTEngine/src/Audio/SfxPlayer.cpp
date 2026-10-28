@@ -21,20 +21,6 @@ namespace ALTEngine::Audio
             return cache;
         }
 
-        // How much audio may sit unplayed before new sounds are dropped.
-        //
-        // The SFX stream is a single queue, so anything pushed while something
-        // is already playing lands AFTER it rather than mixing with it. Without
-        // a cap, a burst of footsteps or a full-auto weapon would queue seconds
-        // of audio and drift further behind the action with every shot. At
-        // 11025 bytes a second this is about a quarter of a second of slack -
-        // enough for sounds to overlap slightly, little enough that they stay
-        // in sync with what is on screen.
-        //
-        // Mixing properly needs a voice mixer, which the original has (its
-        // driver allocates channels) and this does not yet.
-        constexpr int MAX_QUEUED_BYTES = 2756;
-
         const std::unordered_map<SfxId, std::string> kMenuSounds = {
             { SfxId::MenuMove,   "0101sele" },
             { SfxId::MenuSelect, "0102sele" },
@@ -45,12 +31,6 @@ namespace ALTEngine::Audio
     void SfxPlayer::PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory)
     {
         if (stem.empty()) { return; }
-
-        SDL_AudioStream* stream = ALTEngine::Bootstrap::AppWindow::Instance().SfxAudioStream();
-        if (!stream) { return; }
-
-        // Drop rather than queue behind a backlog - see MAX_QUEUED_BYTES.
-        if (SDL_GetAudioStreamQueued(stream) > MAX_QUEUED_BYTES) { return; }
 
         auto& cache = Cache();
         auto it = cache.find(stem);
@@ -79,7 +59,13 @@ namespace ALTEngine::Audio
         }
 
         if (it->second.empty()) { return; }
-        SDL_PutAudioStreamData(stream, it->second.data(), static_cast<int>(it->second.size()));
+
+        // Each sound gets a voice of its own and the device mixes them, so
+        // gunfire, footsteps and impacts overlap the way the original's
+        // channel driver lets them (AppWindow::AcquireSfxVoice).
+        SDL_AudioStream* voice = ALTEngine::Bootstrap::AppWindow::Instance().AcquireSfxVoice();
+        if (!voice) { return; }
+        SDL_PutAudioStreamData(voice, it->second.data(), static_cast<int>(it->second.size()));
     }
 
     void SfxPlayer::Play(SfxId id, const std::filesystem::path& cdDirectory)
@@ -99,6 +85,11 @@ namespace ALTEngine::Audio
         // fired once. Nothing drives a continuous sound yet, so they are played
         // as one-shots for now - noted so it is not mistaken for correct.
         PlayFile(name, cdDirectory);
+    }
+
+    void SfxPlayer::SetVolume(int volume0to10)
+    {
+        ALTEngine::Bootstrap::AppWindow::Instance().SetSfxGain(static_cast<float>(volume0to10) / 10.0f);
     }
 
     void SfxPlayer::ClearCache()

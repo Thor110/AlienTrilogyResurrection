@@ -378,6 +378,15 @@ namespace ALTEngine::Screens
         // creature at a time, everywhere on the level.
         inline bool pounceLockHeld = false;
 
+        // Per-level state that lives outside the roster. The pounce lock above
+        // is only released when a pounce runs to completion, so dying or
+        // quitting mid-pounce used to leave it held for the rest of the
+        // session and no hugger could pounce again. Called on every level load.
+        inline void ResetLevelState()
+        {
+            pounceLockHeld = false;
+        }
+
         // Starts an animation, as FUN_0002f4b0 does - resetting the frame and the
         // timer. Re-starting the one already playing is ignored, which is what
         // stops a walk restarting every tick.

@@ -15,7 +15,10 @@
 #include "ExplosionEffects.h"
 #include "ShatterEffects.h"
 #include "Enemies.h"
-#include "../Formats/CellTriggers.h"
+#include "../Game/Blast.h"
+#include "../Game/Doors.h"
+#include "../Game/Triggers.h"
+#include "SaveSlotScreen.h"
 #include "EnemySprites.h"
 #include "DamageSystem.h"
 #include "../Audio/SfxPlayer.h"
@@ -363,46 +366,13 @@ namespace ALTEngine::Screens
         float originX = 0.0f;
         float originZ = 0.0f;
 
-        // Live door state. Doors drive the collision grid directly: the
-        // ceiling byte of the four cells they cover rises and falls with
-        // the mesh, one height unit (32 world units) per tick, so
-        // movement clearance and the visual stay in lockstep.
-        struct DoorState
-        {
-            enum class Phase { Idle, Opening, Open, Closing };
-            bool alongZ = false;
-            int floorUnits = 0;
-            int travel = 30;
-            int progress = 0;            // 0 .. travel
-            uint8_t threshold = 1;
-            uint8_t unlockProgress = 0;
-            // Consumed when the door starts opening. Without this a door
-            // whose unlock progress is kept (staysUnlocked) re-opens the
-            // instant it finishes closing, forever - reaching the threshold
-            // is what unlocks it, but a fresh trigger is what opens it.
-            // Doors opened by throwing a switch stay open; only doors you
-            // open by walking up to them close behind you. NOT derived from
-            // the disassembly - the dumped Open state has a single
-            // distance check with no such distinction - so this is
-            // behavioural until that is traced.
-            bool switchOperated = false;
-            // Lifts run the same state machine as doors here, so the notice has
-            // to be told which it is.
-            bool isLift = false;
-            // Unlock progress is reset when the door finishes closing in
-            // both ordinary branches. Only doors with flag 0x40 keep it,
-            // and those go through a cooldown counted in hold ticks.
-            bool keepsUnlockOnClose = false;
-            int holdTicks = 0;
-            int cooldown = 0;
-            Phase phase = Phase::Idle;
-            std::array<size_t, 4> cells{};
-            int cellCount = 0;
-            size_t placedFirst = 0;
-            int placedCount = 0;
-            float worldX = 0.0f, worldZ = 0.0f, baseY = 0.0f;
-        };
-        std::vector<DoorState> doorStates;
+        // Live door state - see Game/Doors.h. Doors drive the collision grid
+        // directly, so movement clearance and the visual stay in lockstep.
+        std::vector<ALTEngine::Game::DoorState> doorStates;
+
+        // The level's scripted triggers - see Game/Triggers.h. One system for
+        // walking onto a cell and for the use key.
+        ALTEngine::Game::Triggers::System triggers;
         // Pickups spin in place. The original advances their angle by 0x10
         // per tick in a 4096-step space.
         std::vector<size_t> pickupPlaced;
@@ -488,15 +458,6 @@ namespace ALTEngine::Screens
         ALTEngine::Screens::WeaponSystem::SwitchAnimation weaponSwitch;
         std::array<bool, 6> weaponKeyWasDown{ false, false, false, false, false, false };
 
-        // What the ammo mirror last saw, so pickups can be applied as DELTAS.
-        //
-        // This used to copy the inventory straight into hudState.ammoRemainder
-        // every frame, which quietly made firing impossible: the weapon system
-        // decremented a round and the mirror put it back on the same frame, and
-        // a reload that moved a magazine into the remainder was wiped just as
-        // fast. Nothing visible ever happened (Edward, 2026).
-        std::array<int, ALTEngine::Screens::PlayerHudState::WEAPON_COUNT> mirroredAmmo{ 0, 0, 0, 0, 0 };
-        bool ammoSeeded = false;
         ALTEngine::Screens::PlayerHudState hudState;
         bool hudLoadAttempted = false;
         {
@@ -530,7 +491,6 @@ namespace ALTEngine::Screens
                     (int)modern.FeatureSetting(ALTEngine::Bootstrap::ModernFeature::RenderDistance),
                     (int)!unlimited, modernConfig.FilePath().string().c_str());
         }
-        int lastTriggerAction = 0;
         bool prevUseHeld = false;
         int lastCellIndex = -1;
         float tickAccumulator = 0.0f;
@@ -542,6 +502,14 @@ namespace ALTEngine::Screens
         float pendingMouseYaw = 0.0f;   // angle units, accumulated between player ticks
         float pendingMouseY = 0.0f;     // raw mouse Y, drives the original's mouse-forward
         bool playerCamSeeded = false;
+
+        // Where the player was at the start of the most recent player tick, so
+        // the frame can be drawn between that and where they are now. The
+        // simulation itself stays on its fixed tick; only the view is smoothed.
+        // Without this, movement on a 60Hz+ display stepped visibly at the
+        // 30Hz tick rate.
+        float prevCamX = 0.0f, prevCamZ = 0.0f, prevCamYaw = 0.0f;
+        bool prevCamValid = false;
         // Camera Sway (the original's DAT_000acea0) gates head bob, view roll
         // and the yaw sway together. Footsteps keep running either way.
         bool cameraSway = cameraSwaySettings.Get();
@@ -851,78 +819,16 @@ namespace ALTEngine::Screens
                             }
                         }
 
-                        // Door travel distance in height units: 30 on
-                        // the first two levels, 43 from level 2 onward.
-                        int doorTravel = (digits == "111" || digits == "112") ? 30 : 43;
+                        doorStates = ALTEngine::Game::Doors::Build(
+                            level, ALTEngine::Game::Doors::TravelForLevel(digits), originX, originZ);
+                        ALTEngine::Game::Doors::MarkSingleUseDoors(level, doorStates);
 
-                        for (const auto& door : level.doors)
+                        for (size_t d = 0; d < doorStates.size(); ++d)
                         {
-                            // Orientation 2 and 6 run along Z, 0 and 4 along
-                            // X. 0 vs 4 and 2 vs 6 are 180 degrees apart and
-                            // only affect the model's yaw.
-                            bool alongZ = (door.rotation == 2 || door.rotation == 6);
-
-                            // The mesh origin is the centre of the 4-cell
-                            // span, not the centre of the anchor cell. The
-                            // span runs from grid-1 to grid+2, so its centre
-                            // lands on the boundary between grid and grid+1 -
-                            // hence +512 along the door's own axis, and an
-                            // ordinary +256 cell centre across it.
-                            float gameX = static_cast<float>(door.x) * 512.0f + (alongZ ? 256.0f : 512.0f);
-                            float gameZ = static_cast<float>(door.y) * 512.0f + (alongZ ? 512.0f : 256.0f);
-
-                            float worldX = gameX - originX;
-                            float worldZ = gameZ - originZ;
-
-                            // Four covered cells, anchored one cell BACK
-                            // along the door's axis.
-                            int anchorX = static_cast<int>(door.x) - (alongZ ? 0 : 1);
-                            int anchorZ = static_cast<int>(door.y) - (alongZ ? 1 : 0);
-
-                            size_t ownCell = static_cast<size_t>(door.y) * level.header.mapLength + static_cast<size_t>(door.x);
-                            int cellFloor = (ownCell < level.collisionGrid.size())
-                                                ? level.collisionGrid[ownCell].floorHeight : 0;
-
-                            // Flag 0x40 means the door starts open: its
-                            // ceiling is already raised by the full travel
-                            // distance and the mesh sits at that height.
-                            bool startsOpen = (door.unknown & 0x40) != 0;
-                            int ceilingUnits = startsOpen ? cellFloor + doorTravel : cellFloor;
-                            float worldY = static_cast<float>(startsOpen ? ceilingUnits : cellFloor) * 32.0f + 16.0f;
-
-                            for (int step = 0; step < 4; ++step)
-                            {
-                                int cx = anchorX + (alongZ ? 0 : step);
-                                int cz = anchorZ + (alongZ ? step : 0);
-                                auto* cell = ALTEngine::Formats::CellAt(level, cx, cz);
-                                if (!cell) { continue; }
-                                cell->floorHeight = static_cast<uint8_t>(cellFloor);
-                                cell->ceilingHeight = static_cast<uint8_t>(ceilingUnits);
-                            }
-
-                            DoorState ds;
-                            ds.alongZ = alongZ;
-                            ds.floorUnits = cellFloor;
-                            ds.travel = doorTravel;
-                            ds.progress = startsOpen ? doorTravel : 0;
-                            ds.threshold = door.lockState == 0 ? 1 : door.lockState;
-                            ds.unlockProgress = 0;
-                            ds.keepsUnlockOnClose = (door.unknown & 0x40) != 0;
-                            ds.holdTicks = static_cast<int>(door.time) * 4;
-                            ds.phase = startsOpen ? DoorState::Phase::Open : DoorState::Phase::Idle;
-                            ds.worldX = worldX;
-                            ds.worldZ = worldZ;
-                            ds.baseY = static_cast<float>(cellFloor) * 32.0f + 16.0f;
-                            for (int step = 0; step < 4; ++step)
-                            {
-                                int cx = anchorX + (alongZ ? 0 : step);
-                                int cz = anchorZ + (alongZ ? step : 0);
-                                const int ci = ALTEngine::Formats::CellIndex(level, cx, cz);
-                                if (ci >= 0) { ds.cells[static_cast<size_t>(ds.cellCount++)] = static_cast<size_t>(ci); }
-                            }
+                            const auto& door = level.doors[d];
+                            auto& ds = doorStates[d];
                             ds.placedFirst = placedObjects.size();
                             ds.placedCount = 5;
-                            doorStates.push_back(ds);
 
                             for (int page = 0; page < 5; ++page)
                             {
@@ -932,9 +838,9 @@ namespace ALTEngine::Screens
 
                                 ALTEngine::Renderer::PlacedObject placed;
                                 placed.cacheKey = key;
-                                placed.x = worldX;
-                                placed.y = worldY;
-                                placed.z = worldZ;
+                                placed.x = ds.worldX;
+                                placed.y = ds.startY;
+                                placed.z = ds.worldZ;
                                 placed.rotationRadians = 3.14159265f - static_cast<float>(door.rotation) * (3.14159265f / 4.0f);
                                 placedObjects.push_back(placed);
                             }
@@ -1111,6 +1017,19 @@ namespace ALTEngine::Screens
                         }
 
                         objectState.assign(level.crates.size(), 0);
+                        triggers = ALTEngine::Game::Triggers::System(level);
+
+                        // What Save Game in the pause menu writes: this level,
+                        // from its start, with the loadout the player brought.
+                        {
+                            ALTEngine::Game::SaveData checkpoint;
+                            checkpoint.name = ALTEngine::Game::SaveGame::DefaultName(digits);
+                            checkpoint.levelDigits = digits;
+                            checkpoint.difficulty = static_cast<int>(difficultySettings.Get());
+                            checkpoint.inventory = inventory;
+                            SetCheckpoint(checkpoint);
+                        }
+                        ALTEngine::Screens::Enemies::ResetLevelState();
                     }
                 }
                 catch (const std::exception& e)
@@ -1127,6 +1046,67 @@ namespace ALTEngine::Screens
 
         GameplayResult result;
         bool running = true;
+        bool levelComplete = false;
+
+        // The 3D frame's texture, kept across frames (see the present below).
+        SDL_Texture* frameTexture = nullptr;
+        int frameTextureW = 0;
+        int frameTextureH = 0;
+
+        // What each trigger command does to this level. Built once; the
+        // trigger system decides when they run and in what order.
+        ALTEngine::Game::Triggers::Handlers triggerHandlers;
+        triggerHandlers.door = [&](int doorIndex, bool isOpen, int amount, bool viaSwitch,
+                                   ALTEngine::Game::Triggers::Source source) {
+            if (doorIndex < 0 || static_cast<size_t>(doorIndex) >= doorStates.size()) { return false; }
+            // Walking up to a door opens it only with the Modern Automatic
+            // Doors option; otherwise it takes the use key, as in the original.
+            // A failed door command aborts the rest of that chain, which is
+            // what the old walk-on path did too.
+            if (source == ALTEngine::Game::Triggers::Source::WalkOn && !autoOpenDoors) { return false; }
+            return ALTEngine::Game::Doors::ApplyCommand(doorStates[static_cast<size_t>(doorIndex)], isOpen, amount, viaSwitch);
+        };
+        triggerHandlers.toggleLight = [&](int light, int delta) {
+            // Arms (or advances) a light record's variant counter - what brings
+            // a blink light to life, matching FUN_00029d44's add-and-clamp.
+            ModelRenderer::ToggleLevelLight(cacheKey, light, delta);
+            SDL_Log("GameplayScreen: ToggleLight light=%d delta=%d", light, delta);
+        };
+        triggerHandlers.changeTexture = [&](int animator, int delta) {
+            // The texture-animator counterpart of ToggleLight: what makes a
+            // control panel change when its switch is thrown.
+            ModelRenderer::ChangeLevelTexture(cacheKey, animator, delta);
+            SDL_Log("GameplayScreen: ChangeTexture animator=%d delta=%d", animator, delta);
+        };
+        triggerHandlers.spawnMonster = [&](int monster, int amount) {
+            if (ALTEngine::Screens::Enemies::TriggerSpawn(enemies, monster, amount))
+            {
+                SDL_Log("GameplayScreen: trigger spawned monster %d", monster);
+            }
+        };
+        triggerHandlers.activateObject = [&](int objectIndex) {
+            const size_t oi = static_cast<size_t>(objectIndex);
+            if (objectIndex < 0 || oi >= level.crates.size() || oi >= objectState.size()) { return false; }
+            // Latches: a thrown switch fails, and the chain aborts on the failure.
+            if (objectState[oi] != 0) { return false; }
+            // Types 22 and 26 need a battery and consume one; type 24 is exempt.
+            const uint8_t type = level.crates[oi].type;
+            if (type == 22 || type == 26)
+            {
+                if (!inventory.HasBatteries())
+                {
+                    SDL_Log("GameplayScreen: switch %zu needs a battery", oi);
+                    return false;
+                }
+                inventory.batteries--;
+            }
+            objectState[oi] = 1;
+            return true;
+        };
+        triggerHandlers.endLevel = [&]() {
+            SDL_Log("GameplayScreen: End Level trigger fired");
+            levelComplete = true;
+        };
         Uint64 lastTicks = SDL_GetTicks();
 
         // Mouse look (Edward, 2026: "mouse look rather than arrow keys
@@ -1191,12 +1171,20 @@ namespace ALTEngine::Screens
                         result.outcome = GameplayOutcome::ExitGame;
                         running = false;
                     }
+                    else if (pauseResult.outcome == PauseMenuOutcome::LoadGame)
+                    {
+                        result.outcome = GameplayOutcome::LoadGame;
+                        result.loadSlot = pauseResult.loadSlot;
+                        running = false;
+                    }
                     else if (levelReady)
                     {
                         SDL_SetWindowRelativeMouseMode(app.Window(), true);
                         float discardDx = 0.0f, discardDy = 0.0f;
                         SDL_GetRelativeMouseState(&discardDx, &discardDy); // drain any stale delta before the next real frame
                     }
+                    // The pause menu's Options can change the SFX volume.
+                    ALTEngine::Audio::SfxPlayer::SetVolume(audioSettings.SfxVolume());
                     lastTicks = SDL_GetTicks(); // don't count time spent in the pause menu as a movement frame
                 }
             }
@@ -1329,6 +1317,11 @@ namespace ALTEngine::Screens
                     playerTickAccumulator -= playerTickLength;
                     playerTicksThisFrame++;
 
+                    prevCamX = camera.x;
+                    prevCamZ = camera.z;
+                    prevCamYaw = PC::ToRadians(playerCam.viewYaw);
+                    prevCamValid = true;
+
                     PC::Input pcInput;
 
                     // Turn vs strafe. The original had no dedicated turn keys -
@@ -1450,7 +1443,7 @@ namespace ALTEngine::Screens
                     const bool triggerActive =
                         (WS::Def(weaponRuntime.weapon).primary == WS::FIRE_ON_PRESS) ? firePressed : fireHeld;
 
-                    if (triggerActive && WS::TryPrimaryFire(weaponRuntime, hudState))
+                    if (triggerActive && WS::TryPrimaryFire(weaponRuntime, inventory))
                     {
                         // A shot spawns the round AND the casing - FUN_0003d5b0
                         // calls the weapon's projectile spawn, which then calls
@@ -1520,7 +1513,7 @@ namespace ALTEngine::Screens
                     // which takes the original's fallback path: the pistol is
                     // topped up to one round so the player is never left with
                     // nothing. That is real traced behaviour, not a stopgap.
-                    WS::UpdateIdle(weaponRuntime, hudState, false);
+                    WS::UpdateIdle(weaponRuntime, inventory, false);
                     WS::TickNoise(weaponRuntime);
 
                     // Weapon audio.
@@ -1657,73 +1650,6 @@ namespace ALTEngine::Screens
                             return true;
                         };
 
-                        // ---- cell-entry triggers ------------------------
-                        //
-                        // FUN_0004129c, reached from the mover whenever an
-                        // entity's cell changes. Runs the action chain for the
-                        // new cell's trigger, once on entry.
-                        //
-                        // This is what was missing entirely: the tables were
-                        // parsed but nothing ever fired them, so every monster
-                        // with a non-zero trigger threshold stayed unspawned.
-                        auto fireCellTriggers = [&](int cellIndex, int& lastTriggerId) {
-                            namespace CT = ALTEngine::Formats::CellTriggers;
-                            if (cellIndex < 0 || cellIndex >= static_cast<int>(level.collisionGrid.size())) { return; }
-
-                            // THE CELL BYTE IS AN OFFSET, NOT AN INDEX. Every
-                            // non-zero value on L111 is a multiple of 4 - 36, 40,
-                            // 68, 80, 100, 112 - and dividing by 4 brings them
-                            // into 9..28, inside the 64-entry table. Used
-                            // directly they run off the end of it.
-                            //
-                            // FUN_0004129c multiplies the byte by 4 and then
-                            // indexes BYTES, so the byte is the index and the
-                            // multiply is the record stride. That reads the other
-                            // way from the data. MARKED: the division is what the
-                            // data supports and the disassembly is what it is;
-                            // one of the two readings is incomplete.
-                            const int triggerId =
-                                level.collisionGrid[static_cast<size_t>(cellIndex)].scriptAction / 4;
-                            if (!CT::ShouldFire(lastTriggerId, triggerId)) { lastTriggerId = triggerId; return; }
-                            lastTriggerId = triggerId;
-
-                            if (triggerId >= static_cast<int>(level.actions.size())) { return; }
-                            const auto& trigger = level.actions[static_cast<size_t>(triggerId)];
-                            if ((trigger.activationMask & CT::TRIGGER_ENABLED_FLAG) == 0) { return; }
-                            if (trigger.enable == 0) { return; }
-
-                            int step = trigger.commandStart;
-                            for (int guard = 0; guard < 32 && step != CT::ACTION_LIST_END; ++guard)
-                            {
-                                if (step < 0 || step >= static_cast<int>(level.logics.size())) { break; }
-                                const auto& logic = level.logics[static_cast<size_t>(step)];
-
-                                switch (logic.action)
-                                {
-                                case CT::ACTION_SPAWN_MONSTER:
-                                    // arg2 names the monster, arg1 is added to
-                                    // its trigger counter.
-                                    if (ALTEngine::Screens::Enemies::TriggerSpawn(
-                                            enemies, logic.objectIndex, logic.modifier))
-                                    {
-                                        SDL_Log("trigger %d spawned monster %u", triggerId, logic.objectIndex);
-                                    }
-                                    break;
-                                default:
-                                    // The other actions are doors, lifts and the
-                                    // level exit - not wired here yet.
-                                    break;
-                                }
-                                step = logic.nextStep;
-                            }
-                        };
-
-                        {
-                            const int gx = ToGridSpaceX(camera.x, originX) >> 9;
-                            const int gz = ToGridSpaceZ(camera.z, originZ) >> 9;
-                            fireCellTriggers(ALTEngine::Formats::CellIndex(level, gx, gz),
-                                             playerLastTrigger);
-                        }
 
                         for (auto& enemy : enemies)
                         {
@@ -1980,46 +1906,7 @@ namespace ALTEngine::Screens
                         // Walk the blast out from a cell, two rings, gated the
                         // way FUN_000368c8 gates it.
                         auto RunBlast = [&](int originCell) {
-                            if (originCell < 0 || originCell >= static_cast<int>(level.collisionGrid.size())) { return; }
-                            const int width = level.header.mapLength;
-                            const int ox = originCell % width;
-                            const int oz = originCell / width;
-                            const auto& origin = level.collisionGrid[static_cast<size_t>(originCell)];
-
-                            bool ringOneOpen[8] = { false, false, false, false, false, false, false, false };
-                            auto Reachable = [&](int dx, int dz, int& outCell) {
-                                const int cx = ox + dx;
-                                const int cz = oz + dz;
-                                outCell = -1;
-                                if (cx < 0 || cz < 0 || cx >= width || cz >= level.header.mapWidth) { return false; }
-                                const size_t ci = static_cast<size_t>(cz) * static_cast<size_t>(width)
-                                                + static_cast<size_t>(cx);
-                                if (ci >= level.collisionGrid.size()) { return false; }
-                                const auto& cell = level.collisionGrid[ci];
-                                if (cell.attribute > D::BLAST_MAX_ATTRIBUTE) { return false; }
-                                const int step = static_cast<int>(cell.floorHeight) - static_cast<int>(origin.floorHeight);
-                                if (step > D::BLAST_MAX_HEIGHT_STEP || step < -D::BLAST_MAX_HEIGHT_STEP) { return false; }
-                                outCell = static_cast<int>(ci);
-                                return true;
-                            };
-
-                            std::vector<int> hit;
-                            for (int i = 0; i < 8; ++i)
-                            {
-                                int cell = -1;
-                                if (Reachable(D::BLAST_RING1[i].dx, D::BLAST_RING1[i].dz, cell))
-                                {
-                                    ringOneOpen[i] = true;
-                                    hit.push_back(cell);
-                                }
-                            }
-                            for (const auto& outer : D::BLAST_RING2)
-                            {
-                                if (!ringOneOpen[outer.parent]) { continue; }  // culled with its parent
-                                int cell = -1;
-                                if (Reachable(outer.offset.dx, outer.offset.dz, cell)) { hit.push_back(cell); }
-                            }
-
+                            const std::vector<int> hit = ALTEngine::Game::Blast::ReachedCells(level, originCell);
                             for (int cell : hit)
                             {
                                 for (D::Target& other : damageTargets)
@@ -2256,154 +2143,6 @@ namespace ALTEngine::Screens
                 // Triggers and door ticking.
                 if (levelReady)
                 {
-                    // Runs one trigger's command chain. Shared by the
-                    // automatic path (walking onto the cell) and the
-                    // interact key, so both behave identically once fired.
-                    // viaInteract distinguishes a deliberate use from simply
-                    // walking onto the cell. Activate Object only succeeds on
-                    // the former, which is what keeps the automatic-door
-                    // option from also throwing switches.
-                    auto runTriggerChain = [&](int action, bool viaInteract)
-                    {
-                        if (static_cast<size_t>(action) >= level.actions.size()) { return; }
-                        const auto& trigger = level.actions[static_cast<size_t>(action)];
-                        if ((trigger.activationMask & 0x01) == 0 || trigger.enable == 0) { return; }
-
-                        int cmd = trigger.commandStart;
-                        bool sawActivateObject = false;
-                        std::vector<bool> visited(level.logics.size(), false);
-                        while (cmd != 0xFF && static_cast<size_t>(cmd) < level.logics.size() && !visited[static_cast<size_t>(cmd)])
-                        {
-                            visited[static_cast<size_t>(cmd)] = true;
-                            const auto& c = level.logics[static_cast<size_t>(cmd)];
-
-                            // The chain is conditional: handlers return
-                            // success and a failure aborts the remainder.
-                            // That is how a level says "only if the switch
-                            // actually worked". Commands we have not built
-                            // yet must therefore stop the chain rather than
-                            // fall through - otherwise a switch-operated
-                            // door opens without its switch.
-                            switch (c.action)
-                            {
-                            case 1: // Unlock Door
-                            case 6: // Open Door
-                                if (c.objectIndex >= doorStates.size()) { cmd = 0xFF; break; }
-                                else
-                                {
-                                    DoorState& ds = doorStates[c.objectIndex];
-
-                                    // Both fail (and abort the chain) if the
-                                    // door is already fully unlocked or busy.
-                                    if (ds.phase != DoorState::Phase::Idle || ds.unlockProgress >= ds.threshold)
-                                    {
-                                        cmd = 0xFF;
-                                        break;
-                                    }
-
-                                    // Open Door additionally requires this to
-                                    // be the final increment: a door needing
-                                    // two activations cannot be opened by its
-                                    // own trigger until something else - a
-                                    // switch - has supplied the first one.
-                                    if (c.action == 6 && ds.unlockProgress < ds.threshold - 1)
-                                    {
-                                        cmd = 0xFF;
-                                        break;
-                                    }
-
-                                    if (sawActivateObject) { ds.switchOperated = true; }
-                                    ds.unlockProgress = static_cast<uint8_t>(ds.unlockProgress + c.modifier);
-
-                                }
-                                break;
-                            case 8: // End Level
-                                SDL_Log("GameplayScreen: EndLevel trigger fired (action %d)", action);
-                                break;
-                            case 0: // Toggle Light
-                                // Arms (or advances) a light record's
-                                // variant counter. This is what brings a
-                                // blink light to life: every one of L111's
-                                // 18 mode-1 records loads with
-                                // variant 0 / variantMax 1, so it is
-                                // completely static until this fires. The
-                                // 30 mode-3 records load already armed
-                                // (variantMax 0) and blink from the start.
-                                //
-                                // `modifier` is the delta, matching
-                                // FUN_00029d44's signed add-and-clamp.
-                                // Treated as signed: the original passes it
-                                // in a char.
-                                ModelRenderer::ToggleLevelLight(
-                                    cacheKey, static_cast<int>(c.objectIndex),
-                                    static_cast<int>(static_cast<int8_t>(c.modifier)));
-                                SDL_Log("GameplayScreen: ToggleLight light=%u delta=%d",
-                                        c.objectIndex, static_cast<int>(static_cast<int8_t>(c.modifier)));
-                                // Does not set the success flag in the
-                                // original either, so continuing is correct.
-                                break;
-                            case 9: // Change Texture
-                                // Arms (or advances) a texture animator, the
-                                // direct counterpart of command 0 on a light
-                                // record. This is what makes a control panel
-                                // change when its switch is thrown: L111's
-                                // animators 2-9 all load with
-                                // variant 0 / variantMax 1 and do nothing at
-                                // all until this fires at them.
-                                ModelRenderer::ChangeLevelTexture(
-                                    cacheKey, static_cast<int>(c.objectIndex),
-                                    static_cast<int>(static_cast<int8_t>(c.modifier)));
-                                SDL_Log("GameplayScreen: ChangeTexture animator=%u delta=%d",
-                                        c.objectIndex, static_cast<int>(static_cast<int8_t>(c.modifier)));
-                                // Does not set the success flag in the
-                                // original either, so continuing is correct.
-                                break;
-                            case 2: // Spawn Pickup
-                            case 3: // Spawn Monster
-                                // Do not set the success flag in the
-                                // original either, so continuing is correct.
-                                break;
-                            case 4: // Activate Object
-                            {
-                                // Pressing use on the cell is what activates
-                                // the switch. Walking onto it is not.
-                                if (!viaInteract) { cmd = 0xFF; break; }
-
-                                size_t oi = c.objectIndex;
-                                if (oi >= level.crates.size() || oi >= objectState.size()) { cmd = 0xFF; break; }
-
-                                // Latches: a thrown switch fails, and the
-                                // chain aborts on the failure.
-                                if (objectState[oi] != 0) { cmd = 0xFF; break; }
-
-                                // Types 22 and 26 need a battery and consume
-                                // one; type 24 is exempt.
-                                uint8_t type = level.crates[oi].type;
-                                if (type == 22 || type == 26)
-                                {
-                                    if (!inventory.HasBatteries())
-                                    {
-                                        SDL_Log("GameplayScreen: switch %zu needs a battery", oi);
-                                        cmd = 0xFF;
-                                        break;
-                                    }
-                                    inventory.batteries--;
-                                }
-
-                                objectState[oi] = 1;
-                                sawActivateObject = true;
-                                break;
-                            }
-                            default:
-                                // Lift commands (5, 7) also gate the chain on
-                                // their result. Unimplemented, so stop here.
-                                cmd = 0xFF;
-                                break;
-                            }
-                            if (cmd == 0xFF) { break; }
-                            cmd = c.nextStep;
-                        }
-                    };
 
                     int pgx = ToGridSpaceX(camera.x, originX);
                     int pgz = ToGridSpaceZ(camera.z, originZ);
@@ -2436,19 +2175,14 @@ namespace ALTEngine::Screens
                             level.collisionGrid[static_cast<size_t>(cellIndex)].unknown13 = 0xFF;
                         }
                         lastCellIndex = cellIndex;
-                        int action = 0;
-                        if (cellIndex >= 0 && static_cast<size_t>(cellIndex) < level.collisionGrid.size())
-                        {
-                            action = level.collisionGrid[static_cast<size_t>(cellIndex)].scriptAction;
-                        }
-
-                        if (action == 0) { lastTriggerAction = 0; }
-                        else if (autoOpenDoors && action != lastTriggerAction)
-                        {
-                            lastTriggerAction = action;
-                            runTriggerChain(action, false);
-                        }
                     }
+
+                    // Walking onto a trigger cell runs its chain once on entry,
+                    // whatever the Automatic Doors setting - that setting only
+                    // decides whether the door commands in it may succeed (see
+                    // the door handler). Lights, spawns and the level exit fire
+                    // either way, as they do in the original's mover.
+                    triggers.OnEnterCell(playerLastTrigger, cellIndex, triggerHandlers);
 
                     // Walk-over collection. Applied on whichever cell the
                     // player is standing in, checked every frame rather than
@@ -2518,7 +2252,7 @@ namespace ALTEngine::Screens
                         {
                             if (probe < 0 || static_cast<size_t>(probe) >= level.collisionGrid.size()) { continue; }
                             int useAction = level.collisionGrid[static_cast<size_t>(probe)].scriptAction;
-                            if (useAction != 0) { runTriggerChain(useAction, true); break; }
+                            if (useAction != 0) { triggers.Run(useAction, ALTEngine::Game::Triggers::Source::Interact, triggerHandlers); break; }
                         }
                     }
                     prevUseHeld = useHeld;
@@ -2602,72 +2336,18 @@ namespace ALTEngine::Screens
 
                         for (auto& ds : doorStates)
                         {
-                            switch (ds.phase)
+                            // The notice: a switch-operated door reads as "powered
+                            // up", one you reach yourself as "activated" - see
+                            // HudMessages for why that split and how confident it is.
+                            switch (ALTEngine::Game::Doors::Tick(ds, level, camera.x, camera.z))
                             {
-                            case DoorState::Phase::Idle:
-                                // Re-checked every tick against the counter
-                                // alone - the original needs no fresh trigger
-                                // here, because closing resets the counter.
-                                if (ds.cooldown > 0) { ds.cooldown--; }
-                                else if (ds.unlockProgress >= ds.threshold)
-                                {
-                                    ds.phase = DoorState::Phase::Opening;
-
-                                    // The notice. A switch-operated door reads as
-                                    // "powered up", one you reach yourself as
-                                    // "activated" - see HudMessages for why that
-                                    // split and how confident it is.
-                                    // isLift is always false for now - nothing
-                                    // builds lift states yet, level.lifts is
-                                    // parsed but unused - so this only ever says
-                                    // the door lines. The branch is here so that
-                                    // when lifts arrive the notice comes with
-                                    // them rather than being forgotten.
-                                    if (ds.isLift) { hudMessages.ShowLiftActivated(language); }
-                                    else if (ds.switchOperated) { hudMessages.ShowDoorPoweredUp(language); }
-                                    else { hudMessages.ShowDoorActivated(language); }
-                                }
-                                break;
-                            case DoorState::Phase::Opening:
-                                ds.progress++;
-                                if (ds.progress >= ds.travel) { ds.progress = ds.travel; ds.phase = DoorState::Phase::Open; }
-                                break;
-                            case DoorState::Phase::Open:
-                            {
-                                // Measured across the doorway, not along it:
-                                // a door running along Z is walked through
-                                // in X, so that is the axis that matters.
-                                float d = ds.alongZ ? (ds.worldX - camera.x) : (ds.worldZ - camera.z);
-                                if (d < 0) { d = -d; }
-                                if (ds.switchOperated) { break; }
-                                bool occupied = false;
-                                for (int i = 0; i < ds.cellCount; ++i)
-                                {
-                                    if (level.collisionGrid[ds.cells[static_cast<size_t>(i)]].unknown13 != 0) { occupied = true; break; }
-                                }
-                                if (d > 1024.0f && !occupied) { ds.phase = DoorState::Phase::Closing; }
-                                break;
-                            }
-                            case DoorState::Phase::Closing:
-                                ds.progress--;
-                                if (ds.progress <= 0)
-                                {
-                                    ds.progress = 0;
-                                    ds.phase = DoorState::Phase::Idle;
-                                    if (ds.keepsUnlockOnClose) { ds.cooldown = ds.holdTicks; }
-                                    else { ds.unlockProgress = 0; }
-                                }
-                                break;
+                            case ALTEngine::Game::DoorNotice::DoorActivated: hudMessages.ShowDoorActivated(language); break;
+                            case ALTEngine::Game::DoorNotice::DoorPoweredUp: hudMessages.ShowDoorPoweredUp(language); break;
+                            case ALTEngine::Game::DoorNotice::LiftActivated: hudMessages.ShowLiftActivated(language); break;
+                            case ALTEngine::Game::DoorNotice::None: break;
                             }
 
-                            // Push the current height into both the grid and
-                            // the mesh, so collision and visuals agree.
-                            uint8_t ceilingUnits = static_cast<uint8_t>(ds.floorUnits + ds.progress);
-                            for (int i = 0; i < ds.cellCount; ++i)
-                            {
-                                level.collisionGrid[ds.cells[static_cast<size_t>(i)]].ceilingHeight = ceilingUnits;
-                            }
-                            float y = ds.baseY + static_cast<float>(ds.progress) * 32.0f;
+                            const float y = ds.MeshY();
                             for (int i = 0; i < ds.placedCount; ++i)
                             {
                                 size_t pi = ds.placedFirst + static_cast<size_t>(i);
@@ -2831,12 +2511,48 @@ namespace ALTEngine::Screens
                     }
                 }
 
-                std::vector<uint8_t> pixels = ModelRenderer::RenderLevelToRgba(cacheKey, camera, windowW, windowH,
+                // The view, drawn between the last two player ticks (see
+                // prevCamX). Everything that simulates or tests collision keeps
+                // using `camera`; this copy is only for drawing.
+                ALTEngine::Renderer::FpsCamera view = camera;
+                if (prevCamValid)
+                {
+                    namespace PC = ALTEngine::Screens::PlayerCamera;
+                    const float tickLength = 1.0f / static_cast<float>(PC::TICK_HZ);
+                    const float alpha = std::clamp(playerTickAccumulator / tickLength, 0.0f, 1.0f);
+                    view.x = prevCamX + (camera.x - prevCamX) * alpha;
+                    view.z = prevCamZ + (camera.z - prevCamZ) * alpha;
+
+                    // Yaw the short way round, plus whatever mouse turn has
+                    // arrived since the last tick and not been simulated yet -
+                    // so mouse look answers every frame rather than every tick.
+                    constexpr float TWO_PI = 6.28318530718f;
+                    float turn = camera.yaw - prevCamYaw;
+                    while (turn > TWO_PI * 0.5f) { turn -= TWO_PI; }
+                    while (turn < -TWO_PI * 0.5f) { turn += TWO_PI; }
+                    view.yaw = prevCamYaw + turn * alpha
+                             + pendingMouseYaw * (TWO_PI / static_cast<float>(PC::ANGLE_UNITS));
+                }
+
+                std::vector<uint8_t> pixels = ModelRenderer::RenderLevelToRgba(cacheKey, view, windowW, windowH,
                                                                                placedObjects, placedSprites);
                 placedObjects.resize(staticObjectCount); // drop this frame's particles again
                 if (!pixels.empty())
                 {
-                    SDL_Texture* frameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, windowW, windowH);
+                    // One texture for the whole level, recreated only when the
+                    // window size changes - this used to be created and
+                    // destroyed every frame.
+                    if (frameTexture && (frameTextureW != windowW || frameTextureH != windowH))
+                    {
+                        SDL_DestroyTexture(frameTexture);
+                        frameTexture = nullptr;
+                    }
+                    if (!frameTexture)
+                    {
+                        frameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, windowW, windowH);
+                        frameTextureW = windowW;
+                        frameTextureH = windowH;
+                    }
                     if (frameTexture)
                     {
                         SDL_UpdateTexture(frameTexture, nullptr, pixels.data(), windowW * 4);
@@ -2857,68 +2573,12 @@ namespace ALTEngine::Screens
                             // tracker's panel strip.
                             hud.LoadCustomBorder(renderer, cdDirectory);
                         }
-                        // Mirror the inventory into the HUD state each frame.
-                        //
-                        // The inventory already tracks per-weapon ammo as a
-                        // single number, which is the total the original's HUD
-                        // displays - so it goes into the remainder slot with the
-                        // unit counter left at zero. The unit/remainder split
-                        // exists for reload behaviour that does not exist yet;
-                        // when it does, the split becomes meaningful and this
-                        // mapping should move into the inventory itself rather
-                        // than being flattened here.
-                        //
-                        // Weapon order matches the original's 0-4 indices, which
-                        // is also the inventory's declaration order.
+                        // The HUD prints what the inventory holds. The inventory is
+                        // the only copy of the ammunition - firing, reloading and
+                        // pickups all change it directly - so this is a plain
+                        // read, every frame, with nothing to keep in step.
                         {
-                            const std::array<int, ALTEngine::Screens::PlayerHudState::WEAPON_COUNT> current{
-                                inventory.pistol.ammo, inventory.shotgun.ammo, inventory.flamethrower.ammo,
-                                inventory.pulseRifle.ammo, inventory.smartGun.ammo
-                            };
-
-                            for (size_t w = 0; w < current.size(); ++w)
-                            {
-                                const int magazine = ALTEngine::Screens::PlayerHudState::ROUNDS_PER_UNIT[w];
-
-                                if (!ammoSeeded)
-                                {
-                                    // First frame: split the inventory total
-                                    // into the original's unit/remainder pair.
-                                    // A total that divides exactly leaves the
-                                    // last magazine LOADED rather than banked,
-                                    // so the player can fire immediately.
-                                    if (magazine > 0)
-                                    {
-                                        int units = current[w] / magazine;
-                                        int rem = current[w] % magazine;
-                                        if (rem == 0 && units > 0) { units--; rem = magazine; }
-                                        hudState.ammoUnits[w] = static_cast<int16_t>(units);
-                                        hudState.ammoRemainder[w] = static_cast<int16_t>(rem);
-                                    }
-                                    else
-                                    {
-                                        hudState.ammoUnits[w] = 0;
-                                        hudState.ammoRemainder[w] = static_cast<int16_t>(current[w]);
-                                    }
-                                }
-                                else if (current[w] != mirroredAmmo[w])
-                                {
-                                    // A pickup happened. Apply only the change,
-                                    // so the rounds already spent stay spent.
-                                    int rem = hudState.ammoRemainder[w] + (current[w] - mirroredAmmo[w]);
-                                    int units = hudState.ammoUnits[w];
-                                    if (magazine > 0)
-                                    {
-                                        while (rem > magazine) { rem -= magazine; units++; }
-                                    }
-                                    if (rem < 0) { rem = 0; }
-                                    hudState.ammoUnits[w] = static_cast<int16_t>(units);
-                                    hudState.ammoRemainder[w] = static_cast<int16_t>(rem);
-                                }
-
-                                mirroredAmmo[w] = current[w];
-                            }
-                            ammoSeeded = true;
+                            hudState.currentAmmoDisplay = inventory.AmmoTotal(selectedWeapon);
 
                             // Grenades. The original keeps them in the high half
                             // of the pulse rifle's own ammo word (DAT_000b0ac6),
@@ -3109,7 +2769,6 @@ namespace ALTEngine::Screens
                                                          ALTEngine::Renderer::HUD_MINIMAP_STRIP_H * hudScaleY);
                             }
                         }
-                        SDL_DestroyTexture(frameTexture);
                     }
                 }
                 else
@@ -3127,9 +2786,24 @@ namespace ALTEngine::Screens
             }
 
             SDL_RenderPresent(renderer);
+
+            // Leave after the frame is drawn, so the exit is seen before the
+            // assessment screen. Dying on the same frame takes precedence.
+            if (levelComplete && !playerDead && running)
+            {
+                result.outcome = GameplayOutcome::LevelComplete;
+                running = false;
+            }
         }
 
         SDL_SetWindowRelativeMouseMode(app.Window(), false);
+        if (frameTexture) { SDL_DestroyTexture(frameTexture); frameTexture = nullptr; }
+
+        result.aliensTotal = static_cast<int>(enemies.size());
+        for (const auto& enemy : enemies)
+        {
+            if (!enemy.alive) { result.aliensKilled++; }
+        }
 
         // The game over sequence, after the level is done being drawn so the last
         // frame the player saw is the one that killed them.
@@ -3137,7 +2811,7 @@ namespace ALTEngine::Screens
         {
             ModelRenderer::UnloadLevels();
             ALTEngine::Screens::GameOverSequence::Play(cdDirectory, language, deathVideoIndex);
-            result.outcome = GameplayOutcome::ExitGame;
+            result.outcome = GameplayOutcome::PlayerDied;
             return result;
         }
 

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <optional>
 
+#include "Audio/SfxPlayer.h"
 #include "Bootstrap/ModernSettings.h"
 #include "Tools/LevelLightScanner.h"
 #include "Bootstrap/AppWindow.h"
@@ -25,6 +26,11 @@
 #include "Screens/MissionBriefingScreen.h"
 #include "Screens/MultiplayerScreens.h"
 #include "Screens/SaveSlotScreen.h"
+#include "Screens/EndLevelPromptScreen.h"
+#include "Screens/MissionAssessmentScreen.h"
+#include "Formats/LevelList.h"
+#include "Game/Progression.h"
+#include "Game/SaveGame.h"
 #include "Video/OverrideVideo.h"
 #include "Video/VideoPlayer.h"
 
@@ -44,6 +50,28 @@ namespace
     {
         std::cout << "\nPress Enter to close...";
         std::cin.get();
+    }
+
+    enum class CampaignEnd { BackToMenu, WindowClosed };
+
+    // "1.1.1" -> "111".
+    std::string DigitsOf(const std::string& code)
+    {
+        std::string digits;
+        for (char c : code) { if (c >= '0' && c <= '9') { digits += c; } }
+        return digits;
+    }
+
+    // "111" -> "1.1.1", for a level that is not in the manifest.
+    std::string DottedOf(const std::string& digits)
+    {
+        std::string dotted;
+        for (char c : digits)
+        {
+            if (!dotted.empty()) { dotted += '.'; }
+            dotted += c;
+        }
+        return dotted;
     }
 
     // GraphicsViewer.cs tries these extensions in this order, since which
@@ -192,10 +220,8 @@ int main(int, char**)
         inv = ALTEngine::Screens::PlayerInventoryState{};
     };
 
-    // What Keep Items is actually for: level-to-level progression, which does
-    // not exist yet. Left here so the distinction is explicit rather than
-    // implied by an absence, and so the feature has an obvious home the moment
-    // there is a level-completion path to call it from.
+    // What Keep Items is actually for: level-to-level progression. Without it
+    // each new level starts from the original's pistol-only loadout.
     auto carryInventoryBetweenLevels = []( ALTEngine::Screens::PlayerInventoryState& inv) {
         ALTEngine::Bootstrap::Config modernConfig;
         ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
@@ -204,7 +230,6 @@ int main(int, char**)
             inv = ALTEngine::Screens::PlayerInventoryState{};
         }
     };
-    (void)carryInventoryBetweenLevels;
 
     // Must happen before anything below could possibly call Tr() -
     // LoadedLanguagePacks() only ever initializes its cache once, on
@@ -270,6 +295,7 @@ int main(int, char**)
     CameraSwaySettings cameraSwaySettings(config);
     KeyBindings keyBindings(config);
     AudioSettings audioSettings(config);
+    ALTEngine::Audio::SfxPlayer::SetVolume(audioSettings.SfxVolume());
 
     // Applied once, here, rather than than every time MenuController::Run
     // is re-entered (which would flicker the window every time the
@@ -298,6 +324,96 @@ int main(int, char**)
             AppWindow::Instance().SetDisplayMode(displayMode);
         }
     }
+
+    SetSaveDirectory(ExecutableDirectory() / "Saves");
+    const std::vector<LevelListEntry> levelList = LoadLevelList("data/LevelManifest.json");
+
+    auto closeAndExit = [&]() {
+        std::cout << "Boot window closed. Aborting.\n";
+        ALTEngine::Renderer::ModelRenderer::Shutdown();
+        AppWindow::Instance().Shutdown();
+        PauseBeforeExit();
+        return 1;
+    };
+
+    // Plays from `startDigits` until the player quits, dies, runs out of
+    // campaign or closes the window: briefing, level, assessment, the
+    // end-of-level prompt, then the next level in LevelManifest.json order.
+    // A save loaded from the pause menu restarts the loop at the saved level.
+    auto playCampaign = [&](std::string digits) -> CampaignEnd {
+        while (true)
+        {
+            const auto entry = ALTEngine::Game::Progression::Find(levelList, digits);
+            const std::string dotted = entry ? entry->dottedCode : DottedOf(digits);
+            std::cout << "Starting level " << dotted << "\n";
+
+            // The briefing is not just presentation - it preloads PICKMOD and
+            // OBJ3D, without which no object has a model to draw. Multiplayer
+            // maps have no briefing text, so they get the preload alone.
+            const bool multiplayerLevel = entry ? entry->multiplayer : (!digits.empty() && digits[0] == '9');
+            if (!multiplayerLevel)
+            {
+                MissionBriefingResult briefing = MissionBriefingScreen::Run(cdDirectory, language, dotted);
+                if (briefing.windowClosed) { return CampaignEnd::WindowClosed; }
+            }
+            else
+            {
+                MissionBriefingScreen::PreloadObjectModels(cdDirectory, language);
+            }
+
+            GameplayResult played = GameplayScreen::Run(cdDirectory, language, dotted, keyBindings, audioSettings,
+                                                        renderSettings, resolutionSettings, difficultySettings,
+                                                        cameraSwaySettings, languageSettings, &playerInventory);
+            switch (played.outcome)
+            {
+            case GameplayOutcome::WindowClosed:
+                return CampaignEnd::WindowClosed;
+            case GameplayOutcome::ExitGame:
+            case GameplayOutcome::PlayerDied:
+                return CampaignEnd::BackToMenu;
+            case GameplayOutcome::LoadGame:
+            {
+                auto save = ALTEngine::Game::SaveGame::Read(SaveDirectory(), played.loadSlot);
+                if (!save) { return CampaignEnd::BackToMenu; }
+                difficultySettings.Set(static_cast<Difficulty>(save->difficulty));
+                playerInventory = save->inventory;
+                digits = save->levelDigits;
+                continue;
+            }
+            case GameplayOutcome::LevelComplete:
+                break;
+            }
+
+            const auto assessment = ALTEngine::Game::Progression::Assess(played.aliensKilled, played.aliensTotal);
+            MissionAssessmentStats stats;
+            stats.aliensPercent = assessment.aliensPercent;
+            stats.secretsPercent = assessment.secretsPercent;
+            stats.missionPercent = assessment.missionPercent;
+            if (MissionAssessmentScreen::Run(cdDirectory, stats).windowClosed) { return CampaignEnd::WindowClosed; }
+
+            const auto next = ALTEngine::Game::Progression::NextLevel(levelList, digits);
+            if (!next)
+            {
+                std::cout << "No level after " << dotted << " - back to the main menu.\n";
+                return CampaignEnd::BackToMenu;
+            }
+
+            carryInventoryBetweenLevels(playerInventory);
+
+            // Saving from the prompt checkpoints the NEXT level.
+            ALTEngine::Game::SaveData checkpoint;
+            checkpoint.name = ALTEngine::Game::SaveGame::DefaultName(next->digits);
+            checkpoint.levelDigits = next->digits;
+            checkpoint.difficulty = static_cast<int>(difficultySettings.Get());
+            checkpoint.inventory = playerInventory;
+            SetCheckpoint(checkpoint);
+
+            EndLevelPromptResult prompt = EndLevelPromptScreen::Run(cdDirectory);
+            if (prompt.windowClosed) { return CampaignEnd::WindowClosed; }
+            if (prompt.choice == EndLevelPromptChoice::Quit) { return CampaignEnd::BackToMenu; }
+            digits = next->digits;
+        }
+    };
 
     std::vector<int> mainPath = { 0 };
 
@@ -379,19 +495,21 @@ int main(int, char**)
 
         if (menuResult.action == "Load Game")
         {
-            SaveSlotResult loadResult = SaveSlotScreen::Run(cdDirectory, SaveSlotMode::Load, StubSaveSlots());
-            if (loadResult.windowClosed)
+            SaveSlotResult loadResult = SaveSlotScreen::Run(cdDirectory, SaveSlotMode::Load, CurrentSaveSlots());
+            if (loadResult.windowClosed) { return closeAndExit(); }
+            if (loadResult.selectedSlot)
             {
-                std::cout << "Boot window closed. Aborting.\n";
-                ALTEngine::Renderer::ModelRenderer::Shutdown();
-                AppWindow::Instance().Shutdown();
-                PauseBeforeExit();
-                return 1;
+                if (auto save = ALTEngine::Game::SaveGame::Read(SaveDirectory(), *loadResult.selectedSlot))
+                {
+                    difficultySettings.Set(static_cast<Difficulty>(save->difficulty));
+                    playerInventory = save->inventory;
+                    if (playCampaign(save->levelDigits) == CampaignEnd::WindowClosed) { return closeAndExit(); }
+                }
+                else
+                {
+                    std::cout << "Save slot " << *loadResult.selectedSlot << " could not be read.\n";
+                }
             }
-            // NEXT: actually load the chosen slot's save data and resume
-            // gameplay from it, once a real save system exists. For now,
-            // selecting a slot (or backing out) has nowhere to go but
-            // back to the main menu.
             continue;
         }
 
@@ -403,78 +521,17 @@ int main(int, char**)
         {
             std::cout << "Level Select: " << menuResult.levelCode << "\n";
             prepareInventory(playerInventory);
-
-            // Run the briefing first. It is not just presentation - it is what
-            // preloads PICKMOD and OBJ3D, so skipping it left every crate,
-            // barrel, switch and pickup with no model to draw. That is why
-            // objects only appeared when starting the first level the normal way
-            // (Edward, 2026).
-            //
-            // Multiplayer levels have no briefing text, so they get the same
-            // preload without the screen. Anything whose code starts with 9 is
-            // multiplayer; they are in the list for testing only.
-            bool multiplayerLevel = (menuResult.levelCode[0] == '9');
-            if (!multiplayerLevel)
-            {
-                MissionBriefingResult briefingResult = MissionBriefingScreen::Run(cdDirectory, language, menuResult.levelCode);
-                if (briefingResult.windowClosed)
-                {
-                    std::cout << "Boot window closed. Aborting.\n";
-                    ALTEngine::Renderer::ModelRenderer::Shutdown();
-                    AppWindow::Instance().Shutdown();
-                    PauseBeforeExit();
-                    return 1;
-                }
-            }
-            else
-            {
-                MissionBriefingScreen::PreloadObjectModels(cdDirectory, language);
-            }
-
-            GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, menuResult.levelCode, keyBindings, audioSettings,
-                                                                  renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings,
-                                                                  &playerInventory);
-            if (gameplayResult.outcome == GameplayOutcome::WindowClosed)
-            {
-                std::cout << "Boot window closed. Aborting.\n";
-                ALTEngine::Renderer::ModelRenderer::Shutdown();
-                AppWindow::Instance().Shutdown();
-                PauseBeforeExit();
-                return 1;
-            }
+            if (playCampaign(DigitsOf(menuResult.levelCode)) == CampaignEnd::WindowClosed) { return closeAndExit(); }
             continue;
         }
 
         if (menuResult.action == "Start Game")
         {
-            // Hardcoded to the first level for now - no level-select flow
-            // exists (there never was one in the original game either -
-            // levels just progress, with save/load presumably selecting a
-            // level once that exists). Wire this up to real progression
-            // once there's somewhere for it to come from.
-            MissionBriefingResult briefingResult = MissionBriefingScreen::Run(cdDirectory, language, "1.1.1");
-            if (briefingResult.windowClosed)
-            {
-                std::cout << "Boot window closed. Aborting.\n";
-                ALTEngine::Renderer::ModelRenderer::Shutdown();
-                AppWindow::Instance().Shutdown();
-                PauseBeforeExit();
-                return 1;
-            }
-
+            // The original has no level select: a new game starts at 1.1.1 and
+            // the campaign carries on from there.
             prepareInventory(playerInventory);
-            GameplayResult gameplayResult = GameplayScreen::Run(cdDirectory, language, "1.1.1", keyBindings, audioSettings,
-                                                                  renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings,
-                                                                  &playerInventory);
-            if (gameplayResult.outcome == GameplayOutcome::WindowClosed)
-            {
-                std::cout << "Boot window closed. Aborting.\n";
-                ALTEngine::Renderer::ModelRenderer::Shutdown();
-                AppWindow::Instance().Shutdown();
-                PauseBeforeExit();
-                return 1;
-            }
-            continue; // Exit Game (from the pause menu) - return to the main menu
+            if (playCampaign("111") == CampaignEnd::WindowClosed) { return closeAndExit(); }
+            continue;
         }
 
         // Any other selection (e.g. Options, handled entirely within

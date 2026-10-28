@@ -15,13 +15,23 @@ namespace ALTEngine::Screens
 {
     enum class GameplayOutcome
     {
-        ExitGame,     // player confirmed Exit Game from the pause menu
+        ExitGame,       // player confirmed Exit Game from the pause menu
         WindowClosed,
+        LevelComplete,  // an End Level trigger fired
+        PlayerDied,     // the death sequence has already played
+        LoadGame,       // a save was chosen from the pause menu - see loadSlot
     };
 
     struct GameplayResult
     {
         GameplayOutcome outcome = GameplayOutcome::ExitGame;
+
+        // For the mission assessment, filled in on LevelComplete.
+        int aliensKilled = 0;
+        int aliensTotal = 0;
+
+        // 1-10 when outcome is LoadGame.
+        int loadSlot = 0;
     };
 
     // Renders the actual level (real FPS camera, real geometry - see

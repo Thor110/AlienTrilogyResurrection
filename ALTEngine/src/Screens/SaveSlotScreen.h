@@ -6,6 +6,7 @@
 #include <string>
 
 #include "../Bootstrap/Localization.h"
+#include "../Game/SaveGame.h"
 
 namespace ALTEngine::Screens
 {
@@ -26,7 +27,25 @@ namespace ALTEngine::Screens
     // (slot 1 = "TWENTYTHIRD", 2-10 unused) rather than reading anything
     // real from disk. Swap this out once real save data exists - nothing
     // else about SaveSlotScreen should need to change.
-    std::array<SaveSlotInfo, 10> StubSaveSlots();
+    // ---- the save service ------------------------------------------------
+    //
+    // The menus' view of the save files (Game/SaveGame.h). main() sets the
+    // directory once; whoever is in charge of the game sets the checkpoint -
+    // the level about to be played and what the player carries into it - and
+    // every Save Game in the menus writes that checkpoint.
+    void SetSaveDirectory(const std::filesystem::path& directory);
+    const std::filesystem::path& SaveDirectory();
+
+    // The ten slots as they are on disk right now.
+    std::array<SaveSlotInfo, 10> CurrentSaveSlots();
+
+    void SetCheckpoint(const ALTEngine::Game::SaveData& checkpoint);
+    void ClearCheckpoint();
+    bool HasCheckpoint();
+
+    // Writes the checkpoint to `slot` (1-10). False if there is none or the
+    // write failed.
+    bool SaveCheckpointToSlot(int slot);
 
     struct SaveSlotResult
     {

@@ -18,6 +18,7 @@ namespace ALTEngine::Screens
         Resumed,      // player pressed Escape again / backed all the way out
         ExitGame,     // confirmed "Exit Game" -> "Yes"
         WindowClosed,
+        LoadGame,     // chose a save slot to load - see PauseMenuResult::loadSlot
     };
 
     struct PauseMenuResult
@@ -31,6 +32,9 @@ namespace ALTEngine::Screens
 
         // Health pinned to its maximum while on.
         bool cheatMaximumHealth = false;
+
+        // 1-10 when outcome is LoadGame.
+        int loadSlot = 0;
     };
 
     // The in-game pause menu, opened with Escape. Auto Mapper / Shoulder

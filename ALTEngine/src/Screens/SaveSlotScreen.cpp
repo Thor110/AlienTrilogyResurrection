@@ -27,11 +27,46 @@ namespace ALTEngine::Screens
         constexpr Color COLOR_DIM{ 24, 130, 52, 255 };
     }
 
-    std::array<SaveSlotInfo, 10> StubSaveSlots()
+    namespace
+    {
+        std::filesystem::path& SaveDirectoryStorage()
+        {
+            static std::filesystem::path directory = "Saves";
+            return directory;
+        }
+
+        std::optional<ALTEngine::Game::SaveData>& CheckpointStorage()
+        {
+            static std::optional<ALTEngine::Game::SaveData> checkpoint;
+            return checkpoint;
+        }
+    }
+
+    void SetSaveDirectory(const std::filesystem::path& directory) { SaveDirectoryStorage() = directory; }
+    const std::filesystem::path& SaveDirectory() { return SaveDirectoryStorage(); }
+
+    std::array<SaveSlotInfo, 10> CurrentSaveSlots()
     {
         std::array<SaveSlotInfo, 10> slots{};
-        slots[0] = { "TWENTYTHIRD", true }; // matches the reference screenshots exactly
+        const auto names = ALTEngine::Game::SaveGame::ListNames(SaveDirectory());
+        for (size_t i = 0; i < slots.size(); ++i)
+        {
+            if (names[i]) { slots[i] = { *names[i], true }; }
+        }
         return slots;
+    }
+
+    void SetCheckpoint(const ALTEngine::Game::SaveData& checkpoint) { CheckpointStorage() = checkpoint; }
+    void ClearCheckpoint() { CheckpointStorage().reset(); }
+    bool HasCheckpoint() { return CheckpointStorage().has_value(); }
+
+    bool SaveCheckpointToSlot(int slot)
+    {
+        if (!CheckpointStorage()) { return false; }
+        const bool ok = ALTEngine::Game::SaveGame::Write(SaveDirectory(), slot, *CheckpointStorage());
+        SDL_Log("SaveSlots: %s %s to slot %d", ok ? "saved" : "FAILED to save",
+                CheckpointStorage()->name.c_str(), slot);
+        return ok;
     }
 
     SaveSlotResult SaveSlotScreen::Run(

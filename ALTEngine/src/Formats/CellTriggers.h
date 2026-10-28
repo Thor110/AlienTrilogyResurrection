@@ -51,32 +51,9 @@ namespace ALTEngine::Formats
     // NOTE THE TRIGGER FIRES FOR ANY ENTITY, not only the player: the mover calls
     // it, and the mover runs for monsters too. So a creature can open a door or
     // set off a spawn by walking over the trigger.
-    namespace CellTriggers
-    {
-        inline constexpr int CELL_TRIGGER_ID = 0x0f;      // byte in the collision cell
-        inline constexpr int ENTITY_LAST_TRIGGER = 0x71;  // byte in the entity
-
-        inline constexpr int TRIGGER_ENABLED_FLAG = 4;    // bit 4 of the trigger's flags
-        inline constexpr int TRIGGER_UNLIMITED = 0xff;    // uses byte, never decremented
-        inline constexpr int ACTION_LIST_END = 0xff;
-
-        enum Action
-        {
-            ACTION_OBJECT = 0,
-            ACTION_DOOR = 1,
-            ACTION_LIFT = 2,
-            ACTION_SPAWN_MONSTER = 3,
-            ACTION_FIVE = 5,
-            ACTION_SEVEN = 7,
-            ACTION_LEVEL_EXIT = 8,
-            ACTION_NINE = 9,
-        };
-
-        // An entity fires a trigger only when the cell's id differs from the one
-        // it last fired - see the note above.
-        inline bool ShouldFire(int lastTriggerId, int cellTriggerId)
-        {
-            return cellTriggerId != 0 && lastTriggerId != cellTriggerId;
-        }
-    }
+    // The constants that used to live here are gone: two of them were wrong
+    // against the level data (the enable bit is 0x01, not 0x04, and the cell
+    // byte is the trigger id itself, not id * 4). Game/Triggers.h is the one
+    // implementation now and is tested against the demo levels. These notes
+    // are kept for the disassembly addresses.
 }

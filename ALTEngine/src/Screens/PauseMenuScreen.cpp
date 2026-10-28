@@ -69,6 +69,7 @@ namespace ALTEngine::Screens
             const WeaponState* state;
             int weaponModel;
             int ammoModel;
+            int ammoTotal;
         };
 
         // Maps a top-level item's label to its WeaponState, if it's a
@@ -76,14 +77,14 @@ namespace ALTEngine::Screens
         // Mission, Options, etc).
         std::optional<WeaponInfo> WeaponInfoFor(const std::string& label, const PlayerInventoryState& inv, const MenuNode& node)
         {
-            const WeaponState* state = nullptr;
-            if (label == "9mm Pistol") { state = &inv.pistol; }
-            else if (label == "Shotgun") { state = &inv.shotgun; }
-            else if (label == "Flamethrower") { state = &inv.flamethrower; }
-            else if (label == "Pulse Rifle") { state = &inv.pulseRifle; }
-            else if (label == "Smart Gun") { state = &inv.smartGun; }
-            if (!state) { return std::nullopt; }
-            return WeaponInfo{ state, node.modelIndex, node.secondaryModelIndex };
+            int index = -1;
+            if (label == "9mm Pistol") { index = 0; }
+            else if (label == "Shotgun") { index = 1; }
+            else if (label == "Pulse Rifle") { index = 2; }
+            else if (label == "Flamethrower") { index = 3; }
+            else if (label == "Smart Gun") { index = 4; }
+            if (index < 0) { return std::nullopt; }
+            return WeaponInfo{ inv.ByIndex(index), node.modelIndex, node.secondaryModelIndex, inv.AmmoTotal(index) };
         }
 
         // Draws a nested list as its own column, the way the Options menu does.
@@ -546,15 +547,26 @@ namespace ALTEngine::Screens
                     // (still on Save Game/Load Game) rather than jumping
                     // to the main menu or exiting gameplay.
                     SaveSlotMode mode = (deepest.label == "Save Game") ? SaveSlotMode::Save : SaveSlotMode::Load;
-                    SaveSlotResult slotResult = SaveSlotScreen::Run(cdDirectory, mode, StubSaveSlots(), false);
+                    SaveSlotResult slotResult = SaveSlotScreen::Run(cdDirectory, mode, CurrentSaveSlots(), false);
                     if (slotResult.windowClosed)
                     {
                         result.outcome = PauseMenuOutcome::WindowClosed;
                         running = false;
                     }
-                    // NEXT: actually save/load real data once a real save
-                    // system exists - same TODO as main.cpp's own Load
-                    // Game handling.
+                    else if (slotResult.selectedSlot && mode == SaveSlotMode::Save)
+                    {
+                        // Saves the checkpoint - the start of this level, with
+                        // what the player brought into it. Mid-level state is
+                        // not serialised yet (see Game/SaveGame.h).
+                        SaveCheckpointToSlot(*slotResult.selectedSlot);
+                    }
+                    else if (slotResult.selectedSlot)
+                    {
+                        // Loading leaves this level; main() starts the saved one.
+                        result.outcome = PauseMenuOutcome::LoadGame;
+                        result.loadSlot = *slotResult.selectedSlot;
+                        running = false;
+                    }
                 }
                 if (r != EnterResult::NoOp) { SfxPlayer::Play(SfxId::MenuSelect, cdDirectory); }
             };
@@ -766,7 +778,7 @@ namespace ALTEngine::Screens
             else if (auto weaponInfo = WeaponInfoFor(topLabel, inventory, root.children[static_cast<size_t>(path[0])]))
             {
                 std::string ammoText = weaponInfo->state->available
-                    ? (std::to_string(weaponInfo->state->ammo) + " rounds available")
+                    ? (std::to_string(weaponInfo->ammoTotal) + " rounds available")
                     : "No ammo available";
                 DrawBitmapText(renderer, ammoText, panelX, panelY, scale, COLOR_STATUS);
 

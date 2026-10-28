@@ -270,9 +270,9 @@ namespace ALTEngine::Formats
         // Indexed directly by a cell's action byte (+0x0f). Entry 0 is
         // unused. Confirmed via Ghidra: the game compacts these into a
         // working table keeping only the first three bytes.
-        uint8_t activationMask = 0; // which trigger classes fire this: 0x04 = player walks onto the cell
+        uint8_t activationMask = 0; // which trigger classes fire this: 0x01 = the player (every trigger the demo levels use has it)
         uint8_t commandStart = 0;   // first index into `logics`
-        uint8_t enable = 0;         // must be non-zero or nothing fires
+        uint8_t enable = 0;         // uses remaining: 0 = spent, 0xFF = unlimited, otherwise decremented per completed run
         uint8_t byte4 = 0;          // confirmed always 0
     };
 
@@ -420,7 +420,7 @@ namespace ALTEngine::Formats
     //
     // The names differ from what the code does, which is why I did not recognise
     // them. What was missing was never the parsing - it was that nothing FIRES
-    // them. See Formats/CellTriggers.h.
+    // them. They now run through Game/Triggers.h.
     //
     // VERIFIED ON L111, and the two halves agree without fudging:
     //     ActionGroup 0 -> LogicGroup 43: action 3, spawn monster 8

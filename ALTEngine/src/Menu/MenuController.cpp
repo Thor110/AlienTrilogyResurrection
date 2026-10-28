@@ -1130,6 +1130,7 @@ namespace ALTEngine::Menu
                 else
                 {
                     audioSettings.SetSfxVolume(updated);
+                    SfxPlayer::SetVolume(updated);
                 }
 
                 leaf.sliderValue = updated;

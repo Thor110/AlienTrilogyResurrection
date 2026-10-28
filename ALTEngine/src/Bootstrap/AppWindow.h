@@ -2,6 +2,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <array>
+
 namespace ALTEngine::Bootstrap
 {
     // Edward, 2026: "Display Mode / Windowed / Fullscreen / Borderless
@@ -34,17 +36,27 @@ namespace ALTEngine::Bootstrap
         SDL_Window* Window() const { return window; }
         SDL_Renderer* Renderer() const { return renderer; }
 
-        // Lazily opens a single persistent audio stream matching the
-        // game's SFX format (8-bit unsigned PCM, mono, 11025Hz - per
-        // SoundEffects.cs's CreateWavHeader defaults and ReplaceWAV's
-        // format validation), reused across every SfxPlayer::Play call
-        // rather than opening/closing a device per sound. Returns
-        // nullptr if no window exists yet or the device couldn't open.
-        SDL_AudioStream* SfxAudioStream();
+        // Sound effects play through a pool of voices - one audio stream
+        // each, in the game's SFX format (8-bit unsigned PCM, mono,
+        // 11025Hz - per SoundEffects.cs's CreateWavHeader defaults and
+        // ReplaceWAV's format validation) - all bound to one playback
+        // device, which mixes them. A single stream played sounds one
+        // after another instead of together, and dropped any that
+        // arrived while it was busy.
+        //
+        // Returns an idle voice, or steals the one closest to finishing
+        // when all are busy. nullptr if no window exists yet or the
+        // device couldn't open.
+        SDL_AudioStream* AcquireSfxVoice();
+
+        // Applies to every voice, now and for later sounds. 0..1.
+        void SetSfxGain(float gain);
+
+        static constexpr int SFX_VOICE_COUNT = 12;
 
         // Lazily opens (or reopens, if `spec` differs from whatever's
         // currently open) a persistent audio stream for music playback.
-        // Separate from SfxAudioStream since music format isn't fixed
+        // Separate from the SFX voices since music format isn't fixed
         // the way SFX is - ripped CDDA tracks are 16-bit/44100Hz/stereo,
         // but this just uses whatever spec the caller determined from
         // the actual loaded file (see MusicPlayer). Returns nullptr if
@@ -92,7 +104,11 @@ namespace ALTEngine::Bootstrap
 
         SDL_Window* window = nullptr;
         SDL_Renderer* renderer = nullptr;
-        SDL_AudioStream* sfxStream = nullptr;
+        bool OpenSfxVoices();
+
+        SDL_AudioDeviceID sfxDevice = 0;
+        std::array<SDL_AudioStream*, SFX_VOICE_COUNT> sfxVoices{};
+        float sfxGain = 1.0f;
         SDL_AudioStream* musicStream = nullptr;
         SDL_AudioSpec musicSpec{};
         bool sdlInitialized = false;

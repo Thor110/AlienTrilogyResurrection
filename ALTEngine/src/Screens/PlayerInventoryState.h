@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <initializer_list>
 
 namespace ALTEngine::Screens
@@ -8,7 +10,19 @@ namespace ALTEngine::Screens
     {
         bool available = false; // false = "No ammo available" / not picked up
         bool equipped = false;  // shown bright regardless of cursor position, plus "Selected"
-        int ammo = 0;
+
+        // THE ammunition, in the original's own two counters (see
+        // PlayerHudState's note on FUN_0003aac8). `rounds` is what is loaded
+        // and is what firing spends; `units` are spare magazines, which a
+        // reload turns into `rounds`. Weapons without a magazine (shotgun,
+        // smartgun) only ever use `rounds`.
+        //
+        // This is the only copy. The HUD, the pause menu and the weapon system
+        // all read it here - a second, per-level copy in the HUD state drifted
+        // from this one (pickups stopped adding ammo once this copy hit its
+        // cap, because firing only ever drained the other).
+        int rounds = 0;
+        int units = 0;
 
         // Only the pulse rifle uses this. The original keeps grenades in the
         // HIGH half of that weapon's own ammo word (DAT_000b0ac6), capped at
@@ -39,13 +53,14 @@ namespace ALTEngine::Screens
         //
         // 999 is the original's own display clamp (its number routines clamp to
         // 0..999), so it is the most ammo the HUD can show - anything higher
-        // would read as 999 anyway.
+        // would read as 999 anyway. Called every tick while the cheat is on, so
+        // it writes the real counters and spent rounds really are replaced.
         void GiveEverything()
         {
-            for (WeaponState* w : { &pistol, &shotgun, &flamethrower, &pulseRifle, &smartGun })
+            for (int i = 0; i < 5; ++i)
             {
-                w->available = true;
-                w->ammo = 999;
+                ByIndex(i)->available = true;
+                SetAmmoTotal(i, 999);
             }
             hasAutoMapper = true;
             hasShoulderLamp = true;
@@ -113,7 +128,53 @@ namespace ALTEngine::Screens
             return current;
         }
 
-        WeaponState pistol{ true, true, 45 };
+        // Rounds per spare magazine, by canonical index. 0 = no magazine.
+        static constexpr std::array<int, 5> ROUNDS_PER_UNIT{ 15, 0, 100, 100, 0 };
+
+        // What the HUD and pause menu print: everything carried for a weapon.
+        int AmmoTotal(int i) const
+        {
+            const WeaponState* w = ByIndex(i);
+            if (!w) { return 0; }
+            return w->units * ROUNDS_PER_UNIT[static_cast<size_t>(i)] + w->rounds;
+        }
+
+        // Adds rounds to a weapon's total, never taking it past `cap`. The new
+        // rounds top up the loaded magazine and overflow into spare magazines,
+        // exactly as the HUD's old per-frame pickup delta did.
+        void AddAmmo(int i, int added, int cap)
+        {
+            WeaponState* w = ByIndex(i);
+            if (!w || added <= 0) { return; }
+            const int total = AmmoTotal(i);
+            const int room = cap - total;
+            if (room <= 0) { return; }
+            SetAmmoTotal(i, total + (added < room ? added : room));
+        }
+
+        // Replaces a weapon's total. A total that divides exactly leaves the
+        // last magazine LOADED rather than banked, so the weapon can fire at once.
+        void SetAmmoTotal(int i, int total)
+        {
+            WeaponState* w = ByIndex(i);
+            if (!w) { return; }
+            if (total < 0) { total = 0; }
+            const int magazine = ROUNDS_PER_UNIT[static_cast<size_t>(i)];
+            if (magazine <= 0)
+            {
+                w->units = 0;
+                w->rounds = total;
+                return;
+            }
+            int units = total / magazine;
+            int rounds = total % magazine;
+            if (rounds == 0 && units > 0) { units--; rounds = magazine; }
+            w->units = units;
+            w->rounds = rounds;
+        }
+
+        // 9mm pistol with 45 rounds: one loaded magazine of 15 and two spares.
+        WeaponState pistol{ true, true, 15, 2 };
         WeaponState shotgun{};
         WeaponState flamethrower{};
         // Grenades ride with the pulse rifle rather than being their own item:

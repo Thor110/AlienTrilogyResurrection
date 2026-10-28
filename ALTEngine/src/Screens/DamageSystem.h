@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Renderer/ModelCacheKey.h"
+
 #include <cstdint>
 
 namespace ALTEngine::Screens

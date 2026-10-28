@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PlayerHudState.h"
+#include "PlayerInventoryState.h"
 
 #include <array>
 
@@ -253,10 +254,9 @@ namespace ALTEngine::Screens
         // one. MARKED: the smartgun's real rate is a variable this cannot see.
         //
         // Returns true if a shot went off.
-        inline bool TryPrimaryFire(Runtime& runtime, PlayerHudState& hud)
+        inline bool TryPrimaryFire(Runtime& runtime, PlayerInventoryState& inventory)
         {
             if (runtime.weapon < 0 || runtime.weapon >= PlayerHudState::WEAPON_COUNT) { return false; }
-            const size_t w = static_cast<size_t>(runtime.weapon);
 
             // Every weapon except the smartgun refuses to fire unless idle, so
             // the firing animation's own length sets the rate of fire. The
@@ -266,12 +266,13 @@ namespace ALTEngine::Screens
             if (!smartgun && runtime.state != STATE_IDLE) { return false; }
             if (smartgun && (runtime.state == STATE_EMPTY || runtime.state == STATE_UNKNOWN_5)) { return false; }
 
-            if (hud.ammoRemainder[w] == 0) { return false; }
+            WeaponState* held = inventory.ByIndex(runtime.weapon);
+            if (!held || held->rounds <= 0) { return false; }
 
             runtime.noise = Def(runtime.weapon).noise;
             if (runtime.state == STATE_IDLE) { runtime.SetState(STATE_FIRING); }
 
-            hud.ammoRemainder[w] = static_cast<int16_t>(hud.ammoRemainder[w] - 1);
+            held->rounds--;
             return true;
         }
 
@@ -284,21 +285,21 @@ namespace ALTEngine::Screens
         // the PISTOL's remainder to 1 - not the current weapon's. So running
         // completely dry always leaves one pistol round, which is why the player
         // is never left with nothing at all.
-        inline void UpdateIdle(Runtime& runtime, PlayerHudState& hud, bool canSwitchAway)
+        inline void UpdateIdle(Runtime& runtime, PlayerInventoryState& inventory, bool canSwitchAway)
         {
             if (runtime.state != STATE_IDLE) { return; }
             if (runtime.weapon < 0 || runtime.weapon >= PlayerHudState::WEAPON_COUNT) { return; }
 
-            const size_t w = static_cast<size_t>(runtime.weapon);
-            if (hud.ammoRemainder[w] != 0) { return; }
+            WeaponState* held = inventory.ByIndex(runtime.weapon);
+            if (!held || held->rounds != 0) { return; }
 
             const WeaponDef& def = Def(runtime.weapon);
 
             // A magazine weapon with spare units reloads.
-            if (def.magazineSize > 0 && hud.ammoUnits[w] > 0)
+            if (def.magazineSize > 0 && held->units > 0)
             {
-                hud.ammoUnits[w] = static_cast<int16_t>(hud.ammoUnits[w] - 1);
-                hud.ammoRemainder[w] = static_cast<int16_t>(def.magazineSize);
+                held->units--;
+                held->rounds = def.magazineSize;
                 runtime.SetState(STATE_RELOAD);
                 return;
             }
@@ -323,7 +324,7 @@ namespace ALTEngine::Screens
             // dead (Edward, 2026).
             if (!canSwitchAway)
             {
-                if (hud.ammoRemainder[0] == 0) { hud.ammoRemainder[0] = 1; }
+                if (inventory.pistol.rounds == 0) { inventory.pistol.rounds = 1; }
                 runtime.SetState(STATE_RELOAD);
                 return;
             }

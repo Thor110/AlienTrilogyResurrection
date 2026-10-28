@@ -93,18 +93,17 @@ namespace ALTEngine::Screens
         inline bool Apply(int type, int amount, int units,
                           PlayerInventoryState& inventory, PlayerHudState& hud)
         {
-            auto grant = [&](int weaponIndex, int magCap, int unitCap) {
-                if (WeaponState* w = inventory.ByIndex(weaponIndex))
-                {
-                    w->available = true;
-                    w->ammo = Clamp(w->ammo + amount + units * magCap, magCap * (unitCap + 1));
-                }
-            };
+            // NOTE: `amount` arrives already multiplied by the record's
+            // multiplier AND `units` is that same multiplier, so a pistol clip
+            // of 15 x3 adds 45 + 3 x 15 = 90 rounds. That looks like the
+            // multiplier counted twice; it is kept as-is because it is what the
+            // game has always done, and is worth checking against the original.
             auto addAmmo = [&](int weaponIndex, int magCap, int unitCap) {
-                if (WeaponState* w = inventory.ByIndex(weaponIndex))
-                {
-                    w->ammo = Clamp(w->ammo + amount + units * magCap, magCap * (unitCap + 1));
-                }
+                inventory.AddAmmo(weaponIndex, amount + units * magCap, magCap * (unitCap + 1));
+            };
+            auto grant = [&](int weaponIndex, int magCap, int unitCap) {
+                if (WeaponState* w = inventory.ByIndex(weaponIndex)) { w->available = true; }
+                addAmmo(weaponIndex, magCap, unitCap);
             };
 
             switch (type)
@@ -125,10 +124,7 @@ namespace ALTEngine::Screens
 
             case SMARTGUN_AMMO:
                 // A flat 100, not the record's amount.
-                if (WeaponState* w = inventory.ByIndex(4))
-                {
-                    w->ammo = Clamp(w->ammo + SMARTGUN_AMMO_FLAT, SMARTGUN_CAP);
-                }
+                inventory.AddAmmo(4, SMARTGUN_AMMO_FLAT, SMARTGUN_CAP);
                 return true;
 
             case GRENADES:

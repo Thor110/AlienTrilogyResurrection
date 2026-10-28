@@ -101,24 +101,74 @@ namespace ALTEngine::Bootstrap
         SDL_SetWindowSize(window, width, height);
     }
 
-    SDL_AudioStream* AppWindow::SfxAudioStream()
+    bool AppWindow::OpenSfxVoices()
     {
-        if (sfxStream) { return sfxStream; }
-        if (!window) { return nullptr; }
+        if (sfxDevice != 0) { return true; }
+        if (!window) { return false; }
+
+        sfxDevice = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+        if (sfxDevice == 0)
+        {
+            SDL_Log("AppWindow: SDL_OpenAudioDevice for SFX failed: %s", SDL_GetError());
+            return false;
+        }
 
         SDL_AudioSpec spec{};
         spec.format = SDL_AUDIO_U8;
         spec.channels = 1;
         spec.freq = 11025;
 
-        sfxStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
-        if (!sfxStream)
+        int created = 0;
+        for (SDL_AudioStream*& voice : sfxVoices)
         {
-            SDL_Log("AppWindow::SfxAudioStream: SDL_OpenAudioDeviceStream failed: %s", SDL_GetError());
-            return nullptr;
+            // The output side is left unset: binding sets it to the device's
+            // own format, and SDL converts and mixes from there.
+            voice = SDL_CreateAudioStream(&spec, nullptr);
+            if (!voice) { break; }
+            SDL_SetAudioStreamGain(voice, sfxGain);
+            if (!SDL_BindAudioStream(sfxDevice, voice))
+            {
+                SDL_DestroyAudioStream(voice);
+                voice = nullptr;
+                break;
+            }
+            created++;
         }
-        SDL_ResumeAudioStreamDevice(sfxStream);
-        return sfxStream;
+        if (created == 0)
+        {
+            SDL_Log("AppWindow: no SFX voices could be created: %s", SDL_GetError());
+            SDL_CloseAudioDevice(sfxDevice);
+            sfxDevice = 0;
+            return false;
+        }
+        return true;
+    }
+
+    SDL_AudioStream* AppWindow::AcquireSfxVoice()
+    {
+        if (!OpenSfxVoices()) { return nullptr; }
+
+        SDL_AudioStream* best = nullptr;
+        int bestQueued = 0;
+        for (SDL_AudioStream* voice : sfxVoices)
+        {
+            if (!voice) { continue; }
+            const int queued = SDL_GetAudioStreamQueued(voice);
+            if (queued == 0) { return voice; }
+            if (!best || queued < bestQueued) { best = voice; bestQueued = queued; }
+        }
+        // Every voice busy: cut off the one nearest its end.
+        if (best) { SDL_ClearAudioStream(best); }
+        return best;
+    }
+
+    void AppWindow::SetSfxGain(float gain)
+    {
+        sfxGain = gain < 0.0f ? 0.0f : (gain > 1.0f ? 1.0f : gain);
+        for (SDL_AudioStream* voice : sfxVoices)
+        {
+            if (voice) { SDL_SetAudioStreamGain(voice, sfxGain); }
+        }
     }
 
     SDL_AudioStream* AppWindow::MusicAudioStream(const SDL_AudioSpec& spec)
@@ -144,7 +194,11 @@ namespace ALTEngine::Bootstrap
 
     void AppWindow::Shutdown()
     {
-        if (sfxStream) { SDL_DestroyAudioStream(sfxStream); sfxStream = nullptr; }
+        for (SDL_AudioStream*& voice : sfxVoices)
+        {
+            if (voice) { SDL_DestroyAudioStream(voice); voice = nullptr; }
+        }
+        if (sfxDevice != 0) { SDL_CloseAudioDevice(sfxDevice); sfxDevice = 0; }
         if (musicStream) { SDL_DestroyAudioStream(musicStream); musicStream = nullptr; }
         if (renderer) { SDL_DestroyRenderer(renderer); renderer = nullptr; }
         if (window) { SDL_DestroyWindow(window); window = nullptr; }

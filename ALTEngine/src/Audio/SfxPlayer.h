@@ -33,6 +33,9 @@ namespace ALTEngine::Audio
         // Samples are read once and kept. Call between levels to release them.
         static void ClearCache();
 
+        // The Options SFX volume, 0..10. Applies to every voice at once.
+        static void SetVolume(int volume0to10);
+
     private:
         static void PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory);
     };

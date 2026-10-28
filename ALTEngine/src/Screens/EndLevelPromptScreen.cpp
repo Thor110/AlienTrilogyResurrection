@@ -78,8 +78,9 @@ namespace ALTEngine::Screens
                         if (cursor == 0) { result.choice = EndLevelPromptChoice::Continue; running = false; }
                         else if (cursor == 1)
                         {
-                            SaveSlotResult saveResult = SaveSlotScreen::Run(cdDirectory, SaveSlotMode::Save, StubSaveSlots());
+                            SaveSlotResult saveResult = SaveSlotScreen::Run(cdDirectory, SaveSlotMode::Save, CurrentSaveSlots());
                             if (saveResult.windowClosed) { result.windowClosed = true; running = false; }
+                            else if (saveResult.selectedSlot) { SaveCheckpointToSlot(*saveResult.selectedSlot); }
                             // else: stays on this same prompt, matching a save checkpoint - doesn't force Continue/Quit
                         }
                         else { result.choice = EndLevelPromptChoice::Quit; running = false; }
