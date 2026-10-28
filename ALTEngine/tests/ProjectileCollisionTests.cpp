@@ -6,6 +6,7 @@
 #include "Screens/ParticleSystem.h"
 #include "Screens/PlayerCamera.h"
 #include "Screens/PlayerHudState.h"
+#include "Screens/SmartgunTargeting.h"
 
 #include <cmath>
 
@@ -86,13 +87,13 @@ TEST_CASE("ProjectileCollision: the pistol stops against a barrel without hurtin
     CHECK_EQ(PCol::TestCell(level, 256, 256, 200.0f, PCol::TYPE_SHOTGUN, 0x50).objectHit, 3);
 }
 
-TEST_CASE("ProjectileCollision: 0x15 objects only take flame")
+TEST_CASE("ProjectileCollision: 0x15 objects only take smartgun rounds")
 {
     LevelGeometry level = OneCell();
     level.collisionGrid[0].unknown13 = 0x15;
     level.collisionGrid[0].unknown5 = 1;
     CHECK_EQ(PCol::TestCell(level, 256, 256, 200.0f, PCol::TYPE_PULSE, 0x60).objectHit, -1);
-    CHECK_EQ(PCol::TestCell(level, 256, 256, 200.0f, PCol::TYPE_FLAME, 0xa0).objectHit, 1);
+    CHECK_EQ(PCol::TestCell(level, 256, 256, 200.0f, PCol::TYPE_SMARTGUN, 0xa0).objectHit, 1);
 }
 
 TEST_CASE("ProjectileCollision: liquids stop rounds near their surface")
@@ -245,4 +246,57 @@ TEST_CASE("Particles: pistol rounds converge on the line of sight")
     const float crossing = -side0 / round->vx * std::fabs(round->vz);
     CHECK(crossing > 550.0f);
     CHECK(crossing < 750.0f);
+}
+
+TEST_CASE("Smartgun: locks on to creatures in the cone, nearest first")
+{
+    namespace SGT = ALTEngine::Screens::SmartgunTargeting;
+    // Player at the origin facing yaw 0, which is -z in the port.
+    std::vector<SGT::Creature> creatures{
+        { 0, -3000, 2, 0, 3000, true },     // dead ahead, far
+        { 0, -1000, 2, 0, 1000, true },     // dead ahead, near
+        { 2000, -2000, 2, 0, 2828, true },  // 45 degrees off: outside the cone
+        { 0, -9000, 2, 0, 9000, true },     // beyond 0x1c00
+        { 0, -500, 2, 6, 500, true },       // hit/dying: not a target
+        { 0, -600, 2, 0, 600, false },      // not visible
+        { 100, -2000, 2, 0, 2002, true },   // about 3 degrees off: inside
+    };
+    const auto targets = SGT::FindTargets(creatures, 0, 0, 0);
+    REQUIRE(targets.size() == 3);
+    CHECK_EQ(targets[0].index, 1);
+    CHECK_EQ(targets[1].index, 6);
+    CHECK_EQ(targets[2].index, 0);
+    CHECK(targets[1].offset != 0);
+}
+
+TEST_CASE("Smartgun: an aimed round flies at its target")
+{
+    namespace SGT = ALTEngine::Screens::SmartgunTargeting;
+    const SGT::Vec v = SGT::AimVelocity(0, 0x200, 0, 0, 0x120, -2000, 0x100);
+    CHECK(v.y < 0.0f);                       // down toward a creature on the floor
+    CHECK(v.z < 0.0f);
+    CHECK(std::fabs(std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z) - 0x100) < 0.5f);
+    // Following it lands on the target.
+    const float t = -2000.0f / v.z;
+    CHECK(std::fabs(0x200 + v.y * t - 0x120) < 1.0f);
+}
+
+TEST_CASE("Particles: a flame stops where it is blocked and burns on")
+{
+    namespace P = ALTEngine::Screens::Particles;
+    P::Pool pool;
+    P::Particle* flame = pool.SpawnProjectile(P::TYPE_FLAME, 0, 0x300, 0, 0, 0, 0);
+    REQUIRE(flame != nullptr);
+    const int lifeBefore = flame->life;
+    pool.Tick([](float, float, float, int, int, float, float, float, int&) { return 1; });
+    CHECK(flame->alive);
+    CHECK_EQ(flame->vx, 0.0f);
+    CHECK_EQ(flame->vz, 0.0f);
+    CHECK_EQ(flame->life, lifeBefore - 1);
+
+    // A pistol round in the same place is gone.
+    P::Particle* round = pool.SpawnProjectile(P::TYPE_PISTOL, 0, 0x300, 0, 0, 0, 0);
+    REQUIRE(round != nullptr);
+    pool.Tick([](float, float, float, int, int, float, float, float, int&) { return 2; });
+    CHECK(!round->alive);
 }

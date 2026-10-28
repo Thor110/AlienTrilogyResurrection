@@ -18,6 +18,7 @@
 #include "../Game/Blast.h"
 #include "../Game/Doors.h"
 #include "../Game/ProjectileCollision.h"
+#include "SmartgunTargeting.h"
 #include "../Game/Triggers.h"
 #include "SaveSlotScreen.h"
 #include "EnemySprites.h"
@@ -1299,7 +1300,8 @@ namespace ALTEngine::Screens
                         {
                             // Only start a swap for a weapon that is actually
                             // held and is not the one already in hand.
-                            if (i != selectedWeapon && inventory.Available(i)) { weaponSwitch.Begin(i); }
+                            const int slot = ALTEngine::Screens::PlayerInventoryState::SlotForSelectKey(i);
+                            if (slot != selectedWeapon && inventory.Selectable(slot)) { weaponSwitch.Begin(slot); }
                         }
                         weaponKeyWasDown[static_cast<size_t>(i)] = down;
                     }
@@ -1307,7 +1309,7 @@ namespace ALTEngine::Screens
                     const bool nextDown = keys[keyBindings.GetKey(InputAction::NextWeapon)];
                     if (nextDown && !weaponKeyWasDown[5])
                     {
-                        const int next = inventory.NextAvailable(selectedWeapon);
+                        const int next = inventory.NextSelectable(selectedWeapon);
                         if (next != selectedWeapon) { weaponSwitch.Begin(next); }
                     }
                     weaponKeyWasDown[5] = nextDown;
@@ -1485,7 +1487,14 @@ namespace ALTEngine::Screens
                     if (swapTo >= 0)
                     {
                         const int equipped = inventory.Equip(swapTo);
-                        if (equipped >= 0) { selectedWeapon = equipped; }
+                        if (equipped >= 0)
+                        {
+                            selectedWeapon = equipped;
+                            // FUN_000401d0 puts the new weapon in state 0. Without
+                            // this an automatic switch carried the empty weapon's
+                            // state across, and the new one could not fire.
+                            weaponRuntime.SetState(WS::STATE_IDLE);
+                        }
                     }
                     weaponView.SetSwitchOffset(weaponSwitch.Offset());
 
@@ -1509,8 +1518,8 @@ namespace ALTEngine::Screens
                             P::TYPE_PISTOL,   // 0 pistol       FUN_0002bb74
                             P::TYPE_SHOTGUN,  // 1 shotgun      FUN_0002bbc0
                             P::TYPE_PULSE,    // 2 pulse rifle  FUN_0002bc18
-                            P::TYPE_FLAME,    // 3 flamethrower FUN_0002c1d4
-                            P::TYPE_SMARTGUN, // 4 smartgun     FUN_0002bcac
+                            P::TYPE_SMARTGUN, // 3 smartgun     FUN_0002c1d4
+                            P::TYPE_FLAME,    // 4 flamethrower FUN_0002c0a0 / FUN_0002bcac
                         };
                         const int projectileType = TYPE_FOR_WEAPON[hudState.currentWeapon];
 
@@ -1535,6 +1544,26 @@ namespace ALTEngine::Screens
                         const int firingPitch = static_cast<int>(std::lround(
                             camera.pitch * (PC::ANGLE_UNITS / 6.28318530718f))) & PC::ANGLE_MASK;
 
+                        // The smartgun's lock-on list, nearest first (FUN_0002c12c).
+                        namespace SGT = ALTEngine::Screens::SmartgunTargeting;
+                        std::vector<SGT::Candidate> smartTargets;
+                        if (projectileType == P::TYPE_SMARTGUN)
+                        {
+                            const int playerCell = ALTEngine::Formats::CellIndex(
+                                level, ToGridSpaceX(camera.x, originX) >> 9, ToGridSpaceZ(camera.z, originZ) >> 9);
+                            std::vector<SGT::Creature> creatures;
+                            creatures.reserve(enemies.size());
+                            for (const auto& enemy : enemies)
+                            {
+                                const int enemyCell = ALTEngine::Formats::CellIndex(
+                                    level, ToGridSpaceX(enemy.x, originX) >> 9, ToGridSpaceZ(enemy.z, originZ) >> 9);
+                                creatures.push_back({ enemy.x, enemy.z, enemy.type, enemy.state, enemy.distance,
+                                                      enemy.active && enemy.alive
+                                                          && ALTEngine::Game::ProjectileCollision::ShareZone(level, playerCell, enemyCell) });
+                            }
+                            smartTargets = SGT::FindTargets(creatures, camera.x, camera.z, playerCam.viewYaw);
+                        }
+
                         const int shots = P::ShotsPerPull(projectileType);
                         for (int shot = 0; shot < shots; ++shot)
                         {
@@ -1546,43 +1575,101 @@ namespace ALTEngine::Screens
                                 if (inventory.pulseRifle.rounds <= 0) { break; }
                                 inventory.pulseRifle.rounds--;
                             }
+                            // The smartgun likewise pays per round (FUN_0002c1d4).
+                            if (shot > 0 && projectileType == P::TYPE_SMARTGUN)
+                            {
+                                if (inventory.smartGun.rounds <= 0) { break; }
+                                inventory.smartGun.rounds--;
+                            }
+
+                            // A smartgun round with a target is launched at it.
+                            if (projectileType == P::TYPE_SMARTGUN && static_cast<size_t>(shot) < smartTargets.size())
+                            {
+                                const auto& target = enemies[static_cast<size_t>(smartTargets[static_cast<size_t>(shot)].index)];
+                                const float sy = static_cast<float>(PC::Sin(playerCam.viewYaw)) / PC::TRIG_ONE;
+                                const float cy = static_cast<float>(PC::Cos(playerCam.viewYaw)) / PC::TRIG_ONE;
+                                const float lx = camera.x + sy * SGT::LAUNCH_AHEAD;
+                                const float ly = camera.y - SGT::LAUNCH_DROP;
+                                const float lz = camera.z - cy * SGT::LAUNCH_AHEAD;
+                                const float aimY = target.y + static_cast<float>(
+                                    ALTEngine::Game::ProjectileCollision::CreatureExtents(target.type).y) / 2.0f;
+                                const SGT::Vec v = SGT::AimVelocity(lx, ly, lz, target.x, aimY, target.z,
+                                                                    static_cast<float>(SGT::SPEED + playerCam.speed));
+                                particles.SpawnAimed(projectileType, lx, ly, lz, v.x, v.y, v.z);
+                                continue;
+                            }
 
                             // The pulse rifle's later rounds go faster, so a burst
-                            // strings out; the smartgun has its own scatter (see
-                            // SpawnProjectile).
-                            const int launchSpeed = (projectileType == P::TYPE_SMARTGUN)
+                            // strings out, as do untargeted smartgun rounds; the
+                            // flamethrower has its own scatter (see SpawnProjectile).
+                            const int launchSpeed = (projectileType == P::TYPE_FLAME)
                                 ? playerCam.speed : playerCam.speed + shot * P::BurstSpeedStep;
                             P::Particle* round = particles.SpawnProjectile(
                                 projectileType, camera.x, camera.y, camera.z,
                                 playerCam.viewYaw, firingPitch, launchSpeed);
 
-                            // Smartgun round n (1, 2) lives 0x10 - n ticks and
-                            // starts n steps out (FUN_0002bcac). The pre-steps
-                            // here skip the wall test FUN_0002bcac makes on each.
-                            if (round && projectileType == P::TYPE_SMARTGUN)
+                            // Flamethrower particle n (1, 2) lives 0x10 - n ticks
+                            // and starts n steps out (FUN_0002bcac), with a cell
+                            // test after each step: a blocked one stops there with
+                            // its velocity zeroed, to burn against the wall, and
+                            // one that leaves the map is dropped. (The original
+                            // leaves it in the blocked cell; this keeps it on the
+                            // clear side, where it can be seen.)
+                            if (round && projectileType == P::TYPE_FLAME)
                             {
                                 const int n = shot + 1;
-                                round->life = P::SmartgunLife(shot);
+                                round->life = P::FlameLife(shot);
                                 round->strength = round->life;
-                                round->x += round->vx * n;
-                                round->y += round->vy * n;
-                                round->z += round->vz * n;
+                                for (int step = 0; step < n; ++step)
+                                {
+                                    const float sx = round->x + round->vx;
+                                    const float sy = round->y + round->vy;
+                                    const float sz = round->z + round->vz;
+                                    const auto cell = ALTEngine::Game::ProjectileCollision::TestCell(
+                                        level, ToGridSpaceX(sx, originX), ToGridSpaceZ(sz, originZ), sy,
+                                        projectileType, round->strength);
+                                    if (!ALTEngine::Formats::CellAt(level, ToGridSpaceX(sx, originX) >> 9,
+                                                                    ToGridSpaceZ(sz, originZ) >> 9))
+                                    {
+                                        round->alive = false;
+                                        break;
+                                    }
+                                    if (cell.blocked)
+                                    {
+                                        round->vx = round->vy = round->vz = 0.0f;
+                                        break;
+                                    }
+                                    round->x = sx; round->y = sy; round->z = sz;
+                                }
                             }
                         }
 
-                        particles.SpawnCasing(P::TYPE_CASING_A, camera.x, camera.y, camera.z,
-                                              playerCam.viewYaw, playerCam.speed);
+                        // Only the pistol and the shotgun eject anything:
+                        // FUN_0002bb74 calls FUN_0002b37c(0), a 0x15 casing, and
+                        // FUN_0002bbc0 calls it with 1, a 0x14 shell.
+                        if (projectileType == P::TYPE_PISTOL || projectileType == P::TYPE_SHOTGUN)
+                        {
+                            particles.SpawnCasing(projectileType == P::TYPE_PISTOL ? P::TYPE_CASING_A : P::TYPE_CASING_B,
+                                                  camera.x, camera.y, camera.z,
+                                                  playerCam.viewYaw, playerCam.speed);
+                        }
                     }
 
                     // Reload and out-of-ammo run only from idle, as a separate
                     // pass after the fire keys - the same order FUN_0003efcc has.
                     //
-                    // `canSwitchAway` stands in for FUN_00038c78. Automatic
-                    // weapon switching is not implemented, so this is false,
-                    // which takes the original's fallback path: the pistol is
-                    // topped up to one round so the player is never left with
-                    // nothing. That is real traced behaviour, not a stopgap.
-                    WS::UpdateIdle(weaponRuntime, inventory, false);
+                    // `canSwitchAway` is FUN_00038c78: is there another weapon
+                    // that can still fire. If not, the original's fallback - the
+                    // pistol topped up to one round. If so, the weapon goes empty
+                    // and is switched for the best one left (FUN_00038e64).
+                    {
+                        const int best = inventory.BestOtherSelectable(selectedWeapon);
+                        WS::UpdateIdle(weaponRuntime, inventory, best >= 0);
+                        if (weaponRuntime.state == WS::STATE_EMPTY && best >= 0 && !weaponSwitch.Busy())
+                        {
+                            weaponSwitch.Begin(best);
+                        }
+                    }
                     WS::TickNoise(weaponRuntime);
 
                     // Weapon audio.
@@ -2542,8 +2629,13 @@ namespace ALTEngine::Screens
                         if (particle.type != P::TYPE_CASING_A && particle.type != P::TYPE_CASING_B) { continue; }
 
                         ALTEngine::Renderer::PlacedObject shell;
+                        // Models 26 and 27 sit past the last pickup type (0x19),
+                        // which is why they read as the two ejected cases: 27 the
+                        // pistol's, 26 the shotgun's. INFERRED from that, not traced.
                         shell.cacheKey = { ALTEngine::Renderer::ModelCatalog::Pickmod,
-                                           ALTEngine::Formats::ModelIndices::PickMod::PistolShell };
+                                           particle.type == P::TYPE_CASING_B
+                                               ? ALTEngine::Formats::ModelIndices::PickMod::ShotgunAmmunition
+                                               : ALTEngine::Formats::ModelIndices::PickMod::PistolShell };
                         shell.x = particle.x;
                         shell.y = particle.y;
                         shell.z = particle.z;

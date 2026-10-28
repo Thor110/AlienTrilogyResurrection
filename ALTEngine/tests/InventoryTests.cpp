@@ -32,14 +32,22 @@ TEST_CASE("Inventory: a new loadout is the pistol with 45 rounds")
     CHECK_EQ(inv.pistol.units, 2);
 }
 
-TEST_CASE("Inventory: weapon indices are the canonical order")
+TEST_CASE("Inventory: weapon indices are the original's slots")
 {
     PlayerInventoryState inv;
     CHECK(inv.ByIndex(0) == &inv.pistol);
     CHECK(inv.ByIndex(1) == &inv.shotgun);
     CHECK(inv.ByIndex(2) == &inv.pulseRifle);
-    CHECK(inv.ByIndex(3) == &inv.flamethrower);
-    CHECK(inv.ByIndex(4) == &inv.smartGun);
+    CHECK(inv.ByIndex(3) == &inv.smartGun);
+    CHECK(inv.ByIndex(4) == &inv.flamethrower);
+}
+
+TEST_CASE("Inventory: select keys 4 and 5 are the flamethrower and the smartgun")
+{
+    CHECK_EQ(PlayerInventoryState::SlotForSelectKey(0), 0);
+    CHECK_EQ(PlayerInventoryState::SlotForSelectKey(2), 2);
+    CHECK_EQ(PlayerInventoryState::SlotForSelectKey(3), 4);   // key 4: flamethrower
+    CHECK_EQ(PlayerInventoryState::SlotForSelectKey(4), 3);   // key 5: smartgun
 }
 
 TEST_CASE("Inventory: firing spends the inventory's own rounds and reloads from spares")
@@ -69,7 +77,7 @@ TEST_CASE("Inventory: pickups still add ammo after the cap was reached once")
     CHECK_EQ(inv.AmmoTotal(0), cap - 10);
 }
 
-TEST_CASE("Inventory: pulse rifle and flamethrower ammo land on their own weapons")
+TEST_CASE("Inventory: pulse rifle, smartgun and flamethrower pickups land on their own weapons")
 {
     PlayerInventoryState inv;
     PlayerHudState hud;
@@ -78,13 +86,16 @@ TEST_CASE("Inventory: pulse rifle and flamethrower ammo land on their own weapon
     CHECK_EQ(inv.AmmoTotal(2), 50);
     CHECK_EQ(inv.AmmoTotal(3), 0);
 
-    Pickups::Apply(Pickups::FLAMETHROWER_AND_AMMO, 30, 0, inv, hud);
+    // Pickup 4, the smart gun, fills slot 3.
+    Pickups::Apply(Pickups::SMARTGUN_AND_AMMO, 30, 0, inv, hud);
     CHECK_EQ(inv.AmmoTotal(3), 30);
+    CHECK(inv.smartGun.available);
     CHECK_EQ(inv.AmmoTotal(2), 50);
 
-    // Pickup type 3 is the smartgun, weapon 4.
-    Pickups::Apply(Pickups::SMARTGUN_AND_AMMO, 30, 0, inv, hud);
+    // Pickup 3, the flamethrower, fills slot 4.
+    Pickups::Apply(Pickups::FLAMETHROWER_AND_AMMO, 30, 0, inv, hud);
     CHECK_EQ(inv.AmmoTotal(4), 30);
+    CHECK(inv.flamethrower.available);
 }
 
 TEST_CASE("Inventory: Fully Loaded really refills what has been spent")
@@ -118,4 +129,35 @@ TEST_CASE("Inventory: a total that divides exactly leaves the last magazine load
     inv.SetAmmoTotal(1, 37);           // shotgun: no magazine
     CHECK_EQ(inv.shotgun.rounds, 37);
     CHECK_EQ(inv.shotgun.units, 0);
+}
+
+TEST_CASE("Inventory: an empty weapon switches to the best one that can still fire")
+{
+    PlayerInventoryState inv;
+    PlayerHudState hud;
+    Pickups::Apply(Pickups::SHOTGUN_AND_AMMO, 10, 0, inv, hud);
+    Pickups::Apply(Pickups::PULSE_AND_AMMO, 50, 0, inv, hud);
+    // FUN_00038e64 scans from slot 4 down: the pulse rifle, not the shotgun.
+    CHECK_EQ(inv.BestOtherSelectable(0), 2);
+    // An empty weapon is skipped by both the switch and next-weapon.
+    inv.SetAmmoTotal(2, 0);
+    CHECK_EQ(inv.BestOtherSelectable(0), 1);
+    CHECK_EQ(inv.NextSelectable(1), 0);
+    // Nothing else left: FUN_00038c78's "cannot switch".
+    inv.SetAmmoTotal(1, 0);
+    CHECK_EQ(inv.BestOtherSelectable(0), -1);
+}
+
+TEST_CASE("WeaponSystem: the switch lowers and raises 0x10 a tick")
+{
+    namespace WS = ALTEngine::Screens::WeaponSystem;
+    WS::SwitchAnimation anim;
+    anim.Begin(2);
+    int swapped = -1, ticks = 0;
+    while (swapped < 0 && ticks < 20) { swapped = anim.Tick(); ++ticks; }
+    CHECK_EQ(swapped, 2);
+    CHECK_EQ(ticks, 8);
+    CHECK_EQ(anim.Offset(), 0x80);
+    anim.Tick();
+    CHECK_EQ(anim.Offset(), 0x70);
 }

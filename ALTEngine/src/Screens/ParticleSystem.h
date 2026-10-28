@@ -31,19 +31,20 @@ namespace ALTEngine::Screens
         //     FUN_0002bb74  -> DAT_000b0abe  pistol       type 0
         //     FUN_0002bbc0  -> DAT_000b0ac2  shotgun      type 1
         //     FUN_0002bc18  -> DAT_000b0ac4  pulse rifle  type 2
-        //     FUN_0002bcac  -> DAT_000b0aca  smartgun     type 3
-        //     FUN_0002c1d4  -> DAT_000b0acc  flamethrower type 4
+        //     FUN_0002bcac  -> DAT_000b0aca  flamethrower type 3
+        //     FUN_0002c1d4  -> DAT_000b0acc  smartgun     type 4
         //
-        // Two of these were guessed wrong before: type 2 was labelled the
-        // flamethrower's and type 4 "heavy". Type 2 is the pulse rifle and type
-        // 4 is the flamethrower.
+        // Which weapon owns which counter is settled by the pickups that fill
+        // them (pickup 3, "Flamethrower", fills aca; pickup 4, "Smart Gun",
+        // fills acc) and by the graphics each weapon slot loads. See
+        // PlayerInventoryState::ByIndex. These two were the other way round.
         enum Type : uint8_t
         {
             TYPE_PISTOL = 0,
             TYPE_SHOTGUN = 1,
             TYPE_PULSE = 2,
-            TYPE_SMARTGUN = 3,
-            TYPE_FLAME = 4,
+            TYPE_FLAME = 3,      // FUN_0002bcac's stream, weapon slot 4
+            TYPE_SMARTGUN = 4,   // FUN_0002c1d4's aimed rounds, weapon slot 3
             TYPE_FRAGMENT = 7,   // what a projectile shatters INTO
             // Blood a creature sprays when a round hits it (FUN_0002ada4), the
             // type chosen by creature (Game::ProjectileCollision::
@@ -60,20 +61,21 @@ namespace ALTEngine::Screens
         //     pulse rifle   3, from FUN_0002bc18's loop, each launched at
         //                   playerSpeed + n * 0x80 - a burst that strings out
         //                   in flight because the later rounds are faster
-        //     flamethrower  3, FUN_0002c1d4, same staggered-speed pattern
-        //     smartgun      3, FUN_0002c0a0 calling FUN_0002bcac(1), (2), (3),
-        //                   and each gets a SHORTER life than the last:
-        //                   +0x1c = 0x10 - n. A spread that dies at three
-        //                   different ranges.
+        //     smartgun      3, FUN_0002c1d4: one aimed round per target it
+        //                   finds, or, with none, a staggered-speed burst
+        //     flamethrower  FUN_0002c0a0 calling FUN_0002bcac(1), (2), and
+        //                   each gets a SHORTER life than the last:
+        //                   +0x1c = 0x10 - n. A spray that dies at different
+        //                   ranges.
         inline constexpr int ShotsPerPull(int type)
         {
             switch (type)
             {
             case TYPE_PULSE:
-            case TYPE_FLAME:    return 3;
+            case TYPE_SMARTGUN:    return 3;
             // FUN_0002c0a0: FUN_0002bcac(1), then a loop from 2 while < 3 -
             // two rounds, not three.
-            case TYPE_SMARTGUN: return 2;
+            case TYPE_FLAME: return 2;
             default:            return 1;
             }
         }
@@ -90,7 +92,7 @@ namespace ALTEngine::Screens
         // strength >= initial/2 - is a RANGE FALLOFF: full damage over the first
         // half of the flight, half over the second.
         //
-        //     pistol 20 ticks   shotgun 16   flame 28   heavy 28
+        //     pistol 20 ticks   shotgun 16   pulse 28   smartgun 28   flamethrower 15 or less
         //
         // `speed` is the short at +0x1a, used both as the damage figure and,
         // shifted left 4, as the distance FUN_0002a448 probes.
@@ -98,7 +100,7 @@ namespace ALTEngine::Screens
         //
         // `converge` is a yaw, in 4096 units, that FUN_0002b534 puts into the
         // round's own angles before the view's ([ebp-0x12]: 0x28 for the pistol
-        // and shotgun, 0x30 for the pulse rifle, none for the flamethrower). It
+        // and shotgun, 0x30 for the pulse rifle, none for the smartgun's type 4). It
         // turns the round back across the muzzle offset, so a round fired from
         // 0x28 to the side crosses the line of sight about 650 units out - the
         // rounds "moving towards" what you aim at.
@@ -114,27 +116,26 @@ namespace ALTEngine::Screens
         inline constexpr ProjectileDef PROJECTILE_SHOTGUN{ 0x10, 0x50, 0x20, 0x28 };
         inline constexpr ProjectileDef PROJECTILE_PULSE{ 0x1c, 0x60, 0x20, 0x30 };
 
-        // The flamethrower's, read straight off FUN_0002c1d4, which builds its
-        // particles inline rather than through FUN_0002b534: +0x1c = 0x1c,
-        // +0x1a = 0xa0. Those are the same two numbers the old "heavy" guess
-        // carried, so that part was right by accident.
-        inline constexpr ProjectileDef PROJECTILE_FLAME{ 0x1c, 0xa0, 0x00 };
+        // The smartgun's, read straight off FUN_0002c1d4, which builds its
+        // aimed rounds inline rather than through FUN_0002b534: +0x1c = 0x1c,
+        // +0x1a = 0xa0 (the same as FUN_0002b534's type 4 case).
+        inline constexpr ProjectileDef PROJECTILE_SMARTGUN{ 0x1c, 0xa0, 0x00 };
 
-        // The smartgun's, from FUN_0002bcac: +0x1a = 0x50, and +0x1c is
-        // 0x10 - n where n is which of the three shots it is. The strength here
-        // is the FIRST shot's; SmartgunLife below gives the rest.
+        // The flamethrower's, from FUN_0002bcac: +0x1a = 0x50, and +0x1c is
+        // 0x10 - n where n is which of the shots it is. The strength here
+        // is the FIRST shot's; FlameLife below gives the rest.
         // Its muzzle sits 0x38 to the side (FUN_0002bcac's own offset vector).
-        inline constexpr ProjectileDef PROJECTILE_SMARTGUN{ 0x0f, 0x50, 0x38 };
+        inline constexpr ProjectileDef PROJECTILE_FLAME{ 0x0f, 0x50, 0x38 };
 
-        // The smartgun builds its own launch rather than going through
+        // The flamethrower builds its own launch rather than going through
         // FUN_0002b534: 0x80 below the eye plus up to 0x1f of jitter, and forward
         // at the player's speed + 0x80 + up to 0x3f - a scatter, not a line.
-        inline constexpr int SMARTGUN_MUZZLE_DROP = 0x80;
-        inline constexpr int SMARTGUN_HEIGHT_JITTER = 0x1f;
-        inline constexpr int SMARTGUN_VELOCITY = 0x80;
-        inline constexpr int SMARTGUN_VELOCITY_JITTER = 0x3f;
+        inline constexpr int FLAME_MUZZLE_DROP = 0x80;
+        inline constexpr int FLAME_HEIGHT_JITTER = 0x1f;
+        inline constexpr int FLAME_VELOCITY = 0x80;
+        inline constexpr int FLAME_VELOCITY_JITTER = 0x3f;
 
-        inline constexpr int SmartgunLife(int shotIndex) { return 0x10 - (shotIndex + 1); }
+        inline constexpr int FlameLife(int shotIndex) { return 0x10 - (shotIndex + 1); }
 
         inline constexpr ProjectileDef DefFor(int type)
         {
@@ -142,8 +143,8 @@ namespace ALTEngine::Screens
             {
             case TYPE_SHOTGUN:  return PROJECTILE_SHOTGUN;
             case TYPE_PULSE:    return PROJECTILE_PULSE;
-            case TYPE_SMARTGUN: return PROJECTILE_SMARTGUN;
-            case TYPE_FLAME:    return PROJECTILE_FLAME;
+            case TYPE_FLAME: return PROJECTILE_FLAME;
+            case TYPE_SMARTGUN:    return PROJECTILE_SMARTGUN;
             default:            return PROJECTILE_PISTOL;
             }
         }
@@ -169,12 +170,12 @@ namespace ALTEngine::Screens
             {
             case TYPE_PISTOL:
             case TYPE_PULSE:
-            case TYPE_FLAME:
+            case TYPE_SMARTGUN:
                 return 2;
             case TYPE_SHOTGUN:
                 return 8;
             default:
-                return 3;   // the smartgun's type 3 lands here
+                return 3;   // the flamethrower's type 3 lands here
             }
         }
 
@@ -290,7 +291,7 @@ namespace ALTEngine::Screens
         }
 
         // The extra forward speed the nth shot of a burst gets, from the
-        // `n * 0x80 + playerSpeed` the pulse rifle and flamethrower both pass.
+        // `n * 0x80 + playerSpeed` the pulse rifle and the smartgun (with no target) both pass.
         inline constexpr int BurstSpeedStep = 0x80;
 
         struct Particle
@@ -388,12 +389,12 @@ namespace ALTEngine::Screens
                 p->x = eyeX;
                 p->y = eyeY - MUZZLE_DROP;
                 p->z = eyeZ;
-                if (type == TYPE_FLAME) { p->y -= HEAVY_EXTRA_DROP; }
+                if (type == TYPE_SMARTGUN) { p->y -= HEAVY_EXTRA_DROP; }
                 int forwardSpeed = playerSpeed + MUZZLE_VELOCITY;
-                if (type == TYPE_SMARTGUN)
+                if (type == TYPE_FLAME)
                 {
-                    p->y = eyeY - SMARTGUN_MUZZLE_DROP + static_cast<float>(rng.Bits(SMARTGUN_HEIGHT_JITTER));
-                    forwardSpeed = playerSpeed + SMARTGUN_VELOCITY + rng.Bits(SMARTGUN_VELOCITY_JITTER);
+                    p->y = eyeY - FLAME_MUZZLE_DROP + static_cast<float>(rng.Bits(FLAME_HEIGHT_JITTER));
+                    forwardSpeed = playerSpeed + FLAME_VELOCITY + rng.Bits(FLAME_VELOCITY_JITTER);
                 }
 
                 // Lateral muzzle offset, rotated into the world by the facing.
@@ -417,6 +418,23 @@ namespace ALTEngine::Screens
                 p->vx = forward * fs * pitchCos;
                 p->vy = forward * pitchSin;
                 p->vz = -forward * fc * pitchCos;
+                return p;
+            }
+
+            // A round launched at a given velocity - the smartgun's aimed shots,
+            // which FUN_0002c1d4 builds itself rather than through
+            // FUN_0002b534.
+            Particle* SpawnAimed(int type, float x, float y, float z, float vx, float vy, float vz)
+            {
+                Particle* p = Take();
+                if (!p) { return nullptr; }
+                const ProjectileDef def = DefFor(type);
+                p->type = static_cast<uint8_t>(type);
+                p->strength = def.strength;
+                p->life = def.strength;
+                p->speed = def.speed;
+                p->x = x; p->y = y; p->z = z;
+                p->vx = vx; p->vy = vy; p->vz = vz;
                 return p;
             }
 
@@ -561,8 +579,8 @@ namespace ALTEngine::Screens
                     if (p.isBlood) { p.vy -= BLOOD_GRAVITY; }
 
                     const bool isProjectile = (p.type == TYPE_PISTOL || p.type == TYPE_SHOTGUN
-                                            || p.type == TYPE_PULSE || p.type == TYPE_SMARTGUN
-                                            || p.type == TYPE_FLAME);
+                                            || p.type == TYPE_PULSE || p.type == TYPE_FLAME
+                                            || p.type == TYPE_SMARTGUN);
 
                     // Substep. A pistol round covers 376 units a tick and a
                     // crate is about 256 across, so testing only the endpoint
@@ -629,6 +647,17 @@ namespace ALTEngine::Screens
                     // Blood is gone the moment it lands (or burns the player);
                     // the callback has already left its splat.
                     if (p.isBlood && stopped) { p.alive = false; continue; }
+
+                    // A flame stops where it is blocked and burns on there for
+                    // the rest of its life - the type 0-4 handler at 0x2da89
+                    // zeroes a type 3 particle's velocity on a wall or a
+                    // creature instead of freeing it, and keeps testing it.
+                    if (p.type == TYPE_FLAME && stopped)
+                    {
+                        p.vx = 0; p.vy = 0; p.vz = 0;
+                        p.x = nx; p.y = ny; p.z = nz;
+                        continue;
+                    }
 
                     if (isProjectile && stopped)
                     {

@@ -10,11 +10,15 @@ namespace ALTEngine::Renderer
 {
     namespace
     {
-        // Weapon order is the original's 0-4 (see FUN_0003aac8's ammo switch),
-        // which is also the order PlayerInventoryState declares them in.
+        // By the original's weapon slot (PlayerInventoryState::ByIndex). Each
+        // file matches its animation table frame for frame - FLAME.B16's
+        // sections are the 68x72 / 64x72 / 5-frame set of the table at
+        // 0x0ace70, PULSE.B16's the four-state set at 0x0ace28 - which is how
+        // the old order, with FLAME at 2, was drawing the pulse rifle's
+        // animation over the flamethrower's frames.
         //
         // MM9 is the 9mm pistol the player always starts with.
-        constexpr const char* WEAPON_FILES[] = { "MM9", "SHOTGUN", "FLAME", "PULSE", "SMART" };
+        constexpr const char* WEAPON_FILES[] = { "MM9", "SHOTGUN", "PULSE", "SMART", "FLAME" };
         constexpr int WEAPON_COUNT = static_cast<int>(sizeof(WEAPON_FILES) / sizeof(WEAPON_FILES[0]));
 
         // Section index == weapon state index. See the header.

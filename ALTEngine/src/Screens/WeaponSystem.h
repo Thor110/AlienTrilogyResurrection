@@ -48,17 +48,17 @@ namespace ALTEngine::Screens
         // Weapon state, the low half of DAT_000b0aac.
         //
         // 0, 1, 2 and 4 are certain - they appear as literal stores next to
-        // behaviour that identifies them. 3 is the flamethrower's grenade, also
+        // behaviour that identifies them. 3 is the pulse rifle's grenade, also
         // certain. 5 only ever appears in tests alongside 4 as a state the
-        // smartgun must not fire from, so what it IS is not traced.
+        // flamethrower must not fire from, so what it IS is not traced.
         enum State
         {
             STATE_IDLE = 0,
             STATE_FIRING = 1,
             STATE_RELOAD = 2,
-            STATE_GRENADE = 3,   // flamethrower secondary only
+            STATE_GRENADE = 3,   // pulse rifle secondary only
             STATE_EMPTY = 4,     // out of ammo; will not fire from here
-            STATE_UNKNOWN_5 = 5, // untraced - see above
+            STATE_UNKNOWN_5 = 5, // the raise after a switch (0x3f14a) - see SwitchAnimation
             STATE_COUNT = 6,
         };
 
@@ -83,8 +83,8 @@ namespace ALTEngine::Screens
         // Per-weapon constants, all read directly from the decompilation.
         //
         //   magazineSize: FUN_0003efcc's reload arms - 0xf for the pistol, 100
-        //   for the flamethrower's tank and the pulse rifle's magazine. The
-        //   shotgun and smartgun have no unit counter and so never reload.
+        //   for the pulse rifle's and the smartgun's magazines. The shotgun and
+        //   the flamethrower have no unit counter and so never reload.
         //   These agree with PlayerHudState::ROUNDS_PER_UNIT, which was derived
         //   independently from the HUD's own display arithmetic.
         //
@@ -93,8 +93,8 @@ namespace ALTEngine::Screens
             { 0xf,  0x80,  FIRE_ON_PRESS },   // 0 9mm pistol
             { 0,    0x200, FIRE_ON_PRESS },   // 1 shotgun
             { 100,  0x140, FIRE_WHILE_HELD }, // 2 pulse rifle
-            { 100,  0x200, FIRE_WHILE_HELD }, // 3 flamethrower
-            { 0,    0x80,  FIRE_WHILE_HELD }, // 4 smartgun
+            { 100,  0x200, FIRE_WHILE_HELD }, // 3 smartgun
+            { 0,    0x80,  FIRE_WHILE_HELD }, // 4 flamethrower
             //
             // ONLY THE LABELS CHANGED HERE. The values were already read out of
             // FUN_0003d5b0 and FUN_0003efcc in the switch's own case order, so
@@ -102,7 +102,7 @@ namespace ALTEngine::Screens
             // the pulse rifle and the flamethrower the wrong way round.
         } };
 
-        // The flamethrower's grenade, fired from its secondary. Its own noise
+        // The pulse rifle's grenade, fired from its secondary. Its own noise
         // value, the loudest in the game (FUN_0003efcc case 2, FUN_0003d794).
         inline constexpr int GRENADE_NOISE = 0x280;
 
@@ -127,40 +127,31 @@ namespace ALTEngine::Screens
         inline constexpr std::array<int, PlayerHudState::WEAPON_COUNT + 1> WEAPON_OFFSET_X{
             +4,  // 0 pistol
             +2,  // 1 shotgun
-             0,  // 2 flamethrower
-            -6,  // 3 pulse rifle
-            +10, // 4 smartgun
+             0,  // 2 pulse rifle
+            -6,  // 3 smartgun
+            +10, // 4 flamethrower
              0,  // spare slot
         };
         inline constexpr std::array<int, PlayerHudState::WEAPON_COUNT + 1> WEAPON_OFFSET_Y{
             0, 0, 0, 0, 0, 0
         };
 
-        // DAT_000b0b57, added to the weapon's Y in FUN_0003e93c. Still untraced,
-        // but its SHAPE is suggestive: a per-frame vertical offset applied on top
-        // of the anchor and the bob is exactly what a weapon being lowered and
-        // raised would animate, and the weapon does drop off the bottom of the
-        // screen and come back when you change weapons (Edward, 2026).
-        //
-        // The switch animation below drives its own offset rather than claiming
-        // to be this variable. If DAT_000b0b57 turns out to be the holster
-        // offset, the two become one thing.
-        inline constexpr int WEAPON_Y_BIAS = 0; // GUESS
+        // DAT_000b0b57, added to the weapon's Y in FUN_0003e93c: the switch's
+        // lower/raise offset, which SwitchAnimation below reproduces. It rests
+        // at 0.
+        inline constexpr int WEAPON_Y_BIAS = 0;
 
-        // WEAPON SWITCH: LOWER, SWAP, RAISE.
+        // WEAPON SWITCH: LOWER, SWAP, RAISE - FUN_0003efcc at 0x3f0bc.
         //
-        // BEHAVIOUR CONFIRMED, MECHANISM NOT TRACED. The weapon drops off the
-        // bottom of the screen, the new one is swapped in out of sight, and it
-        // rises back up. Nothing in the decompilation has been tied to this yet -
-        // FUN_000401d0 just sets the weapon index and state 0 - so the timing
-        // below is invented and marked as such.
-        //
-        // The distance is not: it travels far enough to clear the tallest weapon
-        // frame in the game (the smartgun's 116-row reload frame), so no weapon
-        // is left peeking at the bottom mid-swap.
-        inline constexpr int SWITCH_TRAVEL = 128;      // world/HUD rows to drop
-        inline constexpr int SWITCH_LOWER_TICKS = 6;   // GUESS
-        inline constexpr int SWITCH_RAISE_TICKS = 6;   // GUESS
+        // State 4 lowers: DAT_000b0b57 (the weapon's Y offset) goes up 0x10 a
+        // tick, and at 0x80 the swap happens - an automatic switch
+        // (FUN_00038e64), a chosen one (FUN_00039004) or a pickup's
+        // (FUN_00038fb4) - and the state becomes 5. State 5 raises: 0x10 a tick
+        // back down, and at 0 the weapon is idle again. Eight ticks each way.
+        inline constexpr int SWITCH_TRAVEL = 0x80;     // HUD rows to drop
+        inline constexpr int SWITCH_STEP = 0x10;       // per tick
+        inline constexpr int SWITCH_LOWER_TICKS = SWITCH_TRAVEL / SWITCH_STEP;
+        inline constexpr int SWITCH_RAISE_TICKS = SWITCH_TRAVEL / SWITCH_STEP;
 
         // Drives the lower/raise. `pending` is the weapon to switch TO, or -1.
         struct SwitchAnimation
@@ -249,22 +240,21 @@ namespace ALTEngine::Screens
         //
         // The ammo decrement is NOT in FUN_0003d5b0 - it lives in each weapon's
         // projectile spawn (FUN_0002bb74 does `DAT_000b0abe--` for the pistol,
-        // and the smartgun's FUN_0002c0a0 subtracts a variable amount). Since
-        // projectiles do not exist yet, the decrement is done here instead, by
-        // one. MARKED: the smartgun's real rate is a variable this cannot see.
+        // and the flamethrower's FUN_0002c0a0 takes one for each particle it
+        // gets out). The decrement is done here instead, by one per pull.
         //
         // Returns true if a shot went off.
         inline bool TryPrimaryFire(Runtime& runtime, PlayerInventoryState& inventory)
         {
             if (runtime.weapon < 0 || runtime.weapon >= PlayerHudState::WEAPON_COUNT) { return false; }
 
-            // Every weapon except the smartgun refuses to fire unless idle, so
-            // the firing animation's own length sets the rate of fire. The
-            // smartgun keeps spawning while held and only restarts the
+            // Every weapon except the flamethrower refuses to fire unless idle,
+            // so the firing animation's own length sets the rate of fire. The
+            // flamethrower keeps spawning while held and only restarts the
             // animation from idle (FUN_0003d5b0 case 4).
-            const bool smartgun = (runtime.weapon == 4);
-            if (!smartgun && runtime.state != STATE_IDLE) { return false; }
-            if (smartgun && (runtime.state == STATE_EMPTY || runtime.state == STATE_UNKNOWN_5)) { return false; }
+            const bool continuous = (runtime.weapon == 4);
+            if (!continuous && runtime.state != STATE_IDLE) { return false; }
+            if (continuous && (runtime.state == STATE_EMPTY || runtime.state == STATE_UNKNOWN_5)) { return false; }
 
             WeaponState* held = inventory.ByIndex(runtime.weapon);
             if (!held || held->rounds <= 0) { return false; }
@@ -335,7 +325,7 @@ namespace ALTEngine::Screens
         //
         // WHAT IT IS FOR IS INFERENCE, NOT TRACED. It is set per shot, decays,
         // and is ordered exactly the way the weapons are ordered by loudness -
-        // pistol 0x80, flamethrower 0x140, shotgun and pulse rifle 0x200,
+        // pistol and flamethrower 0x80, pulse rifle 0x140, shotgun and smartgun 0x200,
         // grenade 0x280. A decaying per-shot magnitude with that ordering reads
         // as a noise level for enemies to hear, but nothing that CONSUMES it has
         // been traced yet, so treat the name as provisional.
@@ -352,7 +342,7 @@ namespace ALTEngine::Screens
         // per-weapon table backs this up: its entries are contiguous in memory
         // between the five weapons (0xace28, 0xace48, 0xace58, 0xace70,
         // 0xace88), which leaves the pistol three states, the shotgun two and
-        // the flamethrower four - too few for a state-4 entry to exist at all.
+        // the pulse rifle four - too few for a state-4 entry to exist at all.
         inline constexpr bool StateHasAnimation(int state)
         {
             return state == STATE_IDLE || state == STATE_FIRING

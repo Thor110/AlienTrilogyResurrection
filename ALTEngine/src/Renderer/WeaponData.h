@@ -107,17 +107,11 @@ namespace ALTEngine::Renderer
         inline constexpr FrameOffset SMARTGUN_RELOAD_OFFSETS[] = { { -56, -49 }, { -67, -79 }, { -62, -111 }, { -56, -49 } };
         inline const std::vector<uint16_t> SMARTGUN_RELOAD_SEQUENCE{ 2, 4, Op(SA::OP_SET_FLAG1), 0, 1, Op(SA::OP_EVENT, 0x12), 2, 3, Op(SA::OP_END) };
 
-        // The original's weapon order, from FUN_000401d0's switch:
-        //     0 pistol, 1 shotgun, 2 pulse rifle, 3 flamethrower, 4 smartgun
-        //
-        // PlayerHudState orders its weapons pistol, shotgun, flamethrower,
-        // pulse rifle, smartgun - indices 2 and 3 the other way round. Rather
-        // than renumber the port's inventory, which would touch pickups, the
-        // HUD and saved state, the mapping is expressed here.
-        //
-        // MARKED: this assumes the port's own order is the correct one for
-        // everything else. If weapon 3 selects the flamethrower in the original,
-        // it is this table that is wrong, not the port.
+        // By weapon slot, from FUN_000401d0's jump table at 0x401bc:
+        //     0 0x0ace58 pistol, 1 0x0ace48 shotgun, 2 0x0ace28 pulse rifle,
+        //     3 0x0ace88 smartgun, 4 0x0ace70 flamethrower
+        // (an earlier reading took the cases in address order, which put the
+        // flamethrower at 3).
         struct WeaponTables
         {
             const FrameOffset* offsets[4];
@@ -151,9 +145,9 @@ namespace ALTEngine::Renderer
             switch (portWeaponIndex)
             {
             case 1:  return shotgun;
-            case 2:  return pulse;   // canonical order: 2 is the pulse rifle
-            case 3:  return flame;   //                  3 is the flamethrower
-            case 4:  return smart;
+            case 2:  return pulse;
+            case 3:  return smart;
+            case 4:  return flame;
             default: return pistol;
             }
         }

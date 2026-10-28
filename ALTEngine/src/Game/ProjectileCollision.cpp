@@ -21,13 +21,13 @@ namespace ALTEngine::Game::ProjectileCollision
         const uint8_t occupant = cell->unknown13;
         if (occupant == 0x15)
         {
-            if (projectileType == TYPE_FLAME) { hitObject(strength); }
+            if (projectileType == TYPE_SMARTGUN) { hitObject(strength); }
             result.blocked = true;
             return result;
         }
         if (occupant == 0x1d)
         {
-            if (projectileType <= TYPE_PULSE || projectileType == TYPE_FLAME) { hitObject(strength); }
+            if (projectileType <= TYPE_PULSE || projectileType == TYPE_SMARTGUN) { hitObject(strength); }
             result.blocked = true;
             return result;
         }
@@ -35,7 +35,7 @@ namespace ALTEngine::Game::ProjectileCollision
         {
             switch (projectileType)
             {
-            case TYPE_PISTOL: case TYPE_SHOTGUN: case TYPE_PULSE: case TYPE_FLAME: hitObject(strength); break;
+            case TYPE_PISTOL: case TYPE_SHOTGUN: case TYPE_PULSE: case TYPE_SMARTGUN: hitObject(strength); break;
             case TYPE_GRENADE: hitObject(strength << 4); break;
             default: break;
             }

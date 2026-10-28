@@ -78,30 +78,15 @@ namespace ALTEngine::Screens
             return fresh ? speed * 2 : speed;
         }
 
-        // PROJECTILE RANGE: NOT DERIVED, AND NOT GUESSED HERE.
-        //
-        // What stops a round in the original is in the update loop, and that
-        // loop is the function missing from the export - FUN_0002a628 and
-        // FUN_0002ad10 have no callers anywhere in 1244 decompiled functions,
-        // so whatever drives them sits in an un-decompiled gap (most likely
-        // 0x29d44-0x2a260, immediately before the particle block).
-        //
-        // The candidate is the strength byte at +0x1c, which is the only
-        // per-projectile field with no other job: pistol 0x14, shotgun 0x10,
-        // flame 0x1c, heavy 0x1c. If it is a tick countdown then the damage
-        // halving at strength < initial/2 is a HALFWAY-THROUGH-FLIGHT rule,
-        // which would make it a range falloff and explain why the field exists
-        // at all. That reading is consistent but unproven, and the numbers it
-        // produces for the flamethrower come out longer-ranged than the pistol,
-        // which is wrong - so it is NOT implemented.
-        //
-        // Until the loop is exported, rounds here fly until they hit something.
-        // That is a known departure, stated rather than papered over.
+        // PROJECTILE RANGE is the life counter at +0x1c, decremented once a tick
+        // by the particle task at 0x2d91c (see Particles::ProjectileDef), so the
+        // double-damage rule above is a falloff over the second half of a
+        // round's flight.
 
         // Fresh damage per weapon, from the speed fields in
         // Particles::PROJECTILE_*:
         //     pistol  0x10 -> 32     shotgun 0x50 -> 160
-        //     flame   0x60 -> 192    heavy   0xa0 -> 320
+        //     pulse   0x60 -> 192    smartgun 0xa0 -> 320   flamethrower 0x50 -> 160
         inline constexpr int PISTOL_FRESH_DAMAGE = 0x10 * 2;
 
         // CRATE HEALTH: DERIVED, not read.

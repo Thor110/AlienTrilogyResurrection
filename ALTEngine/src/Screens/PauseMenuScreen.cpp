@@ -81,8 +81,8 @@ namespace ALTEngine::Screens
             if (label == "9mm Pistol") { index = 0; }
             else if (label == "Shotgun") { index = 1; }
             else if (label == "Pulse Rifle") { index = 2; }
-            else if (label == "Flamethrower") { index = 3; }
-            else if (label == "Smart Gun") { index = 4; }
+            else if (label == "Flamethrower") { index = 4; }   // weapon slots: see
+            else if (label == "Smart Gun") { index = 3; }      // PlayerInventoryState
             if (index < 0) { return std::nullopt; }
             return WeaponInfo{ inv.ByIndex(index), node.modelIndex, node.secondaryModelIndex, inv.AmmoTotal(index) };
         }

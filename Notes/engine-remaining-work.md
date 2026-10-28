@@ -59,9 +59,9 @@ Status in the port:
 
 ## 5. Weapons still approximated
 
-- **Flamethrower:** builds its particles inline in `FUN_0002c1d4`. The port uses the common spawn.
-- **Smartgun:** pre-steps each round 1–2 steps with a wall test on each (`FUN_0002bcac`). The port pre-steps without the test. Its ammo use is a variable amount (`FUN_0002c0a0`); the port takes 1.
-- **Auto weapon switch when empty:** `FUN_00038c78`. The port always takes the "cannot switch" path.
+- **Flamethrower ammo:** `FUN_0002c0a0` takes one per particle it gets out. The port takes one per pull.
+- **Flame pre-steps:** they don't damage objects the way the original's cell test (`FUN_00036e9c`) does.
+- **Shotgun shell model:** model 26 is used for the ejected shell. This is inferred, not traced.
 
 ## 6. Modern options
 
@@ -79,6 +79,22 @@ Status in the port:
 
 ## Settled this round (see the code comments for the evidence)
 
+- **Weapon slots 3 and 4 were crossed.** The original's internal slot (`DAT_000b0aae`) is 0 pistol, 1 shotgun, 2 pulse rifle, **3 smartgun, 4 flamethrower**:
+  - **Graphics:** `FUN_000401d0`'s jump table at `0x401bc` sends slot 3 to the table at `0x0ace88` (smartgun sounds) and slot 4 to `0x0ace70` (flamethrower sounds). An earlier reading took the cases in address order.
+  - **Firing:** `FUN_0003d5b0` fires slot 3 through `FUN_0002c1d4`, using `acc`, which pickup 4, "Smart Gun", fills. Slot 4 fires through `FUN_0002c0a0`, using `aca`, which pickup 3, "Flamethrower", fills.
+  - **Keys:** the select keys (pistol, shotgun, pulse rifle, flamethrower, smartgun) map to slots 0, 1, 2, 4, 3. The restore code converts with the same 3/4 swap (`0x17bd5`).
+  - **The port's mix-up:** firing and the weapon table were per slot, but graphics, names and pickups were in key order. So each of the two weapons fired the other's rounds, and slot 2 drew the pulse rifle's animation over `FLAME.B16`.
+- **Weapon switching** (`FUN_0003efcc` at `0x3f0bc`):
+  - **Lower and raise:** state 4 lowers the weapon (`DAT_000b0b57` + 0x10 a tick to 0x80), the swap happens at the bottom, and state 5 raises it again. Eight ticks each way.
+  - **Running dry:** the weapon empties and switches to the highest other slot that still has ammo (`FUN_00038e64`). Only when there is none does the pistol get its single-round reload (`FUN_00038c78`).
+  - **Selecting:** choosing a weapon or next-weapon skips one that is held but empty (`FUN_00039004`, `FUN_00038d26`).
+- **Flamethrower particles** stop where a wall or creature blocks them and burn on there. That is the type 3 arm of `0x2da89`, and `FUN_0002bcac` makes the same test at each pre-step.
+- **Casings:** only the pistol (0x15) and the shotgun (0x14) eject one (`FUN_0002b37c`).
+- **The smartgun aims itself** (`FUN_0002c12c` / `FUN_0002c1d4`):
+  - **Targets:** up to three creatures within 0x1c00, inside ±0x80 of the heading, in a visible zone and in state ≤ 5, nearest first.
+  - **Aimed rounds:** each starts 0x100 below the eye and 0x190 ahead, and flies at its target's Y + half its box's half height.
+  - **Leftover shots:** go straight ahead as type 4.
+
 - **Melee creatures leap** (`FUN_00033cbc`, called from creature-task state 4 at `0x3476e`):
   - **Entering the attack state:** the chase (state 2) enters state 4 only at mode 0 and within 0x600 vertically. State 4 returns to the chase at mode 3.
   - **When it attacks:** in state 4, once the creature faces the player exactly, is in a mode below 3, is within 0x400 vertically, and its attack timer has run out (reloaded to 0x3c).
@@ -86,7 +102,7 @@ Status in the port:
   - **Leap:** otherwise it leaps, with horizontal 0x60 along its heading (`FUN_00032f78`), vertical 0x80 and gravity 0xc (`FUN_00031f3c`). Type 3 always leaps.
   - **Landing:** the hit is the ordinary attack check (`FUN_00033ff8`), run when the leap ends. A hugger then goes back to the chase; type 3 stays in state 4.
 - **Spawn clamps** (`FUN_0002e638`, every type except 0x10-0x13): the mode-1 threshold is at least 0x600. The attack cone is the record's bytes 10/11, clamped to 0x100..0x800, with anything wider set to 0x700.
-- **Rounds converge** (`FUN_0002b534`): each round gets a yaw of its own before the view's, turning it back across the muzzle offset. Pistol and shotgun 0x28, pulse rifle 0x30, flamethrower 0.
+- **Rounds converge** (`FUN_0002b534`): each round gets a yaw of its own before the view's, turning it back across the muzzle offset. Pistol and shotgun 0x28, pulse rifle 0x30, the smartgun's unaimed type 4 none.
 - **Level fire passes over a standing hugger.** This is checked, not assumed:
   - **Rounds:** they start 0x60 below the eye (floor + 0x2a0) and are pitched by the view. Running the original's rotate routine (`FUN_00026a20`) in an emulator at the rest pitch (0x30) gives vertical velocity +18 per 256 forward, about 4° up. Its camera (`FUN_00026ab0` and `FUN_0004884c`) looks up by the same amount, so rounds fly to the screen centre.
   - **Hugger:** a standing hugger's box is floor + 0x20 ± 0x200, so its top is floor + 0x220. Nothing else lowers a round: no gravity in the batch mover (`FUN_00047524`), and no steering in the round handler.
@@ -121,5 +137,5 @@ Status in the port:
   - Command 9 is an add-and-clamp on a 16-byte animator record (`FUN_00042fcc`).
   - Shot-activated triggers have flag `0x02`.
 - **Weapons:**
-  - The smartgun fires 2 rounds per pull, launched from eye − `0x80` + jitter, `0x38` to the side (`FUN_0002c0a0`, `FUN_0002bcac`).
+  - The flamethrower puts 2 particles out per pull, launched from eye − `0x80` + jitter, `0x38` to the side (`FUN_0002c0a0`, `FUN_0002bcac`).
   - Each pulse round costs one (`FUN_0002bc18`).

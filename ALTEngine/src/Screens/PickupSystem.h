@@ -11,12 +11,12 @@ namespace ALTEngine::Screens
     // the caller leaves in BX - and most weapon pickups add to BOTH a magazine
     // counter and a spare-unit counter.
     //
-    // TYPE ORDER IS NOT WEAPON ORDER. This is the trap, and the port fell into
-    // it: pickup 3 adds to DAT_000b0aca, which the HUD reads for weapon 4, the
-    // SMARTGUN. Pickup 4 adds to DAT_000b0acc/ace, which is weapon 3, the
-    // FLAMETHROWER. So the two are swapped relative to the weapon indices, and
-    // picking up smartgun ammo was giving flamethrower ammo. Same swap on the
-    // ammo-only variants 0x0d and 0x0e.
+    // TYPE ORDER IS NOT WEAPON-SLOT ORDER for the last two. Pickup 3 is the
+    // flamethrower (its own name, string 140) and adds to DAT_000b0aca, the
+    // counter weapon slot 4 fires from. Pickup 4 is the smart gun (string 141)
+    // and adds to DAT_000b0acc/ace, slot 3's. Same pattern for the ammo-only
+    // 0x0d (flamethrower fuel) and 0x0e (smart gun ammunition). See
+    // PlayerInventoryState::ByIndex for why slot 3 is the smartgun.
     //
     // The pairs are: every weapon has a "grant and fill" type and an "ammo only"
     // type. The first sets the weapon's availability bit in DAT_000b0ab4 and
@@ -27,8 +27,8 @@ namespace ALTEngine::Screens
     //     0       9       pistol         abe / ac0       0x0f / 9
     //     1       0x0a    shotgun        ac2             100
     //     2       0x0b    pulse rifle    ac4 / ac6 low   100 / 9
-    //     3       0x0d    SMARTGUN       aca             500   (0x0d adds a flat 100)
-    //     4       0x0e    FLAMETHROWER   acc / ace low   100 / 9
+    //     3       0x0d    flamethrower   aca             500   (0x0d adds a flat 100)  slot 4
+    //     4       0x0e    smartgun       acc / ace low   100 / 9                 slot 3
     namespace Pickups
     {
         enum Type
@@ -36,8 +36,8 @@ namespace ALTEngine::Screens
             PISTOL_AND_AMMO = 0,
             SHOTGUN_AND_AMMO = 1,
             PULSE_AND_AMMO = 2,
-            SMARTGUN_AND_AMMO = 3,
-            FLAMETHROWER_AND_AMMO = 4,
+            FLAMETHROWER_AND_AMMO = 3,
+            SMARTGUN_AND_AMMO = 4,
 
             PULSE_SPARE = 6,        // DAT_000b0ace high half - the non-pulse icon counter
             COUNTER_AD2 = 7,        // +1, untraced meaning
@@ -47,8 +47,8 @@ namespace ALTEngine::Screens
             SHOTGUN_AMMO = 0x0a,
             PULSE_AMMO = 0x0b,
             GRENADES = 0x0c,        // caps at 0x14 - the pulse rifle's launcher
-            SMARTGUN_AMMO = 0x0d,   // flat +100
-            FLAMETHROWER_AMMO = 0x0e,
+            FLAMETHROWER_AMMO = 0x0d,   // flat +100
+            SMARTGUN_AMMO = 0x0e,
             COUNTER_AE2 = 0x0f,     // +1, untraced
 
             FLAG_80 = 0x10,         // raises bit 0x80 of DAT_000b0ab4
@@ -74,13 +74,13 @@ namespace ALTEngine::Screens
         inline constexpr int SHOTGUN_CAP = 100;
         inline constexpr int MAG_CAP = 100;
         inline constexpr int UNIT_CAP = 9;
-        inline constexpr int SMARTGUN_CAP = 500;
+        inline constexpr int FLAMETHROWER_CAP = 500;
         inline constexpr int GRENADE_CAP = 0x14;
         inline constexpr int HEALTH_CAP = 100;
         inline constexpr int HEALTH_BOOST = 200;
         inline constexpr int SHIELD_TICKS = 900;
         inline constexpr int TERRAIN_SPEED_PER_UNIT = 0x1e;
-        inline constexpr int SMARTGUN_AMMO_FLAT = 100;
+        inline constexpr int FLAMETHROWER_AMMO_FLAT = 100;
 
         inline int Clamp(int value, int cap) { return value > cap ? cap : value; }
 
@@ -108,23 +108,23 @@ namespace ALTEngine::Screens
 
             switch (type)
             {
-            // Weapon indices below are the CANONICAL ones - 2 pulse, 3
-            // flamethrower, 4 smartgun - which is why 3 and 4 look crossed
-            // against the pickup type numbers. See the note at the top.
+            // Weapon indices below are slots - 3 smartgun, 4 flamethrower -
+            // which is why 3 and 4 look crossed against the pickup type
+            // numbers. See the note at the top.
             case PISTOL_AND_AMMO:       grant(0, PISTOL_MAG_CAP, PISTOL_UNIT_CAP); return true;
             case SHOTGUN_AND_AMMO:      grant(1, SHOTGUN_CAP, 0);                  return true;
             case PULSE_AND_AMMO:        grant(2, MAG_CAP, UNIT_CAP);               return true;
-            case SMARTGUN_AND_AMMO:     grant(4, SMARTGUN_CAP, 0);                 return true;
-            case FLAMETHROWER_AND_AMMO: grant(3, MAG_CAP, UNIT_CAP);               return true;
+            case FLAMETHROWER_AND_AMMO: grant(4, FLAMETHROWER_CAP, 0);          return true;
+            case SMARTGUN_AND_AMMO:     grant(3, MAG_CAP, UNIT_CAP);               return true;
 
             case PISTOL_AMMO:       addAmmo(0, PISTOL_MAG_CAP, PISTOL_UNIT_CAP); return true;
             case SHOTGUN_AMMO:      addAmmo(1, SHOTGUN_CAP, 0);                  return true;
             case PULSE_AMMO:        addAmmo(2, MAG_CAP, UNIT_CAP);               return true;
-            case FLAMETHROWER_AMMO: addAmmo(3, MAG_CAP, UNIT_CAP);               return true;
+            case SMARTGUN_AMMO:     addAmmo(3, MAG_CAP, UNIT_CAP);               return true;
 
-            case SMARTGUN_AMMO:
+            case FLAMETHROWER_AMMO:
                 // A flat 100, not the record's amount.
-                inventory.AddAmmo(4, SMARTGUN_AMMO_FLAT, SMARTGUN_CAP);
+                inventory.AddAmmo(4, FLAMETHROWER_AMMO_FLAT, FLAMETHROWER_CAP);
                 return true;
 
             case GRENADES:

@@ -76,8 +76,8 @@ namespace ALTEngine::Formats
         // ordering: pistol, shotgun, flamethrower, pulse rifle, smartgun.
         // Indexed by the canonical weapon order - pistol, shotgun, PULSE RIFLE,
         // FLAMETHROWER, smartgun. See PlayerInventoryState::ByIndex.
-        inline constexpr int WEAPON_SHOT[] = { PISTOL_SHOT, SHOTGUN_SHOT, PULSE_SHOT, FLAME_SHOT, SMARTGUN_SHOT };
-        inline constexpr int WEAPON_CLIP[] = { PISTOL_CLIP, SHOTGUN_CLIP, -1, -1, SMARTGUN_CLIP };
+        inline constexpr int WEAPON_SHOT[] = { PISTOL_SHOT, SHOTGUN_SHOT, PULSE_SHOT, SMARTGUN_SHOT, FLAME_SHOT };
+        inline constexpr int WEAPON_CLIP[] = { PISTOL_CLIP, SHOTGUN_CLIP, -1, SMARTGUN_CLIP, -1 };
 
         // Named slots worth having even though no traced call site uses them yet.
         inline constexpr int PULSE_FIRE = 0x05;         // 0301puls

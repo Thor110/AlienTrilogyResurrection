@@ -17,7 +17,7 @@ namespace ALTEngine::Game::ProjectileCollision
     //                    is now in. Blocked -> shatter, impact sound, gone.
     //   2. creatures     FUN_0002a628 - a per-creature box test, below.
     //                    Hit -> damage, a spray of the creature's blood, gone
-    //                    (shotgun pellets and flame carry on through).
+    //                    (shotgun pellets and smartgun rounds carry on through).
     //   3. triggers      FUN_000414f0 - a round entering a trigger cell can set
     //                    the trigger off (see Triggers::Source::Shot).
     //
@@ -30,8 +30,8 @@ namespace ALTEngine::Game::ProjectileCollision
     inline constexpr int TYPE_PISTOL = 0;
     inline constexpr int TYPE_SHOTGUN = 1;
     inline constexpr int TYPE_PULSE = 2;
-    inline constexpr int TYPE_SMARTGUN = 3;
-    inline constexpr int TYPE_FLAME = 4;
+    inline constexpr int TYPE_FLAME = 3;
+    inline constexpr int TYPE_SMARTGUN = 4;
     inline constexpr int TYPE_GRENADE = 5;
 
     // ---- 1. the cell -------------------------------------------------------
@@ -50,8 +50,8 @@ namespace ALTEngine::Game::ProjectileCollision
     // `strength` is the round's +0x1a value (Particles::ProjectileDef::speed).
     //
     //   - cell attribute 0x14: solid to rounds.
-    //   - an object stamped in the cell (+0x0c): 0x15 only takes flame, 0x1d
-    //     ignores the smartgun and the round passes harmlessly but stops, 0x1c
+    //   - an object stamped in the cell (+0x0c): 0x15 only takes smartgun rounds,
+    //     0x1d ignores the flamethrower and the round passes harmlessly but stops, 0x1c
     //     is hit at any height; any other object (> 0x13) is hit only between
     //     the floor and floor + 0x200 (0x400 for the tall 0x19). The pistol
     //     stops dead against a barrel (0x17) without hurting it.
@@ -92,11 +92,11 @@ namespace ALTEngine::Game::ProjectileCollision
     uint16_t CellZones(const Formats::LevelGeometry& level, int cellIndex);
     bool ShareZone(const Formats::LevelGeometry& level, int cellA, int cellB);
 
-    // Shotgun pellets and flame go on to hit every creature they overlap that
+    // Shotgun pellets and smartgun rounds go on to hit every creature they overlap that
     // tick; every other round stops at the first.
     inline bool StopsAtFirstCreature(int projectileType)
     {
-        return projectileType != TYPE_SHOTGUN && projectileType != TYPE_FLAME;
+        return projectileType != TYPE_SHOTGUN && projectileType != TYPE_SMARTGUN;
     }
 
     // The colour of blood a creature sprays when hit (FUN_0002af24): the

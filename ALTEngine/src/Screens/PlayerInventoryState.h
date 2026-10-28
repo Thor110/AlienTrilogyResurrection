@@ -69,13 +69,26 @@ namespace ALTEngine::Screens
             // it does not change what the player is holding.
         }
 
-        // THE CANONICAL WEAPON ORDER, and it is the original's:
-        //     0 pistol   1 shotgun   2 pulse rifle   3 flamethrower   4 smartgun
+        // THE WEAPON INDEX IS THE ORIGINAL'S INTERNAL SLOT (DAT_000b0aae):
+        //     0 pistol   1 shotgun   2 pulse rifle   3 smartgun   4 flamethrower
         //
-        // Confirmed twice over. The select keys are 1-5 in that order (Edward,
-        // 2026), and FUN_000401d0's switch reaches the per-weapon tables in that
-        // sequence - the four-state table with the grenade launcher is the pulse
-        // rifle, identified by its 0401gren sound cue.
+        // Not the order the select keys run in (1-5: pistol, shotgun, pulse
+        // rifle, flamethrower, smartgun - see SlotForSelectKey). Every table in
+        // the original is per slot, and slot 3 is the smartgun three times over:
+        //   - FUN_000401d0's jump table (0x401bc) gives slot 3 the table at
+        //     0x0ace88, whose sound events are 0901/0902smar, and slot 4 the one
+        //     at 0x0ace70 (0501/0503flam);
+        //   - FUN_0003d5b0 fires slot 3 through FUN_0002c1d4, which aims at up to
+        //     three creatures, from DAT_000b0acc - the counter pickup 4, "Smart
+        //     Gun", fills;
+        //   - slot 4 fires FUN_0002c0a0's short, scattered stream from
+        //     DAT_000b0aca, which pickup 3, "Flamethrower", fills.
+        // The save/restore code converts between the two numberings with a 3/4
+        // swap (0x17bd5).
+        //
+        // The port had 3 as the flamethrower: its graphics, names and pickups
+        // used the key order while its firing used the slot order, so each of
+        // the two weapons fired the other's rounds.
         //
         // The pickup switch already used this order; the current-weapon code did
         // not, which is part of why a picked-up shotgun never became selectable.
@@ -87,11 +100,18 @@ namespace ALTEngine::Screens
             case 0:  return &pistol;
             case 1:  return &shotgun;
             case 2:  return &pulseRifle;
-            case 3:  return &flamethrower;
-            case 4:  return &smartGun;
+            case 3:  return &smartGun;
+            case 4:  return &flamethrower;
             default: return nullptr;
             }
         }
+        // The select keys, 1-5, in slot terms.
+        static constexpr int SlotForSelectKey(int key)
+        {
+            constexpr int SLOTS[5] = { 0, 1, 2, 4, 3 };
+            return (key >= 0 && key < 5) ? SLOTS[key] : 0;
+        }
+
         const WeaponState* ByIndex(int i) const
         {
             return const_cast<PlayerInventoryState*>(this)->ByIndex(i);
@@ -118,6 +138,35 @@ namespace ALTEngine::Screens
         // The original's key 6: step to the next weapon that has been picked up,
         // wrapping. Returns the new index, or the old one if nothing else is
         // available.
+        // THE ORIGINAL'S WEAPON LIST (0x1a7e28): one entry per slot, each with a
+        // flag that pickups set and that is cleared when the weapon runs dry.
+        // Selecting (FUN_00039004) and next-weapon (FUN_00038d26) both skip an
+        // entry whose flag is clear - a weapon held but empty.
+        bool Selectable(int i) const { return Available(i) && AmmoTotal(i) > 0; }
+
+        // Next-weapon: forward from the current slot, wrapping (FUN_00038d26).
+        int NextSelectable(int current) const
+        {
+            for (int step = 1; step < 5; ++step)
+            {
+                const int candidate = (current + step) % 5;
+                if (Selectable(candidate)) { return candidate; }
+            }
+            return current;
+        }
+
+        // The automatic switch when the held weapon runs dry (FUN_00038e64):
+        // the HIGHEST other slot that can still fire, so the best weapon first.
+        // -1 if there is none - FUN_00038c78's "cannot switch".
+        int BestOtherSelectable(int current) const
+        {
+            for (int candidate = 4; candidate >= 0; --candidate)
+            {
+                if (candidate != current && Selectable(candidate)) { return candidate; }
+            }
+            return -1;
+        }
+
         int NextAvailable(int current) const
         {
             for (int step = 1; step <= 5; ++step)
