@@ -39,6 +39,24 @@ namespace ALTEngine::Screens::CreatureAI
     //                      (FUN_00033ff8) and then: a hugger retreats; anything
     //                      else attacks again if it still can, or moves on to a
     //                      fresh point near the player, or idles for 4 ticks.
+    //
+    // THE QUEEN (type 7) runs her own task, LAB_00035bec, which is this one
+    // with five differences - `Agent::queen` selects them:
+    //   - IDLE first plays her intro, a phase in the task's own +0xc: with the
+    //     wait clear and the player inside the middle band she starts
+    //     animation 9 (phase 1); when that plays out, animation 10 if the
+    //     player is in the near band (phase 2) or else animation 8 and 0x80
+    //     ticks more (phase 0); phase 2 playing out is phase 3, and only then
+    //     does IDLE go on to CHASE once the wait is clear.
+    //   - CHASE never attacks. Unalerted, she becomes alerted by noticing the
+    //     player, or by the player being in a zone she can see and either at
+    //     contact range or in a clear line.
+    //   - MOVE and ATTACK ignore the vertical reach; ATTACK acts at contact
+    //     range outright, and from the middle bands with a clear line.
+    //   - ACT goes again at contact range without the vertical and line tests.
+    //   - A hit (state 6) before her intro is done rises at once (animation
+    //     10, 0x40 ticks); after it, she attacks again if she can, or side-
+    //     steps (FUN_00033ad0) with the attack timer at 0x3c, or idles 8 ticks.
     enum State
     {
         IDLE = 0,
@@ -131,7 +149,20 @@ namespace ALTEngine::Screens::CreatureAI
         // Set here, for the caller to act on.
         bool startAct = false;      // FUN_00033cbc: start the attack
         bool resolveHit = false;    // FUN_00033ff8: the attack lands now
+
+        // The queen's own (see above).
+        bool queen = false;
+        int introPhase = 0;         // her task's +0xc
+        bool animationEvent = false;   // set by the caller: +0xb6 bit 1
+        int startAnimation = -1;    // set here: FUN_0002f4b0
     };
+
+    inline constexpr int QUEEN_ANIM_WAIT = 8;
+    inline constexpr int QUEEN_ANIM_RISE = 9;
+    inline constexpr int QUEEN_ANIM_UP = 10;
+    inline constexpr int QUEEN_REWAIT = 0x80;
+    inline constexpr int QUEEN_HIT_RISE_WAIT = 0x40;
+    inline constexpr int QUEEN_SIDESTEP_ATTACK_TIMER = 0x3c;
 
     // FUN_00032ec4: turn toward `to` by at most the turn rate.
     inline void TurnToward(Agent& a, int to)
@@ -291,14 +322,69 @@ namespace ALTEngine::Screens::CreatureAI
 
     // One tick of the task. The caller has already set the perception fields
     // and counted the timers down.
+    // The queen's intro, in IDLE (0x35c95).
+    inline void QueenIdle(Agent& a)
+    {
+        switch (a.introPhase)
+        {
+        case 3:
+            if (a.idleTimer == 0) { a.state = CHASE; }
+            return;
+        case 2:
+            if (a.animationEvent) { a.introPhase = 3; }
+            return;
+        case 1:
+            if (!a.animationEvent) { return; }
+            if (a.mode < 2) { a.startAnimation = QUEEN_ANIM_UP; a.introPhase = 2; }
+            else { a.startAnimation = QUEEN_ANIM_WAIT; a.introPhase = 0; a.idleTimer = QUEEN_REWAIT; }
+            return;
+        default:
+            if (a.idleTimer == 0 && a.mode < 3) { a.startAnimation = QUEEN_ANIM_RISE; a.introPhase = 1; }
+            return;
+        }
+    }
+
+    // The queen's hit reaction ending (0x3617f).
+    inline void QueenRecover(Agent& a, World& w)
+    {
+        Stop(a);
+        if (a.introPhase == 2) { a.introPhase = 3; }
+        if (a.introPhase < 2)
+        {
+            a.startAnimation = QUEEN_ANIM_UP;
+            a.introPhase = 2;
+            a.state = IDLE;
+            a.idleTimer = QUEEN_HIT_RISE_WAIT;
+            return;
+        }
+        if (a.mode < 3 && (a.mode == 0 || a.lineToPlayer))
+        {
+            Face(a, a.bearingToPlayer);
+            Act(a);
+            return;
+        }
+        if (PickSideStep(a, w))
+        {
+            a.attackTimer = QUEEN_SIDESTEP_ATTACK_TIMER;
+            Face(a, Game::OriginalMath::Bearing(a.x - a.waypointX, a.z - a.waypointZ));
+            a.state = MOVE;
+            return;
+        }
+        Face(a, a.bearingToPlayer);
+        a.state = IDLE;
+        a.idleTimer = LOST_LINE_IDLE;
+    }
+
     inline void Step(Agent& a, World& w, int playerX, int playerZ)
     {
         a.startAct = false;
         a.resolveHit = false;
+        a.startAnimation = -1;
 
         switch (a.state)
         {
         case IDLE:
+            if (a.queen) { QueenIdle(a); return; }
             Face(a, a.bearingToPlayer);
             if (a.idleTimer == 0) { a.state = CHASE; }
             return;
@@ -318,6 +404,11 @@ namespace ALTEngine::Screens::CreatureAI
                 return;
             }
             if (Notices(a)) { a.alerted = true; return; }
+            if (a.queen)
+            {
+                if (a.zoneVisible && (a.mode == 0 || a.lineToPlayer)) { a.alerted = true; }
+                return;
+            }
             if (SeesInCone(a))
             {
                 if (a.mode == 0 && a.separationY <= CONTACT_VERTICAL && a.lineToPlayer) { a.state = ATTACK; }
@@ -330,7 +421,7 @@ namespace ALTEngine::Screens::CreatureAI
             if (Arrived(a)) { Stop(a); a.state = ATTACK; return; }
             if (!a.retreating && a.attackTimer == 0)
             {
-                const bool contact = a.mode == 0 && a.separationY <= CONTACT_VERTICAL;
+                const bool contact = a.mode == 0 && (a.queen || a.separationY <= CONTACT_VERTICAL);
                 const bool inLine = a.mode > 0 && a.mode < 3 && a.lineToPlayer;
                 if (contact || inLine)
                 {
@@ -352,6 +443,17 @@ namespace ALTEngine::Screens::CreatureAI
 
         case ATTACK:
             if (a.retreating || a.mode >= 3) { a.state = CHASE; return; }
+            if (a.queen)
+            {
+                if (a.mode == 0 || a.lineToPlayer)
+                {
+                    TurnToward(a, a.bearingToPlayer);
+                    if (a.facing == a.target) { Act(a); }
+                    return;
+                }
+                a.state = CHASE;
+                return;
+            }
             if (a.separationY <= Reach(a) && a.lineToPlayer)
             {
                 TurnToward(a, a.bearingToPlayer);
@@ -376,7 +478,7 @@ namespace ALTEngine::Screens::CreatureAI
             }
             if (a.mode < 3)
             {
-                if (a.mode == 0 && a.separationY <= CONTACT_VERTICAL && a.lineToPlayer)
+                if (a.mode == 0 && (a.queen || (a.separationY <= CONTACT_VERTICAL && a.lineToPlayer)))
                 {
                     Face(a, a.bearingToPlayer);
                     Act(a);

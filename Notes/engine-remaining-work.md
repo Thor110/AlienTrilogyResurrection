@@ -12,12 +12,12 @@ Details for each item are in the numbered sections below.
 |---|---|---|---|
 | 1 | One logic tick rate (find the game's clock) | yes | open |
 | 2 | Player movement exactly (`FUN_0003d85c` / `FUN_0003dc44`) | yes | open |
-| 3 | Lifts (trigger commands 5 and 7) | yes, but the demo maps have none to test with | done (unit tests only; mesh index and origin unverified) |
+| 3 | Lifts (trigger commands 5 and 7) | yes | done (tested on 3.5.1: heights and platform position) |
 | 4a | Creature line of fire and visibility before attacking (`FUN_0003231c`, `FUN_00033a1c`) | yes | done (zone test approximated) |
 | 4b | Creature chase via the path network (state 2/3) | yes | done for the common task (see section 4 for what's approximated) |
 | 4c | Creatures blocking each other (cell occupancy) | yes | done (barrel blasts still find creatures by position) |
 | 4d | Hit, death and leap-end animations | needs the animation scripts | open |
-| 4e | Per-type tasks for types 1, 7, 10, 0x10-0x13 | yes | open |
+| 4e | Per-type tasks for types 1, 7, 10, 0x10-0x13 | yes | done (animation events approximated; untested in play) |
 | 5 | Flame pre-steps damaging objects | yes | open |
 | 6 | Player Jumping option | modern | open |
 | 7a | Secrets counter on the assessment screen | yes | open |
@@ -27,6 +27,9 @@ Details for each item are in the numbered sections below.
 | 7e | Direct-to-window rendering | needs real hardware | open |
 | 7f | Multiplayer | large | open |
 | A | Open question: pistol rounds against a standing hugger | needs a check in the original | open |
+| 8a | Walk-through walls and floors: texture mapping (e.g. 3.5.1) | yes | open |
+| 8b | Breakable windows | yes | open |
+| 8c | Cryopod cover (textured like the windows, not breakable) | yes | open |
 
 ## 1. One logic tick rate
 
@@ -66,11 +69,11 @@ Done as `Game::Lifts` (see section "Settled"). Still to check against a retail m
 | Creature type | Task |
 |---|---|
 | Most | `LAB_000342b4` |
-| 1 | `LAB_000356a0` |
-| 7 | `LAB_00035bec` |
-| 10 | `LAB_000364d4` |
-| 0x10 / 0x11 | `LAB_00035aa0` / `LAB_00035ae8` |
-| 0x12 / 0x13 | `LAB_00035b68` / `LAB_00035b28` |
+| 1 egg | `LAB_000356a0` |
+| 7 queen | `LAB_00035bec` |
+| 10 colonist | `LAB_000364d4` |
+| 0x10 / 0x11 horizontal steam / flame vent | `LAB_00035aa0` / `LAB_00035ae8` |
+| 0x12 / 0x13 vertical steam / flame vent | `LAB_00035b68` / `LAB_00035b28` |
 
 Status in the port:
 - **The common task** (`LAB_000342b4`, used by types 2-6, 8, 9 and 0x0b-0x0e) now runs state by state in `Screens/CreatureAI.h`: idle, chase, move, attack and act, with the flow field (`Game/FlowField.h`). What is still approximated:
@@ -78,7 +81,11 @@ Status in the port:
   - **Mid-attack event:** the act's `+0xb6` bit 8 event (`FUN_0002af8c` / `FUN_0002b240`, a creature's projectile or spit) isn't implemented.
   - **Types 0x0b-0x0e** use `FUN_00032aec` instead of `FUN_0003231c` in places. The port uses `FUN_0003231c` for them.
   - **Speeds and timers** are the original's per-tick values. How fast they look depends on the tick rate (item 1).
-- **Other types** (1, 7, 10, 0x10-0x13) still run the port's own logic: they walk straight at the player.
+- **The other tasks** are now in `Screens/CreatureTasks.h` (egg, colonist, vents) and, for the queen, as a variant of the common task in `Screens/CreatureAI.h`. See "Settled" for what each does. What is still approximated:
+  - **Animation events:** the egg, colonist and queen wait on their animations' script bits (+0xb6 bits 1 and 2). The port has no script VM, so an animation playing through stands in, with a frame count from the sprite set (4 when it has none).
+  - **The egg's line** uses `FUN_0003231c`; the original uses the variant `FUN_00032aec`.
+  - **Vent jets** are drawn as plain puffs; the original's per-type sprites (the table at `0x2d6a0`) aren't read. The vent's sound plays once as the jet starts, since the port's mixer can't hold a loop. A burst pipe shows the barrel explosion; whether `FUN_0002aaf0` also does blast damage is unchecked.
+  - **The queen's death** slides her down a slope and can sink her into a pit (cell attribute 6, under 4 units of headroom); neither is done. The colonist's view-dependent death animations (0x1b + view) aren't either.
 - **Visibility mask:** `FUN_00033a1c`'s zone test uses the zones of the player's own cell. The original's mask is every zone the renderer drew that frame (`0x274c2` onward).
 - **Leap end:** the original ends a leap when the animation script sets `+0xb6` bit 2. The port ends it on landing.
 - **Walking off a ledge** gives a creature a small hop (`vy = 0x3c`, `FUN_000315f0`). Not implemented.
@@ -99,13 +106,31 @@ Status in the port:
 ## 7. Smaller items
 
 - **Assessment screen:** the "secrets" figure is always 0, because nothing tracks secrets.
+  - **Found so far:** two level counters that only ever count up. `DAT_000b0b28` counts doors activated for the first time (`FUN_00029560` / `FUN_00029610`, door flag 0x80), and `DAT_000b0b2a` counts lifts run for the first time (lift flag 0x80). Neither has a direct reader, so the assessment screen probably reads them as a block. Its code is the next thing to read.
 - **Saves:** they checkpoint the start of a level only. Mid-level state isn't serialised.
 - **Death clip choice:** causes 0–2 are known to `GameOverSequence`, but their sources aren't identified.
 - **Field names:** `Pickup::unknown1` / `Pickup::z` are the trigger counter / threshold, and `Crate::unknown1` / `Crate::drop` are health ÷ 16 / flags. They're used correctly now but still have their old names in `LevelLoader.h`.
 - **Rendering:** each frame is still copied GPU → CPU → GPU (`ModelRenderer::RenderLevelToRgba`). Drawing straight to the window would remove a full-frame stall, and needs testing on real hardware.
 - **Multiplayer:** the menus exist, but there is no networking.
 
+## 8. Reported from play, after the rest of the list
+
+- **Walk-through walls and floors:** some walls (and floors) can be walked through, in the original too, where it isn't obvious either. In the port their textures are not mapped properly. Seen on 3.5.1 and throughout the game.
+- **Breakable windows:** some levels have windows that can be shot out.
+- **Cryopod cover:** looks to take its texture the same way as the windows, but can't be broken.
+
 ## Settled this round (see the code comments for the evidence)
+
+- **The egg** (`LAB_000356a0`): its own thresholds (0x800 near, 0xc00 middle) replace the record's, and its record's byte 6 is the monster it holds. Closed, it rechecks every 0x40-0xbf ticks. With the player in the middle band it opens (animation 2), and once open, with the player in the near band and a clear line, it lets the hugger out and dies. The hugger (`FUN_00035530`) appears at the egg, alerted, facing the player and already leaping: 0x40 along, 0x60 up. A hit opens a closed egg.
+- **The colonist** (`LAB_000364d4`): a captive in the wall, pushed 0x40 out along its facing and 0x40 up. It turns its head to whichever eighth the player is in (animation 8 + view) and cries out (sound 0x6e) in the middle band. Close and straight in front (view 4, near band) it plays 0x1a and the chestburster its speed word names comes out (`FUN_00035624`: 0x60 along, 0x78 up, animation 0xd). Its byte 6 pickup is thrown out (`FUN_0003bc9c`).
+- **Vents** (`FUN_000358a4` and the jet arms of the particle pass):
+  - **Timing:** a cycle of the record's bytes 16/17. Each cycle the jet is off for the speed word's length, starting at bytes 18/19. A jet goes out every 3 (or 4) ticks: steam 0x0e / 0x12, flame 0x10 / 0x11, at 0x3c / 0x78 / 0x5a / 0x41.
+  - **Damage:** a jet touching the player (0-0x400 above the feet, 0x100 across) does 5, or 0xa for horizontal flame, with cause 5.
+  - **Off:** a vent only runs while its zone is in view and the player is within 0x1e00. A negative spawn-monster trigger takes it below its threshold and switches it off for good, with "Steam valve closed" / "Flame jet shut down".
+  - **Pipes:** a vent with health is a pipe that bursts and starts jetting when shot. One with none can't be hit, since it is never marked in its cell.
+  - **Placement:** vents face away from their record's heading, and byte 6 sets their height (from the ceiling when negative, jetting down).
+- **Monster triggers** (`FUN_0002f224`): the amount is a signed byte and moves the count of an active monster too. A count at its threshold takes no positive amount.
+- **The queen** (`LAB_00035bec`): the common task with an intro in IDLE (animations 9, then 10 or 8), a chase that only alerts, attacks without the vertical reach test, and her own hit reaction. Her death runs the command chain her record's byte 6 names (`FUN_00040e2c`, now `Triggers::System::RunCommands`).
 
 - **Lifts** (`FUN_000423e8` setup, handlers `0x42238` idle, `0x420ec` ascend, `0x41fa0` descend, `0x41ed0` wait; now `Game::Lifts`):
   - **Record:** x, z, width, depth, low, high, flags, auto-dwell, dwell, threshold, counter, model. On disc low is 0 and high is the travel; at load `FUN_00041b30` adds the first cell's floor to both.

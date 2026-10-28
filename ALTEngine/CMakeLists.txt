@@ -96,6 +96,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/CreatureSightTests.cpp
         tests/CreatureAITests.cpp
         tests/LiftTests.cpp
+        tests/CreatureTaskTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
     target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats)

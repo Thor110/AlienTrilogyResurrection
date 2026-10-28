@@ -300,3 +300,20 @@ TEST_CASE("Triggers: Spawn Pickup reaches its handler and never fails the chain"
     CHECK_EQ(spawned[0].second, 1);
     CHECK(ended);
 }
+
+TEST_CASE("Triggers: a command chain can be run straight from its first command")
+{
+    LevelGeometry level;
+    level.actions.resize(2);
+    level.logics.resize(2);
+    level.logics[0].action = Triggers::END_LEVEL;
+    level.logics[0].nextStep = Triggers::CHAIN_END;
+    Triggers::System system(level);
+    int ended = 0;
+    Triggers::Handlers h;
+    h.endLevel = [&]() { ++ended; };
+    CHECK(system.RunCommands(0, h));
+    CHECK(system.RunCommands(0, h));      // no uses to run out of
+    CHECK_EQ(ended, 2);
+    CHECK(!system.RunCommands(5, h));     // out of range
+}

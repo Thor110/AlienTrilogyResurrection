@@ -258,6 +258,15 @@ namespace ALTEngine::Screens
 
         bool Ready() const { return !byType.empty(); }
 
+        // How many frames an animation has, 0 if this level's sprites lack it.
+        int FrameCount(int type, int animation) const
+        {
+            auto it = byType.find(type);
+            if (it == byType.end()) { return 0; }
+            auto anim = it->second.animations.find(animation);
+            return anim == it->second.animations.end() ? 0 : static_cast<int>(anim->second.frames.size());
+        }
+
         void Collect(const std::vector<Enemies::Enemy>& enemies,
                      float cameraX, float cameraZ,
                      std::vector<ALTEngine::Renderer::PlacedSprite>& out) const
@@ -284,14 +293,25 @@ namespace ALTEngine::Screens
                 }
                 if (anim == it->second.animations.end() || anim->second.frames.empty())
                 {
+                    // Nor that: the first animation the set has, so a creature
+                    // whose task picks animations by view (the colonist) is
+                    // still drawn.
+                    for (anim = it->second.animations.begin(); anim != it->second.animations.end(); ++anim)
+                    {
+                        if (!anim->second.frames.empty()) { break; }
+                    }
+                }
+                if (anim == it->second.animations.end() || anim->second.frames.empty())
+                {
                     continue;
                 }
 
                 // Wrap, so an animation that outlives its frame count loops rather
                 // than falling off the end.
                 const auto& frames = anim->second.frames;
-                const size_t index = static_cast<size_t>(enemy.animationFrame)
-                                   % frames.size();
+                const size_t index = enemy.holdAnimation
+                    ? std::min(static_cast<size_t>(enemy.animationFrame), frames.size() - 1)
+                    : static_cast<size_t>(enemy.animationFrame) % frames.size();
                 const Frame& frame = frames[index];
 
                 ALTEngine::Renderer::PlacedSprite sprite;

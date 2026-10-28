@@ -28,9 +28,21 @@ namespace ALTEngine::Game::Triggers
         uint8_t& uses = uses_[static_cast<size_t>(triggerId)];
         const uint8_t needed = (source == Source::Shot) ? FLAG_SHOT : FLAG_PLAYER;
         if ((trigger.activationMask & needed) == 0 || uses == 0) { return false; }
+        if (!RunChain(trigger.commandStart, source, handlers)) { return false; }
+        if (uses != USES_UNLIMITED) { uses--; }
+        return true;
+    }
 
+    bool System::RunCommands(int commandStart, const Handlers& handlers)
+    {
+        if (!level_) { return false; }
+        return RunChain(commandStart, Source::WalkOn, handlers);
+    }
+
+    bool System::RunChain(int commandStart, Source source, const Handlers& handlers)
+    {
         const auto& commands = level_->logics;
-        int step = trigger.commandStart;
+        int step = commandStart;
         bool sawActivateObject = false;
 
         for (int guard = 0; step != CHAIN_END; ++guard)
@@ -96,8 +108,6 @@ namespace ALTEngine::Game::Triggers
             if (!ok) { return false; }
             step = c.nextStep;
         }
-
-        if (uses != USES_UNLIMITED) { uses--; }
         return true;
     }
 

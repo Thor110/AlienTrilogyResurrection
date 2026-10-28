@@ -107,7 +107,14 @@ namespace ALTEngine::Game
 
             int UsesRemaining(int triggerId) const;
 
+            // FUN_00040e2c: a command chain run straight from its first
+            // command, with no trigger in front of it - no activation mask and
+            // no uses. A dying queen runs the one its record's byte 6 names.
+            bool RunCommands(int commandStart, const Handlers& handlers);
+
         private:
+            bool RunChain(int commandStart, Source source, const Handlers& handlers);
+
             const Formats::LevelGeometry* level_ = nullptr;
             std::vector<uint8_t> uses_;
         };

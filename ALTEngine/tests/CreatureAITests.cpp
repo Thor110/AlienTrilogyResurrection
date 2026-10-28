@@ -196,3 +196,71 @@ TEST_CASE("FlowField: a breadth-first fill from the player's node, and steps alo
     CHECK_EQ(x, 5 * 0x200 + 0x100);
     CHECK_EQ(z, 1 * 0x200 + 0x100);
 }
+
+TEST_CASE("Queen: plays her intro before she will chase")
+{
+    OpenWorld w;
+    AI::Agent q = Creature(0x500, 7);
+    q.queen = true;
+    q.idleTimer = 0;
+    q.mode = 2;
+    AI::Step(q, w.world, 0, -0x500);
+    CHECK_EQ(q.startAnimation, AI::QUEEN_ANIM_RISE);
+    CHECK_EQ(q.introPhase, 1);
+    AI::Step(q, w.world, 0, -0x500);
+    CHECK_EQ(q.introPhase, 1);            // waiting on the animation
+    q.animationEvent = true;
+    AI::Step(q, w.world, 0, -0x500);      // mode 2: not near - back to waiting
+    CHECK_EQ(q.startAnimation, AI::QUEEN_ANIM_WAIT);
+    CHECK_EQ(q.introPhase, 0);
+    CHECK_EQ(q.idleTimer, AI::QUEEN_REWAIT);
+
+    q.idleTimer = 0;
+    q.animationEvent = false;
+    q.mode = 1;
+    AI::Step(q, w.world, 0, -0x500);      // phase 1
+    q.animationEvent = true;
+    AI::Step(q, w.world, 0, -0x500);      // near: she rises
+    CHECK_EQ(q.startAnimation, AI::QUEEN_ANIM_UP);
+    CHECK_EQ(q.introPhase, 2);
+    AI::Step(q, w.world, 0, -0x500);
+    CHECK_EQ(q.introPhase, 3);
+    AI::Step(q, w.world, 0, -0x500);
+    CHECK(q.state == AI::CHASE);
+}
+
+TEST_CASE("Queen: alerted by being seen at range, and never attacks from the chase")
+{
+    OpenWorld w;
+    AI::Agent q = Creature(0x500, 7);
+    q.queen = true;
+    q.state = AI::CHASE;
+    q.zoneVisible = true;
+    q.lineToPlayer = true;
+    q.mode = 0;
+    q.wakeRange = 0;
+    AI::Step(q, w.world, 0, -0x500);
+    CHECK(q.alerted);
+    CHECK(q.state == AI::CHASE);
+}
+
+TEST_CASE("Queen: a hit before her intro is done brings her up at once")
+{
+    OpenWorld w;
+    AI::Agent q = Creature(0x2000, 7);
+    q.queen = true;
+    q.introPhase = 0;
+    AI::QueenRecover(q, w.world);
+    CHECK_EQ(q.startAnimation, AI::QUEEN_ANIM_UP);
+    CHECK_EQ(q.introPhase, 2);
+    CHECK(q.state == AI::IDLE);
+    CHECK_EQ(q.idleTimer, AI::QUEEN_HIT_RISE_WAIT);
+
+    // Up and close: she goes straight back to attacking.
+    AI::Agent near = Creature(0x200, 7);
+    near.queen = true;
+    near.introPhase = 3;
+    near.mode = 0;
+    AI::QueenRecover(near, w.world);
+    CHECK(near.state == AI::ACT);
+}

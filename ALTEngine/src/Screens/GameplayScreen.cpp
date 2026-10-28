@@ -1880,9 +1880,14 @@ namespace ALTEngine::Screens
                                 && occupancy[static_cast<size_t>(index)] != 0;
                         };
                         mark(occupancyCell(camera.x, camera.z), 0xff);
+                        // Vents stand in walls and floors and never move: they
+                        // don't take part.
                         for (const auto& other : enemies)
                         {
-                            if (other.active && other.alive) { mark(occupancyCell(other.x, other.z), 1); }
+                            if (other.active && other.alive && !ALTEngine::Screens::IsVent(other.type))
+                            {
+                                mark(occupancyCell(other.x, other.z), 1);
+                            }
                         }
 
                         // The flow field follows the player's node (cell byte +6).
@@ -2030,7 +2035,7 @@ namespace ALTEngine::Screens
                             // gates (FUN_0003231c, FUN_00033a1c). Only worth working
                             // out inside the line-of-fire range.
                             // Lift this creature's own mark before it looks or moves.
-                            const bool marks = enemy.active && enemy.alive;
+                            const bool marks = enemy.active && enemy.alive && !ALTEngine::Screens::IsVent(enemy.type);
                             if (marks) { mark(occupancyCell(enemy.x, enemy.z), 0); }
 
                             if (enemy.active && enemy.alive)
@@ -2063,8 +2068,111 @@ namespace ALTEngine::Screens
                                 }
                             }
                             aiCreature = &enemy;
+                            enemy.animationFrames = enemySprites.FrameCount(enemy.type, enemy.animation);
                             ALTEngine::Screens::Enemies::Tick(enemy, camera.x, playerFeetY, camera.z,
                                                               &aiWorld, weaponRuntime.noise > 0);
+                            // An egg letting its hugger out (FUN_00035530), or a
+                            // colonist its burster (FUN_00035624).
+                            if (enemy.releaseMonster >= 0)
+                            {
+                                namespace CT = ALTEngine::Screens::CreatureTasks;
+                                const bool colonist = enemy.type == 10;
+                                auto* released = ALTEngine::Screens::Enemies::ReleaseFromEgg(
+                                    enemies, enemy.releaseMonster, enemy.x, enemy.y, enemy.z,
+                                    ALTEngine::Screens::Enemies::BearingTo(enemy, camera.x, camera.z),
+                                    colonist ? CT::Colonist::BURSTER_SPEED : CT::EggRelease::SPEED,
+                                    colonist ? CT::Colonist::BURSTER_LIFT : CT::EggRelease::LIFT);
+                                if (released && colonist)
+                                {
+                                    ALTEngine::Screens::Enemies::RestartAnimation(
+                                        *released, CT::Colonist::BURSTER_ANIMATION);
+                                }
+                                else if (released)
+                                {
+                                    ALTEngine::Screens::Enemies::RestartAnimation(enemy, CT::Egg::ANIM_RELEASE);
+                                }
+                                SDL_Log("GameplayScreen: %s %d %s monster %d", colonist ? "colonist" : "egg",
+                                        enemy.monsterIndex, released ? "released" : "could not release",
+                                        enemy.releaseMonster);
+                                enemy.releaseMonster = -1;
+                            }
+                            // The queen's death runs the command chain her record
+                            // names (FUN_00040e2c).
+                            if (enemy.deathChain >= 0)
+                            {
+                                SDL_Log("GameplayScreen: creature %d's death runs command %d",
+                                        enemy.monsterIndex, enemy.deathChain);
+                                triggers.RunCommands(enemy.deathChain, triggerHandlers);
+                                enemy.deathChain = -1;
+                            }
+                            if (enemy.cried)
+                            {
+                                ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                    ALTEngine::Screens::CreatureTasks::Colonist::SOUND_CRY, digits.c_str(), cdDirectory);
+                            }
+                            // FUN_0003bc9c: a creature's pickup counts toward its
+                            // trigger and, once due, is thrown out where it stands.
+                            if (enemy.dropPickup >= 0)
+                            {
+                                for (auto& live : livePickups)
+                                {
+                                    if (live.pickupIndex != enemy.dropPickup || !live.waitingOnTrigger) { continue; }
+                                    if (live.triggerCount < live.triggerThreshold) { live.triggerCount++; }
+                                    if (live.triggerCount != live.triggerThreshold) { break; }
+                                    live.waitingOnTrigger = false;
+                                    live.contained = false;
+                                    const int gx = ToGridSpaceX(enemy.x, originX) >> 9;
+                                    const int gz = ToGridSpaceZ(enemy.z, originZ) >> 9;
+                                    const int cell = ALTEngine::Formats::CellIndex(level, gx, gz);
+                                    if (cell >= 0) { live.cellIndex = cell; }
+                                    const auto flight = ALTEngine::Screens::DroppedPickups::Launch(
+                                        static_cast<uint8_t>(enemy.facingOctant), dropRng);
+                                    live.vx = flight.vx;
+                                    live.vy = flight.vy;
+                                    live.vz = flight.vz;
+                                    live.falling = true;
+                                    if (live.placedIndex < placedObjects.size())
+                                    {
+                                        auto& placed = placedObjects[live.placedIndex];
+                                        placed.x = enemy.x;
+                                        placed.y = enemy.y + ALTEngine::Screens::DroppedPickups::DropHeight(live.type);
+                                        placed.z = enemy.z;
+                                        placed.visible = true;
+                                    }
+                                    break;
+                                }
+                                enemy.dropPickup = -1;
+                            }
+
+                            // A vent's jet, sound, burst and switch-off
+                            // (CreatureTasks::Vent). The sound plays once as the
+                            // jet starts: the port's mixer has no loops to hold.
+                            if (ALTEngine::Screens::IsVent(enemy.type))
+                            {
+                                namespace VT = ALTEngine::Screens::CreatureTasks::Vent;
+                                const VT::Params vp = VT::For(enemy.type);
+                                if (enemy.ventEmit)
+                                {
+                                    particles.SpawnVent(vp.particleType, enemy.x, enemy.y, enemy.z,
+                                                        vp.speed, enemy.facing, enemy.ventDown);
+                                }
+                                if (enemy.ventSound)
+                                {
+                                    ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                        vp.steam ? VT::SOUND_STEAM : VT::SOUND_FLAME, digits.c_str(), cdDirectory);
+                                }
+                                if (enemy.ventBurst)
+                                {
+                                    explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_BARREL,
+                                                     enemy.x, enemy.y, enemy.z, false);
+                                }
+                                if (enemy.ventSwitchedOff)
+                                {
+                                    if (vp.steam) { hudMessages.ShowSteamValveClosed(language); }
+                                    else { hudMessages.ShowFlameJetShutDown(language); }
+                                }
+                                continue;   // it doesn't move or stand on the floor
+                            }
 
                             // Each axis resolved separately, as the original's two
                             // step helpers do - so a creature blocked on one axis
@@ -2094,7 +2202,10 @@ namespace ALTEngine::Screens
                             enemy.lastZ = enemy.z;
 
                             // Stand on the floor - or, mid-leap, rise and fall
-                            // under gravity (FUN_00031f3c's vertical half).
+                            // under gravity (FUN_00031f3c's vertical half). A
+                            // colonist's task never calls the mover: it stays
+                            // where its spawn put it, 0x40 up its wall.
+                            if (enemy.type != 10)
                             {
                                 const int gx = ToGridSpaceX(enemy.x, originX);
                                 const int gz = ToGridSpaceZ(enemy.z, originZ);
@@ -2366,6 +2477,21 @@ namespace ALTEngine::Screens
                             }
                         };
 
+                        // The vents' jets (ParticleSystem.h TickVents): they
+                        // scald the player with cause 5, as FUN_0002a8f8 does.
+                        particles.TickVents(
+                            [&](float px, float pz, float& floorY, float& ceilingY) {
+                                const auto* cell = ALTEngine::Formats::CellAt(
+                                    level, ToGridSpaceX(px, originX) >> 9, ToGridSpaceZ(pz, originZ) >> 9);
+                                floorY = cell ? static_cast<float>(cell->floorHeight) * 32.0f : 0.0f;
+                                ceilingY = cell ? static_cast<float>(cell->ceilingHeight) * 32.0f : 0.0f;
+                            },
+                            camera.x, playerFeetY, camera.z,
+                            [&](int damage) {
+                                hudState.ApplyDamage(damage, ALTEngine::Screens::GameOverSequence::CAUSE_EXPLOSION);
+                                checkPlayerDeath();
+                            });
+
                         // How a particle meets the world, in the original's own order
                         // - see Game/ProjectileCollision.h. Returns 0 to keep going,
                         // 1 to stop (a round shatters), 2 to stop without shattering.
@@ -2470,6 +2596,9 @@ namespace ALTEngine::Screens
                                 const bool targetable = PCol::CreatureTargetable(enemy.state)
                                     || (ignoreStun && enemy.state == D::STATE_HIT);
                                 if (!enemy.active || !enemy.alive || !targetable) { continue; }
+                                // A vent with no health is never marked in its
+                                // cell, and rounds find creatures by the mark.
+                                if (ALTEngine::Screens::IsVent(enemy.type) && enemy.health <= 0) { continue; }
                                 if (!PCol::OverlapsCreature(px, py, pz, enemy.x, enemy.y, enemy.z, enemy.type, hitType)) { continue; }
                                 const int enemyCell = ALTEngine::Formats::CellIndex(
                                     level, ToGridSpaceX(enemy.x, originX) >> 9, ToGridSpaceZ(enemy.z, originZ) >> 9);
@@ -2836,6 +2965,14 @@ namespace ALTEngine::Screens
                         {
                             spark.halfWidth = FRAGMENT_HALF_SIZE;
                             spark.halfHeight = FRAGMENT_HALF_SIZE;
+                        }
+                        else if (P::IsVentParticle(particle.type))
+                        {
+                            // A puff that swells as it ages. OURS: the original
+                            // draws each jet type with its own sprite through
+                            // the table at 0x2d6a0, not read yet.
+                            const float age = static_cast<float>(particle.strength - particle.life);
+                            spark.halfWidth = spark.halfHeight = 32.0f + age * 6.0f;
                         }
                         else
                         {

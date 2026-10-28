@@ -7,6 +7,7 @@
 #include "PlayerCamera.h"
 #include "../Game/OriginalMath.h"
 #include "CreatureAI.h"
+#include "CreatureTasks.h"
 
 #include <cmath>
 #include <cstdint>
@@ -190,6 +191,27 @@ namespace ALTEngine::Screens
             // The common creature task's own state (CreatureAI.h), for the
             // types that run it. Only used when the caller supplies a world.
             CreatureAI::Agent ai;
+            CreatureTasks::Egg::Egg egg;   // type 1's own task
+            CreatureTasks::Vent::Vent vent;   // types 0x10-0x13
+            CreatureTasks::Colonist::Colonist colonist;   // type 10
+            int facingOctant = 0;       // +0x6d, the record's rotation
+            int heldMonster = 0xff;     // a colonist's burster (+0x5e)
+            bool cried = false;         // a colonist called out this tick
+            int dropPickup = -1;        // a pickup to throw out this tick
+            // A command chain to run as this creature dies: the queen's record
+            // byte 6 (her state 8, FUN_00040e2c). -1 for none.
+            int deathChain = -1;
+            bool ventDown = false;      // a vertical vent hung from the ceiling
+            // What a vent did this tick, for the caller: put out a jet, start
+            // its sound, burst (an explosion), or switch off for good.
+            bool ventEmit = false;
+            bool ventSound = false;
+            bool ventBurst = false;
+            bool ventSwitchedOff = false;
+            bool recoveredFromHit = false;
+            // A monster this creature lets out this tick (an egg's hugger),
+            // for the caller to release; -1 for none.
+            int releaseMonster = -1;
             int actTicks = 0;           // a non-leap attack still playing
             float vy = 0;
             float leapX = 0, leapZ = 0;
@@ -207,6 +229,14 @@ namespace ALTEngine::Screens
             int animationFrame = 0;
             int animationTimer = 0;
             bool animationChanged = false;
+            // The playing animation's frame count, set by the caller from the
+            // sprite set (0 when it doesn't know), and whether it has played
+            // through - the stand-in for the script's end bit (+0xb6 bit 2).
+            // A creature that holds its animations (the egg) stays on the last
+            // frame instead of looping.
+            int animationFrames = 0;
+            bool animationEnded = false;
+            bool holdAnimation = false;
             float lastX = 0, lastZ = 0;
 
             // The two per-creature distance thresholds the mode banding uses.
@@ -316,6 +346,64 @@ namespace ALTEngine::Screens
                 // whatever triggers it.
                 enemy.active = ActiveAtStart(record);
 
+                enemy.facingOctant = record.rotation & 7;
+
+                // A colonist is pushed 0x40 out of its wall along its facing,
+                // stood 0x40 over the floor, and holds the monster its speed
+                // word names.
+                if (record.type == 10)
+                {
+                    namespace CO = CreatureTasks::Colonist;
+                    enemy.x += static_cast<float>(CO::PUSH_X[enemy.facingOctant] * CO::SPAWN_PUSH);
+                    enemy.z += static_cast<float>(CO::PUSH_Z[enemy.facingOctant] * CO::SPAWN_PUSH);
+                    enemy.lastX = enemy.x;
+                    enemy.lastZ = enemy.z;
+                    enemy.y += CO::SPAWN_LIFT;
+                    enemy.heldMonster = record.unknown9 << 8 | record.speed;
+                    enemy.animation = CO::SPAWN_ANIMATION;
+                }
+
+                // Vents face away from their record's heading and sit at the
+                // height byte 6 gives them (FUN_0002e638's 0x10-0x13 arms).
+                if (record.type >= 0x10 && record.type <= 0x13)
+                {
+                    const int gx = static_cast<int>(record.x) * 512 + 256;
+                    const int gz = static_cast<int>(record.y) * 512 + 256;
+                    const float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
+                    const auto* cell = ALTEngine::Formats::CellAt(level, record.x, record.y);
+                    const float ceilingY = cell ? static_cast<float>(cell->ceilingHeight) * 32.0f : floorY;
+                    enemy.facing = (FacingFromRotation(record.rotation) + 0x800) & PlayerCamera::ANGLE_MASK;
+                    enemy.ai.facing = enemy.ai.target = enemy.facing;
+                    if (CreatureTasks::Vent::IsVertical(record.type))
+                    {
+                        const int lift = static_cast<int8_t>(record.drop);
+                        enemy.y = lift >= 0 ? floorY + static_cast<float>(lift * 32)
+                                            : ceilingY - static_cast<float>((10 - lift) * 32);
+                        enemy.ventDown = lift < 0;
+                    }
+                    else
+                    {
+                        enemy.y = floorY + EnemyBehaviour::STAND_CLEARANCE + static_cast<float>(record.drop * 32);
+                    }
+                }
+
+                // The queen starts in her waiting animation (FUN_0002e638).
+                if (record.type == 7)
+                {
+                    enemy.animation = CreatureAI::QUEEN_ANIM_WAIT;
+                    enemy.ai.queen = true;
+                }
+
+                // The egg's own thresholds replace the record's, and it holds
+                // each animation's last frame.
+                if (record.type == 1)
+                {
+                    enemy.nearThreshold = CreatureTasks::Egg::NEAR_THRESHOLD;
+                    enemy.middleThreshold = CreatureTasks::Egg::MIDDLE_THRESHOLD;
+                    enemy.holdAnimation = true;
+                    enemy.animation = CreatureTasks::Egg::ANIM_CLOSED;
+                }
+
                 enemies.push_back(enemy);
             }
             return enemies;
@@ -356,23 +444,68 @@ namespace ALTEngine::Screens
 
         // A trigger asking for a monster to appear, from FUN_0002f224: add to
         // its counter, clamp to its threshold, and spawn when they meet.
+        //
+        // The amount is a signed byte, and the count moves whether or not the
+        // monster is already out: a negative one takes an active vent back
+        // below its threshold, which switches it off (FUN_000358a4). A count
+        // already at its threshold takes no positive amount, and a count
+        // pushed past it - or wrapped below zero - is clamped to it.
         inline bool TriggerSpawn(std::vector<Enemy>& enemies, int monsterIndex, int amount)
         {
+            const int delta = static_cast<int8_t>(amount & 0xff);
             for (Enemy& enemy : enemies)
             {
-                if (enemy.monsterIndex != monsterIndex || enemy.active) { continue; }
+                if (enemy.monsterIndex != monsterIndex) { continue; }
+                if (delta > 0 && enemy.triggerCount == enemy.triggerThreshold) { return false; }
 
-                enemy.triggerCount = static_cast<uint8_t>(enemy.triggerCount + amount);
+                enemy.triggerCount = static_cast<uint8_t>(enemy.triggerCount + delta);
                 if (enemy.triggerCount > enemy.triggerThreshold)
                 {
                     enemy.triggerCount = enemy.triggerThreshold;
                 }
-                if (enemy.triggerCount != enemy.triggerThreshold) { return false; }
+                if (enemy.triggerCount != enemy.triggerThreshold || enemy.active) { return false; }
 
                 enemy.active = true;
                 return true;
             }
             return false;
+        }
+
+        // FUN_00035530: an egg lets its monster out. Unlike a trigger or a
+        // crate it spawns the monster outright, at the egg, alerted and already
+        // leaping at the player. `bearing` is the egg's bearing to the player.
+        //
+        // A colonist's burster goes through the same routine and then
+        // FUN_00035624 sends it out harder - 0x60 along and 0x78 up - which
+        // `speed` and `lift` carry. Returns the monster let out, or null.
+        inline Enemy* ReleaseFromEgg(std::vector<Enemy>& enemies, int monsterIndex,
+                                     float x, float y, float z, int bearing,
+                                     int speed = CreatureTasks::EggRelease::SPEED,
+                                     int lift = CreatureTasks::EggRelease::LIFT)
+        {
+            if (monsterIndex < 0 || monsterIndex == 0xff) { return nullptr; }
+            for (Enemy& enemy : enemies)
+            {
+                if (enemy.monsterIndex != monsterIndex) { continue; }
+                if (enemy.active) { return nullptr; }
+                enemy.active = true;
+                enemy.springing = false;
+                enemy.state = Damage::STATE_NORMAL;
+                enemy.x = enemy.lastX = x;
+                enemy.y = y;
+                enemy.z = enemy.lastZ = z;
+                enemy.facing = bearing & PlayerCamera::ANGLE_MASK;
+                enemy.ai.facing = enemy.ai.target = enemy.facing;
+                enemy.ai.alerted = true;
+                enemy.ai.idleTimer = 0;
+                enemy.ai.state = CreatureAI::ACT;
+                enemy.leaping = true;
+                enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * static_cast<float>(speed);
+                enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * static_cast<float>(speed);
+                enemy.vy = static_cast<float>(lift);
+                return &enemy;
+            }
+            return nullptr;
         }
 
         // Damage, through the same model the crates use - including the hit
@@ -444,6 +577,108 @@ namespace ALTEngine::Screens
             enemy.animationFrame = 0;
             enemy.animationTimer = 0;
             enemy.animationChanged = true;
+            enemy.animationFrames = 0;
+            enemy.animationEnded = false;
+        }
+
+        // FUN_0002f4b0 itself, which starts the animation over even when it is
+        // the one already playing.
+        inline void RestartAnimation(Enemy& enemy, int animation)
+        {
+            if (animation < 0) { return; }
+            enemy.animation = -1;
+            PlayAnimation(enemy, animation);
+        }
+
+        // One tick of a vent's task (CreatureTasks::Vent).
+        inline void RunVentTask(Enemy& enemy)
+        {
+            namespace VT = CreatureTasks::Vent;
+            enemy.ventEmit = enemy.ventSound = enemy.ventBurst = enemy.ventSwitchedOff = false;
+            enemy.stepX = enemy.stepZ = 0.0f;
+            enemy.pendingDamage = 0;
+
+            VT::Input in;
+            in.type = enemy.type;
+            in.cycleLength = enemy.middleThreshold;   // +0x48
+            in.stopAt = enemy.nearThreshold;          // +0x4a
+            in.stopLength = enemy.ai.speed;           // +0x5e
+            in.triggeredOff = enemy.triggerCount < enemy.triggerThreshold;
+            in.visible = enemy.zoneVisible;
+            in.distance = enemy.distance;
+            in.hasHealth = enemy.health > 0;
+
+            // Shot apart: a pipe with health bursts and starts jetting.
+            if (enemy.state == EnemyBehaviour::STATE_DYING || enemy.state == EnemyBehaviour::STATE_DEAD)
+            {
+                in.burst = enemy.vent.state == VT::DORMANT;
+                enemy.health = 0;
+                enemy.state = EnemyBehaviour::STATE_ACTING;
+            }
+            else if (enemy.state != EnemyBehaviour::STATE_ACTING)
+            {
+                // A hit (state 6) puts it back to dormant (0x359c2).
+                enemy.state = EnemyBehaviour::STATE_ACTING;
+                enemy.vent.state = VT::DORMANT;
+            }
+
+            const VT::Output out = VT::Step(enemy.vent, in);
+            enemy.ventEmit = out.emit;
+            enemy.ventSound = out.startSound;
+            enemy.ventBurst = out.explode;
+            enemy.ventSwitchedOff = out.switchOffNotice;
+        }
+
+        // One tick of a colonist's task (CreatureTasks::Colonist).
+        inline void RunColonistTask(Enemy& enemy, float playerX, float playerZ, CreatureAI::World& world)
+        {
+            namespace CO = CreatureTasks::Colonist;
+            CO::Input in;
+            in.mode = enemy.mode;
+            in.view = CO::ViewOf(enemy.facingOctant, BearingTo(enemy, playerX, playerZ));
+            in.animationEvent = enemy.animationEnded;
+            in.recoveredFromHit = enemy.recoveredFromHit;
+            in.random = world.random ? world.random() : 0;
+            enemy.recoveredFromHit = false;
+            enemy.stepX = enemy.stepZ = 0.0f;
+            enemy.pendingDamage = 0;
+
+            const CO::Output out = CO::Step(enemy.colonist, in);
+            RestartAnimation(enemy, out.startAnimation);
+            enemy.cried = out.cry;
+            if (out.burst)
+            {
+                enemy.releaseMonster = enemy.heldMonster;
+                enemy.heldMonster = 0xff;
+                if (enemy.drop != 0xff) { enemy.dropPickup = enemy.drop; }
+            }
+        }
+
+        // One tick of the egg's task (CreatureTasks::Egg).
+        inline void RunEggTask(Enemy& enemy, CreatureAI::World& world)
+        {
+            namespace EG = CreatureTasks::Egg;
+            EG::Input in;
+            in.mode = enemy.mode;
+            in.lineToPlayer = enemy.lineOfFire;   // FUN_00032aec; the port has FUN_0003231c
+            in.animationEnded = enemy.animationEnded;
+            in.recoveredFromHit = enemy.recoveredFromHit;
+            in.random = world.random ? world.random() : 0;
+            enemy.recoveredFromHit = false;
+            enemy.stepX = enemy.stepZ = 0.0f;
+            enemy.pendingDamage = 0;
+
+            const EG::Output out = EG::Step(enemy.egg, in);
+            RestartAnimation(enemy, out.startAnimation);
+            if (out.release)
+            {
+                enemy.releaseMonster = enemy.drop;
+            }
+            if (out.die)
+            {
+                enemy.health = 0;
+                enemy.state = EnemyBehaviour::STATE_DYING;
+            }
         }
 
         // Chooses the animation the creature's current behaviour calls for. The
@@ -556,6 +791,22 @@ namespace ALTEngine::Screens
             a.zoneVisible = enemy.zoneVisible;
             a.playerMakingNoise = playerNoise;
 
+            a.queen = enemy.type == 7;
+            a.animationEvent = enemy.animationEnded;
+
+            // The queen's hit reaction ending is a state of its own (6).
+            if (a.queen && enemy.recoveredFromHit)
+            {
+                enemy.recoveredFromHit = false;
+                a.startAnimation = -1;
+                AI::QueenRecover(a, world);
+                enemy.facing = a.facing;
+                RestartAnimation(enemy, a.startAnimation);
+                enemy.stepX = enemy.stepZ = 0.0f;
+                return;
+            }
+            enemy.recoveredFromHit = false;
+
             // Has the act ended: a leap on landing, a swipe when it has played.
             if (a.state == AI::ACT)
             {
@@ -571,6 +822,7 @@ namespace ALTEngine::Screens
 
             AI::Step(a, world, static_cast<int>(std::lround(playerX)), static_cast<int>(std::lround(playerZ)));
             enemy.facing = a.facing;
+            RestartAnimation(enemy, a.startAnimation);
 
             if (a.resolveHit)
             {
@@ -621,7 +873,18 @@ namespace ALTEngine::Screens
         inline void Tick(Enemy& enemy, float playerX, float playerY, float playerZ,
                          CreatureAI::World* world = nullptr, bool playerNoise = false)
         {
-            const bool commonTask = world != nullptr && CreatureAI::UsesCommonTask(enemy.type);
+            // The queen's task is the common one with her own differences
+            // (CreatureAI.h).
+            const bool commonTask = world != nullptr
+                && (CreatureAI::UsesCommonTask(enemy.type) || enemy.type == 7);
+            const bool eggTask = world != nullptr && enemy.type == 1;
+            const bool ventTask = world != nullptr && enemy.type >= 0x10 && enemy.type <= 0x13;
+            const bool colonistTask = world != nullptr && enemy.type == 10;
+            // Types with a task of their own don't walk at the player.
+            const bool ownTask = commonTask || eggTask || colonistTask;
+            enemy.releaseMonster = -1;
+            enemy.dropPickup = -1;
+            enemy.cried = false;
             if (!enemy.active) { return; }
 
             // Perception - the axis separations and the banded distance.
@@ -634,6 +897,14 @@ namespace ALTEngine::Screens
 
             enemy.mode = EnemyBehaviour::ModeForDistance(
                 enemy.distance, enemy.nearThreshold, enemy.middleThreshold);
+
+            // A vent's task is the whole of it: it never moves, attacks or
+            // animates, and its own cycle runs at any distance.
+            if (ventTask)
+            {
+                RunVentTask(enemy);
+                return;
+            }
 
             // NOT SIMULATED BEYOND THIS. FUN_000358a4 returns immediately when the
             // perceived distance exceeds 0x1e00, so an enemy across the level does
@@ -648,7 +919,7 @@ namespace ALTEngine::Screens
             {
                 if (enemy.mode == 4) { enemy.stepX = enemy.stepZ = 0.0f; enemy.ai.vx = enemy.ai.vz = 0; return; }
             }
-            else if (enemy.distance > EnemyBehaviour::SIMULATION_CUTOFF) { return; }
+            else if (!eggTask && !colonistTask && enemy.distance > EnemyBehaviour::SIMULATION_CUTOFF) { return; }
 
             enemy.ticks++;
 
@@ -661,6 +932,16 @@ namespace ALTEngine::Screens
                 enemy.animationTimer = 0;
                 enemy.animationFrame++;
             }
+            // Played through. Without a frame count from the sprites, four
+            // frames stand in.
+            {
+                const int frames = enemy.animationFrames > 0 ? enemy.animationFrames : 4;
+                if (enemy.animationFrame >= frames)
+                {
+                    enemy.animationEnded = true;
+                    if (enemy.holdAnimation) { enemy.animationFrame = frames - 1; }
+                }
+            }
 
             // ---- movement, from FUN_00031f3c --------------------------
             //
@@ -668,7 +949,7 @@ namespace ALTEngine::Screens
             // and two axis velocities and lets the two step helpers resolve each
             // axis separately; this does the same, using the traced footprint
             // probe for each.
-            if (!commonTask && enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive && enemy.mode <= 2)
+            if (!ownTask && enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive && enemy.mode <= 2)
             {
                 const int bearing = BearingTo(enemy, playerX, playerZ);
 
@@ -756,7 +1037,15 @@ namespace ALTEngine::Screens
                 return;
             }
 
-            if (commonTask && enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive)
+            if (eggTask && enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive)
+            {
+                RunEggTask(enemy, *world);
+            }
+            else if (colonistTask && enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive)
+            {
+                RunColonistTask(enemy, playerX, playerZ, *world);
+            }
+            else if (commonTask && enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive)
             {
                 RunCommonTask(enemy, playerX, playerZ, *world, playerNoise);
             }
@@ -917,6 +1206,7 @@ namespace ALTEngine::Screens
             case EnemyBehaviour::STATE_HIT_RECOVER:
                 // The reaction has played out: back to acting.
                 enemy.state = EnemyBehaviour::STATE_ACTING;
+                enemy.recoveredFromHit = true;
                 enemy.ticks = 0;
                 break;
 
@@ -925,6 +1215,11 @@ namespace ALTEngine::Screens
                 // killing blow, so it lands a tick later and at the position the
                 // body ended up at.
                 enemy.spawnDeathEffect = true;
+                if (enemy.type == 7 && enemy.drop != 0xff)
+                {
+                    enemy.deathChain = enemy.drop;
+                    enemy.drop = 0xff;
+                }
                 enemy.state = EnemyBehaviour::STATE_DEAD;
                 enemy.alive = false;
                 break;

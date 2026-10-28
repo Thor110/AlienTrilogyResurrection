@@ -2,6 +2,7 @@
 
 #include "PlayerCamera.h"
 
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -52,6 +53,13 @@ namespace ALTEngine::Screens
             TYPE_BLOOD_WHITE = 8,
             TYPE_BLOOD_ACID = 9,
             TYPE_BLOOD_ACID_B = 10,
+            // The vents' jets (FUN_0002b0e4, from FUN_000358a4). Each vent type
+            // puts out its own: 0x10 steam -> 0x0e, 0x11 flame -> 0x10,
+            // 0x13 flame -> 0x11, 0x12 steam -> 0x12.
+            TYPE_VENT_STEAM_H = 0x0e,
+            TYPE_VENT_FLAME_H = 0x10,
+            TYPE_VENT_FLAME_V = 0x11,
+            TYPE_VENT_STEAM_V = 0x12,
             TYPE_CASING_B = 0x14,
             TYPE_CASING_A = 0x15,
         };
@@ -231,6 +239,20 @@ namespace ALTEngine::Screens
         // 0x2e171 and 0x2e1da: `sub word [velocity + 2], 4`).
         inline constexpr int BLOOD_GRAVITY = 4;
         inline constexpr int BLOOD_DROPS = 0x10;       // 0x40 for the 0x0b/0x0c/0x13 sources
+
+        inline constexpr bool IsVentParticle(int type)
+        {
+            return type == TYPE_VENT_STEAM_H || type == TYPE_VENT_FLAME_H
+                || type == TYPE_VENT_FLAME_V || type == TYPE_VENT_STEAM_V;
+        }
+
+        // A jet touches the player when it is 0 to 0x400 above the player's
+        // feet and within 0x100 on both ground axes (FUN_0002a8f8); it then
+        // deals its +0x1a (5, or 0xa for the horizontal flame) through
+        // FUN_0003e5a8 with cause 5, and is gone.
+        inline constexpr int VENT_TOUCH_HEIGHT = 0x400;
+        inline constexpr int VENT_TOUCH_HALF = 0x100;
+        inline constexpr int VentDamage(int type) { return type == TYPE_VENT_FLAME_H ? 0x0a : 5; }
 
         inline constexpr bool IsBlood(int type)
         {
@@ -556,12 +578,114 @@ namespace ALTEngine::Screens
             // Everything a fragment or casing does after it is created - gravity,
             // bounce, how it dies - is likewise not traced. They currently just
             // travel and expire.
+            // FUN_0002b0e4: one jet from a vent at (x, y, z). Horizontal ones go
+            // `speed` along `yaw`; vertical ones straight up, or down for a
+            // vent hung from the ceiling.
+            Particle* SpawnVent(int type, float x, float y, float z, int speed, int yaw, bool down)
+            {
+                Particle* p = Take();
+                if (!p) { return nullptr; }
+                p->type = static_cast<uint8_t>(type);
+                p->x = x; p->y = y; p->z = z;
+                if (type == TYPE_VENT_FLAME_V || type == TYPE_VENT_STEAM_V)
+                {
+                    p->vy = static_cast<float>(down ? -speed : speed);
+                }
+                else
+                {
+                    p->vx = PlayerCamera::Sin(yaw) / 4096.0f * static_cast<float>(speed);
+                    p->vz = -PlayerCamera::Cos(yaw) / 4096.0f * static_cast<float>(speed);
+                }
+                p->life = 0x20;
+                p->strength = p->life;
+                p->speed = VentDamage(type);
+                return p;
+            }
+
+            // The vents' jets, as the particle pass runs them (the arms at
+            // 0x2e128, 0x2e0bc, 0x2def1 and 0x2def8): moved by their velocity
+            // (FUN_00047524 moves every particle first), aged - the two flames
+            // twice as fast - and gone on touching the player. Then:
+            //   steam, horizontal  rises 0xa a tick over its last 0x0c ticks;
+            //   flame, horizontal  over its last 0x14 ticks drops 2 a tick and
+            //                      loses 0xc of its world-Z speed, never going
+            //                      below 0 (the original's own, whatever the
+            //                      vent's heading);
+            //   vertical           held 0x200 under the ceiling (rising) or 0x80
+            //                      over the floor (falling), where it turns
+            //                      back at 10 a tick and fans out to either
+            //                      side by half its speed plus up to 15.
+            // `cellHeights(x, z, floorY, ceilingY)` gives the raw floor and
+            // ceiling (bytes * 32) of the cell under a point.
+            template <typename CellHeightsFn, typename DamageFn>
+            void TickVents(CellHeightsFn cellHeights, float playerX, float playerFeetY, float playerZ,
+                           DamageFn damagePlayer)
+            {
+                for (Particle& p : particles)
+                {
+                    if (!p.alive || !IsVentParticle(p.type)) { continue; }
+                    p.x += p.vx; p.y += p.vy; p.z += p.vz;
+                    if (--p.life <= 0) { p.alive = false; continue; }
+                    if (p.type == TYPE_VENT_FLAME_H || p.type == TYPE_VENT_FLAME_V) { --p.life; }
+
+                    const float above = p.y - playerFeetY;
+                    if (above >= 0.0f && above <= VENT_TOUCH_HEIGHT
+                        && std::fabs(p.x - playerX) < VENT_TOUCH_HALF
+                        && std::fabs(p.z - playerZ) < VENT_TOUCH_HALF)
+                    {
+                        damagePlayer(p.speed);
+                        p.alive = false;
+                        continue;
+                    }
+
+                    switch (p.type)
+                    {
+                    case TYPE_VENT_STEAM_H:
+                        if (p.life < 0x0c) { p.vy += 0x0a; }
+                        break;
+                    case TYPE_VENT_FLAME_H:
+                        if (p.life < 0x14)
+                        {
+                            p.vy -= 2;
+                            p.vz -= 0x0c;
+                            if (p.vz < 0) { p.vz = 0; }
+                        }
+                        break;
+                    default:
+                    {
+                        float floorY = 0, ceilingY = 0;
+                        cellHeights(p.x, p.z, floorY, ceilingY);
+                        auto fan = [&]() {
+                            const float half = std::trunc(p.vy / 2.0f);
+                            const float a = half + static_cast<float>(rng.Next() & 0xf);
+                            p.vx = (rng.Next() & 1) ? -a : a;
+                            const float b = half + static_cast<float>(rng.Next() & 0xf);
+                            p.vz = (rng.Next() & 1) ? -b : b;
+                        };
+                        if (p.vy > 0 && ceilingY - 0x200 < p.y)
+                        {
+                            p.y = ceilingY - 0x200;
+                            fan();
+                            p.vy = -10;
+                        }
+                        else if (p.vy < 0 && floorY + 0x80 > p.y)
+                        {
+                            p.y = floorY + 0x80;
+                            fan();
+                            p.vy = 10;
+                        }
+                        break;
+                    }
+                    }
+                }
+            }
+
             template <typename BlockedFn>
             void Tick(BlockedFn blocked)
             {
                 for (Particle& p : particles)
                 {
-                    if (!p.alive) { continue; }
+                    if (!p.alive || IsVentParticle(p.type)) { continue; }
 
                     // Life first. The original decrements +0x1c at the top of
                     // each pass and frees the particle before it moves it, so a
