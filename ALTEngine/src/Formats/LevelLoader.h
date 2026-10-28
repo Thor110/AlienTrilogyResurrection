@@ -116,8 +116,12 @@ namespace ALTEngine::Formats
     {
         uint8_t x = 0;
         uint8_t y = 0;
-        uint8_t unused = 0;      // confirmed always 0
-        uint8_t nodeState = 0;   // 0 = active, 2 = inactive pending action, 3 = one-way only
+        // Always 0 in the file: the original's flow-field value, filled in at
+        // run time (Game::FlowField, FUN_000281cc).
+        uint8_t unused = 0;
+        // Half-cell offsets, not a state (FUN_00033234 and its siblings):
+        // bit 1 puts the node 0x100 along x within its cell, bit 2 0x100 along z.
+        uint8_t nodeState = 0;
         uint8_t nodeA = 0;
         uint8_t nodeB = 0;
         uint8_t nodeC = 0;

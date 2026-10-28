@@ -449,6 +449,8 @@ namespace ALTEngine::Screens
         // The 200-unit half-width is worth having: it is the creature's collision
         // radius, and it is the same for every creature.
         inline constexpr int MOVE_PROBE_LEAD = 200;
+        // FUN_000315f0's rise limit, and the most its three probes may differ.
+        inline constexpr float CREATURE_STEP_UP = 0x100;
         inline constexpr int MOVE_FOOTPRINT_HALF = 200;
         inline constexpr int BLOCKING_ATTRIBUTE_MIN = 0x14;
         inline constexpr int BLOCKING_ATTRIBUTE_MAX = 0x2c;

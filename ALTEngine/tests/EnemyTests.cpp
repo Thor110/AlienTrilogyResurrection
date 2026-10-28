@@ -173,3 +173,37 @@ TEST_CASE("Enemies: the spawn clamps the near threshold and the attack cone")
     CHECK(EnemyBehaviour::ClampsRecordFields(2));
     CHECK(!EnemyBehaviour::ClampsRecordFields(0x11));
 }
+
+TEST_CASE("Enemies: with a world, the common task wakes, closes and leaps")
+{
+    // Open floor, every line clear: a hugger 1200 units off goes from idle to
+    // chasing, is alerted, picks a point near the player, and leaps at it.
+    Enemies::ResetLevelState();
+    CreatureAI::World world;
+    uint32_t seed = 3;
+    world.cellOpenOrPlayer = [](int, int) { return true; };
+    world.cellOpen = [](int, int) { return true; };
+    world.lineTo = [](int, int, int) { return true; };
+    world.nodeAt = [](int, int) { return -1; };
+    world.nodeToward = [](int) { return -1; };
+    world.nodeAway = [](int) { return -1; };
+    world.nodePosition = [](int, int&, int&) { return false; };
+    world.random = [&]() { seed = seed * 1103515245u + 12345u; return static_cast<int>((seed >> 16) & 0xffff); };
+
+    Enemies::Enemy e = HuggerAtPlayer(1200.0f);
+    e.ai.type = 2;
+    e.ai.speed = 0x60;
+    e.ai.wakeRange = 0x1000;
+    bool leapt = false, moved = false;
+    for (int t = 0; t < 400 && !leapt; ++t)
+    {
+        Enemies::Tick(e, 0, 0, 0, &world, false);
+        if (e.stepX != 0.0f || e.stepZ != 0.0f) { moved = true; }
+        e.x += e.stepX; e.z += e.stepZ;
+        Enemies::SettleVertical(e, 0.0f, 100000.0f, 0x200);
+        if (e.leaping) { leapt = true; }
+    }
+    CHECK(moved);
+    CHECK(leapt);
+    CHECK(e.ai.alerted);
+}

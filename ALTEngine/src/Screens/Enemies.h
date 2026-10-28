@@ -6,6 +6,7 @@
 #include "EnemyBehaviour.h"
 #include "PlayerCamera.h"
 #include "../Game/OriginalMath.h"
+#include "CreatureAI.h"
 
 #include <cmath>
 #include <cstdint>
@@ -185,6 +186,11 @@ namespace ALTEngine::Screens
             // FUN_00033a1c's zone test. Every attack needs both.
             bool lineOfFire = true;
             bool zoneVisible = true;
+
+            // The common creature task's own state (CreatureAI.h), for the
+            // types that run it. Only used when the caller supplies a world.
+            CreatureAI::Agent ai;
+            int actTicks = 0;           // a non-leap attack still playing
             float vy = 0;
             float leapX = 0, leapZ = 0;
 
@@ -262,6 +268,15 @@ namespace ALTEngine::Screens
                 enemy.baseHealth = record.health;
                 enemy.health = SpawnHealth(record.type, record.health, difficulty);
                 enemy.speed = record.speed;
+
+                // The common task's spawn values (FUN_0002e638): the record's
+                // speed word (bytes 14/15) with type 2's +0x14 on top, its wake
+                // range (bytes 12/13 -> +0x50), and the per-type turn rate.
+                enemy.ai.type = record.type;
+                enemy.ai.speed = (record.unknown9 << 8 | record.speed)
+                               + (record.type == 2 ? CreatureAI::HUGGER_SPEED_BONUS : 0);
+                enemy.ai.wakeRange = record.unknownB;
+                enemy.ai.facing = enemy.ai.target = FacingFromRotation(record.rotation);
                 enemy.drop = record.drop;
                 enemy.triggerThreshold = record.triggerThreshold;
                 enemy.facing = FacingFromRotation(record.rotation);
@@ -497,8 +512,116 @@ namespace ALTEngine::Screens
             enemy.y = y;
         }
 
-        inline void Tick(Enemy& enemy, float playerX, float playerY, float playerZ)
+        // The hit at the end of an attack (FUN_00033ff8): contact range, within
+        // 0x600 vertically, in view, in a clear line and inside the cone.
+        inline int ResolveAttack(const Enemy& enemy, float playerX, float playerZ)
         {
+            int delta = (enemy.facing - BearingTo(enemy, playerX, playerZ)) & PlayerCamera::ANGLE_MASK;
+            if (delta > PlayerCamera::ANGLE_UNITS / 2) { delta = PlayerCamera::ANGLE_UNITS - delta; }
+            const bool inReach = enemy.mode == 0
+                && enemy.separationY <= EnemyBehaviour::ATTACK_MAX_VERTICAL
+                && enemy.zoneVisible && enemy.lineOfFire
+                && EnemyBehaviour::WithinAttackCone(0, delta, enemy.coneHalfWidth);
+            return inReach ? EnemyBehaviour::AttackDamage(enemy.type, enemy.mode) : 0;
+        }
+
+        // How long a swipe or spit plays before its hit lands. The original
+        // waits for the attack animation's script to set +0xb6 bit 2; those
+        // scripts are not read yet, so this stands in. GUESS.
+        inline constexpr int NON_LEAP_ACT_TICKS = 0x18;
+
+        // One tick of the common creature task for this creature (see
+        // CreatureAI.h), in world coordinates.
+        inline void RunCommonTask(Enemy& enemy, float playerX, float playerZ,
+                                  CreatureAI::World& world, bool playerNoise)
+        {
+            namespace AI = CreatureAI;
+            namespace EB = EnemyBehaviour;
+            AI::Agent& a = enemy.ai;
+            enemy.pendingDamage = 0;
+
+            a.x = static_cast<int>(std::lround(enemy.x));
+            a.z = static_cast<int>(std::lround(enemy.z));
+            a.type = enemy.type;
+            a.coneHalfWidth = enemy.coneHalfWidth;
+            a.nearThreshold = enemy.nearThreshold;
+            a.middleThreshold = enemy.middleThreshold;
+            if (a.idleTimer > 0) { a.idleTimer--; }
+            if (a.attackTimer > 0) { a.attackTimer--; }
+            a.distance = enemy.distance;
+            a.mode = enemy.mode;
+            a.separationY = static_cast<int>(std::lround(enemy.separationY));
+            a.bearingToPlayer = BearingTo(enemy, playerX, playerZ);
+            a.lineToPlayer = enemy.lineOfFire;
+            a.zoneVisible = enemy.zoneVisible;
+            a.playerMakingNoise = playerNoise;
+
+            // Has the act ended: a leap on landing, a swipe when it has played.
+            if (a.state == AI::ACT)
+            {
+                if (enemy.leaping) { a.actFinished = (enemy.vy == 0.0f); }
+                else if (enemy.actTicks > 0) { a.actFinished = (--enemy.actTicks == 0); }
+                else { a.actFinished = true; }
+                if (a.actFinished && enemy.leaping)
+                {
+                    enemy.leaping = false;
+                    enemy.leapX = enemy.leapZ = 0.0f;
+                }
+            }
+
+            AI::Step(a, world, static_cast<int>(std::lround(playerX)), static_cast<int>(std::lround(playerZ)));
+            enemy.facing = a.facing;
+
+            if (a.resolveHit)
+            {
+                enemy.pendingDamage = ResolveAttack(enemy, playerX, playerZ);
+                enemy.velocityActive = false;
+            }
+
+            if (a.startAct)
+            {
+                // FUN_00033cbc's per-type arms.
+                const bool melee = EB::AttackForSubtype(enemy.type).melee;
+                if (enemy.type == 2 && enemy.mode == 0
+                    && enemy.separationY <= EB::FACE_HUG_MAX_VERTICAL && !pounceLockHeld)
+                {
+                    pounceLockHeld = true;
+                    enemy.pouncing = true;
+                    enemy.pounceTicks = EB::POUNCE_HANDOVER_TIMER;
+                    enemy.pendingDamage = EB::AttackForSubtype(enemy.type).closeDamage;
+                    enemy.stepX = enemy.stepZ = 0.0f;
+                    a.vx = a.vz = 0;
+                    return;
+                }
+                if (melee)
+                {
+                    enemy.leaping = true;
+                    enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * EB::LEAP_SPEED;
+                    enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * EB::LEAP_SPEED;
+                    if (enemy.vy == 0.0f) { enemy.vy = EB::LEAP_LIFT; }
+                }
+                else
+                {
+                    enemy.actTicks = NON_LEAP_ACT_TICKS;
+                }
+            }
+
+            if (enemy.leaping && a.state == AI::ACT)
+            {
+                enemy.stepX = enemy.leapX;
+                enemy.stepZ = enemy.leapZ;
+            }
+            else
+            {
+                enemy.stepX = static_cast<float>(a.vx);
+                enemy.stepZ = static_cast<float>(a.vz);
+            }
+        }
+
+        inline void Tick(Enemy& enemy, float playerX, float playerY, float playerZ,
+                         CreatureAI::World* world = nullptr, bool playerNoise = false)
+        {
+            const bool commonTask = world != nullptr && CreatureAI::UsesCommonTask(enemy.type);
             if (!enemy.active) { return; }
 
             // Perception - the axis separations and the banded distance.
@@ -517,7 +640,15 @@ namespace ALTEngine::Screens
             // nothing at all - it does not path, does not turn, does not count
             // down. Worth having: without it every enemy on the map would be
             // walking toward the player from the moment the level loads.
-            if (enemy.distance > EnemyBehaviour::SIMULATION_CUTOFF) { return; }
+            //
+            // That cutoff is the other tasks'. The common task (CreatureAI.h)
+            // runs at any distance and only stands still beyond 0x3fff (mode 4,
+            // 0x3431b).
+            if (commonTask)
+            {
+                if (enemy.mode == 4) { enemy.stepX = enemy.stepZ = 0.0f; enemy.ai.vx = enemy.ai.vz = 0; return; }
+            }
+            else if (enemy.distance > EnemyBehaviour::SIMULATION_CUTOFF) { return; }
 
             enemy.ticks++;
 
@@ -537,7 +668,7 @@ namespace ALTEngine::Screens
             // and two axis velocities and lets the two step helpers resolve each
             // axis separately; this does the same, using the traced footprint
             // probe for each.
-            if (enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive && enemy.mode <= 2)
+            if (!commonTask && enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive && enemy.mode <= 2)
             {
                 const int bearing = BearingTo(enemy, playerX, playerZ);
 
@@ -625,6 +756,11 @@ namespace ALTEngine::Screens
                 return;
             }
 
+            if (commonTask && enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive)
+            {
+                RunCommonTask(enemy, playerX, playerZ, *world, playerNoise);
+            }
+            else
             // ---- melee creatures: the leap ------------------------------
             //
             // Types 2 and 3 never claw from where they stand. Their attack is

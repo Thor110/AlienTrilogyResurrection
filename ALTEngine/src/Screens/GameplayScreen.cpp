@@ -20,6 +20,7 @@
 #include "../Game/ProjectileCollision.h"
 #include "SmartgunTargeting.h"
 #include "../Game/CreatureSight.h"
+#include "../Game/FlowField.h"
 #include "../Game/Triggers.h"
 #include "SaveSlotScreen.h"
 #include "EnemySprites.h"
@@ -426,6 +427,10 @@ namespace ALTEngine::Screens
         bool firePressedLastTick = false;
         bool altFirePressedLastTick = false;
         ALTEngine::Screens::WeaponSystem::Runtime weaponRuntime;
+
+        // The path network's flow field, rebuilt as the player changes node.
+        ALTEngine::Game::FlowField flowField;
+        uint32_t creatureRandom = 0x1234567u;   // FUN_000100ec stands in
         ALTEngine::Screens::Particles::Pool particles;
         ALTEngine::Screens::Particles::Rng dropRng;
         ALTEngine::Screens::ExplosionEffects explosions;
@@ -1037,6 +1042,7 @@ namespace ALTEngine::Screens
                             SetCheckpoint(checkpoint);
                         }
                         ALTEngine::Screens::Enemies::ResetLevelState();
+                        flowField.Reset(level);
                     }
                 }
                 catch (const std::exception& e)
@@ -1790,8 +1796,73 @@ namespace ALTEngine::Screens
                             if (other.active && other.alive) { mark(occupancyCell(other.x, other.z), 1); }
                         }
 
-                        auto enemyAxisClear = [&](float x, float z, bool alongX, float velocity) {
+                        // The flow field follows the player's node (cell byte +6).
+                        {
+                            const auto* playerCell = ALTEngine::Formats::CellAt(
+                                level, ToGridSpaceX(camera.x, originX) >> 9, ToGridSpaceZ(camera.z, originZ) >> 9);
+                            if (playerCell) { flowField.Update(playerCell->unknown7); }
+                        }
+
+                        // What the common creature task asks of the level, in
+                        // world coordinates. `aiCreature` is the one being run.
+                        const ALTEngine::Screens::Enemies::Enemy* aiCreature = nullptr;
+                        ALTEngine::Screens::CreatureAI::World aiWorld;
+                        auto walkableAt = [&](int x, int z, bool allowPlayer) {
+                            const int gx = ToGridSpaceX(static_cast<float>(x), originX);
+                            const int gz = ToGridSpaceZ(static_cast<float>(z), originZ);
+                            if (gx < 0 || gz < 0) { return false; }
+                            const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
+                            if (!cell) { return false; }
+                            if (cell->attribute >= 0x14 && cell->attribute <= 0x2c) { return false; }
+                            const int index = ALTEngine::Formats::CellIndex(level, gx >> 9, gz >> 9);
+                            const uint8_t mark = (index >= 0 && static_cast<size_t>(index) < occupancy.size())
+                                ? occupancy[static_cast<size_t>(index)] : 0;
+                            return mark == 0 || (allowPlayer && mark == 0xff);
+                        };
+                        aiWorld.cellOpenOrPlayer = [&](int x, int z) { return walkableAt(x, z, true); };
+                        aiWorld.cellOpen = [&](int x, int z) { return walkableAt(x, z, false); };
+                        aiWorld.lineTo = [&](int x, int z, int distance) {
+                            if (!aiCreature) { return false; }
+                            namespace CS = ALTEngine::Game::CreatureSight;
+                            CS::Query q;
+                            q.x = static_cast<float>(ToGridSpaceX(aiCreature->x, originX));
+                            q.z = static_cast<float>(ToGridSpaceZ(aiCreature->z, originZ));
+                            q.y = aiCreature->y;
+                            q.targetX = static_cast<float>(ToGridSpaceX(static_cast<float>(x), originX));
+                            q.targetZ = static_cast<float>(ToGridSpaceZ(static_cast<float>(z), originZ));
+                            q.distance = distance;
+                            q.halfHeight = ALTEngine::Game::ProjectileCollision::CreatureExtents(aiCreature->type).y;
+                            q.tallType = (aiCreature->type == 7);
+                            q.occupancy = &occupancy;
+                            return CS::LineOfFire(level, q);
+                        };
+                        aiWorld.nodeAt = [&](int x, int z) {
+                            const auto* cell = ALTEngine::Formats::CellAt(
+                                level, ToGridSpaceX(static_cast<float>(x), originX) >> 9,
+                                ToGridSpaceZ(static_cast<float>(z), originZ) >> 9);
+                            return cell ? static_cast<int>(cell->unknown7) : -1;
+                        };
+                        aiWorld.nodeToward = [&](int node) { return flowField.Step(node, true); };
+                        aiWorld.nodeAway = [&](int node) { return flowField.Step(node, false); };
+                        aiWorld.nodePosition = [&](int node, int& x, int& z) {
+                            int gx = 0, gz = 0;
+                            if (!flowField.Position(node, gx, gz)) { return false; }
+                            x = static_cast<int>(std::lround(static_cast<float>(gx) - originX));
+                            z = static_cast<int>(std::lround(static_cast<float>(gz) - originZ));
+                            return true;
+                        };
+                        aiWorld.random = [&]() {
+                            creatureRandom = creatureRandom * 1103515245u + 12345u;
+                            return static_cast<int>((creatureRandom >> 16) & 0xffff);
+                        };
+
+                        auto enemyAxisClear = [&](float x, float z, bool alongX, float velocity, float halfHeight) {
                             namespace EB = ALTEngine::Screens::EnemyBehaviour;
+                            // FUN_000315f0's height tests run against the floor
+                            // the creature stands on now.
+                            const float standing = ALTEngine::Formats::FindFloorHeightGridSpace(
+                                level, ToGridSpaceX(x, originX), ToGridSpaceZ(z, originZ));
+                            float highest = -1e9f, lowest = 1e9f;
                             const float lead = (velocity >= 0.0f) ? EB::MOVE_PROBE_LEAD
                                                                   : -EB::MOVE_PROBE_LEAD;
                             const float probeX = alongX ? x + lead : x;
@@ -1818,6 +1889,19 @@ namespace ALTEngine::Screens
                                 // with the player, the player's with it.
                                 if (marked(ALTEngine::Formats::CellIndex(level, cellX, cellZ))) { return false; }
 
+                                // HEIGHTS (FUN_000315f0): no probe may rise more
+                                // than 0x100 above the creature's floor, and the
+                                // ceiling over each must clear the creature's own
+                                // half height above that floor.
+                                const float floorHere = ALTEngine::Formats::FindFloorHeightGridSpace(
+                                    level, ToGridSpaceX(sx, originX), ToGridSpaceZ(sz, originZ));
+                                if (floorHere > standing && floorHere - standing > EB::CREATURE_STEP_UP) { return false; }
+                                const float ceilingHere = static_cast<float>(cell->ceilingHeight)
+                                                        * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT;
+                                if (ceilingHere < standing + halfHeight) { return false; }
+                                highest = std::max(highest, floorHere);
+                                lowest = std::min(lowest, floorHere);
+
                                 // THE OCCUPANCY TEST IS OUT, because the field it
                                 // reads is not what I took it for.
                                 //
@@ -1842,6 +1926,9 @@ namespace ALTEngine::Screens
                                 // test above is doing the real work - 596 blocking
                                 // cells, which is a believable wall count.
                             }
+                            // Nor may the three probes disagree by more than 0x100
+                            // - the leading edge must be level enough to stand on.
+                            if (highest - lowest > EB::CREATURE_STEP_UP) { return false; }
                             return true;
                         };
 
@@ -1886,16 +1973,20 @@ namespace ALTEngine::Screens
                                     enemy.lineOfFire = false;
                                 }
                             }
-                            ALTEngine::Screens::Enemies::Tick(enemy, camera.x, playerFeetY, camera.z);
+                            aiCreature = &enemy;
+                            ALTEngine::Screens::Enemies::Tick(enemy, camera.x, playerFeetY, camera.z,
+                                                              &aiWorld, weaponRuntime.noise > 0);
 
                             // Each axis resolved separately, as the original's two
                             // step helpers do - so a creature blocked on one axis
                             // still slides along the other.
-                            if (enemy.stepX != 0.0f && enemyAxisClear(enemy.x, enemy.z, true, enemy.stepX))
+                            const float stepHalfHeight = static_cast<float>(
+                                ALTEngine::Game::ProjectileCollision::CreatureExtents(enemy.type).y);
+                            if (enemy.stepX != 0.0f && enemyAxisClear(enemy.x, enemy.z, true, enemy.stepX, stepHalfHeight))
                             {
                                 enemy.x += enemy.stepX;
                             }
-                            if (enemy.stepZ != 0.0f && enemyAxisClear(enemy.x, enemy.z, false, enemy.stepZ))
+                            if (enemy.stepZ != 0.0f && enemyAxisClear(enemy.x, enemy.z, false, enemy.stepZ, stepHalfHeight))
                             {
                                 enemy.z += enemy.stepZ;
                             }

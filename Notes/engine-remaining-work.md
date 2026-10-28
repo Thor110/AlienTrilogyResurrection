@@ -14,7 +14,7 @@ Details for each item are in the numbered sections below.
 | 2 | Player movement exactly (`FUN_0003d85c` / `FUN_0003dc44`) | yes | open |
 | 3 | Lifts (trigger commands 5 and 7) | yes, but the demo maps have none to test with | open |
 | 4a | Creature line of fire and visibility before attacking (`FUN_0003231c`, `FUN_00033a1c`) | yes | done (zone test approximated) |
-| 4b | Creature chase via the path network (state 2/3) | yes | open |
+| 4b | Creature chase via the path network (state 2/3) | yes | done for the common task (see section 4 for what's approximated) |
 | 4c | Creatures blocking each other (cell occupancy) | yes | done (barrel blasts still find creatures by position) |
 | 4d | Hit, death and leap-end animations | needs the animation scripts | open |
 | 4e | Per-type tasks for types 1, 7, 10, 0x10-0x13 | yes | open |
@@ -72,12 +72,16 @@ The port samples five points and treats bytes `+2`/`+3` as walls. The clearance 
 | 0x12 / 0x13 | `LAB_00035b68` / `LAB_00035b28` |
 
 Status in the port:
-- **The creature task's state machine** (`LAB_000342b4`, jump table at `0x34270`, states 0-8) isn't followed state by state. The port has its own ACTING / HIT / DYING states, with the original's attack logic (state 4 → `FUN_00033cbc` → state 5) mapped onto them.
+- **The common task** (`LAB_000342b4`, used by types 2-6, 8, 9 and 0x0b-0x0e) now runs state by state in `Screens/CreatureAI.h`: idle, chase, move, attack and act, with the flow field (`Game/FlowField.h`). What is still approximated:
+  - **Act length:** a non-leap act lasts a fixed 0x18 ticks. The original waits for the attack animation's script to set `+0xb6` bit 2.
+  - **Mid-attack event:** the act's `+0xb6` bit 8 event (`FUN_0002af8c` / `FUN_0002b240`, a creature's projectile or spit) isn't implemented.
+  - **Types 0x0b-0x0e** use `FUN_00032aec` instead of `FUN_0003231c` in places. The port uses `FUN_0003231c` for them.
+  - **Speeds and timers** are the original's per-tick values. How fast they look depends on the tick rate (item 1).
+- **Other types** (1, 7, 10, 0x10-0x13) still run the port's own logic: they walk straight at the player.
 - **Visibility mask:** `FUN_00033a1c`'s zone test uses the zones of the player's own cell. The original's mask is every zone the renderer drew that frame (`0x274c2` onward).
 - **Leap end:** the original ends a leap when the animation script sets `+0xb6` bit 2. The port ends it on landing.
 - **Walking off a ledge** gives a creature a small hop (`vy = 0x3c`, `FUN_000315f0`). Not implemented.
-- **Movement:** enemies still walk straight at the player.
-- **Path network:** `Game::PathGraph` loads and routes it, tested, but nothing uses it yet.
+- **Creature steps** now refuse a rise over 0x100, uneven ground (probes more than 0x100 apart) and a ceiling below the creature's half height (`FUN_000315f0`).
 - **Hit and death animations:** `FUN_0002f4b0` starts an animation and `FUN_00030b04` is death.
 - **Cell occupancy:** rebuilt every tick in the original's pattern: the player's cell is marked `0xff`, and each live creature lifts its own mark before it looks or moves, then marks where it ends up. Movement and line of fire both refuse marked cells. Barrel blasts still find creatures by position instead of by the mark's type and index.
 
@@ -101,6 +105,15 @@ Status in the port:
 - **Multiplayer:** the menus exist, but there is no networking.
 
 ## Settled this round (see the code comments for the evidence)
+
+- **Creature AI, common task** (`LAB_000342b4`):
+  - **Waking:** creatures idle for 0x20 ticks, then chase.
+  - **Noticing you:** within half their wake range (the record's bytes 12/13) while in view, or within the whole of it while your weapon is loud (`DAT_000b0adc`). Being seen inside their cone with a clear line also alerts them.
+  - **Alerted:** they head for a random point 0x400-0x5ff from you with a clear line to it (`FUN_00032fcc`). Failing that, they take the next path node toward you, then a side-step.
+  - **Moving:** they turn 0x200 a tick and advance only when facing the waypoint, at the record's speed word (+0x14 for huggers).
+  - **Attacking:** they attack whenever you're in reach with a clear line. A hugger retreats down the flow field after its leap; other types attack again while they can.
+  - **The flow field** is a breadth-first fill from your path node (`FUN_000281cc`). Each cell's byte 6 names its node, and node byte 3 holds two half-cell offset flags, not a state.
+- **The 0x1e00 "do nothing" cutoff** belongs to other tasks. The common task keeps running and only stands still beyond 0x3fff.
 
 - **Creatures need a clear line to attack** (`FUN_0003231c`, now `Game::CreatureSight`):
   - **Probes:** two, 200 either side of the line to the player, in 0x100 steps, distance >> 8 of them. The 0x400 side goes first.
