@@ -21,6 +21,7 @@
 #include "SmartgunTargeting.h"
 #include "../Game/CreatureSight.h"
 #include "../Game/FlowField.h"
+#include "../Game/Lifts.h"
 #include "../Game/Triggers.h"
 #include "SaveSlotScreen.h"
 #include "EnemySprites.h"
@@ -355,6 +356,11 @@ namespace ALTEngine::Screens
         // Live door state - see Game/Doors.h. Doors drive the collision grid
         // directly, so movement clearance and the visual stay in lockstep.
         std::vector<ALTEngine::Game::DoorState> doorStates;
+
+        // Lifts (Game/Lifts.h) and where each one's platform pieces sit in
+        // placedObjects.
+        std::vector<ALTEngine::Game::Lifts::Lift> lifts;
+        std::vector<std::pair<size_t, size_t>> liftPlaced;   // first, count
 
         // The level's scripted triggers - see Game/Triggers.h. One system for
         // walking onto a cell and for the use key.
@@ -858,6 +864,57 @@ namespace ALTEngine::Screens
                         SDL_Log("GameplayScreen: door setup failed: %s", e.what());
                     }
 
+                    // Lifts. Their cells take the starting floor now; their
+                    // platforms are the "L0" meshes in this .MAP (as ALTViewer
+                    // reads them), drawn at the centre of the lift's block at
+                    // its floor + 0x10, as FUN_00041ba4 draws them. Which mesh
+                    // a lift uses is its record's byte 12 - an index into a
+                    // model table (0x1a8354) the original fills from these
+                    // sections, taken here to be their order. Not testable on
+                    // the demo levels, which have no lifts.
+                    lifts = ALTEngine::Game::Lifts::Build(level);
+                    liftPlaced.clear();
+                    if (!lifts.empty())
+                    {
+                        try
+                        {
+                            auto liftMeshes = ALTEngine::Formats::ModelLoader::Load(*mapPath, "L0");
+                            auto levelTextures = ALTEngine::Formats::BndTextureLoader::Load(*gfxPath);
+                            for (size_t m = 0; m < liftMeshes.size(); ++m)
+                            {
+                                auto groups = ALTEngine::Formats::BuildRenderMeshPerGroup(liftMeshes[m], levelTextures.uvRects);
+                                for (size_t page = 0; page < groups.size(); ++page)
+                                {
+                                    if (groups[page].indices.empty() || page >= levelTextures.textures.size()) { continue; }
+                                    ALTEngine::Renderer::ModelCacheKey key{
+                                        ALTEngine::Renderer::ModelCatalog::LevelLift,
+                                        static_cast<int>(m) * 8 + static_cast<int>(page) };
+                                    ModelRenderer::RegisterMesh(key, groups[page], levelTextures.textures[page]);
+                                }
+                            }
+                            for (const auto& lift : lifts)
+                            {
+                                const size_t first = placedObjects.size();
+                                const int mesh = (static_cast<size_t>(lift.model) < liftMeshes.size()) ? lift.model : 0;
+                                for (int page = 0; page < 5; ++page)
+                                {
+                                    ALTEngine::Renderer::PlacedObject placed;
+                                    placed.cacheKey = { ALTEngine::Renderer::ModelCatalog::LevelLift, mesh * 8 + page };
+                                    placed.x = lift.CentreX() - originX;
+                                    placed.y = lift.PlatformY();
+                                    placed.z = lift.CentreZ() - originZ;
+                                    placedObjects.push_back(placed);
+                                }
+                                liftPlaced.emplace_back(first, placedObjects.size() - first);
+                            }
+                        }
+                        catch (const std::exception& e)
+                        {
+                            SDL_Log("GameplayScreen: lift meshes not loaded: %s", e.what());
+                        }
+                        SDL_Log("GameplayScreen: %zu lift(s)", lifts.size());
+                    }
+
                     // Pickups. PICKMOD.BND lives in CD/GFX, not a SECT
                     // folder, and MissionBriefingScreen has already preloaded
                     // all 28 slots into the shared model cache by the time we
@@ -1108,6 +1165,11 @@ namespace ALTEngine::Screens
             {
                 SDL_Log("GameplayScreen: trigger spawned monster %d", monster);
             }
+        };
+        // Commands 5 and 7: count toward a lift's threshold (Game/Lifts.h).
+        triggerHandlers.lift = [&](int liftIndex, int amount, bool finalIncrementOnly) {
+            if (liftIndex < 0 || static_cast<size_t>(liftIndex) >= lifts.size()) { return false; }
+            return ALTEngine::Game::Lifts::AddToCounter(lifts[static_cast<size_t>(liftIndex)], amount, finalIncrementOnly);
         };
         triggerHandlers.spawnPickup = [&](int pickupIndex, int amount) {
             // FUN_0003bb14: add to the counter, clamped to the threshold, and the
@@ -2625,6 +2687,23 @@ namespace ALTEngine::Screens
                         for (size_t pi : pickupPlaced)
                         {
                             if (pi < placedObjects.size()) { placedObjects[pi].rotationRadians = pickupAngle; }
+                        }
+
+                        for (size_t li = 0; li < lifts.size(); ++li)
+                        {
+                            namespace LF = ALTEngine::Game::Lifts;
+                            const auto result = LF::Tick(lifts[li], level);
+                            if (result.firstActivation) { hudMessages.ShowLiftActivated(language); }
+                            if (result.started) { ALTEngine::Audio::SfxPlayer::PlaySlot(LF::SOUND_START, digits.c_str(), cdDirectory); }
+                            if (result.stopped) { ALTEngine::Audio::SfxPlayer::PlaySlot(LF::SOUND_STOP, digits.c_str(), cdDirectory); }
+                            if (li < liftPlaced.size())
+                            {
+                                for (size_t k = 0; k < liftPlaced[li].second; ++k)
+                                {
+                                    const size_t pi = liftPlaced[li].first + k;
+                                    if (pi < placedObjects.size()) { placedObjects[pi].y = lifts[li].PlatformY(); }
+                                }
+                            }
                         }
 
                         for (auto& ds : doorStates)

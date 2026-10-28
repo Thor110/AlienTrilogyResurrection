@@ -208,9 +208,9 @@ TEST_CASE("Triggers: spawn triggers release L111's waiting monsters")
     }
 }
 
-TEST_CASE("Triggers: lift commands fail the chain until lifts exist")
+TEST_CASE("Triggers: a lift command with nothing to drive fails the chain")
 {
-    LevelGeometry level = SyntheticLevel({ { Triggers::LIFT_5, 0, 1, 0 }, { Triggers::TOGGLE_LIGHT, 0, 1, 5 } });
+    LevelGeometry level = SyntheticLevel({ { Triggers::LIFT_FINAL, 0, 1, 0 }, { Triggers::TOGGLE_LIGHT, 0, 1, 5 } });
     Triggers::System system(level);
     Recorder rec;
     CHECK(!system.Run(1, Source::Interact, rec.Handlers()));

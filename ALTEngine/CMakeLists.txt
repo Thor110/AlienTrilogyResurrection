@@ -63,6 +63,7 @@ add_library(ALTGame STATIC
     src/Game/PathGraph.cpp
     src/Game/ProjectileCollision.cpp
     src/Game/CreatureSight.cpp
+    src/Game/Lifts.cpp
     src/Game/Progression.cpp
     src/Game/SaveGame.cpp
     src/Game/Triggers.cpp
@@ -94,6 +95,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/ProjectileCollisionTests.cpp
         tests/CreatureSightTests.cpp
         tests/CreatureAITests.cpp
+        tests/LiftTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
     target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats)

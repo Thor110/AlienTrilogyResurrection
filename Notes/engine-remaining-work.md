@@ -12,7 +12,7 @@ Details for each item are in the numbered sections below.
 |---|---|---|---|
 | 1 | One logic tick rate (find the game's clock) | yes | open |
 | 2 | Player movement exactly (`FUN_0003d85c` / `FUN_0003dc44`) | yes | open |
-| 3 | Lifts (trigger commands 5 and 7) | yes, but the demo maps have none to test with | open |
+| 3 | Lifts (trigger commands 5 and 7) | yes, but the demo maps have none to test with | done (unit tests only; mesh index and origin unverified) |
 | 4a | Creature line of fire and visibility before attacking (`FUN_0003231c`, `FUN_00033a1c`) | yes | done (zone test approximated) |
 | 4b | Creature chase via the path network (state 2/3) | yes | done for the common task (see section 4 for what's approximated) |
 | 4c | Creatures blocking each other (cell occupancy) | yes | done (barrel blasts still find creatures by position) |
@@ -53,10 +53,10 @@ The port samples five points and treats bytes `+2`/`+3` as walls. The clearance 
 
 ## 3. Lifts
 
-- `level.lifts` is parsed but unused. The demo levels have none, so retail maps are needed to test them.
-- Commands 5 and 7 are `FUN_00041e20` and `FUN_00041dd8`, with HUD notices `FUN_000537dc` / `FUN_000537bc`.
-- The trigger system currently fails the chain on both.
-- `Game::DoorState::isLift` and `DoorNotice::LiftActivated` are already there for them.
+Done as `Game::Lifts` (see section "Settled"). Still to check against a retail map that has lifts:
+- that record byte 12 indexes the `L0` meshes in file order, and where the mesh's vertical origin sits;
+- sound slots `0x5e`/`0x5f` are blank in the demo's name table;
+- a fast lift (2 units a tick) with an odd travel is clamped at the ends. The original only stops on an exact match, so it would overshoot.
 
 ## 4. Enemy behaviour per type
 
@@ -105,6 +105,14 @@ Status in the port:
 - **Multiplayer:** the menus exist, but there is no networking.
 
 ## Settled this round (see the code comments for the evidence)
+
+- **Lifts** (`FUN_000423e8` setup, handlers `0x42238` idle, `0x420ec` ascend, `0x41fa0` descend, `0x41ed0` wait; now `Game::Lifts`):
+  - **Record:** x, z, width, depth, low, high, flags, auto-dwell, dwell, threshold, counter, model.
+  - **Floor:** every cell of the lift's w×h area gets its floor byte (+0xb) set to the height each tick (`FUN_00041e80`), so the player rides it with no extra code.
+  - **Starting it:** command 7 (`FUN_00041dd8`) adds to the counter; command 5 (`FUN_00041e20`) adds only as the final increment. Both refuse while the lift moves or once the counter has reached the threshold. At the threshold the idle lift sets off (sound `0x5e`) and stops with `0x5f`.
+  - **First run:** sets flag 0x80, adds one to `DAT_000b0b2a` and shows the lift notice. No other direct reference to that counter was found.
+  - **Cycling:** a non-zero auto-dwell makes the lift wait and go back by itself.
+  - **Drawing:** `FUN_00041ba4` only draws the platform, at (x + w·256, height·32 + 0x10, z + d·256).
 
 - **Creature AI, common task** (`LAB_000342b4`):
   - **Waking:** creatures idle for 0x20 ticks, then chase.

@@ -72,6 +72,12 @@ namespace ALTEngine::Game::Triggers
                 // Like Spawn Monster, never fails the chain.
                 if (handlers.spawnPickup) { handlers.spawnPickup(target, signedAmount); }
                 break;
+            case LIFT_FINAL:
+            case LIFT_ADD:
+                // Conditional, like the doors: a lift that is moving or already
+                // due to go refuses, and that fails the chain.
+                ok = handlers.lift && handlers.lift(target, amount, c.action == LIFT_FINAL);
+                break;
             case END_LEVEL:
                 if (handlers.endLevel) { handlers.endLevel(); }
                 break;
@@ -82,7 +88,7 @@ namespace ALTEngine::Game::Triggers
                 step = CHAIN_END;
                 continue;
             default:
-                // Lifts (5, 7) and anything unknown. Failing is the safe choice:
+                // Anything unknown. Failing is the safe choice:
                 // continuing would run later commands without their condition.
                 ok = false;
                 break;

@@ -41,9 +41,9 @@ namespace ALTEngine::Game
             SPAWN_PICKUP = 2,     // pickup record, amount added to its trigger counter (FUN_0003bb14)
             SPAWN_MONSTER = 3,    // monster record, amount added to its trigger counter
             ACTIVATE_OBJECT = 4,  // switch object; interact only, latches
-            LIFT_5 = 5,           // lift - not implemented, fails the chain
+            LIFT_FINAL = 5,       // lift, amount added only as the final increment (FUN_00041e20)
             OPEN_DOOR = 6,        // door, as UNLOCK_DOOR but must be the final increment
-            LIFT_7 = 7,           // lift - not implemented, fails the chain
+            LIFT_ADD = 7,         // lift, amount added to its counter (FUN_00041dd8)
             END_LEVEL = 8,
             CHANGE_TEXTURE = 9,   // texture animator, signed delta
             EMPTY_SLOT = 0xFF,    // unused command slot - ends the chain
@@ -75,6 +75,8 @@ namespace ALTEngine::Game
             std::function<void(int, int)> spawnMonster;     // monster, amount
             std::function<void(int, int)> spawnPickup;      // pickup, amount
             std::function<bool(int)> activateObject;        // object record
+            // lift record, amount, final-increment-only; false fails the chain
+            std::function<bool(int, int, bool)> lift;
             std::function<void()> endLevel;
         };
 
