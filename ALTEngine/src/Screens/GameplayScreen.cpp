@@ -872,6 +872,33 @@ namespace ALTEngine::Screens
                     // model table (0x1a8354) the original fills from these
                     // sections, taken here to be their order. Not testable on
                     // the demo levels, which have no lifts.
+                    // One line per lift, before its cells are set: the record,
+                    // the floors the map gives its own cells, and the floors
+                    // of the cells around it (the landings it should meet).
+                    for (size_t li = 0; li < level.lifts.size(); ++li)
+                    {
+                        const auto& r = level.lifts[li];
+                        auto floorsIn = [&](int x0, int z0, int x1, int z1, bool ringOnly) {
+                            std::string out;
+                            for (int z = z0; z <= z1; ++z)
+                            {
+                                for (int x = x0; x <= x1; ++x)
+                                {
+                                    const bool inside = x > x0 && x < x1 && z > z0 && z < z1;
+                                    if (ringOnly && inside) { continue; }
+                                    const auto* cell = ALTEngine::Formats::CellAt(level, x, z);
+                                    if (!cell || cell->unknown3 == 255) { continue; }
+                                    out += ' ' + std::to_string(cell->floorHeight);
+                                }
+                            }
+                            return out.empty() ? std::string(" -") : out;
+                        };
+                        const std::string own = floorsIn(r.x, r.y, r.x + r.z - 1, r.y + r.unknown1 - 1, false);
+                        const std::string around = floorsIn(r.x - 1, r.y - 1, r.x + r.z, r.y + r.unknown1, true);
+                        SDL_Log("GameplayScreen: lift %zu at (%d,%d) %dx%d low %d high %d flags 0x%02x autodwell %d dwell %d threshold %d counter %d model %d | own floors:%s | around:%s",
+                                li, r.x, r.y, r.z, r.unknown1, r.unknown2, r.unknown3, r.unknown5, r.unknown6, r.unknown7,
+                                r.unknown8, r.unknown9, r.unknown10, own.c_str(), around.c_str());
+                    }
                     lifts = ALTEngine::Game::Lifts::Build(level);
                     liftPlaced.clear();
                     if (!lifts.empty())

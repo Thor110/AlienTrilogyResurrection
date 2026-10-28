@@ -57,6 +57,7 @@ Done as `Game::Lifts` (see section "Settled"). Still to check against a retail m
 - that record byte 12 indexes the `L0` meshes in file order, and where the mesh's vertical origin sits;
 - sound slots `0x5e`/`0x5f` are blank in the demo's name table;
 - a fast lift (2 units a tick) with an odd travel is clamped at the ends. The original only stops on an exact match, so it would overshoot.
+- **Reported:** on a retail level the lift stops just under the landing, and the player sinks partly out of the level. The original's handlers, setup and floor lookup (`FUN_00027e28`, a plain floor byte × 32) all match the port, so the cause is still open. ALTViewer's survey of the high byte (24, 27, 31, 32, 43, 44, 46, 47, 48, 50, 52, 56, 63, 64, 68, 79, 80, 84, 95, 224) has many values one below a common floor height (31/32, 47/48, 63/64…). The game now logs each lift's record with its own and surrounding floors to compare.
 
 ## 4. Enemy behaviour per type
 
@@ -112,6 +113,7 @@ Status in the port:
   - **Starting it:** command 7 (`FUN_00041dd8`) adds to the counter; command 5 (`FUN_00041e20`) adds only as the final increment. Both refuse while the lift moves or once the counter has reached the threshold. At the threshold the idle lift sets off (sound `0x5e`) and stops with `0x5f`.
   - **First run:** sets flag 0x80, adds one to `DAT_000b0b2a` and shows the lift notice. No other direct reference to that counter was found.
   - **Cycling:** a non-zero auto-dwell makes the lift wait and go back by itself.
+  - **Returning:** without that, a lift with a dwell waits at the far end, goes back to where it started, and is idle there. Arriving at the top checks flag 0x20 the opposite way to arriving at the bottom.
   - **Drawing:** `FUN_00041ba4` only draws the platform, at (x + w·256, height·32 + 0x10, z + d·256).
 
 - **Creature AI, common task** (`LAB_000342b4`):

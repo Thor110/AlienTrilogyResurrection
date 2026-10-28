@@ -34,12 +34,15 @@ namespace ALTEngine::Game::Lifts
             r.started = true;
         }
 
-        // What an arrival does next (the tail of 0x41fa0 / 0x420ec).
-        void Arrive(Lift& lift)
+        // What an arrival does next (the tail of 0x41fa0 / 0x420ec). Without
+        // its own cycle, a lift with a dwell goes back to where it started
+        // after the dwell, and is then idle there with its counter cleared.
+        void Arrive(Lift& lift, bool atTop)
         {
             if (lift.flags & CYCLES) { lift.dwellCounter = lift.dwell; lift.phase = Phase::Wait; return; }
             if (lift.dwell == 0) { lift.counter = 0; lift.phase = Phase::Idle; return; }
-            if (!(lift.flags & STARTED_HIGH)) { lift.counter = 0; lift.phase = Phase::Idle; return; }
+            const bool backAtStart = atTop == ((lift.flags & STARTED_HIGH) != 0);
+            if (backAtStart) { lift.counter = 0; lift.phase = Phase::Idle; return; }
             lift.dwellCounter = lift.dwell;
             lift.phase = Phase::Wait;
         }
@@ -122,7 +125,7 @@ namespace ALTEngine::Game::Lifts
             {
                 lift.flags = static_cast<uint8_t>((lift.flags & 0xf3) | AT_BOTTOM);
                 r.stopped = true;
-                Arrive(lift);
+                Arrive(lift, false);
             }
             break;
 
@@ -134,7 +137,7 @@ namespace ALTEngine::Game::Lifts
             {
                 lift.flags = static_cast<uint8_t>((lift.flags & 0xfc) | AT_TOP);
                 r.stopped = true;
-                Arrive(lift);
+                Arrive(lift, true);
             }
             break;
         }

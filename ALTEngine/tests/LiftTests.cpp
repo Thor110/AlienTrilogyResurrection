@@ -98,3 +98,33 @@ TEST_CASE("Lifts: a fast lift with an odd travel still stops at its end")
     while (!L::Tick(lifts[0], level).stopped && ticks < 20) { ++ticks; }
     CHECK_EQ(FloorAt(level, 1, 1), 7);
 }
+
+TEST_CASE("Lifts: a called lift with a dwell goes back to where it started, then idles")
+{
+    LevelGeometry level = WithLift(0, 0, 4, 1);   // starts low, dwell 4
+    auto lifts = L::Build(level);
+    auto& lift = lifts[0];
+    REQUIRE(L::AddToCounter(lift, 1, false));
+    int ticks = 0;
+    while (!L::Tick(lift, level).stopped && ticks < 50) { ++ticks; }
+    CHECK(lift.flags & L::AT_TOP);
+    CHECK(lift.phase == L::Phase::Wait);       // not left at the top
+    ticks = 0;
+    while (!L::Tick(lift, level).stopped && ticks < 50) { ++ticks; }
+    CHECK(lift.flags & L::AT_BOTTOM);
+    CHECK_EQ(FloorAt(level, 1, 1), 0);
+    CHECK(lift.phase == L::Phase::Idle);
+    CHECK_EQ(lift.counter, 0);
+
+    // One that started high does the same the other way up.
+    LevelGeometry high = WithLift(L::AT_TOP, 0, 4, 1);
+    auto highLifts = L::Build(high);
+    REQUIRE(L::AddToCounter(highLifts[0], 1, false));
+    ticks = 0;
+    while (!L::Tick(highLifts[0], high).stopped && ticks < 50) { ++ticks; }
+    CHECK(highLifts[0].phase == L::Phase::Wait);
+    ticks = 0;
+    while (!L::Tick(highLifts[0], high).stopped && ticks < 50) { ++ticks; }
+    CHECK(highLifts[0].flags & L::AT_TOP);
+    CHECK(highLifts[0].phase == L::Phase::Idle);
+}
