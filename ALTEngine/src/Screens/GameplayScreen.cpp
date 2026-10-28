@@ -186,7 +186,7 @@ namespace ALTEngine::Screens
 
         constexpr float COLLISION_RADIUS = 200.0f; // 400-unit footprint, sampled at -r, centre, +r
         constexpr float MAX_STEP_UP = 256.0f;      // a rise steeper than this blocks movement
-        // The player's feet are ON the floor and the eye is 0x180 above them -
+        // The player's feet are ON the floor and the eye is 0x300 above them -
         // see PlayerCamera::EYE_HEIGHT_ORIGINAL for how that was settled.
         constexpr float EYE_HEIGHT = static_cast<float>(ALTEngine::Screens::PlayerCamera::EYE_HEIGHT_ORIGINAL);
 
@@ -1390,16 +1390,14 @@ namespace ALTEngine::Screens
                     pcInput.turn180 = keys[keyBindings.GetKey(InputAction::Turnaround)];
                     pcInput.terrainSpeedTicks = hudState.terrainSpeed;
 
-                    // Manual look: the original gates look up/down behind a
-                    // modifier and reuses the forward/back keys for it. There is
-                    // no separate Look action in the port's binding list, so it
-                    // is wired to the strafe modifier + forward/back, which is
-                    // the closest available shape. MARKED AS A GUESS - if the
-                    // original binds this elsewhere the mapping moves, not the
-                    // logic in PlayerCamera.h.
-                    pcInput.look = false;
-                    pcInput.lookUp = false;
-                    pcInput.lookDown = false;
+                    // Manual look, on the original's own Look Up / Look Down
+                    // keys (FUN_0003efcc). Held, they tilt the view - and with it
+                    // the aim - by up to 0x80 either way; released, the pitch
+                    // eases back to rest. This is how anything on the floor gets
+                    // shot without Free Look.
+                    pcInput.lookUp = keys[keyBindings.GetKey(InputAction::LookUp)];
+                    pcInput.lookDown = keys[keyBindings.GetKey(InputAction::LookDown)];
+                    pcInput.look = pcInput.lookUp || pcInput.lookDown;
 
                     // Mouse. Spread the accumulated delta over the ticks this
                     // frame owes so a single large delta is not applied twice.

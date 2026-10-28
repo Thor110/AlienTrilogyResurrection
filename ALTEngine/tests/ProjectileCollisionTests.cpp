@@ -114,16 +114,22 @@ TEST_CASE("ProjectileCollision: creature boxes are per type and centred")
     CHECK_EQ(PCol::CreatureExtents(5).y, 0x300);
 }
 
-TEST_CASE("ProjectileCollision: a level shot from the original eye height reaches a facehugger")
+TEST_CASE("ProjectileCollision: aiming at floor creatures takes the look-down keys")
 {
-    // The original's numbers end to end: eye at floor + 0x180, rounds 0x60 lower
-    // and climbing at the rest pitch 0x30. A facehugger 3000 units away on
-    // level ground is still inside its box when the round gets there.
+    // The original's numbers end to end: eye at floor + 0x300, rounds 0x60
+    // lower. At the rest pitch (0x30, slightly up) a round passes over a
+    // facehugger's box - its top is floor + 0x20 + 0x200 - but holding Look
+    // Down (pitch -0x80) brings it in, while a warrior's taller box (0x300)
+    // takes level fire.
     namespace PC = ALTEngine::Screens::PlayerCamera;
     const float launchY = PC::EYE_HEIGHT_ORIGINAL - ALTEngine::Screens::Particles::MUZZLE_DROP;
-    const float climb = std::tan(PC::PITCH_REST * 6.28318530718f / PC::ANGLE_UNITS);
-    const float yAt3000 = launchY + 3000.0f * climb;
-    CHECK(PCol::OverlapsCreature(0, yAt3000, 3000, 0, 32, 3000, 2, PCol::TYPE_PISTOL));
+    auto yAt = [&](int pitch, float distance) {
+        return launchY + distance * std::tan(pitch * 6.28318530718f / PC::ANGLE_UNITS);
+    };
+    const float range = 1500.0f;
+    CHECK(!PCol::OverlapsCreature(0, yAt(PC::PITCH_REST, range), range, 0, 32, range, 2, PCol::TYPE_PISTOL));
+    CHECK(PCol::OverlapsCreature(0, yAt(PC::PITCH_MIN, range), range, 0, 32, range, 2, PCol::TYPE_PISTOL));
+    CHECK(PCol::OverlapsCreature(0, yAt(PC::PITCH_REST, range), range, 0, 32, range, 5, PCol::TYPE_PISTOL));
 }
 
 TEST_CASE("ProjectileCollision: zones and targetability")

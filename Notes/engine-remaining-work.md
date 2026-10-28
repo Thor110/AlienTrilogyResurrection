@@ -60,7 +60,7 @@ Status in the port:
 
 ## 6. Modern options
 
-- **Player Jumping:** in the menu but does nothing. It needs a Jump input action, a default key, a Controls menu entry and strings in all six `LANGUAGE` packs.
+- **Player Jumping:** in the menu but does nothing. It needs a Jump input action, a default key, a Controls menu entry and strings in all six `LANGUAGE` packs. Look Up / Look Down show how to add an action: append to `InputAction`, list it in `AllActions()`, give it a label and a default key.
 - **All other options** are now read by gameplay or the menu.
 
 ## 7. Smaller items
@@ -75,7 +75,9 @@ Status in the port:
 ## Settled this round (see the code comments for the evidence)
 
 - **Eye height and field of view:**
-  - The eye is floor + `0x180`; the player's Y is the floor itself (`FUN_0003dff0`, `FUN_0003d00c`).
+  - The standing eye is floor + `0x300`, set by player setup at `0x4078f`; the player's Y is the floor itself (`FUN_0003dff0`, `FUN_0003d00c`).
+  - `0x180` is where the death sequence (`FUN_0003ee4c`) leaves the camera, not the standing height.
+  - Look Up / Look Down are the original's own keys (`FUN_0003efcc`, ±`0x80`). They're needed to shoot anything on the floor without Free Look.
   - The view is 320×240 with focal length `0x100`, so the vertical field of view is ≈ 50.2° (`FUN_0004884c`, `FUN_00010e38`).
 - **Rounds:**
   - Nothing steers a round after launch (particle task `0x2d91c`; type 0–4 handler `0x2da89`).

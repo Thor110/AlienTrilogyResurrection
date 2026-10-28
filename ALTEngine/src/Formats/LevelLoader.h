@@ -391,8 +391,9 @@ namespace ALTEngine::Formats
     //
     // 0x300 world units - 24 height units. The original's player mover
     // (FUN_0003d85c / FUN_0003dc44) refuses a step when the destination's
-    // ceiling (FUN_00027fb0) is below the player's Y + 0x300. This was 25,
-    // worked out from the port's old 800-unit eye height rather than read.
+    // ceiling (FUN_00027fb0) is below the player's Y + 0x300 - which is also
+    // the standing eye height (PlayerCamera::EYE_HEIGHT_ORIGINAL). This was
+    // 25, worked out from the port's old 800-unit eye height rather than read.
     //
     // (The original compares against the player's CURRENT floor, this compares
     // a cell's ceiling with that cell's own floor; they agree on level ground

@@ -134,22 +134,25 @@ namespace ALTEngine::Screens
         constexpr int PITCH_MAX = 0x80;        // DAT_000b0b3c
         constexpr int PITCH_REST = 0x30;       // DAT_000b0b42
 
-        // Standing eye height above the player's feet. DAT_000b0b4c, set to
-        // 0x180 by FUN_0003ee4c, which also eases it back down 0xc per tick
-        // after it has been displaced.
+        // Standing eye height above the player's feet: DAT_000b0b4c.
         //
-        // SETTLED, and applied. The player's Y (DAT_000b0a4a) is the floor
-        // height itself - FUN_0003dff0 writes FUN_00027e28's result straight
-        // into it, no offset - and the eye is DAT_000b0a22 = DAT_000b0a4a +
-        // DAT_000b0b4c (+ the sway term, FUN_0003d00c). So the eye is 384 above
-        // the floor, and every projectile leaves from 0x60 below that.
+        // 0x300, set by the player setup block at 0x0004078f
+        // (`mov edi, 0x300 ... mov [DAT_000b0b4c], di`). The player's Y
+        // (DAT_000b0a4a) is the floor height itself - FUN_0003dff0 writes
+        // FUN_00027e28's result straight into it - and the eye is
+        // DAT_000b0a22 = DAT_000b0a4a + DAT_000b0b4c (+ the sway term,
+        // FUN_0003d00c). Every projectile leaves from 0x60 below the eye.
         //
-        // The port used 800 because it looked right - which it did, because the
-        // view was also far wider than the original's (see VIEW_FOV_Y_RADIANS).
-        // At 70 degrees a 384 eye looks like crawling; at the original's 50
-        // degrees it looks like the original.
-        constexpr int EYE_HEIGHT_ORIGINAL = 0x180;   // 384
-        constexpr int EYE_HEIGHT_RECOVERY = 0xc;     // per tick, FUN_0003ee4c
+        // 0x180 is NOT the standing height. It is where FUN_0003ee4c stops: that
+        // is the DEATH sequence, which lowers the eye 0xc a tick until it
+        // reaches 0x180 and then raises the "fallen" flag (DAT_000b0cc0 | 0x40)
+        // - the camera ending up on the floor. Reading it as the eye height
+        // briefly put the living player at crawling height (Edward, 2026).
+        //
+        // The port's old STAND_OFFSET 32 + EYE_HEIGHT 768 was within 32 of this.
+        constexpr int EYE_HEIGHT_ORIGINAL = 0x300;   // 768, standing
+        constexpr int EYE_HEIGHT_DEAD = 0x180;       // 384, where the death sequence leaves it
+        constexpr int EYE_HEIGHT_RECOVERY = 0xc;     // per tick, FUN_0003ee4c (the fall when dying)
 
         // The original's projection. FUN_0004884c divides by depth and scales by
         // the focal length DAT_00400168, which gameplay sets to 0x100

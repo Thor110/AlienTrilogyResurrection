@@ -58,20 +58,29 @@ namespace ALTEngine::Bootstrap
         // playing with a mouse expects.
         TurnLeft,
         TurnRight,
+
+        // The ORIGINAL's look keys - "Look Up" / "Look Down" are its own
+        // strings (GsLookUp / GsLookDown). FUN_0003efcc tilts the pitch while
+        // either is held, down taking priority, within +/-0x80, and lets the
+        // ramp/recentre code take it back to rest once released. Without these,
+        // the only way to aim at anything on the floor was Free Look.
+        LookUp,
+        LookDown,
     };
 
     // Every action, in the order every device's Redefine list shows
     // them - one shared list, not a separate one per device (Edward,
     // 2026).
-    inline const std::array<InputAction, 21>& AllActions()
+    inline const std::array<InputAction, 23>& AllActions()
     {
-        static const std::array<InputAction, 21> actions{
+        static const std::array<InputAction, 23> actions{
             InputAction::MoveForward, InputAction::MoveBackward,
             InputAction::StrafeLeft, InputAction::StrafeRight,
             // Shown here, next to the movement actions they belong with, even
             // though the enum values themselves are appended at the end - see
             // the note on the enum.
             InputAction::TurnLeft, InputAction::TurnRight,
+            InputAction::LookUp, InputAction::LookDown,
             InputAction::Fire1, InputAction::Fire2, InputAction::Use,
             InputAction::StrafeModifier, InputAction::RunMode, InputAction::RunModifier,
             InputAction::SelectWeapon1, InputAction::SelectWeapon2, InputAction::SelectWeapon3,
@@ -112,6 +121,8 @@ namespace ALTEngine::Bootstrap
         case InputAction::StrafeRight: return "Strafe Right";
         case InputAction::TurnLeft: return "Turn Left";
         case InputAction::TurnRight: return "Turn Right";
+        case InputAction::LookUp: return "Look Up";
+        case InputAction::LookDown: return "Look Down";
         case InputAction::Fire1: return "Fire 1";
         case InputAction::Fire2: return "Fire 2";
         case InputAction::Use: return "Do / Use";
@@ -145,6 +156,8 @@ namespace ALTEngine::Bootstrap
         case InputAction::StrafeRight: return Tr(StringId::ActionStrafeRight, language);
         case InputAction::TurnLeft: return Tr(StringId::ActionTurnLeft, language);
         case InputAction::TurnRight: return Tr(StringId::ActionTurnRight, language);
+        case InputAction::LookUp: return Tr(StringId::GsLookUp, language);
+        case InputAction::LookDown: return Tr(StringId::GsLookDown, language);
         case InputAction::Fire1: return Tr(StringId::ActionFire1, language);
         case InputAction::Fire2: return Tr(StringId::ActionFire2, language);
         case InputAction::Use: return Tr(StringId::ActionUse, language);
@@ -182,6 +195,10 @@ namespace ALTEngine::Bootstrap
         case InputAction::StrafeRight: return SDL_SCANCODE_D;
         case InputAction::TurnLeft: return SDL_SCANCODE_Q;
         case InputAction::TurnRight: return SDL_SCANCODE_E;
+        // The disc's README gives no keys for these; Page Up / Page Down are
+        // the usual choice of the period.
+        case InputAction::LookUp: return SDL_SCANCODE_PAGEUP;
+        case InputAction::LookDown: return SDL_SCANCODE_PAGEDOWN;
         case InputAction::Fire1: return SDL_SCANCODE_LCTRL;
         case InputAction::Fire2: return SDL_SCANCODE_KP_5;
         case InputAction::Use: return SDL_SCANCODE_SPACE;
