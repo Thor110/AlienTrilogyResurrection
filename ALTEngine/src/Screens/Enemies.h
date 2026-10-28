@@ -177,6 +177,7 @@ namespace ALTEngine::Screens
             // makes a hugger hittable with level fire: mid-leap it rises right
             // through the line rounds fly along.
             bool leaping = false;
+            bool engaged = false;       // in the original's attack state (4)
             float vy = 0;
             float leapX = 0, leapZ = 0;
 
@@ -211,9 +212,8 @@ namespace ALTEngine::Screens
             int nearThreshold = 0x800;
             int middleThreshold = 0x1000;
 
-            // The attack cone half-width, the original's +0x40. Also from the
-            // entity template, so also a GUESS - 0x200 of 4096 is about 17
-            // degrees either side.
+            // The attack cone half-width, the original's +0x40: the record's
+            // bytes 10/11, clamped (Build). 0x200 is what most records hold.
             int coneHalfWidth = 0x200;
 
             bool active = false;        // released and in play
@@ -263,6 +263,16 @@ namespace ALTEngine::Screens
                 // are 768 and 1536 because that is what the level says.
                 if (record.nearThreshold > 0) { enemy.nearThreshold = record.nearThreshold; }
                 if (record.middleThreshold > 0) { enemy.middleThreshold = record.middleThreshold; }
+
+                // FUN_0002e638 clamps two of the record's fields, for every type
+                // but 0x10-0x13: the mode-1 threshold (+0x4a) to at least 0x600,
+                // and the attack cone (+0x40, bytes 10/11) to 0x100..0x800, with
+                // anything wider set to 0x700.
+                if (EnemyBehaviour::ClampsRecordFields(record.type))
+                {
+                    if (enemy.nearThreshold < EnemyBehaviour::NEAR_THRESHOLD_MIN) { enemy.nearThreshold = EnemyBehaviour::NEAR_THRESHOLD_MIN; }
+                    enemy.coneHalfWidth = EnemyBehaviour::ClampCone(record.unknownA);
+                }
 
                 // Cell centre, the same convention the crates and pickups use.
                 enemy.x = static_cast<float>(record.x) * 512.0f + 256.0f - originX;
@@ -610,9 +620,9 @@ namespace ALTEngine::Screens
             // ---- melee creatures: the leap ------------------------------
             //
             // Types 2 and 3 never claw from where they stand. Their attack is
-            // FUN_00033cbc: a face hug from contact range, or a leap at the
-            // player from anywhere nearer than mode 3, whose damage lands with
-            // it. See LEAP_* in EnemyBehaviour.h.
+            // FUN_00033cbc: a face hug, or a leap at the player whose damage
+            // lands with it. Either needs the creature to have closed to
+            // contact range first. See LEAP_* in EnemyBehaviour.h.
             if (EnemyBehaviour::AttackForSubtype(enemy.type).melee
                 && enemy.state == EnemyBehaviour::STATE_ACTING
                 && enemy.alive)
@@ -635,6 +645,10 @@ namespace ALTEngine::Screens
                         // vertically, and facing the player.
                         enemy.leaping = false;
                         enemy.leapX = enemy.leapZ = 0.0f;
+
+                        // A hugger goes back to the chase after its leap
+                        // (0x348f9: state 2); type 3 stays in the attack state.
+                        if (enemy.type == 2) { enemy.engaged = false; }
                         enemy.stepX = enemy.stepZ = 0.0f;
                         enemy.velocityActive = false;
                         int delta = (enemy.facing - BearingTo(enemy, playerX, playerZ)) & PlayerCamera::ANGLE_MASK;
@@ -649,9 +663,17 @@ namespace ALTEngine::Screens
                 }
                 else
                 {
+                    // THE ATTACK STATE IS ENTERED FROM CONTACT RANGE ONLY. The
+                    // chase (state 2, 0x3445e) moves to state 4 when the mode is
+                    // 0 and the creature is within 0x600 vertically; state 4
+                    // attacks from any mode below 3 and gives up at mode 3.
+                    if (enemy.mode >= EB::FAR_MODE) { enemy.engaged = false; }
+                    else if (enemy.mode == 0 && enemy.separationY <= EB::FACE_HUG_MAX_VERTICAL) { enemy.engaged = true; }
+
                     if (enemy.attackCooldown > 0) { enemy.attackCooldown--; }
                     const bool facingPlayer = enemy.facing == BearingTo(enemy, playerX, playerZ);
-                    if (enemy.attackCooldown == 0
+                    if (enemy.engaged
+                        && enemy.attackCooldown == 0
                         && facingPlayer
                         && enemy.mode < EB::FAR_MODE
                         && enemy.separationY <= EB::ATTACK_REACH_VERTICAL)

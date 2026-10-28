@@ -629,6 +629,12 @@ namespace ALTEngine::Screens
         // THE MELEE ATTACK IS A LEAP - FUN_00033cbc
         // ---------------------------------------------------------------
         //
+        // The chase (state 2, 0x3445e) enters the attack state, 4, only at
+        // mode 0 and within 0x600 vertically; state 4 keeps attacking while the
+        // mode stays below 3 and returns to the chase at mode 3. So nothing
+        // leaps from across the room: a hugger walks into contact range, and
+        // then face-hugs, or leaps if another hugger already holds the lock.
+        //
         // The creature task's state 4 (0x3476e) calls FUN_00033cbc once the
         // creature faces the player exactly (+0x42 == +0x44) and, for the
         // ordinary types, while the mode is below 3, the vertical separation is
@@ -642,7 +648,8 @@ namespace ALTEngine::Screens
         //     to 0x60 along its heading, animation 10 starts, and if it is not
         //     already in the air its vertical velocity becomes 0x80.
         //
-        // Type 3 always leaps, with animation 12. The mover then takes 0xc off
+        // Type 3 always leaps, with animation 12. After the leap a hugger goes
+        // back to the chase (0x348f9); type 3 stays in the attack state. The mover then takes 0xc off
         // the vertical velocity each tick and lands the creature at floor +
         // 0x20. State 5 ends the leap (0x34874): both velocities cleared, then
         // FUN_00033ff8, the attack's damage, runs - so the hit lands when the
@@ -657,7 +664,17 @@ namespace ALTEngine::Screens
         inline constexpr int FACE_HUG_MAX_VERTICAL = 0x600;
         inline constexpr int LEAP_ANIMATION_TYPE_2 = 10;
         inline constexpr int LEAP_ANIMATION_TYPE_3 = 12;
-        inline constexpr int FAR_MODE = 3;   // mode 3 and up: no attack, back to the chase
+        inline constexpr int FAR_MODE = 3;
+
+        // FUN_0002e638's clamps on the record (see Enemies::Build).
+        inline constexpr int NEAR_THRESHOLD_MIN = 0x600;
+        inline constexpr bool ClampsRecordFields(int type) { return type < 0x10 || type > 0x13; }
+        inline constexpr int ClampCone(int cone)
+        {
+            if (cone < 0x100) { return 0x100; }
+            if (cone > 0x800) { return 0x700; }
+            return cone;
+        }   // mode 3 and up: no attack, back to the chase
 
         // THE POUNCE IS A ONE-SHOT AND THE CREATURE DIES AT THE END OF IT.
         //

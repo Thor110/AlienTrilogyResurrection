@@ -95,16 +95,24 @@ namespace ALTEngine::Screens
         // `speed` is the short at +0x1a, used both as the damage figure and,
         // shifted left 4, as the distance FUN_0002a448 probes.
         // `lateral` is the sideways muzzle offset, rotated by the view angles.
+        //
+        // `converge` is a yaw, in 4096 units, that FUN_0002b534 puts into the
+        // round's own angles before the view's ([ebp-0x12]: 0x28 for the pistol
+        // and shotgun, 0x30 for the pulse rifle, none for the flamethrower). It
+        // turns the round back across the muzzle offset, so a round fired from
+        // 0x28 to the side crosses the line of sight about 650 units out - the
+        // rounds "moving towards" what you aim at.
         struct ProjectileDef
         {
             int strength;
             int speed;
             int lateral;
+            int converge = 0;
         };
 
-        inline constexpr ProjectileDef PROJECTILE_PISTOL{ 0x14, 0x10, 0x28 };
-        inline constexpr ProjectileDef PROJECTILE_SHOTGUN{ 0x10, 0x50, 0x20 };
-        inline constexpr ProjectileDef PROJECTILE_PULSE{ 0x1c, 0x60, 0x20 };
+        inline constexpr ProjectileDef PROJECTILE_PISTOL{ 0x14, 0x10, 0x28, 0x28 };
+        inline constexpr ProjectileDef PROJECTILE_SHOTGUN{ 0x10, 0x50, 0x20, 0x28 };
+        inline constexpr ProjectileDef PROJECTILE_PULSE{ 0x1c, 0x60, 0x20, 0x30 };
 
         // The flamethrower's, read straight off FUN_0002c1d4, which builds its
         // particles inline rather than through FUN_0002b534: +0x1c = 0x1c,
@@ -400,9 +408,15 @@ namespace ALTEngine::Screens
                 const float pitchCos = static_cast<float>(PlayerCamera::Cos(viewPitch)) / PlayerCamera::TRIG_ONE;
                 const float pitchSin = static_cast<float>(PlayerCamera::Sin(viewPitch)) / PlayerCamera::TRIG_ONE;
 
-                p->vx = forward * s * pitchCos;
+                // The convergence yaw. Increasing the yaw turns the heading
+                // toward the side the lateral offset sits on, so it is taken off.
+                const int flightYaw = (viewYaw - def.converge) & PlayerCamera::ANGLE_MASK;
+                const float fs = static_cast<float>(PlayerCamera::Sin(flightYaw)) / PlayerCamera::TRIG_ONE;
+                const float fc = static_cast<float>(PlayerCamera::Cos(flightYaw)) / PlayerCamera::TRIG_ONE;
+
+                p->vx = forward * fs * pitchCos;
                 p->vy = forward * pitchSin;
-                p->vz = -forward * c * pitchCos;
+                p->vz = -forward * fc * pitchCos;
                 return p;
             }
 

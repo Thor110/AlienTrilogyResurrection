@@ -20,7 +20,7 @@ namespace
         e.state = EnemyBehaviour::STATE_ACTING;
         e.health = 64;
         e.z = distance;
-        e.nearThreshold = 768;      // a hugger's own record values
+        e.nearThreshold = 0x600;    // a hugger's 768, after the spawn clamp
         e.middleThreshold = 1536;
         return e;
     }
@@ -68,13 +68,29 @@ TEST_CASE("Enemies: a level reload releases a pounce that never finished")
     CHECK(next.pouncing);
 }
 
-TEST_CASE("Enemies: a hugger in the middle band leaps rather than face-hugging")
+TEST_CASE("Enemies: a hugger only attacks once it has closed to contact range")
 {
+    // The attack state is entered from mode 0 only. A hugger in the middle
+    // band walks in; it does not leap from there.
     Enemies::ResetLevelState();
     Enemies::Enemy e = HuggerAtPlayer(1200.0f);
     Enemies::Tick(e, 0, 0, 0);
-    CHECK_EQ(e.mode, 2);
+    CHECK_EQ(e.mode, 1);   // 1200 is inside the clamped 0x600 near threshold
+    CHECK(!e.engaged);
+    CHECK(!e.leaping);
     CHECK(!e.pouncing);
+}
+
+TEST_CASE("Enemies: with the face-hug lock taken, a hugger in contact range leaps")
+{
+    Enemies::ResetLevelState();
+    Enemies::Enemy first = HuggerAtPlayer();
+    Enemies::Tick(first, 0, 0, 0);
+    REQUIRE(first.pouncing);
+
+    Enemies::Enemy e = HuggerAtPlayer(900.0f);
+    Enemies::Tick(e, 0, 0, 0);
+    CHECK(e.engaged);
     CHECK(e.leaping);
     CHECK_EQ(e.vy, static_cast<float>(EnemyBehaviour::LEAP_LIFT));
     CHECK(e.stepZ < 0.0f);                       // toward the player
@@ -84,10 +100,13 @@ TEST_CASE("Enemies: a hugger in the middle band leaps rather than face-hugging")
 TEST_CASE("Enemies: the leap rises, falls under gravity and lands at floor + 0x20")
 {
     Enemies::ResetLevelState();
-    Enemies::Enemy e = HuggerAtPlayer(1200.0f);
+    Enemies::Enemy lockHolder = HuggerAtPlayer();
+    Enemies::Tick(lockHolder, 0, 0, 0);
+    Enemies::Enemy e = HuggerAtPlayer(900.0f);
     float highest = 0.0f;
     int airborne = 0;
     Step(e);
+    REQUIRE(e.leaping);
     while (e.leaping && airborne < 100)
     {
         highest = std::max(highest, e.y);
@@ -95,6 +114,7 @@ TEST_CASE("Enemies: the leap rises, falls under gravity and lands at floor + 0x2
         Step(e);
     }
     CHECK(!e.leaping);
+    CHECK(!e.engaged);                           // a hugger goes back to the chase
     CHECK(airborne > 15);
     CHECK(airborne < 30);
     CHECK(highest > 600.0f);
@@ -103,28 +123,23 @@ TEST_CASE("Enemies: the leap rises, falls under gravity and lands at floor + 0x2
 
 TEST_CASE("Enemies: the leap stops at the player's cell and its damage lands with it")
 {
-    // Type 3 never face-hugs: it leaps even from contact range.
+    // Type 3 never face-hugs: in contact range it always leaps.
     Enemies::ResetLevelState();
-    Enemies::Enemy near = HuggerAtPlayer(512.0f, 3);
-    Step(near);
-    CHECK(near.leaping);
-    CHECK(!near.pouncing);
-
-    Enemies::Enemy e = HuggerAtPlayer(1400.0f, 3);
-    int damage = 0, hits = 0, ticks = 0;
+    Enemies::Enemy e = HuggerAtPlayer(900.0f, 3);
     Step(e);
     REQUIRE(e.leaping);
+    CHECK(!e.pouncing);
+    int ticks = 0;
     while (e.leaping && ticks < 100)
     {
         CHECK_EQ(e.pendingDamage, 0);   // nothing while in the air
         Step(e);
         ++ticks;
     }
-    if (e.pendingDamage > 0) { damage = e.pendingDamage; ++hits; }
     CHECK(e.z >= 456.0f);               // stopped short of the player's cell
     CHECK(e.z < 600.0f);
-    CHECK_EQ(hits, 1);
-    CHECK_EQ(damage, EnemyBehaviour::AttackForSubtype(3).closeDamage);
+    CHECK_EQ(e.pendingDamage, EnemyBehaviour::AttackForSubtype(3).closeDamage);
+    CHECK(e.engaged);                   // type 3 stays in the attack state
 }
 
 TEST_CASE("Enemies: nothing attacks from the far bands")
@@ -140,7 +155,7 @@ TEST_CASE("Enemies: nothing attacks from the far bands")
 TEST_CASE("Enemies: an attack waits until the creature faces the player exactly")
 {
     Enemies::ResetLevelState();
-    Enemies::Enemy e = HuggerAtPlayer(1200.0f);
+    Enemies::Enemy e = HuggerAtPlayer(512.0f, 3);
     e.facing = 0x400;   // a quarter turn off
     Enemies::Tick(e, 0, 0, 0);
     CHECK(!e.leaping);
@@ -148,4 +163,13 @@ TEST_CASE("Enemies: an attack waits until the creature faces the player exactly"
     while (!e.leaping && ticks < 50) { Enemies::Tick(e, 0, 0, 0); ++ticks; }
     CHECK(e.leaping);
     CHECK(ticks > 5);
+}
+
+TEST_CASE("Enemies: the spawn clamps the near threshold and the attack cone")
+{
+    CHECK_EQ(EnemyBehaviour::ClampCone(0x80), 0x100);
+    CHECK_EQ(EnemyBehaviour::ClampCone(0x200), 0x200);
+    CHECK_EQ(EnemyBehaviour::ClampCone(0x900), 0x700);
+    CHECK(EnemyBehaviour::ClampsRecordFields(2));
+    CHECK(!EnemyBehaviour::ClampsRecordFields(0x11));
 }

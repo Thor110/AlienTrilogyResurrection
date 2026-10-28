@@ -230,3 +230,19 @@ TEST_CASE("PlayerHudState: floor hazards and pits")
     CHECK(hud.dead);
     CHECK_EQ(hud.armourItem, 100);
 }
+
+TEST_CASE("Particles: pistol rounds converge on the line of sight")
+{
+    // FUN_0002b534 starts a pistol round 0x28 to the side and yaws it 0x28
+    // back across, so it crosses the line of sight about 650 units out.
+    namespace P = ALTEngine::Screens::Particles;
+    P::Pool pool;
+    P::Particle* round = pool.SpawnProjectile(P::TYPE_PISTOL, 0, 0x300, 0, 0, 0, 0);
+    REQUIRE(round != nullptr);
+    const float side0 = round->x;          // yaw 0: the side axis is x
+    CHECK(std::fabs(side0) > 30.0f);
+    CHECK(round->vx * side0 < 0.0f);       // heading back toward the middle
+    const float crossing = -side0 / round->vx * std::fabs(round->vz);
+    CHECK(crossing > 550.0f);
+    CHECK(crossing < 750.0f);
+}

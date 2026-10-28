@@ -172,10 +172,12 @@ namespace ALTEngine::Formats
         uint16_t nearThreshold = 0;    // bytes 18,19
         uint16_t middleThreshold = 0;  // bytes 16,17
 
-        // Still unidentified. Bytes 10/11 read as a u16 are often exactly 512;
-        // bytes 12/13 range 1879..9061 and could be a sight or wake range.
+        // Bytes 10/11 are the attack cone half-width: FUN_0002e638 copies them
+        // to the creature's +0x40 (clamped 0x100..0x800), which FUN_00033a1c
+        // tests the bearing against. Usually exactly 512.
+        // Bytes 12/13 (1879..9061) go to +0x50, still unidentified.
         uint8_t unk4 = 0;              // byte 9, constant 0 across L111
-        uint16_t unknownA = 0;         // bytes 10,11
+        uint16_t unknownA = 0;         // bytes 10,11 - attack cone
         uint16_t unknownB = 0;         // bytes 12,13
         uint8_t unknown4 = 0;
         uint8_t unknown5 = 0;
