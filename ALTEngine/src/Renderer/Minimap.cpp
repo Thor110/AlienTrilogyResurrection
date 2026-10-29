@@ -46,15 +46,6 @@ namespace ALTEngine::Renderer
             Uint8 a = static_cast<Uint8>(c.a * alpha / 255);
             SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, a);
         }
-
-        // Kept for reference; superseded by IsCellBlocking below.
-        bool IsWallLegacy(const ALTEngine::Formats::CollisionNode& cell)
-        {
-            // Both bytes are confirmed to only ever be 255 or 0. Either one
-            // marking solid is enough - they agree in practice, and treating a
-            // disagreement as solid is the safe direction for a map.
-            return cell.unknown3 == 255 || cell.unknown4 == 255;
-        }
     }
 
     SDL_FRect DrawMinimap(SDL_Renderer* renderer,

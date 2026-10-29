@@ -59,7 +59,6 @@ add_library(ALTFormats STATIC
     src/Formats/OverrideImage.cpp
     src/Formats/ModelLoader.cpp
     src/Formats/LevelList.cpp
-    src/Tools/LevelLightScanner.cpp
     src/Formats/ObjLoader.cpp
     src/Formats/RenderMesh.cpp
     src/Formats/UvSeamScan.cpp
@@ -67,7 +66,6 @@ add_library(ALTFormats STATIC
     src/Formats/BinaryReadLE.h
     src/Formats/MissionText.cpp
     src/Formats/Obj3DTexture.cpp
-    src/Formats/LevelTransparency.cpp
     src/Formats/SpriteFrameDecompressor.cpp
     src/Formats/SpriteFrameDimensions.cpp
     src/Formats/SpriteFrameLoader.cpp

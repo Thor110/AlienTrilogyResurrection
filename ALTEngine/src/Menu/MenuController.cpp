@@ -627,7 +627,7 @@ namespace ALTEngine::Menu
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
         {
-            return { true, "" };
+            return { true, "", "" };
         }
         SDL_Renderer* renderer = app.Renderer();
 
@@ -804,7 +804,7 @@ namespace ALTEngine::Menu
             {
                 if (mainBg) { SDL_DestroyTexture(mainBg); }
                 if (optionsBg) { SDL_DestroyTexture(optionsBg); }
-                return { true, "" };
+                return { true, "", "" };
             }
         }
 

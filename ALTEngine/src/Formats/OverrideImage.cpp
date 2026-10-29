@@ -2,7 +2,15 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG   // .obj (models) get their own loader later - this file only ever needs PNG
+// stb_image defines helpers its own build options leave unused.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#endif
 #include "../../third_party/stb/stb_image.h"
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #include <cstdio>
 

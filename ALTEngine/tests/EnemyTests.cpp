@@ -269,6 +269,7 @@ TEST_CASE("Death: every creature's death animation exists and ends, so its body 
         const int animation = EnemyBehaviour::DeathAnimation(type);
         const int creature = AD::CreatureIndexForType(type);
         CHECK(creature >= 0);
+        if (creature < 0) { continue; }
         CHECK(animation < AD::CREATURES[creature].count);
         const auto seq = AS::Find(creature, animation);
         CHECK(seq.count > 0);

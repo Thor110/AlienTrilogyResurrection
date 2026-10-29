@@ -34,7 +34,6 @@ namespace ALTEngine::Renderer
         // empty part of the run was being left as whatever the frame showed
         // through, so a half-empty bar read as half-lit rather than half-spent.
         constexpr SDL_Color BAR_EMPTY{ 0, 0, 0, 255 };
-        constexpr SDL_Color BAR_FRAME{ 24, 24, 16, 255 };
 
         // The counters read GREY in the original, not white (Edward, 2026). The
         // glyphs on the sheet are near-white (200,200,200 is the second most
@@ -392,7 +391,7 @@ namespace ALTEngine::Renderer
     // `x` and `y` are DEVICE PIXELS, not HUD units - the caller advances the
     // cursor in pixels so the spacing matches the drawn glyph size.
     void HudRenderer::DrawDescriptor(SDL_Renderer* renderer, int descriptorIndex, float x, float y,
-                                     float scaleX, float scaleY) const
+                                     float /*scaleX*/, float scaleY) const
     {
         if (descriptorIndex < 0 || static_cast<size_t>(descriptorIndex) >= rects.size()) { return; }
         const ALTEngine::Formats::BxRectangle& r = rects[static_cast<size_t>(descriptorIndex)];

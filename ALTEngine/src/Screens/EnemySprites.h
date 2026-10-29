@@ -283,7 +283,6 @@ namespace ALTEngine::Screens
         }
 
         void Collect(const std::vector<Enemies::Enemy>& enemies,
-                     float cameraX, float cameraZ,
                      std::vector<ALTEngine::Renderer::PlacedSprite>& out) const
         {
             for (const auto& enemy : enemies)

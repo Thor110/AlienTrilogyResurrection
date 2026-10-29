@@ -451,9 +451,9 @@ namespace ALTEngine::Renderer
             size_t ibSize = renderMesh.indices.size() * sizeof(uint32_t);
             size_t texSize = static_cast<size_t>(tex.width) * tex.height * 4;
 
-            SDL_GPUBufferCreateInfo vbInfo{ SDL_GPU_BUFFERUSAGE_VERTEX, static_cast<Uint32>(vbSize) };
+            SDL_GPUBufferCreateInfo vbInfo{ SDL_GPU_BUFFERUSAGE_VERTEX, static_cast<Uint32>(vbSize), 0 };
             SDL_GPUBuffer* vertexBuffer = SDL_CreateGPUBuffer(device, &vbInfo);
-            SDL_GPUBufferCreateInfo ibInfo{ SDL_GPU_BUFFERUSAGE_INDEX, static_cast<Uint32>(ibSize) };
+            SDL_GPUBufferCreateInfo ibInfo{ SDL_GPU_BUFFERUSAGE_INDEX, static_cast<Uint32>(ibSize), 0 };
             SDL_GPUBuffer* indexBuffer = SDL_CreateGPUBuffer(device, &ibInfo);
 
             SDL_GPUTextureCreateInfo texInfo{};
@@ -1197,9 +1197,9 @@ namespace ALTEngine::Renderer
         for (size_t i = 0; i < pending.size(); i++)
         {
             auto& up = pending[i];
-            SDL_GPUBufferCreateInfo vbInfo{ SDL_GPU_BUFFERUSAGE_VERTEX, static_cast<Uint32>(up.vbSize) };
+            SDL_GPUBufferCreateInfo vbInfo{ SDL_GPU_BUFFERUSAGE_VERTEX, static_cast<Uint32>(up.vbSize), 0 };
             SDL_GPUBuffer* vertexBuffer = SDL_CreateGPUBuffer(device, &vbInfo);
-            SDL_GPUBufferCreateInfo ibInfo{ SDL_GPU_BUFFERUSAGE_INDEX, static_cast<Uint32>(up.ibSize) };
+            SDL_GPUBufferCreateInfo ibInfo{ SDL_GPU_BUFFERUSAGE_INDEX, static_cast<Uint32>(up.ibSize), 0 };
             SDL_GPUBuffer* indexBuffer = SDL_CreateGPUBuffer(device, &ibInfo);
 
             SDL_GPUTextureCreateInfo texInfo{};
@@ -1385,7 +1385,7 @@ namespace ALTEngine::Renderer
         // (Formats::ClassifyDrawRoutine), and the cut-out and see-through fills
         // skip texels whose raw palette word is 0. So the pages load keyed on
         // that, and the opaque faces get a copy with the alpha ignored. This
-        // replaces the per-level index table (LevelTransparency.h), which made
+        // replaced an old per-level index table (since removed), which made
         // every face on a page a cut-out.
 
         ALTEngine::Formats::LevelGeometry level;
@@ -2093,10 +2093,10 @@ namespace ALTEngine::Renderer
                     spriteBufferCapacity = drawable + 64;
 
                     SDL_GPUBufferCreateInfo vbInfo{ SDL_GPU_BUFFERUSAGE_VERTEX,
-                        static_cast<Uint32>(spriteBufferCapacity * 4 * sizeof(ALTEngine::Formats::RenderVertex)) };
+                        static_cast<Uint32>(spriteBufferCapacity * 4 * sizeof(ALTEngine::Formats::RenderVertex)), 0 };
                     spriteVertexBuffer = SDL_CreateGPUBuffer(device, &vbInfo);
                     SDL_GPUBufferCreateInfo ibInfo{ SDL_GPU_BUFFERUSAGE_INDEX,
-                        static_cast<Uint32>(spriteBufferCapacity * 6 * sizeof(uint32_t)) };
+                        static_cast<Uint32>(spriteBufferCapacity * 6 * sizeof(uint32_t)), 0 };
                     spriteIndexBuffer = SDL_CreateGPUBuffer(device, &ibInfo);
                 }
 

@@ -34,7 +34,7 @@ namespace ALTEngine::Formats
     //     C0. No external palette needed for these files.
     //   - The palette-index-0-is-transparent rule (confirmed universal
     //     for these files specifically, unlike level textures' more
-    //     complex per-level-ID rule - see LevelTransparency.h) - and
+    //     complex rule, the raw palette word 0) - and
     //     confirmed again here: C000's own color 0 decodes to black,
     //     consistent with that convention.
     //   - The override system, using Edward's own export naming

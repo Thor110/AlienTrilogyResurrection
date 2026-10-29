@@ -38,6 +38,7 @@
 #include "../Renderer/Minimap.h"
 #include "../Audio/MusicPlayer.h"
 #include "../Bootstrap/ModernSettings.h"
+#include "../Bootstrap/GameplaySettings.h"
 #include "../Renderer/ModelPreview.h"
 #include "../Formats/ModelIndices.h"
 #include "../Formats/ModelLoader.h"
@@ -236,22 +237,6 @@ namespace ALTEngine::Screens
             }
             return std::nullopt;
         }
-
-        void ComputeVertexBounds(const ALTEngine::Formats::LevelGeometry& level, float& outMinY, float& outCenterX, float& outCenterY, float& outCenterZ)
-        {
-            float minX = std::numeric_limits<float>::max(), maxX = std::numeric_limits<float>::lowest();
-            float minY = minX, maxY = maxX, minZ = minX, maxZ = maxX;
-            for (const auto& v : level.vertices)
-            {
-                minX = std::min(minX, static_cast<float>(v.x)); maxX = std::max(maxX, static_cast<float>(v.x));
-                minY = std::min(minY, static_cast<float>(v.y)); maxY = std::max(maxY, static_cast<float>(v.y));
-                minZ = std::min(minZ, static_cast<float>(v.z)); maxZ = std::max(maxZ, static_cast<float>(v.z));
-            }
-            outMinY = minY;
-            outCenterX = (minX + maxX) / 2.0f;
-            outCenterY = (minY + maxY) / 2.0f;
-            outCenterZ = (minZ + maxZ) / 2.0f;
-        }
     }
 
     GameplayResult GameplayScreen::Run(
@@ -445,6 +430,14 @@ namespace ALTEngine::Screens
         // waits for the next such tick rather than being lost.
         unsigned logicTick = 0;
         bool firePressPending = false;
+        // The weapon's own clock (Bootstrap::WeaponPacingSettings). The
+        // original fires and animates the weapon once per drawn frame, which
+        // its speed compensation does not make up for, so its rate of fire
+        // followed the machine's frame rate. Here a weapon pass comes once per
+        // weaponFrameSeconds of game time, whatever the port's frame rate.
+        double weaponClock = 0.0;
+        double weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings::DEFAULT
+            / ALTEngine::Screens::PlayerCamera::ORIGINAL_TIMER_HZ;
         // The same split on the world tick: doors and lifts run on every
         // tick, the lights, the HUD timers and the other cosmetic cadences on
         // alternate ones, as they did before the base tick doubled.
@@ -523,6 +516,8 @@ namespace ALTEngine::Screens
             saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
             ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
+            weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings(modernConfig).Get()
+                / ALTEngine::Screens::PlayerCamera::ORIGINAL_TIMER_HZ;
 
             // The cheat's own stored state, so it stays on across levels while
             // Enable Cheats is active.
@@ -1555,6 +1550,8 @@ namespace ALTEngine::Screens
                         saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
                         liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
                         ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
+                        weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings(modernConfig).Get()
+                            / ALTEngine::Screens::PlayerCamera::ORIGINAL_TIMER_HZ;
 
                         ModelRenderer::SetDrawDistanceFade(
                             !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance));
@@ -1731,6 +1728,13 @@ namespace ALTEngine::Screens
                     // The original's alternate pass (see logicTick).
                     const bool halfPass = ((logicTick++ & 1u) == 0) || speedCompensationOff;
                     const bool creaturePass = halfPass || fasterXenomorphs;
+                    // The original's last pass, for the weapon: firing, the
+                    // switch and the animation. A frame shorter than a tick
+                    // still gets one weapon pass a tick, as the original's
+                    // fastest frame still had one pass.
+                    weaponClock += playerTickLength;
+                    const bool weaponPass = weaponClock >= weaponFrameSeconds;
+                    if (weaponPass) { weaponClock = std::min(weaponClock - weaponFrameSeconds, weaponFrameSeconds); }
 
                     prevCamX = camera.x;
                     prevCamZ = camera.z;
@@ -1939,7 +1943,7 @@ namespace ALTEngine::Screens
 
                     // The swap happens at the bottom of the lower, out of sight.
                     // On the weapon's own (drawing-pass) rate, like its animation.
-                    const int swapTo = halfPass ? weaponSwitch.Tick() : -1;
+                    const int swapTo = weaponPass ? weaponSwitch.Tick() : -1;
                     if (swapTo >= 0)
                     {
                         const int equipped = inventory.Equip(swapTo);
@@ -1957,12 +1961,12 @@ namespace ALTEngine::Screens
                     weaponRuntime.weapon = hudState.currentWeapon;
                     weaponRuntime.stateChanged = false;
 
-                    // Firing happens on the alternate pass only (FUN_0003d5b0
-                    // runs on the drawing pass); a press in between is kept.
+                    // Firing happens on the weapon pass only (FUN_0003d5b0 runs
+                    // on the drawing pass); a press in between is kept.
                     if (firePressed) { firePressPending = true; }
                     const bool onPress = WS::Def(weaponRuntime.weapon).primary == WS::FIRE_ON_PRESS;
-                    const bool triggerActive = halfPass && (onPress ? firePressPending : fireHeld);
-                    if (halfPass) { firePressPending = false; }
+                    const bool triggerActive = weaponPass && (onPress ? firePressPending : fireHeld);
+                    if (weaponPass) { firePressPending = false; }
 
                     if (triggerActive && WS::TryPrimaryFire(weaponRuntime, inventory))
                     {
@@ -2193,7 +2197,7 @@ namespace ALTEngine::Screens
                     }
 
                     weaponView.SetCameraDip(playerCam.bobOffsetY * 64);
-                    if (halfPass && weaponView.Tick())
+                    if (weaponPass && weaponView.Tick())
                     {
                         // The sequence ending is what returns the weapon to idle
                         // (FUN_0003e93c), except from the latched empty states.
@@ -3757,7 +3761,7 @@ namespace ALTEngine::Screens
                         placedSprites.push_back(spark);
                     }
                     explosions.Collect(placedSprites, camera.x, camera.y, camera.z, true);
-                    enemySprites.Collect(enemies, camera.x, camera.z, placedSprites);
+                    enemySprites.Collect(enemies, placedSprites);
                     shatter.Collect(placedSprites, camera.x, camera.z);
                 }
 
