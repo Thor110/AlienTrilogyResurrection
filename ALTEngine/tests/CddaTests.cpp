@@ -59,6 +59,32 @@ TEST_CASE("CD audio: an AIFF track becomes little-endian PCM")
     CHECK(CD::AiffToPcm({ 'R', 'I', 'F', 'F' }).empty());
 }
 
+TEST_CASE("CD audio: a track as macOS's cddafs serves it converts unchanged")
+{
+    // cddafs's own header (AIFFSupport.c BuildCDAIFFHeader, packed to 2):
+    // AIFF-C with a version chunk, a 24-byte COMM ending in compression
+    // 'sowt' (little-endian, the sectors as read), and the sound data
+    // starting 2280 bytes into SSND, so a track's audio begins at the
+    // second 2352-byte block of the file.
+    const std::vector<uint8_t> audio = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88 };
+    std::vector<uint8_t> f;
+    const uint32_t offset = 2352 - 72;
+    const uint32_t ssndSize = 8 + static_cast<uint32_t>(audio.size()) + offset;
+    Tag(f, "FORM"); Be32(f, 4 + 12 + 32 + 8 + ssndSize); Tag(f, "AIFC");
+    Tag(f, "FVER"); Be32(f, 4); Be32(f, 0xA2805140);
+    Tag(f, "COMM"); Be32(f, 24);
+    Be16(f, 2); Be32(f, static_cast<uint32_t>(audio.size() / 4)); Be16(f, 16);
+    const uint8_t rate[10] = { 0x40, 0x0e, 0xac, 0x44, 0, 0, 0, 0, 0, 0 };
+    f.insert(f.end(), rate, rate + 10);
+    Tag(f, "sowt"); f.push_back(0); f.push_back(0);   // empty Pascal name, padded
+    Tag(f, "SSND"); Be32(f, ssndSize); Be32(f, offset); Be32(f, 0);
+    f.insert(f.end(), offset, 0);
+    f.insert(f.end(), audio.begin(), audio.end());
+    REQUIRE(f.size() == 2352u + audio.size());
+
+    CHECK(CD::AiffToPcm(f) == audio);   // already little-endian: not swapped
+}
+
 TEST_CASE("CD audio: the WAV header is the CD's format")
 {
     const auto path = std::filesystem::temp_directory_path() / "alt_cdda_test.wav";

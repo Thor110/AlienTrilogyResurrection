@@ -155,6 +155,8 @@ namespace ALTEngine::Bootstrap
         case StringId::DescFasterEnemies: return "DescFasterEnemies";
         case StringId::SpeedCompensation: return "SpeedCompensation";
         case StringId::DescSpeedCompensation: return "DescSpeedCompensation";
+        case StringId::SaveAnywhere: return "SaveAnywhere";
+        case StringId::DescSaveAnywhere: return "DescSaveAnywhere";
         case StringId::GsOptions: return "GsOptions";
         case StringId::GsRedefineKeyboard: return "GsRedefineKeyboard";
         case StringId::GsRedefineMouse: return "GsRedefineMouse";
@@ -484,6 +486,8 @@ namespace ALTEngine::Bootstrap
         if (name == "DescFasterEnemies") { return StringId::DescFasterEnemies; }
         if (name == "SpeedCompensation") { return StringId::SpeedCompensation; }
         if (name == "DescSpeedCompensation") { return StringId::DescSpeedCompensation; }
+        if (name == "SaveAnywhere") { return StringId::SaveAnywhere; }
+        if (name == "DescSaveAnywhere") { return StringId::DescSaveAnywhere; }
         if (name == "GsOptions") { return StringId::GsOptions; }
         if (name == "GsRedefineKeyboard") { return StringId::GsRedefineKeyboard; }
         if (name == "GsRedefineMouse") { return StringId::GsRedefineMouse; }

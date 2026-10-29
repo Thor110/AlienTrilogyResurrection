@@ -21,7 +21,7 @@ Details for each item are in the numbered sections below.
 | 5 | Flame pre-steps damaging objects | yes | done |
 | 6 | Player Jumping option | modern | done (a hop; doesn't reach higher ledges) |
 | 7a | Secrets counter on the assessment screen | yes | open |
-| 7b | Mid-level saves | modern | open |
+| 7b | Mid-level saves | modern | done: Modern "Save Anywhere" (untested in play) |
 | 7c | Death clip choice | yes | done |
 | 7d | Field renames in `LevelLoader.h` | tidy-up | done for lifts, pickups, crates and monsters |
 | 7e | Direct-to-window rendering | needs real hardware | open |
@@ -132,11 +132,16 @@ Status in the port:
 
 - **Assessment screen:** the "secrets" figure is always 0, because nothing tracks secrets.
   - **Found so far:** two level counters that only ever count up. `DAT_000b0b28` counts doors activated for the first time (`FUN_00029560` / `FUN_00029610`, door flag 0x80), and `DAT_000b0b2a` counts lifts run for the first time (lift flag 0x80). Neither has a direct reader, so the assessment screen probably reads them as a block. Its code is the next thing to read.
-- **Saves:** they checkpoint the start of a level only. Mid-level state isn't serialised.
+- **Saves:** done as the Modern option **Save Anywhere** (`Screens/LevelSnapshot.h`). Off, Save Game checkpoints the start of the level, as before. On, opening the pause menu captures the level into the checkpoint's `snapshot`, which loading puts back over the freshly built level:
+  - **Kept:** the whole cell grid (16 bytes a cell, so doors, lifts, marks and anything a trigger rewrote), each door's and lift's progress, every trigger's uses, every pickup (taken, still in its crate, waiting on a trigger, where it lies), every crate and barrel (health, broken), the switches, the minimap, the player (position, facing, look, health, armour, items, weapon) and every creature (position, facing, health, dead or alive, alerted, an egg's, vent's or colonist's own state, an unscripted creature's frame).
+  - **Not kept:** rounds and other particles in flight, explosions, debris, sounds, a creature's attack, leap, flinch or face hug in progress (it comes back idle and decides again), and the level's light flicker.
+  - Each piece is only restored when it matches the level as built (the same number of doors, creatures and so on), so a save from an edited level can't put anything out of range.
 - **Death clip choice:** done. The causes are the creature attack's, by type (`FUN_00033ff8`, tables `0x33f60` / `0x33fac` by type - 1): huggers and bursters 4 (DEATH1), bambi and dog 1 (DEATH5), warrior drone 0 (DEATH2), queen 2 (DEATH3). Cause 3 is a creature's projectile (particle type 5), and 5 a blast or a vent. The port passed 4 for every creature. Types 8 and up have no arm there at all.
 - **Field names:** renamed. Pickups: `triggerCount` / `triggerThreshold`. Crates: `flags` / `healthDiv16`. Lifts: `width`, `depth`, `low`, `travel`, `flags`, `autoDwell`, `dwell`, `threshold`, `counter`, `model`. Monsters: `coneHalfWidth`, `wakeRange`, `speedHigh`. A monster's byte 6 keeps the name `drop`, with a note that its meaning depends on the type.
 - **Rendering:** each frame is still copied GPU → CPU → GPU (`ModelRenderer::RenderLevelToRgba`). Drawing straight to the window would remove a full-frame stall, and needs testing on real hardware.
 - **Multiplayer:** the menus exist, but there is no networking.
+
+- **CD music on Linux and macOS:** done (`Formats/CddaRipper.cpp`). Linux reads the drive the disc is mounted from (`/proc/mounts`) with `CDROMREADTOCHDR` / `CDROMREADTOCENTRY` / `CDROMREADAUDIO`. macOS converts the tracks its own `cddafs` mounts; failing that it reads `/dev/rdiskN` with `DKIOCCDREADTOC` / `DKIOCCDREAD`, which normally only root can open. Checked against Apple's cddafs source: it mounts any disc with an audio track (this disc included), names each file after its real track number (`2 Audio Track.aiff`), and serves AIFF-C `sowt`, already little-endian. The drive code is untested on a real drive on all three systems; macOS's compiles in CI.
 
 ## 8. Reported from play, after the rest of the list
 

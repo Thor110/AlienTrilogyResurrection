@@ -42,6 +42,14 @@ namespace ALTEngine::Screens
     void SetCheckpoint(const ALTEngine::Game::SaveData& checkpoint);
     void ClearCheckpoint();
     bool HasCheckpoint();
+    // The checkpoint as it stands, so a mid-level save can be laid over it.
+    std::optional<ALTEngine::Game::SaveData> CurrentCheckpoint();
+
+    // A mid-level save being loaded (Modern: Save Anywhere): whoever loads the
+    // save leaves its snapshot here, and the level takes it once it has been
+    // built - if it is the same level. Taking it clears it.
+    void SetPendingRestore(const std::string& levelDigits, const std::string& snapshot);
+    std::string TakePendingRestore(const std::string& levelDigits);
 
     // Writes the checkpoint to `slot` (1-10). False if there is none or the
     // write failed.

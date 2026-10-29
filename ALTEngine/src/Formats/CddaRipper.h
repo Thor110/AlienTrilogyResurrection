@@ -73,9 +73,10 @@ namespace ALTEngine::Formats
         // (the Red Book format), so a WAV is the 44-byte RIFF header and them.
         void WriteWav(const std::filesystem::path& outputPath, const std::vector<uint8_t>& pcm);
 
-        // An AIFF's sound data as little-endian 16-bit PCM, if it is the CD's
-        // own format (16-bit, 2 channels, 44100 Hz) - what macOS's cddafs
-        // serves for an audio CD's tracks. Empty if it isn't.
+        // An AIFF's (or uncompressed AIFF-C's) sound data as little-endian
+        // 16-bit PCM, if it is the CD's own format (16-bit, 2 channels,
+        // 44100 Hz). macOS's cddafs serves an audio CD's tracks as AIFF-C
+        // "sowt", already little-endian. Empty if it isn't one of these.
         std::vector<uint8_t> AiffToPcm(const std::vector<uint8_t>& aiff);
 
         // The device a mount point comes from, from a mount table in

@@ -114,9 +114,10 @@ if (ALTENGINE_BUILD_TESTS)
         tests/CreatureTaskTests.cpp
         tests/PlayerMoverTests.cpp
         tests/CddaTests.cpp
+        tests/LevelSnapshotTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
-    target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats alt_warnings)
+    target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats alt_warnings nlohmann_json::nlohmann_json)
     target_compile_definitions(ALTEngineTests PRIVATE
         ALT_TEST_DEMO_ROOT="${CMAKE_SOURCE_DIR}/../Notes/repack-disc-comparison/DEMO"
         ALT_TEST_DATA_ROOT="${CMAKE_SOURCE_DIR}/data")
@@ -341,6 +342,7 @@ target_link_libraries(ALTEngine PRIVATE ALTGame ALTFormats)
 target_link_libraries(ALTEngine PRIVATE SDL3::SDL3)
 target_link_libraries(ALTEngine PRIVATE PkgConfig::FFMPEG)
 target_link_libraries(ALTEngine PRIVATE alt_warnings)
+target_link_libraries(ALTEngine PRIVATE nlohmann_json::nlohmann_json)
 
 if (WIN32 AND DXC_EXECUTABLE)
     add_dependencies(ALTEngine CompileModelShaders)

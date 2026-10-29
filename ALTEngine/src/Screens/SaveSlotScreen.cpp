@@ -1,4 +1,6 @@
 #include "SaveSlotScreen.h"
+
+#include <utility>
 #include "MenuBackground.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Bootstrap/AppWindow.h"
@@ -40,6 +42,12 @@ namespace ALTEngine::Screens
             static std::optional<ALTEngine::Game::SaveData> checkpoint;
             return checkpoint;
         }
+
+        std::pair<std::string, std::string>& PendingRestoreStorage()
+        {
+            static std::pair<std::string, std::string> pending;   // level, snapshot
+            return pending;
+        }
     }
 
     void SetSaveDirectory(const std::filesystem::path& directory) { SaveDirectoryStorage() = directory; }
@@ -59,6 +67,20 @@ namespace ALTEngine::Screens
     void SetCheckpoint(const ALTEngine::Game::SaveData& checkpoint) { CheckpointStorage() = checkpoint; }
     void ClearCheckpoint() { CheckpointStorage().reset(); }
     bool HasCheckpoint() { return CheckpointStorage().has_value(); }
+    std::optional<ALTEngine::Game::SaveData> CurrentCheckpoint() { return CheckpointStorage(); }
+
+    void SetPendingRestore(const std::string& levelDigits, const std::string& snapshot)
+    {
+        PendingRestoreStorage() = { levelDigits, snapshot };
+    }
+
+    std::string TakePendingRestore(const std::string& levelDigits)
+    {
+        auto& pending = PendingRestoreStorage();
+        std::string snapshot = pending.first == levelDigits ? pending.second : std::string{};
+        pending = {};
+        return snapshot;
+    }
 
     bool SaveCheckpointToSlot(int slot)
     {

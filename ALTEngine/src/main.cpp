@@ -378,6 +378,7 @@ int main(int, char**)
                 difficultySettings.Set(static_cast<Difficulty>(save->difficulty));
                 playerInventory = save->inventory;
                 digits = save->levelDigits;
+                SetPendingRestore(save->levelDigits, save->snapshot);
                 continue;
             }
             case GameplayOutcome::LevelComplete:
@@ -514,6 +515,7 @@ int main(int, char**)
                 {
                     difficultySettings.Set(static_cast<Difficulty>(save->difficulty));
                     playerInventory = save->inventory;
+                    SetPendingRestore(save->levelDigits, save->snapshot);
                     if (playCampaign(save->levelDigits) == CampaignEnd::WindowClosed) { return closeAndExit(); }
                 }
                 else

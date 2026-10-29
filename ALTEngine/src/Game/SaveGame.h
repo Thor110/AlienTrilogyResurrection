@@ -11,15 +11,19 @@ namespace ALTEngine::Game
 {
     // A saved game is a checkpoint at the START of a level: which level, at
     // what difficulty, carrying what. That matches where the original offers to
-    // save (the end-of-level prompt, before the next mission), and it is all
-    // the engine can restore today - mid-level state (enemies, doors, crates)
-    // is not serialised.
+    // save (the end-of-level prompt, before the next mission). With the Modern
+    // "Save Anywhere" option it also carries the level as it stood
+    // (`snapshot`, Screens/LevelSnapshot.h), and loading puts that back.
     struct SaveData
     {
         std::string name;          // shown in the slot list
         std::string levelDigits;   // "112"
         int difficulty = 0;        // Bootstrap::Difficulty as an int
         Screens::PlayerInventoryState inventory;
+        // The level's state as JSON text, for a mid-level save; empty for a
+        // checkpoint at the level's start. Kept as text so this header needs
+        // no JSON library.
+        std::string snapshot;
     };
 
     namespace SaveGame

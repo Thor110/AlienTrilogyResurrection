@@ -171,6 +171,8 @@ namespace ALTEngine::Bootstrap
         DescFasterEnemies,
         SpeedCompensation,
         DescSpeedCompensation,
+        SaveAnywhere,
+        DescSaveAnywhere,
 
 
         // The original game's own text, extracted from LANGUAGE/*.BIN. The

@@ -74,6 +74,11 @@ namespace ALTEngine::Bootstrap
         // creatures' 34.87. Off, the port runs as -so does: everything at
         // 34.87 Hz (Edward, 2026: on, "everything is insanely fast").
         SpeedCompensation,
+
+        // Save Game in the pause menu saves the level as it stands - the
+        // player, creatures, doors, lifts, crates and pickups - instead of a
+        // checkpoint at its start. The original only saves between levels.
+        SaveAnywhere,
     };
 
     class ModernSettings
@@ -113,6 +118,7 @@ namespace ALTEngine::Bootstrap
             ModernFeature::EnableCheats,
             ModernFeature::FasterEnemies,
             ModernFeature::SpeedCompensation,
+            ModernFeature::SaveAnywhere,
         };
 
         // The individual toggle's own stored value, ignoring the mode.
@@ -210,6 +216,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::EnableCheats: return "Enable Cheats";
             case ModernFeature::FasterEnemies: return "Faster Enemies";
             case ModernFeature::SpeedCompensation: return "Speed Compensation";
+            case ModernFeature::SaveAnywhere: return "Save Anywhere";
             }
             return "";
         }
@@ -230,6 +237,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::EnableCheats: return "ModernEnableCheats";
             case ModernFeature::FasterEnemies: return "ModernFasterEnemies";
             case ModernFeature::SpeedCompensation: return "ModernSpeedCompensation";
+            case ModernFeature::SaveAnywhere: return "ModernSaveAnywhere";
             }
             return "ModernUnknown";
         }

@@ -331,6 +331,7 @@ namespace ALTEngine::Formats
             if (!aifc && std::memcmp(aiff.data() + 8, "AIFF", 4) != 0) { return {}; }
 
             bool formatOk = false;
+            bool littleEndian = false;
             const uint8_t* sound = nullptr;
             size_t soundSize = 0;
             size_t pos = 12;
@@ -351,9 +352,18 @@ namespace ALTEngine::Formats
                     uint64_t mantissa = 0;
                     for (int i = 0; i < 8; ++i) { mantissa = (mantissa << 8) | c[10 + i]; }
                     const uint64_t rate = (exponent >= 0 && exponent < 64) ? (mantissa >> (63 - exponent)) : 0;
-                    bool uncompressed = true;
-                    if (aifc && size >= 22) { uncompressed = std::memcmp(c + 18, "NONE", 4) == 0; }
-                    formatOk = channels == 2 && bits == 16 && rate == 44100 && uncompressed;
+                    // AIFF is big-endian. AIFF-C names its encoding: "NONE"
+                    // is big-endian too, and "sowt" little-endian - which is
+                    // what macOS's cddafs serves, the sectors as they come
+                    // off the disc (its AIFFSupport.c).
+                    bool known = true;
+                    if (aifc)
+                    {
+                        known = false;
+                        if (size >= 22 && std::memcmp(c + 18, "NONE", 4) == 0) { known = true; }
+                        if (size >= 22 && std::memcmp(c + 18, "sowt", 4) == 0) { known = true; littleEndian = true; }
+                    }
+                    formatOk = channels == 2 && bits == 16 && rate == 44100 && known;
                 }
                 else if (std::memcmp(chunk, "SSND", 4) == 0 && size >= 8)
                 {
@@ -368,9 +378,12 @@ namespace ALTEngine::Formats
             }
             if (!formatOk || !sound) { return {}; }
 
-            // AIFF is big-endian; a WAV little-endian.
+            // A WAV is little-endian.
             std::vector<uint8_t> pcm(sound, sound + (soundSize & ~size_t(1)));
-            for (size_t i = 0; i + 1 < pcm.size(); i += 2) { std::swap(pcm[i], pcm[i + 1]); }
+            if (!littleEndian)
+            {
+                for (size_t i = 0; i + 1 < pcm.size(); i += 2) { std::swap(pcm[i], pcm[i + 1]); }
+            }
             return pcm;
         }
 
@@ -562,16 +575,15 @@ namespace ALTEngine::Formats
 
 #if defined(__APPLE__)
         // The tracks macOS has already mounted as AIFF files, which needs no
-        // access to the raw device. On this disc track 1 is the data, so if
-        // the files are numbered from 1 they count the audio tracks alone,
-        // and track N is file N - 1.
+        // access to the raw device (normally root's alone). cddafs mounts any
+        // disc with an audio track, this one's mixed data and audio included,
+        // and names each file after its real track number ("2 Audio
+        // Track.aiff" is track 2: cddafs_util.cpp's GetTrackData).
         const auto aiffTracks = FindAudioCdTracks();
         if (!aiffTracks.empty())
         {
-            const int shift = aiffTracks.begin()->first == 1 ? 1 : 0;
-            for (const auto& [number, path] : aiffTracks)
+            for (const auto& [trackNumber, path] : aiffTracks)
             {
-                const int trackNumber = number + shift;
                 const std::vector<uint8_t> pcm = CddaDetail::AiffToPcm(ReadWholeFile(path));
                 if (pcm.empty())
                 {

@@ -47,6 +47,12 @@ namespace ALTEngine::Game::SaveGame
             } },
         };
 
+        if (!data.snapshot.empty())
+        {
+            try { root["snapshot"] = nlohmann::json::parse(data.snapshot); }
+            catch (const std::exception&) { return false; }
+        }
+
         std::error_code ec;
         std::filesystem::create_directories(directory, ec);
 
@@ -109,6 +115,10 @@ namespace ALTEngine::Game::SaveGame
             data.inventory.hasAutoMapper = inv.value("autoMapper", false);
             data.inventory.hasShoulderLamp = inv.value("shoulderLamp", false);
             data.inventory.batteries = inv.value("batteries", 0);
+            if (root.contains("snapshot") && root["snapshot"].is_object())
+            {
+                data.snapshot = root["snapshot"].dump();
+            }
             return data;
         }
         catch (const std::exception&)

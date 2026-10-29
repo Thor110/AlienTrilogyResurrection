@@ -107,6 +107,11 @@ namespace ALTEngine::Game
 
             int UsesRemaining(int triggerId) const;
 
+            // Every trigger's uses left, for a mid-level save, and putting
+            // them back. A list of another length (another level) is ignored.
+            const std::vector<uint8_t>& Uses() const { return uses_; }
+            void RestoreUses(const std::vector<uint8_t>& uses) { if (uses.size() == uses_.size()) { uses_ = uses; } }
+
             // FUN_00040e2c: a command chain run straight from its first
             // command, with no trigger in front of it - no activation mask and
             // no uses. A dying queen runs the one its record's byte 6 names.

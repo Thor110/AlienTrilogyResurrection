@@ -25,6 +25,9 @@
 #include "../Game/PlayerMover.h"
 #include "../Game/Triggers.h"
 #include "SaveSlotScreen.h"
+#include "LevelSnapshot.h"
+
+#include <nlohmann/json.hpp>
 #include "EnemySprites.h"
 #include "DamageSystem.h"
 #include "../Audio/SfxPlayer.h"
@@ -414,6 +417,9 @@ namespace ALTEngine::Screens
         // base tick is half as fast. Modern: Speed Compensation turns it off,
         // for the original's default (the player at twice the creatures' rate).
         bool speedCompensationOff = true;
+        // Modern: Save Anywhere. Opening the pause menu makes its Save Game
+        // keep the level as it stands (Screens/LevelSnapshot.h).
+        bool saveAnywhere = false;
         // Knockback (Game::PlayerMover): its strength and heading.
         int knockbackStrength = 0;
         int knockbackYaw = 0;
@@ -489,6 +495,7 @@ namespace ALTEngine::Screens
             playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
             fasterEnemies = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterEnemies);
             speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
+            saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
             ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
 
@@ -546,6 +553,150 @@ namespace ALTEngine::Screens
         // Modern: draw tracers along their real direction of travel rather than
         // as the original's flat sideways streak.
 
+
+        // ---- Modern: Save Anywhere --------------------------------------------
+        // The level as it stands, as the save file's snapshot, and putting one
+        // back over the level as loaded. The pieces are LevelSnapshot's; this
+        // is what puts them together.
+        auto hexBytes = [](const std::vector<uint8_t>& bytes) {
+            static const char* hexDigits = "0123456789abcdef";
+            std::string out;
+            for (uint8_t b : bytes) { out.push_back(hexDigits[b >> 4]); out.push_back(hexDigits[b & 15]); }
+            return out;
+        };
+        auto bytesFromHex = [](const std::string& hex) {
+            std::vector<uint8_t> out;
+            auto nibble = [](char c) { return c <= '9' ? c - '0' : (c | 0x20) - 'a' + 10; };
+            for (size_t i = 0; i + 1 < hex.size(); i += 2)
+            {
+                out.push_back(static_cast<uint8_t>(nibble(hex[i]) << 4 | nibble(hex[i + 1])));
+            }
+            return out;
+        };
+
+        auto captureSnapshot = [&]() -> std::string {
+            namespace LS = ALTEngine::Screens::LevelSnapshot;
+            nlohmann::json j;
+            j["version"] = LS::VERSION;
+            j["level"] = digits;
+            j["grid"] = LS::GridToHex(level.collisionGrid);
+            j["player"] = { { "x", camera.x }, { "z", camera.z }, { "weapon", selectedWeapon },
+                            { "camera", LS::SaveCamera(playerCam) }, { "hud", LS::SaveHud(hudState) } };
+            j["doors"] = nlohmann::json::array();
+            for (const auto& d : doorStates) { j["doors"].push_back(LS::SaveDoor(d)); }
+            j["lifts"] = nlohmann::json::array();
+            for (const auto& l : lifts) { j["lifts"].push_back(LS::SaveLift(l)); }
+            j["triggers"] = hexBytes(triggers.Uses());
+            j["pickups"] = nlohmann::json::array();
+            for (const auto& live : livePickups)
+            {
+                const bool placed = live.placedIndex < placedObjects.size();
+                j["pickups"].push_back({ { "collected", live.collected }, { "contained", live.contained },
+                                         { "waiting", live.waitingOnTrigger }, { "count", live.triggerCount },
+                                         { "cell", live.cellIndex },
+                                         { "x", placed ? placedObjects[live.placedIndex].x : 0.0f },
+                                         { "y", placed ? placedObjects[live.placedIndex].y : 0.0f },
+                                         { "z", placed ? placedObjects[live.placedIndex].z : 0.0f } });
+            }
+            j["targets"] = nlohmann::json::array();
+            for (const auto& t : damageTargets) { j["targets"].push_back(LS::SaveTarget(t)); }
+            j["objects"] = hexBytes(objectState);
+            j["enemies"] = nlohmann::json::array();
+            for (const auto& e : enemies) { j["enemies"].push_back(LS::SaveEnemy(e)); }
+            j["minimap"] = hexBytes(minimapVisited);
+            return j.dump();
+        };
+
+        // Over the level as just built. Each piece is only put back if it
+        // matches what was built (the same number of doors, creatures, ...),
+        // so a save from a changed level file can't put anything out of range.
+        auto applySnapshot = [&](const std::string& text) -> bool {
+            namespace LS = ALTEngine::Screens::LevelSnapshot;
+            namespace PC = ALTEngine::Screens::PlayerCamera;
+            nlohmann::json j;
+            try { j = nlohmann::json::parse(text); }
+            catch (const std::exception&) { return false; }
+            if (j.value("version", 0) != LS::VERSION || j.value("level", std::string{}) != digits) { return false; }
+            try
+            {
+                LS::GridFromHex(level.collisionGrid, j.value("grid", std::string{}));
+
+                const auto& d = j["doors"];
+                if (d.is_array() && d.size() == doorStates.size())
+                {
+                    for (size_t i = 0; i < d.size(); ++i) { LS::LoadDoor(doorStates[i], d[i]); }
+                }
+                const auto& l = j["lifts"];
+                if (l.is_array() && l.size() == lifts.size())
+                {
+                    for (size_t i = 0; i < l.size(); ++i) { LS::LoadLift(lifts[i], l[i]); }
+                }
+                triggers.RestoreUses(bytesFromHex(j.value("triggers", std::string{})));
+
+                const auto& p = j["pickups"];
+                if (p.is_array() && p.size() == livePickups.size())
+                {
+                    for (size_t i = 0; i < p.size(); ++i)
+                    {
+                        auto& live = livePickups[i];
+                        live.collected = p[i].value("collected", live.collected);
+                        live.contained = p[i].value("contained", live.contained);
+                        live.waitingOnTrigger = p[i].value("waiting", live.waitingOnTrigger);
+                        live.triggerCount = p[i].value("count", live.triggerCount);
+                        live.cellIndex = p[i].value("cell", live.cellIndex);
+                        live.falling = false;
+                        live.vx = live.vy = live.vz = 0.0f;
+                        if (live.placedIndex < placedObjects.size())
+                        {
+                            auto& placed = placedObjects[live.placedIndex];
+                            placed.x = p[i].value("x", placed.x);
+                            placed.y = p[i].value("y", placed.y);
+                            placed.z = p[i].value("z", placed.z);
+                            placed.visible = !live.collected && !live.contained && !live.waitingOnTrigger;
+                        }
+                    }
+                }
+                const auto& t = j["targets"];
+                if (t.is_array() && t.size() == damageTargets.size())
+                {
+                    for (size_t i = 0; i < t.size(); ++i)
+                    {
+                        auto& target = damageTargets[i];
+                        LS::LoadTarget(target, t[i]);
+                        if (target.destroyed && target.placedObjectIndex >= 0
+                            && target.placedObjectIndex < static_cast<int>(placedObjects.size()))
+                        {
+                            placedObjects[static_cast<size_t>(target.placedObjectIndex)].visible = false;
+                        }
+                    }
+                }
+                const auto objects = bytesFromHex(j.value("objects", std::string{}));
+                if (objects.size() == objectState.size()) { objectState = objects; }
+
+                const auto& e = j["enemies"];
+                if (e.is_array() && e.size() == enemies.size())
+                {
+                    for (size_t i = 0; i < e.size(); ++i) { LS::LoadEnemy(enemies[i], e[i]); }
+                }
+                minimapVisited = bytesFromHex(j.value("minimap", std::string{}));
+
+                const auto& player = j["player"];
+                camera.x = player.value("x", camera.x);
+                camera.z = player.value("z", camera.z);
+                LS::LoadCamera(playerCam, player["camera"]);
+                camera.yaw = PC::ToRadians(playerCam.yaw);
+                playerCamSeeded = true;
+                prevCamValid = false;
+                LS::LoadHud(hudState, player["hud"]);
+                const int weapon = player.value("weapon", selectedWeapon);
+                if (inventory.Equip(weapon) >= 0) { selectedWeapon = weapon; }
+            }
+            catch (const std::exception& ex)
+            {
+                SDL_Log("GameplayScreen: the saved level couldn't be put back fully: %s", ex.what());
+            }
+            return true;
+        };
 
         if (mapPath.has_value() && gfxPath.has_value())
         {
@@ -1118,6 +1269,13 @@ namespace ALTEngine::Screens
                             checkpoint.inventory = inventory;
                             SetCheckpoint(checkpoint);
                         }
+                        // A mid-level save being loaded: the level as it was,
+                        // over the level as built.
+                        if (const std::string saved = TakePendingRestore(digits); !saved.empty())
+                        {
+                            SDL_Log("GameplayScreen: restoring the saved level state: %s",
+                                    applySnapshot(saved) ? "done" : "not this level's, ignored");
+                        }
                         ALTEngine::Screens::Enemies::ResetLevelState();
                         flowField.Reset(level);
                     }
@@ -1253,6 +1411,19 @@ namespace ALTEngine::Screens
                 else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == keyBindings.GetKey(ALTEngine::Bootstrap::InputAction::Pause))
                 {
                     SDL_SetWindowRelativeMouseMode(app.Window(), false);
+                    // Modern: Save Anywhere - the pause menu's Save Game keeps
+                    // the level as it stands now.
+                    if (saveAnywhere && levelReady && !playerDead)
+                    {
+                        ALTEngine::Game::SaveData checkpoint;
+                        if (auto current = CurrentCheckpoint()) { checkpoint = *current; }
+                        checkpoint.name = ALTEngine::Game::SaveGame::DefaultName(digits);
+                        checkpoint.levelDigits = digits;
+                        checkpoint.difficulty = static_cast<int>(difficultySettings.Get());
+                        checkpoint.inventory = inventory;
+                        checkpoint.snapshot = captureSnapshot();
+                        SetCheckpoint(checkpoint);
+                    }
                     PauseMenuResult pauseResult = PauseMenuScreen::Run(cdDirectory, language, missionLevelCode, inventory, audioSettings,
                                                                         renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings, keyBindings,
                                                                       levelReady ? &level : nullptr,
@@ -1272,6 +1443,7 @@ namespace ALTEngine::Screens
                         playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
                         fasterEnemies = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterEnemies);
                         speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
+                        saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
                         liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
                         ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
 

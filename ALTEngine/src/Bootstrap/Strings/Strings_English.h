@@ -158,6 +158,8 @@ namespace ALTEngine::Bootstrap
             "Creatures move at the player's pace, not the original's half pace",
             "Speed Compensation",
             "The original's default timing: you, doors and lifts at twice the creatures' rate",
+            "Save Anywhere",
+            "Save Game keeps the level as it stands, not just its start",
         };
         return table;
     }
