@@ -648,21 +648,21 @@ namespace ALTEngine::Screens
         inline int ActAnimation(int type, int mode, int random, bool& armGrenade)
         {
             armGrenade = false;
-            const bool near = mode < 2;
+            const bool nearBand = mode < 2;   // not `near`: a Windows header macro
             switch (type)
             {
             case 2:  return 10;
             case 3:  return 12;
             case 4:  return 12;
-            case 5:  return near ? 10 : 11;
-            case 6:  return near ? 11 : 12;
+            case 5:  return nearBand ? 10 : 11;
+            case 6:  return nearBand ? 11 : 12;
             case 8:  return 9;
             case 9:  return 8;
             case 0x0b:
             case 0x0c: return 9;
             case 0x0d: return 16;
             case 0x0e:
-                if (near || (random & 7) <= 2) { return 11; }
+                if (nearBand || (random & 7) <= 2) { return 11; }
                 armGrenade = true;
                 return 10;
             default: return EnemyBehaviour::ActingAnimation(type);
