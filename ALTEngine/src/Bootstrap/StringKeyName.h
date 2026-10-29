@@ -454,14 +454,12 @@ namespace ALTEngine::Bootstrap
         if (name == "SkipEndLevelScreen") { return StringId::SkipEndLevelScreen; }
         if (name == "PlayerJumping") { return StringId::PlayerJumping; }
         if (name == "NoHitImmunity") { return StringId::NoHitImmunity; }
-        if (name == "StunnedEnemies") { return StringId::NoHitImmunity; }   // its old name
         if (name == "DescEnableAll") { return StringId::DescEnableAll; }
         if (name == "DescAutomaticDoors") { return StringId::DescAutomaticDoors; }
         if (name == "DescKeepItems") { return StringId::DescKeepItems; }
         if (name == "DescSkipEndLevel") { return StringId::DescSkipEndLevel; }
         if (name == "DescPlayerJumping") { return StringId::DescPlayerJumping; }
         if (name == "DescNoHitImmunity") { return StringId::DescNoHitImmunity; }
-        if (name == "DescStunnedEnemies") { return StringId::DescNoHitImmunity; }   // its old name
         if (name == "FreeLook") { return StringId::FreeLook; }
         if (name == "DescFreeLook") { return StringId::DescFreeLook; }
         if (name == "RenderDistance") { return StringId::RenderDistance; }
@@ -485,9 +483,7 @@ namespace ALTEngine::Bootstrap
         if (name == "DescMaximumHealth") { return StringId::DescMaximumHealth; }
         if (name == "ActionJump") { return StringId::ActionJump; }
         if (name == "FasterXenomorphs") { return StringId::FasterXenomorphs; }
-        if (name == "FasterEnemies") { return StringId::FasterXenomorphs; }   // its old name
         if (name == "DescFasterXenomorphs") { return StringId::DescFasterXenomorphs; }
-        if (name == "DescFasterEnemies") { return StringId::DescFasterXenomorphs; }   // its old name
         if (name == "SpeedCompensation") { return StringId::SpeedCompensation; }
         if (name == "DescSpeedCompensation") { return StringId::DescSpeedCompensation; }
         if (name == "SaveAnywhere") { return StringId::SaveAnywhere; }

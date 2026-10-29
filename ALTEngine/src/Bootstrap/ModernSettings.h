@@ -231,15 +231,13 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::KeepItems: return "ModernKeepItems";
             case ModernFeature::SkipEndLevelScreen: return "ModernSkipEndLevelScreen";
             case ModernFeature::PlayerJumping: return "ModernPlayerJumping";
-            // Stored under its old name, so a saved setting carries over.
-            case ModernFeature::NoHitImmunity: return "ModernStunnedEnemies";
+            case ModernFeature::NoHitImmunity: return "ModernNoHitImmunity";
             case ModernFeature::FreeLook: return "ModernFreeLook";
             case ModernFeature::RenderDistance: return "ModernRenderDistance";
             case ModernFeature::LevelSelect: return "ModernLevelSelect";
             case ModernFeature::LiveMinimap: return "ModernLiveMinimap";
             case ModernFeature::EnableCheats: return "ModernEnableCheats";
-            // Stored under its old name, so a saved setting carries over.
-            case ModernFeature::FasterXenomorphs: return "ModernFasterEnemies";
+            case ModernFeature::FasterXenomorphs: return "ModernFasterXenomorphs";
             case ModernFeature::SpeedCompensation: return "ModernSpeedCompensation";
             case ModernFeature::SaveAnywhere: return "ModernSaveAnywhere";
             }

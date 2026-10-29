@@ -54,7 +54,7 @@ The port runs two clocks:
 **What the port does now:** by default, the original's `-so` timing: one 34.87 Hz tick for everything, creatures included (Edward, 2026: with speed compensation as the default, "everything is insanely fast"). The Modern option **Speed Compensation** gives the original's default instead, described next: the design point, fixed. A base tick of 69.74 Hz (`PlayerCamera::TICK_HZ`), with drawing free of it and the camera smoothed between ticks:
 - **Every tick (69.74 Hz):** the player's movement and state, doors and lifts.
 - **Every other tick (34.87 Hz, `CREATURE_TICK_HZ`):** creatures, particles, explosions and debris, the handlers' grenades, firing, the weapon's animation and its swap, thrown pickups, and the cosmetic cadences: lights, HUD timers, messages, the tracker, the face-hug overlay, the pickups' spin and the switch lights. A fire-on-press weapon's press is held over to the next such tick.
-- **Modern "Faster Xenomorphs"** (was "Faster Enemies", same saved setting; in the Modernised preset): the aliens (types 1-9) run on every tick. The colonist, guard, soldier, synth, handler and the vents stay on the alternate tick, as do particles and firing.
+- **Modern "Faster Xenomorphs"** (in the Modernised preset): the aliens (types 1-9) run on every tick. The colonist, guard, soldier, synth, handler and the vents stay on the alternate tick, as do particles and firing.
 - **Changes-16 was wrong:** it ran the player at 34.87 Hz and creatures at half that. That kept the 2:1 ratio but halved every creature's speed: slow huggers and drones. The creatures are at 34.87 Hz in every mode of the original (with `-so`, n is 1 and pass 1 is odd).
 - **The player's walk** is 0x78 a tick (the move vector is rotated at full scale, `FUN_00026a20` / `FUN_00047e84`), so 8370 units a second at 69.74 Hz. Changes-15 to 18 had it at half that.
 - **Player Jumping** is scaled to keep its height and timing: lift 0x24 and gravity 3 a tick.
@@ -129,7 +129,7 @@ Status in the port:
 ## 6. Modern options
 
 - **Player Jumping:** done. A Jump action (default J, in the Controls list, translated in all six string tables) gives a hop with the original's gravity (0xc a creature tick, so 3 a player tick), lift 0x24: about 216 units high. It's held under the ceiling. Movement's step-up rules are unchanged, so a jump doesn't reach a ledge more than the usual 256 up.
-- **No Hit Immunity** (was "Stunned Enemies", same saved setting): every hit lands, through a creature's flinch and the 0x10 ticks after it, from rounds and from blasts alike; a creature already dying still takes nothing more.
+- **No Hit Immunity:** every hit lands, through a creature's flinch and the 0x10 ticks after it, from rounds and from blasts alike; a creature already dying still takes nothing more.
 - **All other options** are now read by gameplay or the menu.
 
 ## 7. Smaller items
