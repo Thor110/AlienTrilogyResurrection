@@ -231,7 +231,7 @@ cmake -S . -B out/build/release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build out/build/release
 ```
 
-The tests run with `ctest --test-dir <build folder>`. Ripping the music from a CD is only done on Windows; elsewhere, install from a copy of the disc (a mounted disc under `/Volumes`, `/media` or `/mnt` is found automatically).
+The tests run with `ctest --test-dir <build folder>`. A mounted disc under `/Volumes`, `/media` or `/mnt` is found automatically, and the music is ripped from it on all three systems: on Linux straight from the drive, on macOS from the audio tracks macOS mounts itself (or the drive if those aren't there).
 
 ## Alien Trilogy Viewer
 

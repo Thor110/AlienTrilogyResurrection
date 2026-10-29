@@ -113,6 +113,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/LiftTests.cpp
         tests/CreatureTaskTests.cpp
         tests/PlayerMoverTests.cpp
+        tests/CddaTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
     target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats alt_warnings)

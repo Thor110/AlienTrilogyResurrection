@@ -13,6 +13,7 @@
 namespace ALTEngine::Bootstrap
 {
     using ALTEngine::Formats::CddaRipper;
+    using ALTEngine::Formats::CddaRipSummary;
     using ALTEngine::Formats::CddaTrack;
     using ALTEngine::Formats::DiscManifest;
     using ALTEngine::Formats::DiscManifestLoader;
@@ -105,40 +106,22 @@ namespace ALTEngine::Bootstrap
         // whatever happens to run next.
         RunPatches(destination / "CD");
 
-        // CDDA rip - drive letter only (e.g. "D:"), not the trailing
-        // backslash discRoot carries.
-        std::string driveLetter = discRoot.string().substr(0, 2);
+        // The music: the disc's audio tracks as CD/MUSIC/trackNN.wav, by
+        // whichever route this system has (CddaRipper::RipDisc).
         std::filesystem::path musicDir = destination / "CD" / "MUSIC";
         std::error_code ec;
         std::filesystem::create_directories(musicDir, ec);
 
-        try
+        const CddaRipSummary rip = CddaRipper::RipDisc(discRoot, musicDir,
+            [](const std::string& line) { std::cout << line << "\n"; });
+        if (!rip.error.empty())
         {
-            std::vector<CddaTrack> tracks = CddaRipper::ReadToc(driveLetter);
-            int ripped = 0, failed = 0;
-            for (const auto& track : tracks)
-            {
-                if (!track.isAudio) { continue; } // track 1 is the data track
-                try
-                {
-                    char nameBuf[32];
-                    std::snprintf(nameBuf, sizeof(nameBuf), "track%02d.wav", track.trackNumber);
-                    std::cout << "  Ripping " << nameBuf << "...\n";
-                    CddaRipper::RipTrackToWav(driveLetter, track, musicDir / nameBuf);
-                    ++ripped;
-                }
-                catch (const std::exception& e)
-                {
-                    std::cout << "  Failed to rip track " << track.trackNumber << ": " << e.what() << "\n";
-                    ++failed;
-                }
-            }
-            std::cout << "CDDA rip: " << ripped << " tracks ripped, " << failed << " failed.\n";
-        }
-        catch (const std::exception& e)
-        {
-            std::cout << "CDDA rip failed entirely (TOC read): " << e.what() << "\n";
+            std::cout << "CDDA rip failed entirely: " << rip.error << "\n";
             std::cout << "Continuing without music - this can be retried later.\n";
+        }
+        else
+        {
+            std::cout << "CDDA rip: " << rip.ripped << " tracks ripped, " << rip.failed << " failed.\n";
         }
 
         return true;
