@@ -128,6 +128,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/ProjectileCollisionTests.cpp
         tests/CreatureSightTests.cpp
         tests/UvSeamScanTests.cpp
+        tests/EnemySpriteSetTests.cpp
         tests/CreatureAITests.cpp
         tests/LiftTests.cpp
         tests/CreatureTaskTests.cpp

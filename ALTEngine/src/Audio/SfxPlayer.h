@@ -47,7 +47,8 @@ namespace ALTEngine::Audio
         static void SetVolume(int volume0to10);
 
     private:
+        // `once`: not while the same sample is still playing (the game's rule).
         static void PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory,
-                             float volume = 1.0f);
+                             float volume = 1.0f, bool once = false);
     };
 }

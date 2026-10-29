@@ -244,6 +244,10 @@ namespace ALTEngine::Screens
             bool indestructible = false;   // FUN_00037184's flag - rounds stop, nothing breaks
             int placedObjectIndex = -1;
             int cellIndex = -1;        // collision cell this object stamps as occupied
+            // A window, breakable wall or curtain (0x15, 0x1c, 0x1d) stamps a
+            // block of cells from there, this many along x and z (record bytes
+            // 8 and 9, FUN_00037084); everything else just its own.
+            int cellsWide = 1, cellsDeep = 1;
             int crateIndex = -1;       // its record in level.crates, for its contents
             int facing = 0;            // rotation - picks the debris scatter axis
             int objectType = 0;        // crate type - 0x1d scatters one piece, not six

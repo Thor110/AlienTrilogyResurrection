@@ -1734,7 +1734,7 @@ namespace ALTEngine::Renderer
         {
             FM::FaceFill fill;
             std::array<LevelSubGroup, 5>* groups;
-            const std::array<size_t, 5>* counts;
+            std::array<size_t, 5>* counts;
         };
         const Pass passes[] = {
             { FM::FaceFill::Opaque, &level.groups, &level.groupVertexCounts },
@@ -1748,21 +1748,28 @@ namespace ALTEngine::Renderer
 
             for (size_t i = 0; i < 5; ++i)
             {
-                if (!(*pass.groups)[i].vertexBuffer) { continue; }
+                LevelSubGroup& group = (*pass.groups)[i];
+                // A page this fill never had faces on has no texture to draw
+                // with; anything animating onto it stays where it was.
+                if (!group.texture) { continue; }
 
-                // An animated face whose new descriptor sits on a different page
-                // would migrate between per-page buffers. The in-place re-upload
-                // cannot express that, so bail loudly rather than corrupt the
-                // buffer with a mismatched size.
+                // An animated face whose new frame sits on a different page
+                // moves between the per-page buffers, so this page's face
+                // count changes: build its buffers afresh (the texture stays).
                 if (meshes[i].vertices.size() != (*pass.counts)[i])
                 {
-                    SDL_Log("ModelRenderer::TickLevelLights(%s): group %zu vertex count changed "
-                            "(%zu -> %zu) - an animated face crossed texture pages, which the "
-                            "in-place re-upload does not support. Skipping.",
-                            cacheKey.c_str(), i, (*pass.counts)[i], meshes[i].vertices.size());
+                    LevelSubGroup rebuilt = UploadMeshBuffersOnly(meshes[i]);
+                    if (!meshes[i].vertices.empty() && !rebuilt.vertexBuffer) { continue; }
+                    if (group.vertexBuffer) { SDL_ReleaseGPUBuffer(device, group.vertexBuffer); }
+                    if (group.indexBuffer) { SDL_ReleaseGPUBuffer(device, group.indexBuffer); }
+                    group.vertexBuffer = rebuilt.vertexBuffer;
+                    group.indexBuffer = rebuilt.indexBuffer;
+                    group.indexCount = rebuilt.indexCount;
+                    (*pass.counts)[i] = meshes[i].vertices.size();
                     continue;
                 }
-                ReuploadVertices((*pass.groups)[i], meshes[i]);
+                if (!group.vertexBuffer) { continue; }
+                ReuploadVertices(group, meshes[i]);
             }
         }
         return true;

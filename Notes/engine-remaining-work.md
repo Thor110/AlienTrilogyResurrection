@@ -290,3 +290,11 @@ All three came down to the level faces' draw routines, which the port mostly ign
 
 `ALTLevelScan <CD folder>` (built with the engine, `src/Tools/LevelScanMain.cpp`, `Formats/UvSeamScan.h`) looks through every level for faces textured the wrong way round. Where neighbouring faces show touching pieces of one picture on the same page, both should put each shared vertex on the same texel; a face that doesn't, and that one of its other orientations would fix, is reported, strongest first, with a `faceUvRotations` entry in Patches.json's form. Faces Patches.json already turns are judged as turned. On L391 it names 162 of the 246 inner egg sack faces fixed by hand, each with the same correction, and 7 faces on the fixed file; L263 shows 5, L351 82 and L371 51, not yet looked at.
 
+## Fixed after play-testing 0.9.0
+
+- **Wall blocks:** a window, breakable wall or curtain (0x15, 0x1c, 0x1d) stamps a block of cells, record byte 8 along x and byte 9 along z from its own (`FUN_00037084`), and its destruction clears the block (`FUN_000370d4`). The port stamped one cell, so L231's grenade wall (a 0x15, 2 x 5) could be walked through. A blast reaches the object through any cell of its block.
+- **Objects stop creatures:** the creature marks now start from the objects' stamps, so crates, barrels and wall blocks stop creatures and their lines as they do in the original (`FUN_000315f0`, `FUN_0003231c` refuse any non-zero +0x0c).
+- **Raw sprite frames:** a creature frame that compression wouldn't shrink is stored as it is, width x height bytes running exactly to the next frame or the section's end. The burster's two death animations end on such a frame (its body), so they never decoded and it died in its walk pose. Its animations 14-18 still don't decode: their records give other animations' offsets with the wrong sizes, and nothing is known to play them.
+- **A game sound never overlaps itself** (`FUN_0005aed9` won't start a sample still playing on any channel); the menus' ticks are exempt.
+- **Animated faces changing texture page** rebuild that page's buffers instead of being skipped (L212).
+

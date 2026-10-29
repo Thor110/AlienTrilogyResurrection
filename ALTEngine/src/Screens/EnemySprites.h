@@ -205,6 +205,7 @@ namespace ALTEngine::Screens
                 TypeArt art;
                 art.sprites = set;
                 int decodedAnims = 0;
+                std::string missing;   // animations no section of the file matches
 
                 for (int a = 0; a < creature->count; ++a)
                 {
@@ -224,7 +225,11 @@ namespace ALTEngine::Screens
                     }
 
                     auto decoded = set->DecodeAnimation(records);
-                    if (decoded.empty()) { continue; }
+                    if (decoded.empty())
+                    {
+                        missing += (missing.empty() ? "" : " ") + std::to_string(a);
+                        continue;
+                    }
 
                     // Upload each frame as its own sheet.
                     Animation entry;
@@ -250,8 +255,9 @@ namespace ALTEngine::Screens
                 {
                     byType[type] = std::move(art);
                     loadedTypes++;
-                    SDL_Log("EnemySprites: type %d -> %s.B16, %d animations decoded",
-                            type, creature->file, decodedAnims);
+                    SDL_Log("EnemySprites: type %d -> %s.B16, %d of %d animations decoded%s%s",
+                            type, creature->file, decodedAnims, creature->count,
+                            missing.empty() ? "" : ", not: ", missing.c_str());
                 }
             }
             return loadedTypes > 0;

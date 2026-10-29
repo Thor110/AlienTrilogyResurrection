@@ -21,6 +21,17 @@ namespace ALTEngine::Audio
             return cache;
         }
 
+        // Which sample each voice was last given. The original won't start a
+        // sample that is still playing on any channel (FUN_0005aed9 walks its
+        // channels and returns if one holds the same sample and isn't done),
+        // so a creature's cue repeating on every loop of its walk, or several
+        // creatures cueing at once, never stack up into a drone.
+        std::unordered_map<SDL_AudioStream*, const std::vector<uint8_t>*>& VoiceSamples()
+        {
+            static std::unordered_map<SDL_AudioStream*, const std::vector<uint8_t>*> playing;
+            return playing;
+        }
+
         const std::unordered_map<SfxId, std::string> kMenuSounds = {
             { SfxId::MenuMove,   "0101sele" },
             { SfxId::MenuSelect, "0102sele" },
@@ -28,7 +39,8 @@ namespace ALTEngine::Audio
         };
     }
 
-    void SfxPlayer::PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory, float volume)
+    void SfxPlayer::PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory, float volume,
+                              bool once)
     {
         if (stem.empty()) { return; }
 
@@ -62,10 +74,18 @@ namespace ALTEngine::Audio
 
         // Each sound gets a voice of its own and the device mixes them, so
         // gunfire, footsteps and impacts overlap the way the original's
-        // channel driver lets them (AppWindow::AcquireSfxVoice).
+        // channel driver lets them (AppWindow::AcquireSfxVoice) - except that
+        // a game sound never overlaps itself (see VoiceSamples). The menus'
+        // ticks aren't the game's sound driver and repeat as fast as keys go.
         auto& app = ALTEngine::Bootstrap::AppWindow::Instance();
+        auto& playing = VoiceSamples();
+        for (const auto& [stream, sample] : playing)
+        {
+            if (once && sample == &it->second && SDL_GetAudioStreamQueued(stream) > 0) { return; }
+        }
         SDL_AudioStream* voice = app.AcquireSfxVoice();
         if (!voice) { return; }
+        playing[voice] = &it->second;
         // Voices are shared, so every sound sets its own gain.
         SDL_SetAudioStreamGain(voice, app.SfxGain() * volume);
         SDL_PutAudioStreamData(voice, it->second.data(), static_cast<int>(it->second.size()));
@@ -75,7 +95,7 @@ namespace ALTEngine::Audio
     {
         auto it = kMenuSounds.find(id);
         if (it == kMenuSounds.end()) { return; }
-        PlayFile(it->second, cdDirectory);
+        PlayFile(it->second, cdDirectory, 1.0f, false);
     }
 
     void SfxPlayer::PlaySlot(int slotId, const char* levelCode, const std::filesystem::path& cdDirectory)
@@ -87,7 +107,7 @@ namespace ALTEngine::Audio
         // in the manifests and need to be held and retriggered rather than
         // fired once. Nothing drives a continuous sound yet, so they are played
         // as one-shots for now - noted so it is not mistaken for correct.
-        PlayFile(name, cdDirectory);
+        PlayFile(name, cdDirectory, 1.0f, true);
     }
 
     void SfxPlayer::PlaySlotAtVolume(int slotId, float volume, const char* levelCode,
@@ -95,7 +115,7 @@ namespace ALTEngine::Audio
     {
         const char* name = SfxBank::SlotName(levelCode, slotId);
         if (!name || name[0] == '\0') { return; }
-        PlayFile(name, cdDirectory, volume);
+        PlayFile(name, cdDirectory, volume, true);
     }
 
     float SfxPlayer::CreatureVolume(float dx, float dz)
@@ -114,6 +134,7 @@ namespace ALTEngine::Audio
 
     void SfxPlayer::ClearCache()
     {
+        VoiceSamples().clear();
         Cache().clear();
     }
 }

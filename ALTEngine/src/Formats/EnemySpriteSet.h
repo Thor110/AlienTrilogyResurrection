@@ -3,6 +3,8 @@
 #include "BndParser.h"
 #include "SpriteFrameDecompressor.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -116,28 +118,13 @@ namespace ALTEngine::Formats
                 std::vector<Frame> decoded;
                 decoded.reserve(records.size());
                 bool allMatched = true;
-
-                for (const Frame& record : records)
+                for (size_t r = 0; r < records.size() && allMatched; ++r)
                 {
-                    if (record.width <= 0 || record.height <= 0) { allMatched = false; break; }
-                    const size_t want = static_cast<size_t>(record.width)
-                                      * static_cast<size_t>(record.height);
-                    if (record.compressedOffset < 0
-                        || static_cast<size_t>(record.compressedOffset) >= sections[section].size())
-                    {
-                        allMatched = false;
-                        break;
-                    }
-
-                    auto result = SpriteFrameDecompressor::DecompressSingleFrame(
-                        sections[section], static_cast<size_t>(record.compressedOffset));
-                    if (result.first.size() != want) { allMatched = false; break; }
-
-                    Frame frame = record;
-                    frame.pixels = std::move(result.first);
-                    decoded.push_back(std::move(frame));
+                    const size_t next = r + 1 < records.size() ? static_cast<size_t>(std::max(0, records[r + 1].compressedOffset)) : 0;
+                    Frame frame;
+                    allMatched = DecodeFrame(section, records[r], next, frame);
+                    if (allMatched) { decoded.push_back(std::move(frame)); }
                 }
-
                 if (allMatched && decoded.size() == records.size()) { return decoded; }
             }
             return {};
@@ -147,6 +134,36 @@ namespace ALTEngine::Formats
         const std::vector<uint8_t>& Palette() const { return palette; }
 
     private:
+        // One frame from one section. Most are compressed; a frame that
+        // compression wouldn't shrink is stored as it is - width x height
+        // bytes running exactly to the next frame's offset, or to the end of
+        // the section for the last (the burster's two death animations end on
+        // such a frame, the body on the floor). `nextOffset` 0: the section end.
+        bool DecodeFrame(size_t section, const Frame& record, size_t nextOffset, Frame& out) const
+        {
+            if (record.width <= 0 || record.height <= 0 || record.compressedOffset < 0) { return false; }
+            const auto& data = sections[section];
+            const size_t at = static_cast<size_t>(record.compressedOffset);
+            if (at >= data.size()) { return false; }
+            const size_t want = static_cast<size_t>(record.width) * static_cast<size_t>(record.height);
+
+            auto result = SpriteFrameDecompressor::DecompressSingleFrame(data, at);
+            if (result.first.size() == want)
+            {
+                out = record;
+                out.pixels = std::move(result.first);
+                return true;
+            }
+            const size_t end = (nextOffset > at && nextOffset <= data.size()) ? nextOffset : data.size();
+            if (end - at == want)
+            {
+                out = record;
+                out.pixels.assign(data.begin() + static_cast<std::ptrdiff_t>(at), data.begin() + static_cast<std::ptrdiff_t>(end));
+                return true;
+            }
+            return false;
+        }
+
         std::vector<std::vector<uint8_t>> sections;
         std::vector<uint8_t> palette;
     };

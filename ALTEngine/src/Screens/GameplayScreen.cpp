@@ -1036,6 +1036,29 @@ namespace ALTEngine::Screens
                             level.collisionGrid[crateCell].unknown13 = crate.type;
                             level.collisionGrid[crateCell].unknown5 = static_cast<uint8_t>(&crate - level.crates.data());
                         }
+                        // A window, breakable wall or curtain fills a block of
+                        // cells (FUN_00037084): record byte 8 along x and byte
+                        // 9 along z from its own. On L231 the grenade wall is
+                        // 2 x 5, which is what makes the whole wall solid.
+                        if (invisibleObject)
+                        {
+                            for (int dz = 0; dz < crate.unknown4; ++dz)
+                            {
+                                for (int dx = 0; dx < crate.unknown3; ++dx)
+                                {
+                                    const int x = crate.x + dx, z = crate.y + dz;
+                                    if (x >= level.header.mapLength || z >= level.header.mapWidth) { continue; }
+                                    auto& cell = level.collisionGrid[static_cast<size_t>(z) * level.header.mapLength + static_cast<size_t>(x)];
+                                    cell.unknown13 = crate.type;
+                                    cell.unknown5 = static_cast<uint8_t>(&crate - level.crates.data());
+                                }
+                            }
+                            if (!damageTargets.empty() && damageTargets.back().crateIndex == static_cast<int>(ci))
+                            {
+                                damageTargets.back().cellsWide = std::max(1, static_cast<int>(crate.unknown3));
+                                damageTargets.back().cellsDeep = std::max(1, static_cast<int>(crate.unknown4));
+                            }
+                        }
                     }
 
                     // Doors. Their meshes live in this same .MAP under
@@ -2226,6 +2249,16 @@ namespace ALTEngine::Screens
                             return index >= 0 && static_cast<size_t>(index) < occupancy.size()
                                 && occupancy[static_cast<size_t>(index)] != 0;
                         };
+                        // Objects first: every crate, barrel, switch and wall
+                        // block keeps its type in the cell from its spawn until
+                        // it is destroyed, and creatures are stopped by it as
+                        // by anything else there (FUN_000315f0, FUN_0003231c
+                        // refuse any non-zero +0x0c).
+                        for (size_t c = 0; c < occupancy.size() && c < level.collisionGrid.size(); ++c)
+                        {
+                            const uint8_t stamp = level.collisionGrid[c].unknown13;
+                            if (stamp >= 0x14 && stamp != 0xFF) { occupancy[c] = stamp; }
+                        }
                         mark(occupancyCell(camera.x, camera.z), 0xff);
                         // Vents stand in walls and floors and never move: they
                         // don't take part. Nor does a hugger on the player's
@@ -2364,29 +2397,10 @@ namespace ALTEngine::Screens
                                 highest = std::max(highest, floorHere);
                                 lowest = std::min(lowest, floorHere);
 
-                                // THE OCCUPANCY TEST IS OUT, because the field it
-                                // reads is not what I took it for.
-                                //
-                                // FUN_000315f0 refuses a step when the cell's byte
-                                // at +0xc is non-zero, and FUN_000368c8 treats that
-                                // same byte as "what is standing here" - 0xff the
-                                // player, 1-0x0f a monster, above that an object.
-                                // So blocking on it looked obviously right.
-                                //
-                                // On L111 it is non-zero in 1341 cells, and 900 of
-                                // those are ordinary WALKABLE FLOOR with a
-                                // non-blocking attribute - including 25 of the 49
-                                // cells around the player's own start. Enemies
-                                // could barely take a step (Edward, 2026: "the
-                                // facehuggers appear to walk on the spot").
-                                //
-                                // So either the field carries something else as
-                                // well as occupancy, or the runtime clears it at
-                                // load and only writes live entities into it, and
-                                // the map's own values are stale. Blocking on the
-                                // raw map value is wrong either way. The attribute
-                                // test above is doing the real work - 596 blocking
-                                // cells, which is a believable wall count.
+                                // (The map's own +0x0c bytes are editor leftovers
+                                // and the loader clears them; the marks tested
+                                // above are the runtime ones - objects, the
+                                // player and creatures.)
                             }
                             // Nor may the three probes disagree by more than 0x100
                             // - the leading edge must be level enough to stand on.
@@ -2927,6 +2941,18 @@ namespace ALTEngine::Screens
                                 placedObjects[static_cast<size_t>(target.placedObjectIndex)].visible = false;
                             }
                             ClearOccupancy(target.cellIndex);
+                            // And the rest of a wall's block (FUN_000370d4).
+                            if (target.cellsWide > 1 || target.cellsDeep > 1)
+                            {
+                                const int length = level.header.mapLength;
+                                for (int dz = 0; dz < target.cellsDeep; ++dz)
+                                {
+                                    for (int dx = 0; dx < target.cellsWide; ++dx)
+                                    {
+                                        ClearOccupancy(target.cellIndex + dz * length + dx);
+                                    }
+                                }
+                            }
                             ReleaseContents(target.crateIndex, target.x, target.y, target.z, target.cellIndex);
 
                             // The faces that show it broken: each of its texture
@@ -3028,7 +3054,13 @@ namespace ALTEngine::Screens
                                     // Objects caught in a blast are removed
                                     // outright - no health check - unless they
                                     // are flagged indestructible.
-                                    if (!other.destroyed && !other.indestructible && other.cellIndex == cell)
+                                    // Any cell of its block reaches it.
+                                    const int length = level.header.mapLength;
+                                    const int dx = (cell % length) - (other.cellIndex % length);
+                                    const int dz = (cell / length) - (other.cellIndex / length);
+                                    const bool covers = other.cellIndex >= 0 && dx >= 0 && dz >= 0
+                                        && dx < other.cellsWide && dz < other.cellsDeep;
+                                    if (!other.destroyed && !other.indestructible && covers)
                                     {
                                         other.destroyed = true;
                                         other.state = D::STATE_DYING;
