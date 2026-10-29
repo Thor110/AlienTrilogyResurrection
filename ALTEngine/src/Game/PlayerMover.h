@@ -173,11 +173,12 @@ namespace ALTEngine::Game::PlayerMover
     //
     // A slippery ramp (attributes 0x35-0x38, the same slopes as 0x31-0x34)
     // pushes the player downhill: by their own speed (at least 0x20), or 0x80
-    // standing still. Downhill is -z, +x, -x, +z for 0x35-0x38, in that order.
-    inline bool RampPush(int attribute, int speed, int& outX, int& outZ)
+    // standing still; running (DAT_000b0ab4 bit 2), by their speed less 0x20.
+    // Downhill is -z, +x, -x, +z for 0x35-0x38, in that order.
+    inline bool RampPush(int attribute, int speed, bool running, int& outX, int& outZ)
     {
         if (attribute < 0x35 || attribute > 0x38) { return false; }
-        const int s = speed == 0 ? 0x80 : (speed < 0x20 ? 0x20 : speed);
+        const int s = speed == 0 ? 0x80 : (speed < 0x20 ? 0x20 : (running ? speed - 0x20 : speed));
         static constexpr int DX[4] = { 0, 1, -1, 0 };
         static constexpr int DZ[4] = { -1, 0, 0, 1 };
         outX = DX[attribute - 0x35] * s;

@@ -1812,7 +1812,7 @@ namespace ALTEngine::Screens
                     {
                         namespace PM = ALTEngine::Game::PlayerMover;
                         int pushX = 0, pushZ = 0;
-                        if (PM::RampPush(cellAttribute, playerCam.speed, pushX, pushZ))
+                        if (PM::RampPush(cellAttribute, playerCam.speed, playerCam.running, pushX, pushZ))
                         {
                             stepX += static_cast<float>(pushX);
                             stepZ += static_cast<float>(pushZ);
@@ -2204,12 +2204,22 @@ namespace ALTEngine::Screens
                         // map's own +0x0c bytes are stale (see below), so the
                         // runtime must be writing live entities over them.
                         std::vector<uint8_t> occupancy(level.collisionGrid.size(), 0);
+                        // Which creature a mark of 1 stands for (the index byte
+                        // the original keeps at +4 alongside it), for blasts.
+                        std::vector<int> markedCreature(level.collisionGrid.size(), -1);
                         auto occupancyCell = [&](float x, float z) {
                             return ALTEngine::Formats::CellIndex(level, ToGridSpaceX(x, originX) >> 9,
                                                                  ToGridSpaceZ(z, originZ) >> 9);
                         };
                         auto mark = [&](int index, uint8_t value) {
                             if (index >= 0 && static_cast<size_t>(index) < occupancy.size()) { occupancy[static_cast<size_t>(index)] = value; }
+                        };
+                        auto markCreature = [&](int index, const ALTEngine::Screens::Enemies::Enemy* creature) {
+                            mark(index, creature ? 1 : 0);
+                            if (index >= 0 && static_cast<size_t>(index) < markedCreature.size())
+                            {
+                                markedCreature[static_cast<size_t>(index)] = creature ? static_cast<int>(creature - enemies.data()) : -1;
+                            }
                         };
                         auto marked = [&](int index) {
                             return index >= 0 && static_cast<size_t>(index) < occupancy.size()
@@ -2225,7 +2235,7 @@ namespace ALTEngine::Screens
                         {
                             if (other.active && other.alive && !other.pouncing && !ALTEngine::Screens::IsVent(other.type))
                             {
-                                mark(occupancyCell(other.x, other.z), 1);
+                                markCreature(occupancyCell(other.x, other.z), &other);
                             }
                         }
 
@@ -2368,6 +2378,10 @@ namespace ALTEngine::Screens
 
                         // Creatures run on the original's alternate pass, or on
                         // every tick with Faster Enemies.
+                        // What the renderer would have drawn from here: the
+                        // zones creatures test the player against.
+                        const uint16_t drawnZones = ALTEngine::Game::CreatureSight::DrawnZoneMask(level,
+                            ToGridSpaceX(camera.x, originX) >> 9, ToGridSpaceZ(camera.z, originZ) >> 9, playerCam.viewYaw);
                         if (creaturePass)
                         for (auto& enemy : enemies)
                         {
@@ -2378,7 +2392,7 @@ namespace ALTEngine::Screens
                             // out inside the line-of-fire range.
                             // Lift this creature's own mark before it looks or moves.
                             const bool marks = enemy.active && enemy.alive && !ALTEngine::Screens::IsVent(enemy.type);
-                            if (marks) { mark(occupancyCell(enemy.x, enemy.z), 0); }
+                            if (marks) { markCreature(occupancyCell(enemy.x, enemy.z), nullptr); }
 
                             if (enemy.active && enemy.alive)
                             {
@@ -2388,8 +2402,7 @@ namespace ALTEngine::Screens
                                 const int pgx = ToGridSpaceX(camera.x, originX);
                                 const int pgz = ToGridSpaceZ(camera.z, originZ);
                                 enemy.zoneVisible = CS::ZoneVisible(level,
-                                    ALTEngine::Formats::CellIndex(level, egx >> 9, egz >> 9),
-                                    ALTEngine::Formats::CellIndex(level, pgx >> 9, pgz >> 9));
+                                    ALTEngine::Formats::CellIndex(level, egx >> 9, egz >> 9), drawnZones);
                                 if (enemy.distance <= CS::MAX_DISTANCE)
                                 {
                                     CS::Query q;
@@ -2404,12 +2417,34 @@ namespace ALTEngine::Screens
                                     q.occupancy = &occupancy;
                                     enemy.lineOfFire = CS::LineOfFire(level, q);
                                 }
+                                // The gunners and the egg look along a ray
+                                // instead (FUN_00032aec), and only to 0x1555.
+                                if (enemy.type == 1 || (enemy.type >= 0x0b && enemy.type <= 0x0e))
+                                {
+                                    CS::Query3D q;
+                                    q.x = static_cast<float>(egx);
+                                    q.y = enemy.y;
+                                    q.z = static_cast<float>(egz);
+                                    // +0x54, the bearing to the player (0x357a6, 0x34c7d).
+                                    q.heading = ALTEngine::Game::OriginalMath::Bearing(egx - pgx, egz - pgz);
+                                    q.targetX = static_cast<float>(pgx);
+                                    q.targetZ = static_cast<float>(pgz);
+                                    q.targetFloorY = playerFeetY;
+                                    q.distance = enemy.distance;
+                                    q.occupancy = &occupancy;
+                                    enemy.lineOfFire = CS::LineOfFire3D(level, q);
+                                }
                                 else
                                 {
                                     enemy.lineOfFire = false;
                                 }
                             }
                             aiCreature = &enemy;
+                            {
+                                const auto* standing = ALTEngine::Formats::CellAt(level,
+                                    ToGridSpaceX(enemy.x, originX) >> 9, ToGridSpaceZ(enemy.z, originZ) >> 9);
+                                enemy.standingAttribute = standing ? standing->attribute : 0;
+                            }
                             enemy.animationFrames = enemySprites.FrameCount(enemy.type, enemy.animation);
                             const bool wasAlive = enemy.alive;
                             ALTEngine::Screens::Enemies::Tick(enemy, camera.x, playerFeetY, camera.z,
@@ -2589,17 +2624,46 @@ namespace ALTEngine::Screens
                             // still slides along the other.
                             const float stepHalfHeight = static_cast<float>(
                                 ALTEngine::Game::ProjectileCollision::CreatureExtents(enemy.type).y);
-                            if (enemy.stepX != 0.0f && enemyAxisClear(enemy.x, enemy.z, true, enemy.stepX, stepHalfHeight))
+                            // A refused step slides up to what refused it, and
+                            // one off a ledge hops down (FUN_000315f0's ends),
+                            // both measured against the floor the move began on.
                             {
-                                enemy.x += enemy.stepX;
-                            }
-                            if (enemy.stepZ != 0.0f && enemyAxisClear(enemy.x, enemy.z, false, enemy.stepZ, stepHalfHeight))
-                            {
-                                enemy.z += enemy.stepZ;
+                                namespace EB = ALTEngine::Screens::EnemyBehaviour;
+                                const float startFloor = ALTEngine::Formats::FindFloorHeightGridSpace(
+                                    level, ToGridSpaceX(enemy.x, originX), ToGridSpaceZ(enemy.z, originZ));
+                                const bool crawler = enemy.ai.ceilingCrawler;
+                                if (enemy.stepX != 0.0f)
+                                {
+                                    const int gx = ToGridSpaceX(enemy.x, originX);
+                                    const int step = static_cast<int>(std::lround(enemy.stepX));
+                                    int to = 0;
+                                    if (enemyAxisClear(enemy.x, enemy.z, true, enemy.stepX, stepHalfHeight))
+                                    {
+                                        to = EB::LedgeStep(gx + step, step, startFloor,
+                                            ALTEngine::Formats::FindFloorHeightGridSpace(level, gx + step, ToGridSpaceZ(enemy.z, originZ)),
+                                            crawler, enemy.vy);
+                                    }
+                                    else { to = EB::BlockedStep(gx, step); }
+                                    enemy.x += static_cast<float>(to - gx);
+                                }
+                                if (enemy.stepZ != 0.0f)
+                                {
+                                    const int gz = ToGridSpaceZ(enemy.z, originZ);
+                                    const int step = static_cast<int>(std::lround(enemy.stepZ));
+                                    int to = 0;
+                                    if (enemyAxisClear(enemy.x, enemy.z, false, enemy.stepZ, stepHalfHeight))
+                                    {
+                                        to = EB::LedgeStep(gz + step, step, startFloor,
+                                            ALTEngine::Formats::FindFloorHeightGridSpace(level, ToGridSpaceX(enemy.x, originX), gz + step),
+                                            crawler, enemy.vy);
+                                    }
+                                    else { to = EB::BlockedStep(gz, step); }
+                                    enemy.z += static_cast<float>(to - gz);
+                                }
                             }
 
                             // And mark wherever it ended up.
-                            if (marks && enemy.alive && !enemy.pouncing) { mark(occupancyCell(enemy.x, enemy.z), 1); }
+                            if (marks && enemy.alive && !enemy.pouncing) { markCreature(occupancyCell(enemy.x, enemy.z), &enemy); }
 
                             // Moving sets the velocity flag; attacking and dying
                             // clear it. Nothing else touches it, so a creature's
@@ -2664,7 +2728,7 @@ namespace ALTEngine::Screens
                             // cell of attribute 6 it is taken away; on bare
                             // floor above Easy an alien's leaves acid there
                             // (attribute 0x0c, which burns the player).
-                            if (ALTEngine::Screens::CreatureAI::UsesCommonTask(enemy.type)
+                            if ((ALTEngine::Screens::CreatureAI::UsesCommonTask(enemy.type) || enemy.type == 7)
                                 && enemy.state == ALTEngine::Screens::EnemyBehaviour::STATE_DEAD
                                 && !enemy.bodyRemoved && enemy.animationEnded)
                             {
@@ -2676,10 +2740,11 @@ namespace ALTEngine::Screens
                                 }
                                 else if (cell && cell->attribute == 0
                                          && static_cast<int>(difficultySettings.Get()) != 0
-                                         && enemy.type >= 2 && enemy.type <= 9 && enemy.type != 7)
+                                         && enemy.type >= 2 && enemy.type <= 9)
                                 {
-                                    // Types 2-6, and the ceiling ones (8, 9),
-                                    // which become 6 and 5 as they die.
+                                    // Types 2-6, the ceiling ones (8, 9), which
+                                    // become 6 and 5 as they die, and the queen,
+                                    // whose own task leaves it too (0x36455).
                                     cell->attribute = 0x0c;
                                 }
                             }
@@ -2899,35 +2964,40 @@ namespace ALTEngine::Screens
                         auto RunBlast = [&](int originCell) {
                             namespace Blast = ALTEngine::Game::Blast;
                             const Blast::Rings rings = Blast::ReachedRings(level, originCell);
-                            auto inRing = [](const std::vector<int>& ring, int cell) {
-                                return std::find(ring.begin(), ring.end(), cell) != ring.end();
-                            };
 
-                            // The player: 0x32 in the inner ring, 0x19 in the outer.
-                            const int playerCell = ALTEngine::Formats::CellIndex(
-                                level, ToGridSpaceX(camera.x, originX) >> 9, ToGridSpaceZ(camera.z, originZ) >> 9);
-                            if (inRing(rings.inner, playerCell))
-                            {
-                                hudState.ApplyDamage(Blast::PLAYER_DAMAGE_INNER, Blast::DAMAGE_CAUSE);
-                            }
-                            else if (inRing(rings.outer, playerCell))
-                            {
-                                hudState.ApplyDamage(Blast::PLAYER_DAMAGE_OUTER, Blast::DAMAGE_CAUSE);
-                            }
-                            checkPlayerDeath();
-
-                            // Creatures in either ring take their whole health,
-                            // except type 7.
-                            for (auto& creature : enemies)
-                            {
-                                if (!creature.active || !creature.alive || creature.type == Blast::IMMUNE_CREATURE_TYPE) { continue; }
-                                const int creatureCell = ALTEngine::Formats::CellIndex(
-                                    level, ToGridSpaceX(creature.x, originX) >> 9, ToGridSpaceZ(creature.z, originZ) >> 9);
-                                if (inRing(rings.inner, creatureCell) || inRing(rings.outer, creatureCell))
+                            // Each reached cell's occupant, by its mark
+                            // (FUN_000368c8): the player takes 0x32 in the
+                            // inner ring and 0x19 in the outer; the creature
+                            // the mark names takes its whole health, unless it
+                            // is the queen, and goes up in a crate's burst
+                            // (FUN_0002aaf0, 0x100 up) whether or not it dies.
+                            // One occupant a cell - a second creature sharing
+                            // it is missed, as in the original.
+                            auto occupant = [&](int cell, bool inner) {
+                                if (cell < 0 || static_cast<size_t>(cell) >= occupancy.size()) { return; }
+                                const uint8_t m = occupancy[static_cast<size_t>(cell)];
+                                if (m == 0xff)
+                                {
+                                    hudState.ApplyDamage(inner ? Blast::PLAYER_DAMAGE_INNER : Blast::PLAYER_DAMAGE_OUTER,
+                                                         Blast::DAMAGE_CAUSE);
+                                    return;
+                                }
+                                const int index = markedCreature[static_cast<size_t>(cell)];
+                                if (m == 0 || index < 0 || static_cast<size_t>(index) >= enemies.size()) { return; }
+                                auto& creature = enemies[static_cast<size_t>(index)];
+                                if (!creature.active) { return; }
+                                if (creature.type != Blast::IMMUNE_CREATURE_TYPE && creature.alive)
                                 {
                                     ALTEngine::Screens::Enemies::ApplyHit(creature, creature.health);
                                 }
-                            }
+                                explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE,
+                                                 creature.x, creature.y + 0x100, creature.z);
+                                ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                    ALTEngine::Formats::SoundIds::CRATE_BREAK, digits.c_str(), cdDirectory);
+                            };
+                            for (int cell : rings.inner) { occupant(cell, true); }
+                            for (int cell : rings.outer) { occupant(cell, false); }
+                            checkPlayerDeath();
 
                             std::vector<int> hit = rings.inner;
                             hit.insert(hit.end(), rings.outer.begin(), rings.outer.end());
@@ -3544,6 +3614,8 @@ namespace ALTEngine::Screens
                 if (levelReady)
                 {
                     namespace P = ALTEngine::Screens::Particles;
+                    // The jets pick a frame at random each frame (FUN_000100ec).
+                    static uint32_t ventFlicker = 1;
                     for (const P::Particle& particle : particles.All())
                     {
                         if (!particle.alive) { continue; }
@@ -3575,11 +3647,19 @@ namespace ALTEngine::Screens
                         }
                         else if (P::IsVentParticle(particle.type))
                         {
-                            // A puff that swells as it ages. OURS: the original
-                            // draws each jet type with its own sprite through
-                            // the table at 0x2d6a0, not read yet.
-                            const float age = static_cast<float>(particle.strength - particle.life);
-                            spark.halfWidth = spark.halfHeight = 32.0f + age * 6.0f;
+                            // Its own frame and size by its life (the draw's
+                            // table at 0x2d6a0; ExplosionGraphics::VentSprites),
+                            // between 0x200 and 0x1800 away.
+                            namespace VS = ALTEngine::Formats::ExplosionGraphics::VentSprites;
+                            if (distance < 0x200 || distance > 0x1800) { continue; }
+                            const bool steam = particle.type == P::TYPE_VENT_STEAM_H || particle.type == P::TYPE_VENT_STEAM_V;
+                            const bool vertical = particle.type == P::TYPE_VENT_STEAM_V || particle.type == P::TYPE_VENT_FLAME_V;
+                            ventFlicker = ventFlicker * 1103515245u + 12345u;
+                            const VS::Look look = VS::For(steam, vertical, particle.life, static_cast<int>(ventFlicker >> 16));
+                            if (!explosions.UseRecord(look.record, spark)) { continue; }
+                            spark.halfWidth = look.halfWidth;
+                            spark.halfHeight = look.halfHeight;
+                            spark.r = spark.g = spark.b = look.grey;
                         }
                         else
                         {

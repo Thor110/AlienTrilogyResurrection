@@ -375,6 +375,42 @@ namespace ALTEngine::Screens::CreatureAI
         a.idleTimer = LOST_LINE_IDLE;
     }
 
+    // The common task's hit reaction ending (0x34ba4). The push stops and the
+    // creature decides afresh: a burster backs off; anything else attacks at
+    // once if it is at contact range or has a line to the player (the
+    // gunners' 3D one), or side-steps with the attack timer at 0x3c, or idles
+    // for 8 ticks.
+    inline void CommonRecover(Agent& a, World& w)
+    {
+        a.startAct = false;
+        a.resolveHit = false;
+        a.startAnimation = -1;
+        Stop(a);
+        if (a.type == 3)
+        {
+            a.retreating = true;
+            Face(a, a.bearingToPlayer);
+            a.state = CHASE;
+            return;
+        }
+        if (a.mode < 3 && ((a.mode == 0 && a.separationY <= CONTACT_VERTICAL) || a.lineToPlayer))
+        {
+            Face(a, a.bearingToPlayer);
+            Act(a);
+            return;
+        }
+        if (PickSideStep(a, w))
+        {
+            a.attackTimer = ATTACK_TIMER;
+            Face(a, Game::OriginalMath::Bearing(a.x - a.waypointX, a.z - a.waypointZ));
+            a.state = MOVE;
+            return;
+        }
+        Face(a, a.bearingToPlayer);
+        a.state = IDLE;
+        a.idleTimer = LOST_LINE_IDLE;
+    }
+
     inline void Step(Agent& a, World& w, int playerX, int playerZ)
     {
         a.startAct = false;

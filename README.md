@@ -233,6 +233,8 @@ cmake --build out/build/release
 
 The tests run with `ctest --test-dir <build folder>`. A mounted disc under `/Volumes`, `/media` or `/mnt` is found automatically, and the music is ripped from it on all three systems: on Linux straight from the drive, on macOS from the audio tracks macOS mounts itself (or the drive if those aren't there).
 
+The build also makes `ALTLevelScan`, which checks every level for faces whose texture is turned or mirrored against the faces next to it. Run it from the `ALTEngine` folder as `ALTLevelScan <CD folder>` (the folder holding `SECT11`, `SECT12` and so on). It writes `LevelUvScan.json`, which lists the suspect faces, strongest first, with a `faceUvRotations` entry for each in Patches.json's form. Check each one in the viewer before copying it across. `--level 391` scans one level; run with no arguments, it prints its options.
+
 ## Alien Trilogy Viewer
 
 The main program window.

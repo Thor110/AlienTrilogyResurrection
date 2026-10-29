@@ -313,6 +313,14 @@ namespace ALTEngine::Formats
         }
     }
 
+    std::array<std::pair<float, float>, 4> LevelFaceUvs(const ModelQuad& q, uint16_t texIndex,
+                                                        const std::vector<BxRectangle>& uvRects)
+    {
+        ModelQuad resolved = q;
+        resolved.texIndex = texIndex;
+        return ComputeLevelQuadUvs(resolved, uvRects);
+    }
+
     DrawRoutine ClassifyDrawRoutine(uint8_t routine)
     {
         DrawRoutine r;

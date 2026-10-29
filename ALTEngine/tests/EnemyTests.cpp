@@ -293,3 +293,143 @@ TEST_CASE("Death: a killed warrior stays down on its death animation's last fram
     CHECK(e.stepX == 0.0f && e.stepZ == 0.0f);
     Enemies::ResetLevelState();
 }
+
+TEST_CASE("Hits: a warrior is pushed away while it flinches, then attacks again")
+{
+    // FUN_000310ac: state 6 and 0x10 ticks of immunity, pushed at a quarter of
+    // its speed along its bearing turned half round; at the end (0x34ba4) it
+    // stops and, with a line to the player, goes straight back into an attack.
+    Enemies::ResetLevelState();
+    CreatureAI::World world;
+    uint32_t seed = 7;
+    world.cellOpenOrPlayer = [](int, int) { return true; };
+    world.cellOpen = [](int, int) { return true; };
+    world.lineTo = [](int, int, int) { return true; };
+    world.nodeAt = [](int, int) { return -1; };
+    world.nodeToward = [](int) { return -1; };
+    world.nodeAway = [](int) { return -1; };
+    world.nodePosition = [](int, int&, int&) { return false; };
+    world.random = [&]() { seed = seed * 1103515245u + 12345u; return static_cast<int>((seed >> 16) & 0xffff); };
+
+    Enemies::Enemy e = HuggerAtPlayer(900.0f, 6);
+    e.ai.type = 6;
+    e.ai.speed = 0x40;
+    e.lineOfFire = true;
+    Enemies::Tick(e, 0, 0, 0, &world, false);   // sets its bearing to the player
+
+    CHECK(!Enemies::ApplyHit(e, 5));
+    CHECK(e.state == EnemyBehaviour::STATE_HIT_RECOVER);
+    CHECK_EQ(e.hitCooldown, EnemyBehaviour::HIT_IMMUNITY);
+    CHECK(e.pushZ > 0.0f);                     // the player is toward -z
+    CHECK(std::fabs(e.pushZ - 0x10) < 1.0f);   // 0x40 >> 2
+    CHECK(!Enemies::ApplyHit(e, 5));           // immune
+    CHECK_EQ(e.health, 59);
+
+    const float z = e.z;
+    int t = 0;
+    for (; t < 200 && e.state == EnemyBehaviour::STATE_HIT_RECOVER; ++t)
+    {
+        Enemies::Tick(e, 0, 0, 0, &world, false);
+        e.x += e.stepX; e.z += e.stepZ;
+    }
+    CHECK(e.state == EnemyBehaviour::STATE_ACTING);
+    CHECK(e.z > z);
+    CHECK(e.pushX == 0.0f && e.pushZ == 0.0f);
+    Enemies::Tick(e, 0, 0, 0, &world, false);
+    CHECK(e.ai.state == CreatureAI::ACT);
+    Enemies::ResetLevelState();
+}
+
+TEST_CASE("Hits: the ceiling creatures never react, and flinch animations follow the view")
+{
+    Enemies::Enemy e = HuggerAtPlayer(900.0f, 8);
+    CHECK(!Enemies::ApplyHit(e, 5));
+    CHECK(e.state == EnemyBehaviour::STATE_ACTING);
+    CHECK_EQ(e.hitCooldown, 0);
+    CHECK_EQ(e.health, 59);
+
+    CHECK_EQ(EnemyBehaviour::HitAnimation(2, 4), 8);
+    CHECK_EQ(EnemyBehaviour::HitAnimation(6, 0), 8);
+    CHECK_EQ(EnemyBehaviour::HitAnimation(6, 4), 9);
+    CHECK_EQ(EnemyBehaviour::HitAnimation(1, 0, 0), 3);
+    CHECK_EQ(EnemyBehaviour::HitAnimation(1, 0, 2), 4);
+    CHECK_EQ(EnemyBehaviour::HitAnimation(1, 0, 4), -1);
+}
+
+TEST_CASE("Moves: a refused step slides up to the wall, and a step off a ledge hops down")
+{
+    namespace EB = EnemyBehaviour;
+    // Heading +x from 1000 with a wall cell from 1536: the lead probe at
+    // 1000 + 400 + 200 hits it, so it stops 201 short.
+    CHECK_EQ(EB::BlockedStep(1000, 400), 1536 - 201);
+    // Heading -x from 1400 with the wall cell 512..1023: 1024 + 200.
+    CHECK_EQ(EB::BlockedStep(1400, -300), 1224);
+
+    float vy = 0.0f;
+    CHECK_EQ(EB::LedgeStep(1030, 30, 0x400, 0x300, false, vy), 1030);   // 0x100 is a step, not a drop
+    CHECK(vy == 0.0f);
+    CHECK_EQ(EB::LedgeStep(1030, 30, 0x400, 0x200, false, vy), 1024 + 200);
+    CHECK(vy == static_cast<float>(EB::LEDGE_HOP_LIFT));
+    vy = -12.0f;
+    CHECK_EQ(EB::LedgeStep(800, -30, 0x400, 0x200, false, vy), 800);    // already well in
+    CHECK(vy == -12.0f);                                                // falling: no lift
+    CHECK_EQ(EB::LedgeStep(1010, -30, 0x400, 0x200, false, vy), 512 + 312);
+}
+
+TEST_CASE("Deaths: a warrior slides back as it falls, then a ramp carries its body")
+{
+    namespace EB = EnemyBehaviour;
+    Enemies::Enemy e = HuggerAtPlayer(900.0f, 6);
+    e.ai.speed = 0x40;
+    e.ai.bearingToPlayer = Enemies::BearingTo(e, 0, 0);
+    e.health = 1;
+    CHECK(Enemies::ApplyHit(e, 5));
+    Enemies::Tick(e, 0, 0, 0);
+    CHECK(e.state == EB::STATE_DEAD);
+    CHECK(std::fabs(e.stepZ - 0x10) < 1.0f);   // away from the player, at speed / 4
+    const float z = e.z;
+    int t = 0;
+    for (; t < 400 && !e.bodyDown; ++t) { Step(e); }
+    CHECK(e.bodyDown);
+    CHECK(e.z > z);
+    Step(e);
+    CHECK(e.stepX == 0.0f && e.stepZ == 0.0f);   // down, on ordinary floor: still
+
+    // On a ramp cell it is carried at full speed, and stops off the ramp.
+    Enemies::Enemy r = HuggerAtPlayer(900.0f, 6);
+    r.ai.speed = 0x40;
+    r.health = 1;
+    r.standingAttribute = 0x2e;
+    CHECK(Enemies::ApplyHit(r, 5));
+    Enemies::Tick(r, 0, 0, 0);
+    CHECK(r.stepX == 0.0f && r.stepZ == 0.0f);   // no death push on a ramp
+    for (t = 0; t < 400 && !r.bodyDown; ++t) { Step(r); }
+    CHECK(r.stepX == 64.0f);
+    r.standingAttribute = 0;
+    Step(r);
+    CHECK(r.stepX == 0.0f);
+
+    int vx, vz;
+    CHECK(EB::RampCarry(0x2d, 10, vx, vz)); CHECK(vz == -10);
+    CHECK(EB::RampCarry(0x33, 10, vx, vz)); CHECK(vx == -10);
+    CHECK(EB::RampCarry(0x34, 10, vx, vz)); CHECK(vz == 10);
+    CHECK(!EB::RampCarry(0x35, 10, vx, vz));
+    Enemies::ResetLevelState();
+}
+
+TEST_CASE("Deaths: a colonist's body looks the way the player sees it")
+{
+    namespace CO = CreatureTasks::Colonist;
+    Enemies::Enemy e = HuggerAtPlayer(900.0f, 10);
+    e.health = 1;
+    CHECK(Enemies::ApplyHit(e, 5));
+    for (int t = 0; t < 600 && !e.bodyDown; ++t) { Enemies::Tick(e, 0, 0, 0); }
+    CHECK(e.bodyDown);
+    const int view = CO::ViewOf(e.facingOctant, Enemies::BearingTo(e, 0, 0));
+    CHECK_EQ(e.animation, CO::ANIM_BODY + view);
+    // The player walks round to its other side.
+    Enemies::Tick(e, 0, 0, 1800);
+    const int behind = CO::ViewOf(e.facingOctant, Enemies::BearingTo(e, 0, 1800));
+    CHECK(behind != view);
+    CHECK_EQ(e.animation, CO::ANIM_BODY + behind);
+}

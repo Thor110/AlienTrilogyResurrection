@@ -55,6 +55,7 @@ add_library(ALTFormats STATIC
     src/Tools/LevelLightScanner.cpp
     src/Formats/ObjLoader.cpp
     src/Formats/RenderMesh.cpp
+    src/Formats/UvSeamScan.cpp
     src/Formats/LevelLoader.cpp
     src/Formats/BinaryReadLE.h
     src/Formats/MissionText.cpp
@@ -88,6 +89,16 @@ target_link_libraries(ALTGame PUBLIC ALTFormats)
 target_link_libraries(ALTGame PRIVATE nlohmann_json::nlohmann_json alt_warnings)
 
 # ---------------------------------------------------------------------------
+# ALTLevelScan - a command-line check of every level's texture orientation
+# (src/Tools/LevelScanMain.cpp). SDL-free, like the tests.
+# ---------------------------------------------------------------------------
+option(ALTENGINE_BUILD_TOOLS "Build the ALTLevelScan command-line tool" ON)
+if (ALTENGINE_BUILD_TOOLS)
+    add_executable(ALTLevelScan src/Tools/LevelScanMain.cpp)
+    target_link_libraries(ALTLevelScan PRIVATE ALTFormats alt_warnings nlohmann_json::nlohmann_json)
+endif()
+
+# ---------------------------------------------------------------------------
 # Tests. SDL-free, so they build and run anywhere ALTFormats does:
 #   ctest --test-dir <build dir>      or run ALTEngineTests directly
 # Level fixtures come from the demo disc copy under Notes/; a test whose
@@ -109,6 +120,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/PathGraphTests.cpp
         tests/ProjectileCollisionTests.cpp
         tests/CreatureSightTests.cpp
+        tests/UvSeamScanTests.cpp
         tests/CreatureAITests.cpp
         tests/LiftTests.cpp
         tests/CreatureTaskTests.cpp

@@ -455,6 +455,49 @@ namespace ALTEngine::Screens
         // FUN_000315f0's rise limit, and the most its three probes may differ.
         inline constexpr float CREATURE_STEP_UP = 0x100;
         inline constexpr int MOVE_FOOTPRINT_HALF = 200;
+
+        // FUN_000315b4 / FUN_00031ab8: a refused step still goes as far as 201
+        // units short of the cell its lead probe hit (512 + 200 past its start
+        // going the other way), so a creature comes to rest against what
+        // stopped it rather than wherever its last whole step left it. Grid
+        // space, one axis.
+        inline int BlockedStep(int position, int step)
+        {
+            const int target = position + step;
+            const int probe = target + (step < 0 ? -MOVE_PROBE_LEAD : MOVE_PROBE_LEAD);
+            const int cellStart = probe & ~0x1ff;
+            if (step < 0)
+            {
+                const int limit = cellStart + 0x200 + MOVE_PROBE_LEAD;
+                return limit < target ? target : limit;
+            }
+            const int limit = cellStart - MOVE_PROBE_LEAD - 1;
+            return limit > target ? target : limit;
+        }
+
+        // The end of FUN_000315f0 / FUN_00031afc: a step that drops more than
+        // 0x100 below the floor the creature started the move on (0x200 for a
+        // ceiling crawler) is a hop off a ledge - a little lift (0x3c) if it is
+        // not already rising or falling, and it is carried at least 200 into
+        // the cell it lands in, so it never balances on the edge. Grid space,
+        // one axis; returns the new position.
+        inline constexpr int LEDGE_HOP_LIFT = 0x3c;
+        inline int LedgeStep(int target, int step, float startFloor, float newFloor, bool ceilingCrawler,
+                             float& vy)
+        {
+            const float drop = ceilingCrawler ? 0x200 : 0x100;
+            if (!(newFloor < startFloor && startFloor - newFloor > drop)) { return target; }
+            if (vy == 0.0f) { vy = LEDGE_HOP_LIFT; }
+            const int cellStart = target & ~0x1ff;
+            if (step >= 0)
+            {
+                const int least = cellStart + MOVE_PROBE_LEAD;
+                return target >= least ? target : least;
+            }
+            const int most = cellStart + 0x200 - MOVE_PROBE_LEAD;
+            return target <= most ? target : most;
+        }
+
         inline constexpr int BLOCKING_ATTRIBUTE_MIN = 0x14;
         inline constexpr int BLOCKING_ATTRIBUTE_MAX = 0x2c;
 
@@ -513,16 +556,67 @@ namespace ALTEngine::Screens
             }
         }
 
-        // The gunners (0x0b-0x0e) flinch on 8 as well (0x311c5); the synth
-        // only seen from behind (walk views 7, 0 and 1), and on 9 otherwise
-        // (0x312bb) - `view` is the walk view it was last drawn in.
-        inline int HitAnimation(int subtype, int view = 0)
+        // FUN_000310ac's flinch, or -1 for none. A hugger and the gunners other
+        // than the synth flinch on 8; the warriors, the burster and the synth
+        // on 8 when seen from behind (view 7, 0 or 1, `view` being +0x6e) and
+        // on 9 otherwise. The egg flinches on 3 while closed and 4 while
+        // checking, and not at all once it opens. The ceiling creatures (8 and
+        // 9) never react; the queen and the colonist are the caller's.
+        inline int HitAnimation(int subtype, int view = 0, int eggState = 0)
         {
-            if (subtype == 1) { return 3; }
-            if (subtype == 0x0d) { return (view == 0 || view == 1 || view == 7) ? 8 : 9; }
-            if (subtype >= 2 && subtype <= 0x0e) { return 8; }
-            return 9;
+            switch (subtype)
+            {
+            case 1:  return eggState == 0 ? 3 : (eggState == 2 ? 4 : -1);
+            case 2: case 0x0b: case 0x0c: case 0x0e: return 8;
+            case 3: case 4: case 5: case 6: case 0x0d:
+                return (view == 0 || view == 1 || view == 7) ? 8 : 9;
+            default: return -1;
+            }
         }
+
+        // FUN_000310ac returns before anything else for types 8 and 9: no
+        // reaction state, no immunity, no push.
+        inline bool ReactsToHits(int subtype) { return subtype != 8 && subtype != 9; }
+
+        // The creatures FUN_00032f78 pushes away from the player on a hit, at a
+        // quarter of their speed.
+        inline bool PushedByHits(int subtype)
+        {
+            return (subtype >= 2 && subtype <= 6) || (subtype >= 0x0b && subtype <= 0x0e);
+        }
+
+        // +0x4e on a hit: 0x10 ticks of immunity, the queen 0x12, or 0x40 while
+        // she is rising.
+        // FUN_00030b04 pushes these as they die (the same push as a hit's);
+        // the ceiling creatures drop where they are.
+        inline bool PushedOnDeath(int subtype)
+        {
+            return (subtype >= 2 && subtype <= 7) || (subtype >= 0x0b && subtype <= 0x0e);
+        }
+
+        // Ramp cells, 0x2d-0x34: a body that comes to rest on one is carried
+        // along it at the creature's full speed (+0x5e), by the tables at
+        // 0x34294 and 0x35bcc - 0x2d and 0x31 toward -z, 0x2e and 0x32 +x,
+        // 0x2f and 0x33 -x, 0x30 and 0x34 +z.
+        inline constexpr int RAMP_ATTRIBUTE_MIN = 0x2d;
+        inline constexpr int RAMP_ATTRIBUTE_MAX = 0x34;
+        inline bool RampCarry(int attribute, int speed, int& vx, int& vz)
+        {
+            vx = vz = 0;
+            if (attribute < RAMP_ATTRIBUTE_MIN || attribute > RAMP_ATTRIBUTE_MAX) { return false; }
+            switch ((attribute - RAMP_ATTRIBUTE_MIN) & 3)
+            {
+            case 0: vz = -speed; break;
+            case 1: vx = speed; break;
+            case 2: vx = -speed; break;
+            default: vz = speed; break;
+            }
+            return true;
+        }
+
+        inline constexpr int HIT_IMMUNITY = 0x10;
+        inline constexpr int QUEEN_HIT_IMMUNITY = 0x12;
+        inline constexpr int QUEEN_RISING_HIT_IMMUNITY = 0x40;
 
         inline int DeathAnimation(int subtype)
         {

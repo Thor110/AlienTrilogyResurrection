@@ -53,9 +53,50 @@ namespace ALTEngine::Game::CreatureSight
 
     bool LineOfFire(const Formats::LevelGeometry& level, const Query& query);
 
-    // FUN_00033a1c's first test: the creature's cell must share a zone bit with
-    // what the player can see (DAT_000b0cf0, which the renderer builds from
-    // every cell it draws). The port stands in the zones of the player's own
-    // cell - the same rule rounds use - since it does not walk visible cells.
-    bool ZoneVisible(const Formats::LevelGeometry& level, int creatureCell, int playerCell);
+    // THE GUNNERS' AND THE EGG'S LINE - FUN_00032aec, which types 0x0b-0x0e
+    // use in place of FUN_0003231c throughout the common task (0x344c5,
+    // 0x3463b, 0x34998 and the rest test the type first) and the egg uses to
+    // decide to open (0x357af).
+    //
+    // A single ray in three dimensions, not two probes on the ground: from
+    // 0x240 above the creature to the player's eye, 0x400 above the player's
+    // floor, pitched by the angle between them (FUN_00026c60's distance and
+    // FUN_00026b64's angle) and set off along the bearing to the player (+0x54), 0x100 a
+    // step for distance >> 8 steps (at least two). At each point it is refused
+    // by a cell off the map, a wall (attribute 0x14-0x2c), a floor above it or
+    // a ceiling below it - and what stands in the cell raises the floor rather
+    // than blocking: a crate (0x14) or a barrel (0x17) by 0x200, a double crate
+    // (0x19) by 0x400. Anything else there blocks (a creature, the player, a
+    // switch). Beyond 0x1555 the answer is no without looking.
+    inline constexpr int MAX_DISTANCE_3D = 0x1555;
+    inline constexpr int RAY_START_HEIGHT = 0x240;
+    inline constexpr int RAY_TARGET_HEIGHT = 0x400;
+
+    struct Query3D
+    {
+        float x = 0, y = 0, z = 0;           // the creature
+        int heading = 0;                     // +0x54: the bearing to the player
+        float targetX = 0, targetZ = 0;      // the player
+        float targetFloorY = 0;              // the player's floor (b0a4a)
+        int distance = 0;                    // the creature's own +0x60
+        // Creature and player marks, as for Query; objects are read from the
+        // cells' own +0x0c (CollisionNode::unknown13).
+        const std::vector<uint8_t>* occupancy = nullptr;
+    };
+
+    bool LineOfFire3D(const Formats::LevelGeometry& level, const Query3D& query);
+
+    // The zones the renderer drew this frame (DAT_000b0cf2, built at
+    // 0x2745b). It starts as the zones of the player's own cell; then the
+    // cells round the player are walked ring by ring out to 15 (ViewRings.h),
+    // within 0x600 of the view yaw for the first ring, 0x384 for the second,
+    // 0x280 to the eighth and 0x1b8 beyond. A cell sharing a zone with the mask
+    // so far is drawn, and if it has faces its zones join the mask - so the
+    // mask spreads through the zones the player can actually see into.
+    // `viewYaw` is the camera's (DAT_000b0ba2).
+    uint16_t DrawnZoneMask(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ, int viewYaw);
+
+    // FUN_00033a1c's first test: the creature's cell shares a zone with that
+    // mask.
+    bool ZoneVisible(const Formats::LevelGeometry& level, int creatureCell, uint16_t drawnZones);
 }

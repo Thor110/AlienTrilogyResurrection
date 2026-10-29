@@ -201,6 +201,7 @@ namespace ALTEngine::Screens::LevelSnapshot
 
         // Moment-to-moment state starts clear.
         e.hitCooldown = 0;
+        e.pushX = e.pushZ = 0.0f;
         e.pendingDamage = 0;
         e.attackCooldown = 0;
         e.stepX = e.stepZ = 0.0f;

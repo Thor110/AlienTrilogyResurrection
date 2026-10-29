@@ -1,5 +1,7 @@
 #pragma once
 
+#include <utility>
+
 #include <array>
 #include <cstdint>
 #include <vector>
@@ -182,6 +184,14 @@ namespace ALTEngine::Formats
     };
 
     DrawRoutine ClassifyDrawRoutine(uint8_t routine);
+
+    // The UVs (0-1, top-left origin) the level mesh gives a face's corners,
+    // in a/b/c/d order, before any faceUvRotations patch - the mapping the
+    // renderer uses. A triangle's fourth entry repeats its third. For an
+    // animated face pass the descriptor the animator resolves to as
+    // `texIndex` (see TextureAnimator::CurrentTexture).
+    std::array<std::pair<float, float>, 4> LevelFaceUvs(const ModelQuad& q, uint16_t texIndex,
+                                                        const std::vector<BxRectangle>& uvRects);
 
     // `lights` supplies each quad's colour. Passing nullptr emits white
     // for everything, i.e. the pre-lighting behaviour, which is what the

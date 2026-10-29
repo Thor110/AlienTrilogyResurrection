@@ -78,11 +78,16 @@ TEST_CASE("PlayerMover: a diagonal wall keeps the player on its side")
 TEST_CASE("PlayerMover: slippery ramps push downhill")
 {
     int x = 0, z = 0;
-    CHECK(PM::RampPush(0x35, 0, x, z));
+    CHECK(PM::RampPush(0x35, 0, false, x, z));
     CHECK_EQ(z, -0x80);
-    CHECK(PM::RampPush(0x36, 0x40, x, z));
+    CHECK(PM::RampPush(0x36, 0x40, false, x, z));
     CHECK_EQ(x, 0x40);
-    CHECK(!PM::RampPush(0x31, 0, x, z));
+    CHECK(!PM::RampPush(0x31, 0, false, x, z));
+    // Running, the push is the speed less 0x20; under 0x20 it is still 0x20.
+    CHECK(PM::RampPush(0x37, 0x90, true, x, z));
+    CHECK_EQ(x, -0x70);
+    CHECK(PM::RampPush(0x38, 0x10, true, x, z));
+    CHECK_EQ(z, 0x20);
 }
 
 TEST_CASE("PlayerMover: walking into a wall at an angle slides along it at full speed")

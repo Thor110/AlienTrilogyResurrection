@@ -1,10 +1,10 @@
 Offset	From   To
-0x6F78E == ?? = 01
+0x6F78E == 02 = 01
 ^ Inaccessible Secret Fix (discovered by @bambamalicious)
 
 0x6F78E is byte 10 of lift 3's record: its threshold, the count its triggers must reach
 before it moves (FUN_000423e8 copies it to the lift's +0x18; the lift's idle task waits
-for counter >= threshold). The original value isn't in a patched copy; it was not 1.
+for counter >= threshold). The original value was 2.
 
 Lift 3 is the 3x3 lift at cells (21-23, 58-60). It starts at the top (flags 0x01), at
 height 48, and goes down 48 into secret area 1, the pit at height 0. Two triggers add

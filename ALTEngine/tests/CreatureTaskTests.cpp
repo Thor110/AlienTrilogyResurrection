@@ -17,9 +17,9 @@ TEST_CASE("Egg: stays closed while the player is far, rechecking after a random 
     EG::Output out;
     for (int i = 0; i < EG::SPAWN_IDLE_TIMER; ++i) { out = EG::Step(egg, Far()); }
     CHECK(egg.state == EG::CHECK);
-    EG::Input far = Far();
-    far.random = 0x85;   // & 0x7f = 5
-    out = EG::Step(egg, far);
+    EG::Input distant = Far();
+    distant.random = 0x85;   // & 0x7f = 5
+    out = EG::Step(egg, distant);
     CHECK(egg.state == EG::CLOSED);
     CHECK_EQ(out.startAnimation, EG::ANIM_CLOSED);
     CHECK_EQ(egg.idleTimer, EG::RECHECK_MIN + 5);
@@ -358,4 +358,27 @@ TEST_CASE("Damage: a creature's hit lands from the near and middle bands with a 
     CHECK_EQ(EN::ResolveAttack(w, 0, -1000), 0);
     w.mode = 0; w.zoneVisible = false;
     CHECK_EQ(EN::ResolveAttack(w, 0, -1000), 0);
+}
+
+#include "Formats/ExplosionGraphics.h"
+
+TEST_CASE("Vents: each jet's sprite is its own frame and size for its life")
+{
+    namespace VS = ALTEngine::Formats::ExplosionGraphics::VentSprites;
+    // A fresh steam jet (life 0x20, clamped to 0x1f) on its first frame,
+    // wide and flat; an old one swells on frame 8.
+    VS::Look young = VS::For(true, false, 0x20, 0);
+    CHECK_EQ(young.record, 4);
+    CHECK(std::fabs(young.halfWidth - 8 * 15000.0f / 256) < 0.01f);
+    CHECK(std::fabs(young.halfHeight - 2 * 15000.0f / 256) < 0.01f);
+    VS::Look old = VS::For(true, false, 0, 3);
+    CHECK_EQ(old.record, 8);
+    CHECK(old.halfHeight > young.halfHeight);
+    // Vertical steam is the same turned on end.
+    VS::Look up = VS::For(true, true, 0x20, 0);
+    CHECK(up.halfWidth == young.halfHeight && up.halfHeight == young.halfWidth);
+    // A flame starts on frame 2 and burns down to 7.
+    CHECK_EQ(VS::For(false, false, 0x1f, 0).record, 2);
+    CHECK_EQ(VS::For(false, false, 0, 3).record, 7);
+    CHECK(std::fabs(VS::For(false, false, 0, 0).grey - 0x69 / 128.0f) < 0.001f);
 }

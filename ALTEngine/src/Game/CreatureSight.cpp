@@ -2,11 +2,66 @@
 
 #include "OriginalMath.h"
 #include "ProjectileCollision.h"
+#include "ViewRings.h"
 
 #include <cmath>
 
 namespace ALTEngine::Game::CreatureSight
 {
+    bool LineOfFire3D(const Formats::LevelGeometry& level, const Query3D& q)
+    {
+        if (q.distance > MAX_DISTANCE_3D) { return false; }
+
+        int x = static_cast<int>(std::lround(q.x));
+        int z = static_cast<int>(std::lround(q.z));
+        int y = static_cast<int>(std::lround(q.y)) + RAY_START_HEIGHT;
+        const int eye = static_cast<int>(std::lround(q.targetFloorY)) + RAY_TARGET_HEIGHT;
+        const int across = OriginalMath::Distance(static_cast<int>(std::lround(q.targetX)) - x,
+                                                  static_cast<int>(std::lround(q.targetZ)) - z);
+
+        // The step: 0x100 along the pitch toward the eye, then turned onto the
+        // heading. (The original turns (0, 0, 0x100) by the pitch from its own
+        // angle routine, then by the heading; the same vector to within a
+        // unit.)
+        const double pitch = std::atan2(static_cast<double>(eye - y), static_cast<double>(across));
+        const int forward = static_cast<int>(std::lround(PROBE_STEP * std::cos(pitch)));
+        const int stepY = static_cast<int>(std::lround(PROBE_STEP * std::sin(pitch)));
+        int stepX, stepZ;
+        OriginalMath::RotateYaw(forward, q.heading + 0x800, stepX, stepZ);
+
+        int steps = q.distance >> 8;
+        if (steps < 2) { steps = 2; }
+        for (int i = 0; i < steps; ++i)
+        {
+            if (x < 0 || z < 0) { return false; }
+            const int cellX = x >> 9, cellZ = z >> 9;
+            const auto* cell = Formats::CellAt(level, cellX, cellZ);
+            if (!cell) { return false; }
+            if (cell->attribute > 0x13 && cell->attribute < 0x2d) { return false; }
+
+            int floor = static_cast<int>(Formats::FindFloorHeightGridSpace(level, x, z));
+            const int index = Formats::CellIndex(level, cellX, cellZ);
+            uint8_t occupant = cell->unknown13;
+            if (q.occupancy && index >= 0 && static_cast<size_t>(index) < q.occupancy->size()
+                && (*q.occupancy)[static_cast<size_t>(index)] != 0)
+            {
+                occupant = (*q.occupancy)[static_cast<size_t>(index)];
+            }
+            if (occupant != 0)
+            {
+                if (occupant == 0x14 || occupant == 0x17) { floor += 0x200; }
+                else if (occupant == 0x19) { floor += 0x400; }
+                else { return false; }
+            }
+            if (y < floor) { return false; }
+            const int ceiling = static_cast<int>(cell->ceilingHeight) * Formats::WORLD_UNITS_PER_HEIGHT_UNIT;
+            if (ceiling < y) { return false; }
+
+            x += stepX; y += stepY; z += stepZ;
+        }
+        return true;
+    }
+
     bool LineOfFire(const Formats::LevelGeometry& level, const Query& q)
     {
         if (q.distance > MAX_DISTANCE) { return false; }
@@ -83,8 +138,52 @@ namespace ALTEngine::Game::CreatureSight
         return true;
     }
 
-    bool ZoneVisible(const Formats::LevelGeometry& level, int creatureCell, int playerCell)
+    uint16_t DrawnZoneMask(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ, int viewYaw)
     {
-        return ProjectileCollision::ShareZone(level, creatureCell, playerCell);
+        const int length = level.header.mapLength;
+        const int width = level.header.mapWidth;
+        if (playerCellX < 0 || playerCellZ < 0 || playerCellX >= length || playerCellZ >= width) { return 0; }
+        if (level.collisionGrid.size() < static_cast<size_t>(length) * static_cast<size_t>(width)) { return 0; }
+        auto at = [&](int x, int z) -> const Formats::CollisionNode& {
+            return level.collisionGrid[static_cast<size_t>(z) * static_cast<size_t>(length) + static_cast<size_t>(x)];
+        };
+        auto zones = [](const Formats::CollisionNode& c) { return static_cast<uint16_t>(c.ceilingFog | (c.floorFog << 8)); };
+        // Bytes 0-3 are the cell's first face, 0xffffffff for none (the
+        // runtime turns it into the list the renderer draws).
+        auto hasFaces = [](const Formats::CollisionNode& c) {
+            return (c.unknown1 & c.unknown2 & c.unknown3 & c.unknown4) != 0xff;
+        };
+
+        uint16_t mask = zones(at(playerCellX, playerCellZ));
+        struct Pass { int firstRing, lastRing, halfWidth; };
+        static constexpr Pass PASSES[] = { { 0, 0, 0x600 }, { 1, 1, 0x384 }, { 2, 7, 0x280 }, { 8, 14, 0x1b8 } };
+        const int yaw = viewYaw & 0xfff;
+        for (const Pass& pass : PASSES)
+        {
+            int lo = yaw - pass.halfWidth;
+            int hi = yaw + pass.halfWidth;
+            if (lo < 0) { lo += 0x1000; hi += 0x1000; }
+            for (int ring = pass.firstRing; ring <= pass.lastRing; ++ring)
+            {
+                int i = ViewRings::RING_BUCKETS[ring][lo >> 7];
+                while (ViewRings::RING_CELLS[i].angle < lo) { ++i; }
+                for (; i < ViewRings::CELL_COUNT && ViewRings::RING_CELLS[i].angle <= hi; ++i)
+                {
+                    const int x = playerCellX - ViewRings::RING_CELLS[i].dx;
+                    const int z = playerCellZ + ViewRings::RING_CELLS[i].dz;
+                    if (x < 0 || z < 0 || x >= length || z >= width) { continue; }
+                    const auto& cell = at(x, z);
+                    const uint16_t cellZones = zones(cell);
+                    if ((cellZones & mask) == 0) { continue; }
+                    if (hasFaces(cell)) { mask = static_cast<uint16_t>(mask | cellZones); }
+                }
+            }
+        }
+        return mask;
+    }
+
+    bool ZoneVisible(const Formats::LevelGeometry& level, int creatureCell, uint16_t drawnZones)
+    {
+        return (ProjectileCollision::CellZones(level, creatureCell) & drawnZones) != 0;
     }
 }

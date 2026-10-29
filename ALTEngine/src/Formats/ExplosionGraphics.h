@@ -76,6 +76,81 @@ namespace ALTEngine::Formats
         inline constexpr EffectTable EFFECT_UNKNOWN_B { 18, 6, 0x0a00, 0x0a00 };
         inline constexpr EffectTable EFFECT_IMPACT    { 25, 7, 0x0800, 0x0800 };
 
+        // THE VENT JETS (FUN_0002caa8 steam, FUN_0002ccfc flame, from the
+        // particle draw's table at 0x2d6a0). Each jet is a billboard of one of
+        // records 2-8, chosen afresh every frame by its life (+0x1c, clamped
+        // to 0-0x1f) plus a random 0-3: frame = table[0x20 - life + r]. Its
+        // half size on screen is a per-life value times a constant over the
+        // depth, which at the focal length 0x100 is that value times
+        // constant / 0x100 in world units. A steam jet is drawn at grey
+        // 0x41 + life, a flame at 0x69 (0x80 is white).
+        //   steam  frames 0xac20c, widths 0xac10c, heights 0xac18c, x 15000;
+        //          a vertical jet's width and height are swapped.
+        //   flame  frames 0xac354, lengths 0xac254 (x 16000), breadths
+        //          0xac2d4 (x 8000 across a horizontal jet, 12000 a vertical);
+        //          horizontal: length across, breadth up; vertical: the other way.
+        // The flame draws through LAB_0004b400 while life is 0x1c or more and
+        // LAB_0004b5cc after; the steam always through LAB_0004b5cc. Both are
+        // drawn here as cut-out billboards (the blend of those two fills is not
+        // settled).
+        namespace VentSprites
+        {
+            inline constexpr int16_t STEAM_FRAMES[36] = {
+                4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6,
+                7, 7, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8 };
+            inline constexpr int16_t FLAME_FRAMES[36] = {
+                2, 2, 2, 2, 4, 3, 4, 3, 3, 4, 3, 4, 4, 4, 4, 4, 3, 4, 4, 5, 4, 4, 5, 4,
+                4, 4, 5, 5, 5, 6, 5, 6, 6, 7, 7, 7 };
+            inline constexpr int8_t STEAM_WIDTH[32] = {
+                10, 10, 8, 7, 7, 7, 7, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 8, 8, 8, 8 };
+            inline constexpr int8_t STEAM_HEIGHT[32] = {
+                5, 5, 5, 5, 5, 6, 6, 6, 6, 5, 5, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2 };
+            inline constexpr int8_t FLAME_LENGTH[32] = {
+                4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8 };
+            inline constexpr int8_t FLAME_BREADTH[32] = {
+                8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7, 7, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3 };
+            inline constexpr float FOCAL = 0x100;
+            inline constexpr int STEAM_GREY_BASE = 0x41;
+            inline constexpr int FLAME_GREY = 0x69;
+            inline constexpr float WHITE = 0x80;
+
+            struct Look { int record; float halfWidth, halfHeight, grey; };
+
+            // `steam` and `vertical` from the jet's type; `random` any value.
+            inline Look For(bool steam, bool vertical, int life, int random)
+            {
+                const int l = life < 0 ? 0 : (life > 0x1f ? 0x1f : life);
+                const int index = 0x20 - l + (random & 3);
+                Look look{};
+                if (steam)
+                {
+                    look.record = STEAM_FRAMES[index];
+                    const float w = STEAM_WIDTH[l] * 15000.0f / FOCAL;
+                    const float h = STEAM_HEIGHT[l] * 15000.0f / FOCAL;
+                    look.halfWidth = vertical ? h : w;
+                    look.halfHeight = vertical ? w : h;
+                    look.grey = static_cast<float>(STEAM_GREY_BASE + l) / WHITE;
+                }
+                else
+                {
+                    look.record = FLAME_FRAMES[index];
+                    const float length = FLAME_LENGTH[l] * 16000.0f / FOCAL;
+                    if (vertical)
+                    {
+                        look.halfHeight = length;
+                        look.halfWidth = FLAME_BREADTH[l] * 12000.0f / FOCAL;
+                    }
+                    else
+                    {
+                        look.halfWidth = length;
+                        look.halfHeight = FLAME_BREADTH[l] * 8000.0f / FOCAL;
+                    }
+                    look.grey = static_cast<float>(FLAME_GREY) / WHITE;
+                }
+                return look;
+            }
+        }
+
         // The scale is a 12.12 fixed-point multiplier the original divides by
         // distance to get screen size. A world-space billboard needs it as a
         // world size instead, so the rect's pixel size is multiplied by the

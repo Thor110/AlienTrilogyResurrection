@@ -2,6 +2,7 @@
 
 #include "Formats/LevelLoader.h"
 #include "Game/CreatureSight.h"
+#include "Game/OriginalMath.h"
 
 using namespace ALTEngine::Formats;
 namespace CS = ALTEngine::Game::CreatureSight;
@@ -92,8 +93,32 @@ TEST_CASE("CreatureSight: zones")
 {
     LevelGeometry level = Room();
     At(level, 9, 2).ceilingFog = 2;
-    CHECK(!CS::ZoneVisible(level, 2 * 12 + 1, 2 * 12 + 9));
-    CHECK(CS::ZoneVisible(level, 2 * 12 + 1, 2 * 12 + 2));
+    CHECK(!CS::ZoneVisible(level, 2 * 12 + 9, 1));
+    CHECK(CS::ZoneVisible(level, 2 * 12 + 2, 1));
+}
+
+TEST_CASE("CreatureSight: the drawn zones spread from the player's cell through what is in view")
+{
+    // The room is zone 1. A second zone (2) shares the cells of column 6 with
+    // zone 1 (bits 1 and 2), and runs on through columns 7-11 on its own. A
+    // third (4) is only in column 11. Every cell has faces.
+    LevelGeometry level = Room();
+    for (auto& cell : level.collisionGrid) { cell.unknown1 = cell.unknown2 = cell.unknown3 = cell.unknown4 = 0; }
+    for (int z = 0; z < 5; ++z)
+    {
+        At(level, 6, z).ceilingFog = 3;
+        for (int x = 7; x < 11; ++x) { At(level, x, z).ceilingFog = 2; }
+        At(level, 11, z).ceilingFog = 4;
+    }
+    // From (2, 2) looking along +x (yaw 0xc00 has the rings' cells at x+1)
+    // the walk reaches column 6, so zone 2 joins; zone 4 never touches it.
+    const uint16_t ahead = CS::DrawnZoneMask(level, 2, 2, 0xc00);
+    CHECK(ahead == 3);
+    // Looking the other way, column 6 is behind and outside every window.
+    CHECK(CS::DrawnZoneMask(level, 2, 2, 0x400) == 1);
+    // A cell with no faces is drawn but adds nothing.
+    for (int z = 0; z < 5; ++z) { auto& c = At(level, 6, z); c.unknown1 = c.unknown2 = c.unknown3 = c.unknown4 = 0xff; }
+    CHECK(CS::DrawnZoneMask(level, 2, 2, 0xc00) == 1);
 }
 
 #include "Game/OriginalMath.h"
@@ -141,4 +166,52 @@ TEST_CASE("CreatureSight: another creature in the way blocks the line")
     CHECK(CS::LineOfFire(level, q));
     occupancy[static_cast<size_t>(2 * 12 + 5)] = 1;   // a creature halfway along
     CHECK(!CS::LineOfFire(level, q));
+}
+
+namespace
+{
+    // The same creature and player for FUN_00032aec's ray: 0x240 above the
+    // creature to 0x400 above the player's floor.
+    CS::Query3D Ray()
+    {
+        CS::Query3D q;
+        q.x = 1 * 512 + 256; q.z = 2 * 512 + 256; q.y = 0x20;
+        q.targetX = q.x + 4000; q.targetZ = q.z; q.targetFloorY = 0;
+        q.distance = 4000;
+        q.heading = ALTEngine::Game::OriginalMath::Bearing(static_cast<int>(q.x - q.targetX), static_cast<int>(q.z - q.targetZ));
+        return q;
+    }
+}
+
+TEST_CASE("CreatureSight: the gunners' ray passes over a crate, not a double crate, and not a wall")
+{
+    LevelGeometry level = Room();
+    CHECK(CS::LineOfFire3D(level, Ray()));
+
+    At(level, 5, 2).unknown13 = 0x14;   // a crate raises the floor by 0x200 - under the ray
+    CHECK(CS::LineOfFire3D(level, Ray()));
+    At(level, 5, 2).unknown13 = 0x19;   // a double crate by 0x400 - over it
+    CHECK(!CS::LineOfFire3D(level, Ray()));
+    At(level, 5, 2).unknown13 = 0x16;   // anything else in the cell blocks
+    CHECK(!CS::LineOfFire3D(level, Ray()));
+
+    LevelGeometry wall = Room();
+    At(wall, 5, 2).attribute = 0x14;
+    CHECK(!CS::LineOfFire3D(wall, Ray()));
+}
+
+TEST_CASE("CreatureSight: the gunners' ray is blocked by a creature, a low ceiling, and beyond 0x1555")
+{
+    LevelGeometry level = Room();
+    std::vector<uint8_t> occupancy(level.collisionGrid.size(), 0);
+    occupancy[2 * 12 + 5] = 1;
+    CS::Query3D q = Ray(); q.occupancy = &occupancy;
+    CHECK(!CS::LineOfFire3D(level, q));
+
+    LevelGeometry low = Room();
+    At(low, 5, 2).ceilingHeight = 0x10;   // 0x200, under the ray
+    CHECK(!CS::LineOfFire3D(low, Ray()));
+
+    CS::Query3D distant = Ray(); distant.distance = 0x1556;
+    CHECK(!CS::LineOfFire3D(Room(), distant));
 }

@@ -163,6 +163,12 @@ namespace ALTEngine::Screens
             // This tick's intended movement, before collision. The caller applies
             // it, because only it can probe the level.
             float stepX = 0, stepZ = 0;
+            float pushX = 0, pushZ = 0;   // a hit's or a death's push (FUN_00032f78)
+            // The attribute of the cell it stands in (the byte 10 of the cell
+            // +0x78 points at), set by the caller before each tick.
+            int standingAttribute = 0;
+            // The death animation has played out: the body (state 8).
+            bool bodyDown = false;
 
             // THE VELOCITY FLAG the motion tracker tests. Not a latch after all:
             // set when the creature moves, and cleared when it ATTACKS
@@ -592,10 +598,6 @@ namespace ALTEngine::Screens
         // sequences are wired through it.
         inline constexpr int ANIMATION_TICKS_PER_FRAME = 6;
 
-        inline constexpr int HIT_REACTION_TICKS = 6;   // GUESS - the real one is
-                                                       // the reaction animation's
-                                                       // own length
-
         // `ignoreStun` is the Modern "Stunned Enemies" option: hits land during
         // the hit reaction as well, instead of the creature being immune until
         // it recovers.
@@ -608,8 +610,25 @@ namespace ALTEngine::Screens
             enemy.health -= damage;
             if (enemy.health > 0)
             {
+                // FUN_000310ac. The ceiling creatures carry on as if nothing
+                // happened.
+                namespace EB = EnemyBehaviour;
+                if (!EB::ReactsToHits(enemy.type)) { return false; }
                 enemy.state = Damage::STATE_HIT;
-                enemy.hitCooldown = HIT_REACTION_TICKS;
+                enemy.hitCooldown = enemy.type != 7 ? EB::HIT_IMMUNITY
+                    : (enemy.ai.introPhase == 2 ? EB::QUEEN_RISING_HIT_IMMUNITY : EB::QUEEN_HIT_IMMUNITY);
+                // A rise is cut short, and the creature is pushed away from the
+                // player at a quarter of its speed until it recovers
+                // (FUN_00032f78 along the bearing turned half round).
+                if (enemy.vy > 0.0f) { enemy.vy = -enemy.vy; }
+                enemy.pushX = enemy.pushZ = 0.0f;
+                if (EB::PushedByHits(enemy.type))
+                {
+                    int px = 0, pz = 0;
+                    ALTEngine::Game::OriginalMath::RotateYaw(enemy.ai.speed >> 2, enemy.ai.bearingToPlayer, px, pz);
+                    enemy.pushX = static_cast<float>(px);
+                    enemy.pushZ = static_cast<float>(pz);
+                }
                 return false;
             }
             // Leave it alive for one more tick: the original checks health in
@@ -818,7 +837,7 @@ namespace ALTEngine::Screens
             namespace EG = CreatureTasks::Egg;
             EG::Input in;
             in.mode = enemy.mode;
-            in.lineToPlayer = enemy.lineOfFire;   // FUN_00032aec; the port has FUN_0003231c
+            in.lineToPlayer = enemy.lineOfFire;   // FUN_00032aec (CreatureSight::LineOfFire3D)
             in.animationEnded = enemy.animationEnded;
             in.recoveredFromHit = enemy.recoveredFromHit;
             in.random = world.random ? world.random() : 0;
@@ -849,6 +868,8 @@ namespace ALTEngine::Screens
             if (enemy.state == EnemyBehaviour::STATE_DYING
                 || enemy.state == EnemyBehaviour::STATE_DEAD)
             {
+                // A colonist's body has a look for each view (the death arm).
+                if (enemy.type == 10 && enemy.bodyDown) { return; }
                 PlayAnimation(enemy, EnemyBehaviour::DeathAnimation(enemy.type));
                 return;
             }
@@ -872,7 +893,7 @@ namespace ALTEngine::Screens
                 }
                 else
                 {
-                    PlayAnimation(enemy, EnemyBehaviour::HitAnimation(enemy.type, enemy.walkView));
+                    PlayAnimation(enemy, EnemyBehaviour::HitAnimation(enemy.type, enemy.walkView, enemy.egg.state));
                 }
                 return;
             }
@@ -992,8 +1013,9 @@ namespace ALTEngine::Screens
             a.queen = enemy.type == 7;
             a.animationEvent = enemy.animationEnded;
 
-            // The queen's hit reaction ending is a state of its own (6).
-            if (a.queen && enemy.recoveredFromHit)
+            // The hit reaction ending is a state of its own (6).
+            const bool recovering = enemy.recoveredFromHit;
+            if (a.queen && recovering)
             {
                 enemy.recoveredFromHit = false;
                 a.startAnimation = -1;
@@ -1047,7 +1069,8 @@ namespace ALTEngine::Screens
                 }
             }
 
-            AI::Step(a, world, static_cast<int>(std::lround(playerX)), static_cast<int>(std::lround(playerZ)));
+            if (recovering) { AI::CommonRecover(a, world); }
+            else { AI::Step(a, world, static_cast<int>(std::lround(playerX)), static_cast<int>(std::lround(playerZ))); }
             enemy.facing = a.facing;
             RestartAnimation(enemy, a.startAnimation);
 
@@ -1489,18 +1512,19 @@ namespace ALTEngine::Screens
             case EnemyBehaviour::STATE_HIT_RECOVER:
                 // A scripted creature flinches until its hit animation ends
                 // (state 6, 0x34ba4), and is immune for that long.
-                if (Scripted(enemy)) { enemy.stepX = enemy.stepZ = 0.0f; }
+                // It slides with the hit's push the while.
+                enemy.stepX = enemy.pushX;
+                enemy.stepZ = enemy.pushZ;
                 if (Scripted(enemy) && SequenceCanEnd(enemy.sequence) && !enemy.animator.Ended()) { break; }
+                enemy.stepX = enemy.stepZ = 0.0f;
+                enemy.pushX = enemy.pushZ = 0.0f;
                 if (CreatureAI::UsesCommonTask(enemy.type))
                 {
-                    // Then it decides afresh, facing the player; a burster
-                    // backs off first (0x34bd6). OURS: the original re-runs the
-                    // attack's choice in place; the chase reaches the same one.
-                    enemy.ai.facing = enemy.ai.target = BearingTo(enemy, playerX, playerZ);
-                    enemy.facing = enemy.ai.facing;
+                    // Then it decides afresh on its next task tick
+                    // (CreatureAI::CommonRecover); whatever it was doing is
+                    // over.
                     enemy.ai.vx = enemy.ai.vz = 0;
-                    enemy.ai.state = CreatureAI::CHASE;
-                    if (enemy.type == 3) { enemy.ai.retreating = true; }
+                    enemy.ai.state = CreatureAI::IDLE;
                     enemy.leaping = false;
                     enemy.leapX = enemy.leapZ = 0.0f;
                 }
@@ -1515,6 +1539,22 @@ namespace ALTEngine::Screens
                 // killing blow, so it lands a tick later and at the position the
                 // body ended up at.
                 enemy.spawnDeathEffect = true;
+                // FUN_00030b04: it falls pushed away from the player at a
+                // quarter of its speed, unless it is on a ramp cell; the
+                // ceiling creatures just drop.
+                enemy.pushX = enemy.pushZ = 0.0f;
+                enemy.bodyDown = false;
+                if (EnemyBehaviour::PushedOnDeath(enemy.type)
+                    && enemy.standingAttribute < EnemyBehaviour::RAMP_ATTRIBUTE_MIN)
+                {
+                    int px = 0, pz = 0;
+                    ALTEngine::Game::OriginalMath::RotateYaw(enemy.ai.speed >> 2, enemy.ai.bearingToPlayer, px, pz);
+                    enemy.pushX = static_cast<float>(px);
+                    enemy.pushZ = static_cast<float>(pz);
+                }
+                else if (enemy.vy > 0.0f) { enemy.vy = -enemy.vy; }
+                enemy.stepX = enemy.pushX;
+                enemy.stepZ = enemy.pushZ;
                 if (enemy.type == 7 && enemy.drop != 0xff)
                 {
                     enemy.deathChain = enemy.drop;
@@ -1525,6 +1565,54 @@ namespace ALTEngine::Screens
                 break;
 
             case EnemyBehaviour::STATE_DEAD:
+                // The common task's and the queen's states 7 and 8 (0x34dfb,
+                // 0x34eb3; 0x36302, 0x36395). The death push lasts the death
+                // animation (the queen's into her first tick down); then a body
+                // on a ramp cell is carried down it at the creature's speed,
+                // and stops on the first cell that isn't one.
+                if (enemy.type == 10)
+                {
+                    // The colonist's states 7 and 8 (0x3667f, 0x36698): once
+                    // its death has played, the body shows animation 0x1b plus
+                    // the view, and changes as the player moves round.
+                    const int view = CreatureTasks::Colonist::ViewOf(enemy.facingOctant, BearingTo(enemy, playerX, playerZ));
+                    if (!enemy.bodyDown ? enemy.animationEnded : view != enemy.colonist.lastView)
+                    {
+                        enemy.bodyDown = true;
+                        enemy.colonist.lastView = view;
+                        PlayAnimation(enemy, CreatureTasks::Colonist::ANIM_BODY + view);
+                    }
+                    enemy.pushX = enemy.pushZ = 0.0f;
+                }
+                else if (CreatureAI::UsesCommonTask(enemy.type) || enemy.type == 7)
+                {
+                    namespace EB = EnemyBehaviour;
+                    if (!enemy.bodyDown)
+                    {
+                        if (enemy.animationEnded)
+                        {
+                            enemy.bodyDown = true;
+                            if (enemy.type != 7)
+                            {
+                                enemy.pushX = enemy.pushZ = 0.0f;
+                                if (enemy.vy > 0.0f) { enemy.vy = -enemy.vy; }
+                            }
+                            int vx = 0, vz = 0;
+                            if (EB::RampCarry(enemy.standingAttribute, enemy.ai.speed, vx, vz))
+                            {
+                                enemy.pushX = static_cast<float>(vx);
+                                enemy.pushZ = static_cast<float>(vz);
+                            }
+                        }
+                    }
+                    else if (enemy.standingAttribute < EB::RAMP_ATTRIBUTE_MIN)
+                    {
+                        enemy.pushX = enemy.pushZ = 0.0f;
+                    }
+                }
+                else { enemy.pushX = enemy.pushZ = 0.0f; }
+                enemy.stepX = enemy.pushX;
+                enemy.stepZ = enemy.pushZ;
                 break;
 
             default:

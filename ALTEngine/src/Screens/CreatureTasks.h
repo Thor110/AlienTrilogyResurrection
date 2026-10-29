@@ -182,7 +182,8 @@ namespace ALTEngine::Screens::CreatureTasks
     //   4 BURST     0x36649  shows the empty cocoon's look (animation 0-7) as
     //                        the player moves round.
     //   6 HIT       0x3665b  on the event: LOOKING, with 8 ticks to wait.
-    //   7/8               dying and dead.
+    //   7/8               dying (animation 0x19), then dead: 0x1b plus the
+    //                     eighth, following the player round (0x3667f).
     // The animation "event" (+0xb6 bit 1) comes from the animation scripts,
     // which the port does not run; an animation playing through stands in.
     namespace Colonist
@@ -197,6 +198,7 @@ namespace ALTEngine::Screens::CreatureTasks
         inline constexpr int ANIM_BURST_LOOK = 0;     // + the eighth
         inline constexpr int ANIM_FRONT_CRY = 0x18;
         inline constexpr int ANIM_BURSTING = 0x1a;
+        inline constexpr int ANIM_BODY = 0x1b;        // + the eighth, once dead
         inline constexpr int SOUND_CRY = 0x6e;
         inline constexpr int BURST_WAIT_MIN = 0x28;
         inline constexpr int CRY_WAIT_MIN = 0x78;

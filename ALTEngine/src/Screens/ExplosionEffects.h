@@ -102,6 +102,23 @@ namespace ALTEngine::Screens
 
         bool Ready() const { return loaded && rects.size() >= 45; }
 
+        // Points a sprite at one of the file's 45 rectangles (the UV record
+        // table at DAT_002405a0 that every effect indexes).
+        bool UseRecord(int record, ALTEngine::Renderer::PlacedSprite& sprite) const
+        {
+            if (!Ready() || record < 0 || static_cast<size_t>(record) >= rects.size()) { return false; }
+            const auto& rect = rects[static_cast<size_t>(record)];
+            const int page = (rect.page >= 0 && rect.page < 2) ? rect.page : 0;
+            const float sheetW = static_cast<float>(sheetWidth[page]);
+            const float sheetH = static_cast<float>(sheetHeight[page]);
+            sprite.textureKey = SheetKey(page);
+            sprite.u0 = static_cast<float>(rect.x) / sheetW;
+            sprite.v0 = static_cast<float>(rect.y) / sheetH;
+            sprite.u1 = static_cast<float>(rect.x + rect.width) / sheetW;
+            sprite.v1 = static_cast<float>(rect.y + rect.height) / sheetH;
+            return true;
+        }
+
         // Sets one off. `table` picks which of the file's effects to play - see
         // ExplosionGraphics for the full list.
         // `flipVertically` mirrors the frames upside down. A puff on the
