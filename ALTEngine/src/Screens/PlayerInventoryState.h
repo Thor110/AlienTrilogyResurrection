@@ -49,6 +49,11 @@ namespace ALTEngine::Screens
         int batteries = 0;
         bool HasBatteries() const { return batteries > 0; }
 
+        // Seismic charges (DAT_000b0ad0), from pickup 6 (0x3899f, no cap).
+        // Fire 2 throws one with any weapon but the pulse rifle, whose Fire 2
+        // is its grenade (FUN_0003efcc -> FUN_0003d794).
+        int seismicCharges = 0;
+
         // "Fully Loaded" cheat: every weapon and item available with full ammo.
         //
         // 999 is the original's own display clamp (its number routines clamp to
@@ -65,6 +70,7 @@ namespace ALTEngine::Screens
             hasAutoMapper = true;
             hasShoulderLamp = true;
             batteries = 9;
+            seismicCharges = 99;
             // Equipped weapon deliberately left alone - the cheat gives things,
             // it does not change what the player is holding.
         }

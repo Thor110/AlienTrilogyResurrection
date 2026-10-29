@@ -178,6 +178,9 @@ namespace ALTEngine::Screens
         // Where the fireball sits relative to the barrel's base. GUESS - the
         // original's explosion carries its own position which has not been read.
         constexpr float EXPLOSION_HEIGHT_OFFSET = 256.0f;
+        // FUN_0003d794's FUN_00040ba0(9, -1): the sound a seismic charge's
+        // throw plays.
+        constexpr int SEISMIC_THROW_SOUND = 9;
 
 
         constexpr float FRAGMENT_HALF_SIZE = 6.0f;
@@ -388,6 +391,20 @@ namespace ALTEngine::Screens
             int life = 0x40;     // +0x1c: goes off when it runs out
         };
         std::vector<EnemyGrenade> enemyGrenades;
+        // The player's thrown explosives: the pulse rifle's grenade (particle
+        // type 0xc, FUN_0002c4e0) and the seismic charge (0x13, FUN_0002c830).
+        // Both fly by the particle pass's arm at 0x2db80 and go off when their
+        // life runs out (0x2da19), on an object or creature, or dropping into a
+        // hole.
+        struct PlayerExplosive
+        {
+            float x = 0, y = 0, z = 0;
+            float vx = 0, vy = 0, vz = 0;
+            int bounce = 8;      // +0x18: the next bounce's lift, 2 less each time
+            int life = 0x40;     // +0x1c
+            bool charge = true;  // a seismic charge, or else a grenade
+        };
+        std::vector<PlayerExplosive> playerExplosives;
         // Switch/object state, indexed by object record. Non-zero means
         // already thrown - the original latches on this and fails, which
         // aborts the whole command chain rather than re-running it.
@@ -430,6 +447,12 @@ namespace ALTEngine::Screens
         // player, the doors and the lifts. A fire-on-press weapon's press
         // waits for the next such tick rather than being lost.
         unsigned logicTick = 0;
+        // Faster Xenomorphs: of the passes the original skips for creatures,
+        // the aliens take one in FASTER_XENO_OFF_PASS_EVERY, so they run at
+        // 1 + 1/N times the original's rate. Every off-pass (N = 1, double
+        // speed) was too fast in play (Edward, 2026); N = 2 gives 1.5x.
+        constexpr unsigned FASTER_XENO_OFF_PASS_EVERY = 2;
+        unsigned fasterXenoOffPass = 0;
         bool firePressPending = false;
         // The weapon's own clock (Bootstrap::WeaponPacingSettings). The
         // original fires and animates the weapon once per drawn frame, which
@@ -1299,6 +1322,7 @@ namespace ALTEngine::Screens
                         // off the playable map are crate contents and start out
                         // of play.
                         enemyGrenades.clear();
+                        playerExplosives.clear();
                         enemies = ALTEngine::Screens::Enemies::Build(
                             level, static_cast<int>(difficultySettings.Get()), originX, originZ);
                         {
@@ -1448,6 +1472,22 @@ namespace ALTEngine::Screens
             if (ALTEngine::Screens::Enemies::TriggerSpawn(enemies, monster, amount))
             {
                 SDL_Log("GameplayScreen: trigger spawned monster %d", monster);
+                // A creature let out into a cell with no zones - a sealed duct
+                // behind a wall vent, as L111's huggers are - could never see
+                // the player there, so it would wait in the wall forever. It
+                // comes out alerted instead; once in the room the usual sight
+                // rules take over. NOT TRACED (Edward, 2026: they should come
+                // out of the vents as you pass the triggers).
+                for (auto& released : enemies)
+                {
+                    if (released.monsterIndex != monster || !released.active) { continue; }
+                    const int cell = ALTEngine::Formats::CellIndex(level,
+                        ToGridSpaceX(released.x, originX) >> 9, ToGridSpaceZ(released.z, originZ) >> 9);
+                    if (ALTEngine::Game::ProjectileCollision::CellZones(level, cell) == 0)
+                    {
+                        released.ai.alerted = true;
+                    }
+                }
             }
         };
         // Commands 5 and 7: count toward a lift's threshold (Game/Lifts.h).
@@ -1731,7 +1771,9 @@ namespace ALTEngine::Screens
                     playerTicksThisFrame++;
                     // The original's alternate pass (see logicTick).
                     const bool halfPass = ((logicTick++ & 1u) == 0) || speedCompensationOff;
-                    const bool creaturePass = halfPass || fasterXenomorphs;
+                    const bool fasterXenoPass = fasterXenomorphs && !halfPass
+                        && (fasterXenoOffPass++ % FASTER_XENO_OFF_PASS_EVERY) == 0;
+                    const bool creaturePass = halfPass || fasterXenoPass;
                     // The resupply countdown's task runs every pass, the timer
                     // interrupt counting its seconds (one or two a tick).
                     if (resupply.active && !resupply.expired && !playerDead)
@@ -2190,12 +2232,56 @@ namespace ALTEngine::Screens
                     const bool altFirePressed = altFireHeld && !altFirePressedLastTick;
                     altFirePressedLastTick = altFireHeld;
 
+                    // Both throws start from the player and fly along the view
+                    // (FUN_0002c4e0 / FUN_0002c830): (0, -0x18, speed) turned by
+                    // the pitch, then the yaw, from below the eye.
+                    auto throwExplosive = [&](bool charge) {
+                        const int pitch = static_cast<int>(std::lround(
+                            camera.pitch * (PC::ANGLE_UNITS / 6.28318530718f))) & PC::ANGLE_MASK;
+                        // The grenade at the player's speed + 0x100, at most
+                        // 0x100; the charge at + 0x40, at most 0x80.
+                        const int speed = charge ? std::min(playerCam.speed + 0x40, 0x80)
+                                                 : std::min(playerCam.speed + 0x100, 0x100);
+                        const float ps = static_cast<float>(PC::Sin(pitch)) / PC::TRIG_ONE;
+                        const float pc = static_cast<float>(PC::Cos(pitch)) / PC::TRIG_ONE;
+                        const float ys = static_cast<float>(PC::Sin(playerCam.viewYaw)) / PC::TRIG_ONE;
+                        const float yc = static_cast<float>(PC::Cos(playerCam.viewYaw)) / PC::TRIG_ONE;
+                        const float forward = static_cast<float>(speed) * pc + 0x18 * ps;
+                        PlayerExplosive e;
+                        e.charge = charge;
+                        e.x = camera.x;
+                        e.y = camera.y - (charge ? 0x100 : 0x80);
+                        e.z = camera.z;
+                        e.vx = forward * ys;
+                        e.vz = -forward * yc;
+                        e.vy = static_cast<float>(speed) * ps - 0x18 * pc;
+                        e.bounce = charge ? 8 : 0x10;
+                        e.life = charge ? 0x40 : 0x30;
+                        playerExplosives.push_back(e);
+                    };
+
+                    // Fire 2 with anything but the pulse rifle throws a seismic
+                    // charge (FUN_0003d794): the noise 0x280 and sound 9, with no
+                    // change to the weapon's own state. It never did anything.
+                    if (altFirePressed
+                        && hudState.currentWeapon != ALTEngine::Renderer::HUD_GRENADE_WEAPON
+                        && weaponRuntime.state == WS::STATE_IDLE
+                        && inventory.seismicCharges > 0)
+                    {
+                        inventory.seismicCharges--;
+                        weaponRuntime.noise = WS::GRENADE_NOISE;
+                        ALTEngine::Audio::SfxPlayer::PlaySlot(SEISMIC_THROW_SOUND, digits.c_str(), cdDirectory);
+                        throwExplosive(true);
+                    }
+
                     if (altFirePressed
                         && hudState.currentWeapon == ALTEngine::Renderer::HUD_GRENADE_WEAPON
                         && weaponRuntime.state == WS::STATE_IDLE
                         && inventory.pulseRifle.grenades > 0)
                     {
                         inventory.pulseRifle.grenades--;
+                        // The grenade itself, which until now was never launched.
+                        throwExplosive(false);
                         // And the grenade, less (0x2c52c: 0x20).
                         knockbackStrength = ALTEngine::Game::PlayerMover::KNOCKBACK_GRENADE;
                         knockbackYaw = (playerCam.viewYaw + 0x800) & PC::ANGLE_MASK;
@@ -2427,7 +2513,8 @@ namespace ALTEngine::Screens
 
 
                         // Creatures run on the original's alternate pass; with
-                        // Faster Xenomorphs the aliens run on every tick.
+                        // Faster Xenomorphs the aliens also take some of the
+                        // others (FASTER_XENO_OFF_PASS_EVERY).
                         // What the renderer would have drawn from here: the
                         // zones creatures test the player against.
                         const uint16_t drawnZones = ALTEngine::Game::CreatureSight::DrawnZoneMask(level,
@@ -2648,8 +2735,18 @@ namespace ALTEngine::Screens
                                 const VT::Params vp = VT::For(enemy.type);
                                 if (enemy.ventEmit)
                                 {
+                                    // The vent's heading is its record's turned half
+                                    // round (FUN_0002e638), but FUN_0002b0e4 rotates
+                                    // a velocity along +z, the reverse of the port's
+                                    // (sin, -cos) heading - so in the port's terms the
+                                    // jet runs along the record's own heading. Turned
+                                    // round, 45 of the 59 horizontal vents in the
+                                    // game jetted straight into the wall block behind
+                                    // them (L112's pipes: "inside the pipe", seen only
+                                    // up close - Edward, 2026); the record's way, 1.
+                                    const int jetYaw = (enemy.facing + 0x800) & ALTEngine::Screens::PlayerCamera::ANGLE_MASK;
                                     particles.SpawnVent(vp.particleType, enemy.x, enemy.y, enemy.z,
-                                                        vp.speed, enemy.facing, enemy.ventDown);
+                                                        vp.speed, jetYaw, enemy.ventDown);
                                 }
                                 if (enemy.ventSound)
                                 {
@@ -3344,6 +3441,77 @@ namespace ALTEngine::Screens
                                 else { ++gi; }
                             }
                         }
+
+                        // The player's grenades and seismic charges, on the same
+                        // pass (the arm at 0x2db80). In its order: time running
+                        // out (0x2da19), an object (FUN_0002a2d8), a creature
+                        // (FUN_0002a628), then the floor. OURS, simplified as the
+                        // handler's grenade is: any object or blocking cell in
+                        // its cell sets it off, and so does a live creature
+                        // within 0x100 of it.
+                        if (halfPass && !playerExplosives.empty())
+                        {
+                            auto detonate = [&](float x, float y, float z) {
+                                const int cell = ALTEngine::Formats::CellIndex(
+                                    level, ToGridSpaceX(x, originX) >> 9, ToGridSpaceZ(z, originZ) >> 9);
+                                explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_BARREL,
+                                                 x, y + EXPLOSION_HEIGHT_OFFSET, z);
+                                if (cell >= 0) { blastQueue.push_back(cell); }
+                                for (size_t q = 0; q < blastQueue.size(); ++q)
+                                {
+                                    ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                        ALTEngine::Formats::SoundIds::BARREL_EXPLODE, digits.c_str(), cdDirectory);
+                                    RunBlast(blastQueue[q]);
+                                }
+                                blastQueue.clear();
+                            };
+                            for (size_t ei = 0; ei < playerExplosives.size();)
+                            {
+                                PlayerExplosive& e = playerExplosives[ei];
+                                bool gone = false;
+                                const int gx = ToGridSpaceX(e.x, originX);
+                                const int gz = ToGridSpaceZ(e.z, originZ);
+                                const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
+                                bool nearCreature = false;
+                                for (const auto& enemy : enemies)
+                                {
+                                    if (!enemy.active || !enemy.alive || ALTEngine::Screens::IsVent(enemy.type)) { continue; }
+                                    if (std::fabs(enemy.x - e.x) < 0x100 && std::fabs(enemy.z - e.z) < 0x100
+                                        && std::fabs(enemy.y - e.y) < 0x200) { nearCreature = true; break; }
+                                }
+                                if (!cell) { gone = true; }
+                                else if (--e.life <= 0) { detonate(e.x, e.y, e.z); gone = true; }
+                                else if ((cell->attribute > 0x13 && cell->attribute < 0x2d)
+                                         || (cell->unknown13 >= 0x14 && cell->unknown13 != 0xFF)
+                                         || nearCreature)
+                                {
+                                    detonate(e.x, e.y, e.z); gone = true;
+                                }
+                                else
+                                {
+                                    const float floor = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
+                                    if (e.y < floor + 0x20)
+                                    {
+                                        // Dropped into a hole: it goes off 0x200 up.
+                                        if (floor - e.y > 0x40) { detonate(e.x, e.y + 0x200, e.z); gone = true; }
+                                        else
+                                        {
+                                            e.y = floor + 0x20;
+                                            e.vy = static_cast<float>(e.bounce);
+                                            if (e.bounce > 4) { e.bounce -= 2; }
+                                            else { e.vx = std::trunc(e.vx / 2.0f); e.vz = std::trunc(e.vz / 2.0f); }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        e.vy -= 1.0f;   // 0x2dcf9: one a tick
+                                    }
+                                    if (!gone) { e.x += e.vx; e.y += e.vy; e.z += e.vz; }
+                                }
+                                if (gone) { playerExplosives.erase(playerExplosives.begin() + static_cast<std::ptrdiff_t>(ei)); }
+                                else { ++ei; }
+                            }
+                        }
                     }
 
                     // The animation's own sound cue. OP_EVENT's operand IS a
@@ -3726,7 +3894,7 @@ namespace ALTEngine::Screens
                             const bool vertical = particle.type == P::TYPE_VENT_STEAM_V || particle.type == P::TYPE_VENT_FLAME_V;
                             ventFlicker = ventFlicker * 1103515245u + 12345u;
                             const VS::Look look = VS::For(steam, vertical, particle.life, static_cast<int>(ventFlicker >> 16));
-                            if (!explosions.UseRecord(look.record, spark)) { continue; }
+                            if (!explosions.UseRecord(look.record, spark, steam)) { continue; }
                             spark.halfWidth = look.halfWidth;
                             spark.halfHeight = look.halfHeight;
                             spark.r = spark.g = spark.b = look.grey;
@@ -3816,6 +3984,20 @@ namespace ALTEngine::Screens
                         shell.scaleX = shell.scaleY = shell.scaleZ = CASING_MODEL_SCALE * 2.0f;
                         placedObjects.push_back(shell);
                     }
+                    // The player's grenades and charges, each with its own
+                    // pickup model (FUN_0002cf14 draws a model for both).
+                    for (const PlayerExplosive& e : playerExplosives)
+                    {
+                        ALTEngine::Renderer::PlacedObject shell;
+                        shell.cacheKey = { ALTEngine::Renderer::ModelCatalog::Pickmod,
+                                           e.charge ? ALTEngine::Formats::ModelIndices::PickMod::SeismicCharge
+                                                    : ALTEngine::Formats::ModelIndices::PickMod::PulseRifleGrenade };
+                        shell.x = e.x;
+                        shell.y = e.y - 0x20;
+                        shell.z = e.z;
+                        shell.scaleX = shell.scaleY = shell.scaleZ = CASING_MODEL_SCALE * 2.0f;
+                        placedObjects.push_back(shell);
+                    }
                 }
 
                 // The view, drawn between the last two player ticks (see
@@ -3895,6 +4077,7 @@ namespace ALTEngine::Screens
                                 inventory.pulseRifle.grenades > ALTEngine::Screens::PlayerHudState::GRENADE_MAX
                                     ? ALTEngine::Screens::PlayerHudState::GRENADE_MAX
                                     : inventory.pulseRifle.grenades);
+                            hudState.seismicCharges = static_cast<int16_t>(std::min(inventory.seismicCharges, 999));
                         }
 
                         // The select keys own this now, in the canonical order

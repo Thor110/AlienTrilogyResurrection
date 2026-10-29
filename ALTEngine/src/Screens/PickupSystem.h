@@ -39,7 +39,8 @@ namespace ALTEngine::Screens
             FLAMETHROWER_AND_AMMO = 3,
             SMARTGUN_AND_AMMO = 4,
 
-            PULSE_SPARE = 6,        // DAT_000b0ace high half - the non-pulse icon counter
+            SEISMIC_CHARGES = 6,    // DAT_000b0ad0 (the high half of 0x10ace): the HUD's
+                                    // item with any weapon but the pulse rifle (0x3ac97)
             COUNTER_AD2 = 7,        // +1, untraced meaning
             COUNTER_AD8 = 8,        // +1, untraced meaning
 
@@ -158,8 +159,10 @@ namespace ALTEngine::Screens
                 hud.terrainSpeed = static_cast<int16_t>(hud.terrainSpeed + amount * TERRAIN_SPEED_PER_UNIT);
                 return true;
 
-            case PULSE_SPARE:
-                inventory.pulseRifle.grenades = Clamp(inventory.pulseRifle.grenades + amount, GRENADE_CAP);
+            case SEISMIC_CHARGES:
+                // Added with no cap (0x3899f). This used to go to the pulse
+                // rifle's grenades, so seismic charges never existed.
+                inventory.seismicCharges += amount;
                 return true;
 
             case FLAG_80:

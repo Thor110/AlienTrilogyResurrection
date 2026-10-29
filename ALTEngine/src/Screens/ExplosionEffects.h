@@ -91,6 +91,20 @@ namespace ALTEngine::Screens
                 }
                 sheetWidth[i] = texture.width;
                 sheetHeight[i] = texture.height;
+
+                // A grey copy for the steam jets: the original fills steam
+                // through its own blend at a grey level (FUN_0002caa8, 0x4b400)
+                // rather than in the frames' fire colours, which drawn as they
+                // are made the steam read as flame (Edward, 2026). Each texel
+                // keeps its brightness and transparency.
+                std::vector<uint8_t> grey = texture.rgba;
+                for (size_t p = 0; p + 3 < grey.size(); p += 4)
+                {
+                    const int luma = (grey[p] * 77 + grey[p + 1] * 150 + grey[p + 2] * 29) >> 8;
+                    grey[p] = grey[p + 1] = grey[p + 2] = static_cast<uint8_t>(luma);
+                }
+                ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
+                    GreySheetKey(static_cast<int>(i)), grey, texture.width, texture.height);
             }
 
             rects = set.uvRects;
@@ -104,14 +118,14 @@ namespace ALTEngine::Screens
 
         // Points a sprite at one of the file's 45 rectangles (the UV record
         // table at DAT_002405a0 that every effect indexes).
-        bool UseRecord(int record, ALTEngine::Renderer::PlacedSprite& sprite) const
+        bool UseRecord(int record, ALTEngine::Renderer::PlacedSprite& sprite, bool grey = false) const
         {
             if (!Ready() || record < 0 || static_cast<size_t>(record) >= rects.size()) { return false; }
             const auto& rect = rects[static_cast<size_t>(record)];
             const int page = (rect.page >= 0 && rect.page < 2) ? rect.page : 0;
             const float sheetW = static_cast<float>(sheetWidth[page]);
             const float sheetH = static_cast<float>(sheetHeight[page]);
-            sprite.textureKey = SheetKey(page);
+            sprite.textureKey = grey ? GreySheetKey(page) : SheetKey(page);
             sprite.u0 = static_cast<float>(rect.x) / sheetW;
             sprite.v0 = static_cast<float>(rect.y) / sheetH;
             sprite.u1 = static_cast<float>(rect.x + rect.width) / sheetW;
@@ -279,6 +293,7 @@ namespace ALTEngine::Screens
         };
 
         static const char* SheetKey(int page) { return page == 1 ? "explgfx1" : "explgfx0"; }
+        static const char* GreySheetKey(int page) { return page == 1 ? "explgfx1:grey" : "explgfx0:grey"; }
 
         static constexpr size_t MAX_ACTIVE = 32;
 

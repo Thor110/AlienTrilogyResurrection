@@ -701,7 +701,7 @@ Applied by both ALTEngine and ALTViewer's patch button.
 
 ## L900LEV Multiplayer Map 1 Fix 4
 
-[The same as L111LEV Fix 4](#L111LEV-Fix-4): the wrong texture index, and the UV rotation that goes with it. L900LEV previously got neither.
+[The same as L111LEV Fix 4](#L111LEV-Fix-4): the wrong texture index. L900LEV previously did not get it.
 
 Patch listed at Patch/another-fix.txt
 
@@ -763,7 +763,7 @@ Applied by both ALTEngine and ALTViewer's patch button.
 
 Patched an issue on L111LEV where a face was assigned the wrong texture index.
 
-UV rotation corrected: with the right texture, the face also needed its texture turned a quarter-turn counter-clockwise. This used to be done by the engine while drawing; it is now in the level file, by rotating the face's vertex list.
+The face is a triangle. An earlier version of this fix also turned it a quarter-turn, but that only made up for the engine's old triangle mapping; with the original's mapping in place the face's own order is right, and the patch writes it back.
 
 Patch listed at Patch/another-fix.txt
 

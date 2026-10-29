@@ -924,8 +924,8 @@ namespace ALTViewer
             BinaryUtility.ReplaceBytes(replacements, patchDirectory);
             // L111LEV.MAP and L900LEV.MAP - the same three bugs at the same offsets in both
             //   0x14EFA: misplaced vertex coordinate on a lift (Patch/new-fix.txt, Edward, 2026)
-            //   0x46DB4 + 0x46DC4: one triangle had the wrong texture index, and its texture needs a quarter-turn
-            //     counter-clockwise, done by rotating its vertex list 8052, 8049, 8113 -> 8049, 8113, 8052 (Patch/another-fix.txt)
+            //   0x46DC4: one triangle had the wrong texture index; 0x46DB4 writes its vertex list back to the original
+            //     8052, 8049, 8113, undoing a quarter-turn an earlier version added for the engine's old triangle mapping (Patch/another-fix.txt)
             //   0x49BCA: the starting lift panel (face 10208) was mirrored the wrong way, flag 0x00 -> 0x02 (Edward, 2026)
             foreach (string level in new[] { "SECT11\\L111LEV.MAP", "SECT90\\L900LEV.MAP" })
             {
@@ -933,7 +933,7 @@ namespace ALTViewer
                 replacements = new List<Tuple<long, byte[]>>()
                 {
                     Tuple.Create(0x14EFAL, new byte[] { 0x00, 0x00 }),
-                    Tuple.Create(0x46DB4L, new byte[] { 0x71, 0x1F, 0x00, 0x00, 0xB1, 0x1F, 0x00, 0x00, 0x74, 0x1F, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF }),
+                    Tuple.Create(0x46DB4L, new byte[] { 0x74, 0x1F, 0x00, 0x00, 0x71, 0x1F, 0x00, 0x00, 0xB1, 0x1F, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF }),
                     Tuple.Create(0x46DC4L, new byte[] { 0x38 }),
                     Tuple.Create(0x49BCAL, new byte[] { 0x02 })
                 };

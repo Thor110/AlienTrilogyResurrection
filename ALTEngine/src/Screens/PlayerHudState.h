@@ -52,6 +52,7 @@ namespace ALTEngine::Screens
         // in hand - the launcher is underslung on it.
         static constexpr int GRENADE_MAX = 0x14;
         int16_t grenades = 0;
+        int16_t seismicCharges = 0;   // shown with any weapon but the pulse rifle
 
         // The other three, identified by WHAT READS THEM rather than by any
         // name in the binary. None of them is the wall charges.

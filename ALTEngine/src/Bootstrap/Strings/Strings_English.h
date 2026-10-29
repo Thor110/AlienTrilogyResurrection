@@ -155,7 +155,7 @@ namespace ALTEngine::Bootstrap
             "Health held at its maximum, including derm patch overcharge",
             "Jump",
             "Faster Xenomorphs",
-            "Aliens move at the player's pace, not the original's half pace; people and synthetics keep theirs",
+            "Aliens move half again as fast as in the original; people and synthetics keep their pace",
             "Speed Compensation",
             "The original's default timing: you, doors and lifts at twice the creatures' rate",
             "Save Anywhere",

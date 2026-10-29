@@ -156,6 +156,14 @@ namespace ALTEngine::Formats
             // (Edward, 2026 - Ghidra deep-dive).
             n.unknown13 = 0;
             n.ceilingHeight = data[pos + 13]; n.lighting = data[pos + 14]; n.scriptAction = data[pos + 15];
+            // A ceiling of 0 is no ceiling given: the level load puts it 0x30
+            // over the floor (0x279a4, a byte add). The ducts behind the wall
+            // vents creatures wait in are cells like this (L111, L122, L131,
+            // L222, L232, L331), as are L113's start room and the open ground
+            // on L113-L115. Read as a height, 0 refused every step in them:
+            // vent huggers never came out and the player could not leave
+            // L113's start (Edward, 2026).
+            if (n.ceilingHeight == 0) { n.ceilingHeight = static_cast<uint8_t>(n.floorHeight + 0x30); }
             pos += 16;
             result.collisionGrid.push_back(n);
         }

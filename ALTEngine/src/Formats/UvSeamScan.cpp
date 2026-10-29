@@ -135,6 +135,10 @@ namespace ALTEngine::Formats
             uint16_t tex = q.texIndex;
             if (routine.animated && !animator.CurrentTexture(static_cast<int>(q.texIndex), tex)) { continue; }
             if (tex >= textures.uvRects.size()) { continue; }
+            // Triangles are left out: the original draws them as pinched quads
+            // (a, a, b, c) - see ComputeLevelQuadUvs - which this scan's turns
+            // and mirrors of three corners do not describe.
+            if (q.d < 0) { continue; }
             FaceInfo& fi = info[f];
             fi.page = textures.uvRects[tex].page;
             if (!pages.count(fi.page)) { continue; }

@@ -105,44 +105,25 @@ namespace ALTEngine::Formats
             float x1 = (rect->x + rect->width) / TEX_SIZE;
             float y1 = (rect->y + rect->height) / TEX_SIZE;
 
-            // TRIANGLES. Draw routines 1 and 3 are the triangle rasterizers -
-            // in L111 they are the ONLY flag values that ever produce a
-            // three-cornered face, and 0/2/4/8 are exclusively quads:
+            // TRIANGLES ARE PINCHED QUADS. The original draws a level triangle
+            // (a, b, c) as the quad (a, a, b, c) with the ordinary quad corners
+            // - bottom-left and bottom-right both at a, then top-right at b and
+            // top-left at c - so the tile's whole bottom edge pinches to a.
             //
-            //   flag |  d == -1  |  quads
-            //      0 |      0    |   8755
-            //      1 |    285    |      0
-            //      2 |      0    |   1902
-            //      3 |      1    |      0
-            //      4 |      0    |    171
-            //      8 |      0    |    150
+            // Found from the levels themselves: over all 45, 9,316 triangle
+            // edges are shared with a quad showing a neighbouring piece of the
+            // same picture. With a taking bottom-right on its edge to b and
+            // bottom-left on its edge to c, 2,325 of them meet the quad texel
+            // for texel; the best single corner for a gets 1,777, and what this
+            // used (top-left, top-right, bottom-left) 150. That was why so many
+            // triangles were mapped wrong in play (Edward, 2026: L112, L906,
+            // L907 and more).
             //
-            // A triangle needs three of the descriptor's four UV corners, and
-            // WHICH three is not a free choice. The runtime descriptor built
-            // by FUN_00018bcc lays its four corners out in Z order, not
-            // winding order:
-            //
-            //   corner 0 = (x,     y    )   top-left
-            //   corner 1 = (x + w, y    )   top-right
-            //   corner 2 = (x,     y + h)   bottom-left
-            //   corner 3 = (x + w, y + h)   bottom-right
-            //
-            // so the triangle routine's three corners are top-left,
-            // top-right, bottom-left.
-            //
-            // What was here before rotated the WINDING order by one step and
-            // came out with top-right, bottom-left, bottom-right - the wrong
-            // three corners entirely, including bottom-right and omitting
-            // top-left. That is why corner faces at hallway intersections
-            // showed the wrong part of their tile (Edward, 2026). The old
-            // rotation came from ModelRenderer.cs's OBJ exporter, which is
-            // Edward's own tool rather than the game, and OBJ export never had
-            // to agree with the original rasterizer about corner ordering.
+            // The four come back as: a towards c, a towards b, b, c. EmitQuad
+            // draws the pinch as a fan from a (EmitPinchedTriangle).
             if (q.d == -1)
             {
-                // Fourth entry repeats the third; nothing reads it for a
-                // triangle, but leaving it defined keeps the array honest.
-                return { Uv{x0, y0}, Uv{x1, y0}, Uv{x0, y1}, Uv{x0, y1} };
+                return { Uv{x0, y1}, Uv{x1, y1}, Uv{x1, y0}, Uv{x0, y0} };
             }
 
             // Routines 2, 6, 34 and their animated forms (10, 28, 32) swap
@@ -200,6 +181,9 @@ namespace ALTEngine::Formats
         // itself); the model path leaves it false so its own long-standing
         // flag-1 rotation is untouched - model and door geometry renders
         // correctly today and this change is not about it.
+        // How many slices a level triangle's pinched quad is drawn in.
+        constexpr int PINCH_SLICES = 16;
+
         void EmitQuad(RenderMesh& result, const std::vector<ModelVertex>& vertices, const ModelQuad& q, const std::array<Uv, 4>& uvs,
                       const QuadColours& colours, bool uvsAlreadyOrdered = false)
         {
@@ -272,7 +256,49 @@ namespace ALTEngine::Formats
             // model flag values mean something different (see ModelQuad).
             bool doubleSided = uvsAlreadyOrdered && !ClassifyDrawRoutine(q.flags).culled;
 
-            if (isTriangle)
+            if (isTriangle && uvsAlreadyOrdered)
+            {
+                // A level triangle: the pinched quad (a, a, b, c), drawn as a fan
+                // of slices from a. A point on the line from a to the point
+                // (1 - s) c + s b of the far edge takes texture column s, from a's
+                // side of the tile to the far edge - so each slice carries its own
+                // strip, and a's corner moves across the tile's bottom edge with
+                // it. Exact along every such line, and within a slice's width
+                // across them.
+                result.vertices.resize(result.vertices.size() - 3);   // ia, ib, ic re-made below
+                const ModelVertex& va = vertices[static_cast<size_t>(a)];
+                const ModelVertex& vb = vertices[static_cast<size_t>(b)];
+                const ModelVertex& vc = vertices[static_cast<size_t>(c)];
+                const Uv aTowardC = effectiveUvs[0], aTowardB = effectiveUvs[1], uvb = effectiveUvs[2], uvc = effectiveUvs[3];
+                auto lerp = [](float p, float q2, float t) { return p + (q2 - p) * t; };
+                for (int i = 0; i < PINCH_SLICES; ++i)
+                {
+                    const float s0 = static_cast<float>(i) / PINCH_SLICES;
+                    const float s1 = static_cast<float>(i + 1) / PINCH_SLICES;
+                    const float sm = (s0 + s1) * 0.5f;
+                    auto farPoint = [&](float t) -> uint32_t {
+                        result.vertices.push_back({
+                            lerp(vc.x, vb.x, t), lerp(vc.y, vb.y, t), lerp(vc.z, vb.z, t),
+                            lerp(uvc.first, uvb.first, t), lerp(uvc.second, uvb.second, t),
+                            lerp(colours.r[2], colours.r[1], t), lerp(colours.g[2], colours.g[1], t), lerp(colours.b[2], colours.b[1], t) });
+                        return static_cast<uint32_t>(result.vertices.size() - 1);
+                    };
+                    result.vertices.push_back({
+                        static_cast<float>(va.x), static_cast<float>(va.y), static_cast<float>(va.z),
+                        lerp(aTowardC.first, aTowardB.first, sm), lerp(aTowardC.second, aTowardB.second, sm),
+                        colours.r[0], colours.g[0], colours.b[0] });
+                    const uint32_t pa = static_cast<uint32_t>(result.vertices.size() - 1);
+                    const uint32_t p1 = farPoint(s1);   // nearer b
+                    const uint32_t p0 = farPoint(s0);   // nearer c
+                    // (a, nearer b, nearer c) keeps the face's own a-b-c winding.
+                    result.indices.push_back(pa); result.indices.push_back(p1); result.indices.push_back(p0);
+                    if (doubleSided)
+                    {
+                        result.indices.push_back(p0); result.indices.push_back(p1); result.indices.push_back(pa);
+                    }
+                }
+            }
+            else if (isTriangle)
             {
                 result.indices.push_back(ia);
                 result.indices.push_back(ib);

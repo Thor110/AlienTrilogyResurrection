@@ -246,7 +246,13 @@ namespace ALTEngine::Screens
             while (SDL_PollEvent(&event))
             {
                 if (event.type == SDL_EVENT_QUIT) { result.windowClosed = true; running = false; }
-                else if ((event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) && counted) { running = false; }
+                else if ((event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+                {
+                    // A press while the figures count jumps every row to its
+                    // final value (Edward, 2026); the next press leaves.
+                    if (counted) { running = false; }
+                    else { shown = target; counted = true; }
+                }
             }
             if (!running) { break; }
 

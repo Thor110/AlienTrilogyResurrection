@@ -729,8 +729,11 @@ namespace ALTEngine::Renderer
                 itemY += HUD_ITEM_ROW_STEP;
             };
 
-            // Slot 1 is the grenade launcher, and only with the pulse rifle up.
+            // Slot 1 is Fire 2's: the grenade launcher with the pulse rifle up,
+            // the seismic charges with anything else, while there are any
+            // (0x3ac5a-0x3acc3).
             if (state.currentWeapon == HUD_GRENADE_WEAPON) { drawItem("GREN", state.grenades); }
+            else if (state.seismicCharges > 0) { drawItem("CHRG", state.seismicCharges); }
             drawItem("ARMR", state.armourItem);
             drawItem("SPD",  state.terrainSpeed);
             drawItem("SHLD", state.terrainShield);

@@ -57,3 +57,18 @@ TEST_CASE("LevelLoader: every used trigger carries the walk-on bit 0x01")
         }
     }
 }
+
+TEST_CASE("LevelLoader: a ceiling of 0 is put 0x30 over the floor, as the original's load does")
+{
+    // 0x279a4: every cell whose ceiling byte is 0 gets floor + 0x30. L111's
+    // hugger duct at (14,82) is one: floor 0x40, ceiling 0 on disk.
+    LevelGeometry level = LevelLoader::Load(AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
+    const CollisionNode* duct = CellAt(level, 14, 82);
+    REQUIRE(duct != nullptr);
+    CHECK_EQ(duct->floorHeight, 0x40);
+    CHECK_EQ(duct->ceilingHeight, 0x70);
+    for (const CollisionNode& cell : level.collisionGrid)
+    {
+        CHECK(cell.ceilingHeight != 0 || cell.floorHeight == 0xd0);
+    }
+}

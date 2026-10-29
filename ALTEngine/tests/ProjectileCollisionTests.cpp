@@ -38,26 +38,39 @@ TEST_CASE("ProjectileCollision: a round is clear between floor and ceiling")
     CHECK(PCol::TestCell(level, 600, 256, 288.0f, PCol::TYPE_PISTOL, 0x10).blocked);   // off the map
 }
 
-TEST_CASE("ProjectileCollision: every demo wall cell stops a round at any height")
+TEST_CASE("ProjectileCollision: every demo wall cell stops a round")
 {
     LevelGeometry level = LevelLoader::Load(AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
-    int walls = 0;
+    int walls = 0, nullSpace = 0;
     for (int cz = 0; cz < level.header.mapWidth; ++cz)
     {
         for (int cx = 0; cx < level.header.mapLength; ++cx)
         {
             const CollisionNode* cell = CellAt(level, cx, cz);
             if (cell->unknown3 != 255 && cell->unknown4 != 255) { continue; }
-            walls++;
-            // Not y == 0 exactly: with floor and ceiling both 0 the original's
-            // own `y < floor` / `y <= ceiling` pair lets that one height through.
-            for (float y : { 1.0f, 288.0f, 800.0f, 1400.0f })
+            if (cell->attribute == 0x14)
             {
-                CHECK(PCol::TestCell(level, cx * 512 + 256, cz * 512 + 256, y, PCol::TYPE_PISTOL, 0x10).blocked);
+                // A real wall: at any height.
+                walls++;
+                for (float y : { 1.0f, 288.0f, 800.0f, 1400.0f, 4000.0f })
+                {
+                    CHECK(PCol::TestCell(level, cx * 512 + 256, cz * 512 + 256, y, PCol::TYPE_PISTOL, 0x10).blocked);
+                }
+            }
+            else
+            {
+                // Null space between the rooms (attribute 0, floor 0). The load
+                // gives its ceiling of 0 a height of 0x30 (0x279a4), so like the
+                // original it stops a round only below its floor or above that;
+                // none of it borders a cell a round can be in.
+                nullSpace++;
+                const float ceiling = static_cast<float>(cell->ceilingHeight) * WORLD_UNITS_PER_HEIGHT_UNIT;
+                CHECK(PCol::TestCell(level, cx * 512 + 256, cz * 512 + 256, ceiling + 1.0f, PCol::TYPE_PISTOL, 0x10).blocked);
             }
         }
     }
     CHECK(walls > 0);
+    CHECK(nullSpace > 0);
 }
 
 TEST_CASE("ProjectileCollision: objects are hit inside their height window only")

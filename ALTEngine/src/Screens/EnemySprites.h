@@ -337,10 +337,21 @@ namespace ALTEngine::Screens
                 sprite.halfWidth = frame.width * 0.5f * WORLD_UNITS_PER_PIXEL;
                 sprite.halfHeight = frame.height * 0.5f * WORLD_UNITS_PER_PIXEL;
 
-                // Standing on the floor. The frame's own offsetY is a draw offset
-                // from the creature's anchor, in the original's screen space, so
-                // it is not applied here - the sprite is placed in the world.
-                sprite.y = enemy.y + sprite.halfHeight;
+                // The frame hangs from the creature's anchor by its own offset,
+                // as the original draws it: offsetY is where the frame's top sits
+                // above the anchor (negative = up), so its bottom is
+                // offsetY + height below it. The anchor is the creature's
+                // position, 0x20 over the floor (FUN_00031f3c). Drawing the
+                // frame's bottom at the anchor, as this did, left every body a
+                // good way above the floor (Edward, 2026).
+                //
+                // The original paints sprites over the floor; here the depth
+                // test would hide what goes below it, so on the ground a frame's
+                // bottom stops at the floor. In the air (a leap, a fall) it keeps
+                // its offset.
+                float bottom = enemy.y - static_cast<float>(frame.offsetY + frame.height) * WORLD_UNITS_PER_PIXEL;
+                if (enemy.vy == 0.0f) { bottom = std::max(bottom, enemy.y - EnemyBehaviour::STAND_CLEARANCE); }
+                sprite.y = bottom + sprite.halfHeight;
                 // Hanging from the ceiling: the frame's top at the ceiling.
                 if (enemy.onCeiling) { sprite.y = enemy.y + EnemyBehaviour::STAND_CLEARANCE - sprite.halfHeight; }
 

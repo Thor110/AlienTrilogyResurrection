@@ -45,6 +45,7 @@ namespace ALTEngine::Game::SaveGame
                 { "autoMapper", data.inventory.hasAutoMapper },
                 { "shoulderLamp", data.inventory.hasShoulderLamp },
                 { "batteries", data.inventory.batteries },
+                { "seismicCharges", data.inventory.seismicCharges },
             } },
         };
 
@@ -120,6 +121,7 @@ namespace ALTEngine::Game::SaveGame
             data.inventory.hasAutoMapper = inv.value("autoMapper", false);
             data.inventory.hasShoulderLamp = inv.value("shoulderLamp", false);
             data.inventory.batteries = inv.value("batteries", 0);
+            data.inventory.seismicCharges = inv.value("seismicCharges", 0);
             if (root.contains("snapshot") && root["snapshot"].is_object())
             {
                 data.snapshot = root["snapshot"].dump();
