@@ -444,8 +444,10 @@ namespace ALTEngine::Renderer
 
     int HudRenderer::DrawHudText(SDL_Renderer* renderer, const std::string& text, int x, int y,
                                  int firstDescriptor, float scaleX, float scaleY,
-                                 int letterSpacing) const
+                                 int letterSpacing, SDL_Color tint) const
     {
+        const bool tinted = sheet && (tint.r != 255 || tint.g != 255 || tint.b != 255);
+        if (tinted) { SDL_SetTextureColorMod(sheet, tint.r, tint.g, tint.b); }
         // Same cursor discipline as DrawNumber: step by the glyph's own advance
         // times the scale the glyph is drawn at, never the other axis's scale.
         const float glyphScale = scaleY;
@@ -468,6 +470,7 @@ namespace ALTEngine::Renderer
                            + static_cast<float>(letterSpacing)) * glyphScale;
             }
         }
+        if (tinted) { SDL_SetTextureColorMod(sheet, 255, 255, 255); }
         return static_cast<int>((cursor - startCursor) / (scaleX > 0.0f ? scaleX : 1.0f));
     }
 

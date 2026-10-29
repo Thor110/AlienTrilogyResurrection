@@ -17,6 +17,7 @@
 #include "Enemies.h"
 #include "../Game/Blast.h"
 #include "../Game/Doors.h"
+#include "../Game/ResupplyTimer.h"
 #include "../Game/ProjectileCollision.h"
 #include "SmartgunTargeting.h"
 #include "../Game/CreatureSight.h"
@@ -1395,6 +1396,9 @@ namespace ALTEngine::Screens
         GameplayResult result;
         bool running = true;
         bool levelComplete = false;
+        // The resupply levels' countdown (Game::ResupplyTimer, FUN_0003b518).
+        ALTEngine::Game::ResupplyTimer::State resupply =
+            ALTEngine::Game::ResupplyTimer::Start(ALTEngine::Game::Progression::CampaignIndex(digits));
 
         // Dead: one of the six death videos then GAMEOVER, and back to the menu
         // - see GameOverSequence. The clip is chosen by HOW you died, which
@@ -1728,6 +1732,14 @@ namespace ALTEngine::Screens
                     // The original's alternate pass (see logicTick).
                     const bool halfPass = ((logicTick++ & 1u) == 0) || speedCompensationOff;
                     const bool creaturePass = halfPass || fasterXenomorphs;
+                    // The resupply countdown's task runs every pass, the timer
+                    // interrupt counting its seconds (one or two a tick).
+                    if (resupply.active && !resupply.expired && !playerDead)
+                    {
+                        const int cue = ALTEngine::Game::ResupplyTimer::Pass(resupply, speedCompensationOff ? 2 : 1);
+                        if (cue >= 0) { ALTEngine::Audio::SfxPlayer::PlaySlot(cue, digits.c_str(), cdDirectory); }
+                        if (resupply.expired) { levelComplete = true; }
+                    }
                     // The original's last pass, for the weapon: firing, the
                     // switch and the animation. A frame shorter than a tick
                     // still gets one weapon pass a tick, as the original's
@@ -3934,6 +3946,18 @@ namespace ALTEngine::Screens
                                 // surface so the text lands on whole pixels.
                                 // Newest at the bottom, the way a terminal
                                 // scrolls.
+                                // The resupply countdown, two digits in the HUD
+                                // font at (16, 19) (FUN_00043720): steady above
+                                // 17 seconds, blinking from 17 down.
+                                if (resupply.active)
+                                {
+                                    namespace RT = ALTEngine::Game::ResupplyTimer;
+                                    const SDL_Color colour = !RT::Blinking(resupply) ? SDL_Color{ 0, 255, 0, 255 }
+                                        : RT::BlinkPhase(resupply) ? SDL_Color{ 255, 255, 0, 255 } : SDL_Color{ 255, 0, 0, 255 };
+                                    hud.DrawHudText(renderer, RT::Text(resupply), RT::HUD_X, RT::HUD_Y,
+                                                    ALTEngine::Renderer::HUD_FONT_FIRST_DESCRIPTOR, 1.0f, 1.0f, 0, colour);
+                                }
+
                                 const auto visible = hudMessages.Visible();
                                 if (visible.empty()) { return; }
 

@@ -29120,6 +29120,36 @@
           ]
         }
       ]
+    },
+    {
+      "target": "SECT90/L903LEV.MAP",
+      "note": "L903LEV.MAP - four cells lost their wall attribute when the level was made from L141LEV: two pillars at (11,43) and (11,48) could be walked into; restored to L141's values (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x69002",
+          "bytes": [
+            "0x14"
+          ]
+        },
+        {
+          "offset": "0x69502",
+          "bytes": [
+            "0x14"
+          ]
+        },
+        {
+          "offset": "0x6AE52",
+          "bytes": [
+            "0x14"
+          ]
+        },
+        {
+          "offset": "0x6E862",
+          "bytes": [
+            "0x15"
+          ]
+        }
+      ]
     }
   ],
   "faceUvRotations": [

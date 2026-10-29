@@ -137,6 +137,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/RenderMeshTests.cpp
         tests/PatchRunnerTests.cpp
         tests/ModelRemovalTests.cpp
+        tests/ResupplyTimerTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
     target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats alt_warnings nlohmann_json::nlohmann_json)

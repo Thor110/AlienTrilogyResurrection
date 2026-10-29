@@ -15,9 +15,10 @@ namespace ALTViewer
             byte first = BinaryUtility.ReadByteAtOffset(patchDirectory, 0x50BC8); // checks if the first byte of the current patch has been applied
             // second patch – SECT32
             byte last = BinaryUtility.ReadByteAtOffset(gameDirectory + "SECT32\\371GFX.B16", 0x40B0B); // checks if the last byte of the current patch has been applied
-            // newest patches - SECT90: the texture scan fixes (last one at 0x42524) and the model removals (the file shrinks to 393852 bytes)
+            // newest patches - SECT90: the texture scan fixes (last one at 0x42524), the model removals (the file shrinks to 393852 bytes) and L903's pillars
             string sect90Last = Path.Combine(gameDirectory, "SECT90", "L909LEV.MAP");
-            bool newestDone = File.Exists(sect90Last) && new FileInfo(sect90Last).Length == 393852 && BinaryUtility.ReadByteAtOffset(sect90Last, 0x4252C) == 0xC5;
+            bool newestDone = File.Exists(sect90Last) && new FileInfo(sect90Last).Length == 393852 && BinaryUtility.ReadByteAtOffset(sect90Last, 0x4252C) == 0xC5
+                && BinaryUtility.ReadByteAtOffset(Path.Combine(gameDirectory, "SECT90", "L903LEV.MAP"), 0x6AE52) == 0x14;
             if (first == 0xFF || last != 0xFA || !newestDone) { button6.Visible = true; } // show patch button if any of the patches is still to be applied
         }
         // create new form method
@@ -901,6 +902,16 @@ namespace ALTViewer
                 Tuple.Create(0x29162L, new byte[] { 0x02 }),
                 Tuple.Create(0x30504L, new byte[] { 0xAA, 0x1A, 0x00, 0x00, 0x9D, 0x1A, 0x00, 0x00, 0x9F, 0x1A, 0x00, 0x00, 0xAB, 0x1A, 0x00, 0x00 }),
                 Tuple.Create(0x42524L, new byte[] { 0x34, 0x17, 0x00, 0x00, 0x33, 0x17, 0x00, 0x00, 0xC5, 0x19, 0x00, 0x00, 0xC9, 0x19, 0x00, 0x00 })
+            };
+            BinaryUtility.ReplaceBytes(replacements, patchDirectory);
+            // L903LEV.MAP - walk-through pillars: four cells lost their wall attribute when the level was made from L141LEV (see Patch/L903LEV.txt)
+            patchDirectory = gameDirectory + "SECT90\\L903LEV.MAP";
+            replacements = new List<Tuple<long, byte[]>>()
+            {
+                Tuple.Create(0x69002L, new byte[] { 0x14 }),
+                Tuple.Create(0x69502L, new byte[] { 0x14 }),
+                Tuple.Create(0x6AE52L, new byte[] { 0x14 }),
+                Tuple.Create(0x6E862L, new byte[] { 0x15 })
             };
             BinaryUtility.ReplaceBytes(replacements, patchDirectory);
             //

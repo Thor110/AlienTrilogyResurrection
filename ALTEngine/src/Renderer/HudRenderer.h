@@ -64,9 +64,10 @@ namespace ALTEngine::Renderer
         // Returns the pixel width drawn, in HUD units.
         // `letterSpacing` is added to every glyph's advance. Font A wants 0 (its
         // rect carries a blank column already); font C wants 1.
+        // `tint` multiplies the glyphs' colour (white leaves them as drawn).
         int DrawHudText(SDL_Renderer* renderer, const std::string& text, int x, int y,
                         int firstDescriptor, float scaleX, float scaleY,
-                        int letterSpacing = 0) const;
+                        int letterSpacing = 0, SDL_Color tint = SDL_Color{ 255, 255, 255, 255 }) const;
 
         void Unload();
 

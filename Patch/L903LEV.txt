@@ -1,1 +1,11 @@
-Incorrect UVs on some faces, fixed in code on export for now. ( same as L141LEV )
+Walk-through pillars (Claude, 2026)
+
+L903LEV is built on L141LEV: the same 105 x 81 grid and the same geometry. Four of its cells lost their
+attribute byte (cell offset + 10) on the way, so the two pillars at (11,43) and (11,48) could be walked
+into. Restored to L141's values; attributes 0x14-0x2c block.
+
+Offset		Cell		From	To
+0x69002		(12,42)		00	14
+0x69502		(11,43)		00	14	pillar
+0x6AE52		(11,48)		00	14	pillar
+0x6E862		(49,59)		00	15
