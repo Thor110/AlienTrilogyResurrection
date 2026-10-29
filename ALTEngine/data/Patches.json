@@ -1236,7 +1236,7 @@
       "note": "L162LEV.MAP - D001 - incorrect texture index",
       "edits": [
         {
-          "offset": "0x323E8",
+          "offset": "0x3205C",
           "bytes": [
             "0x67"
           ]
@@ -29144,6 +29144,714 @@
         10759
       ],
       "flip": true
+    }
+  ],
+  "modelRemovals": [
+    {
+      "target": "SECT11/L122LEV.MAP",
+      "note": "L122LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 668 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 660,
+          "crc32": "0x12647718"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x5C43F",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x5C45F",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT11/L131LEV.MAP",
+      "note": "L131LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000), D002 (unused); 1188 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 660,
+          "crc32": "0xB57B6A4C"
+        },
+        {
+          "tag": "D002",
+          "size": 512,
+          "crc32": "0xFA9A4438"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x75833",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x7585B",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT12/L141LEV.MAP",
+      "note": "L141LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 908 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 900,
+          "crc32": "0x4AA13566"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x7DEDB",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x7DEE3",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT12/L154LEV.MAP",
+      "note": "L154LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000), L001 (unused), L008 (unused); 3720 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 900,
+          "crc32": "0x54B1403A"
+        },
+        {
+          "tag": "L001",
+          "size": 1412,
+          "crc32": "0xC6773286"
+        },
+        {
+          "tag": "L008",
+          "size": 1384,
+          "crc32": "0x7556E903"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x73353",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x7335B",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x73368",
+          "bytes": [
+            "0x03"
+          ]
+        },
+        {
+          "offset": "0x73378",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x73388",
+          "bytes": [
+            "0x04"
+          ]
+        },
+        {
+          "offset": "0x73398",
+          "bytes": [
+            "0x04"
+          ]
+        },
+        {
+          "offset": "0x733B8",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x733C8",
+          "bytes": [
+            "0x05"
+          ]
+        },
+        {
+          "offset": "0x733D8",
+          "bytes": [
+            "0x05"
+          ]
+        },
+        {
+          "offset": "0x733E8",
+          "bytes": [
+            "0x06"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT12/L155LEV.MAP",
+      "note": "L155LEV.MAP - duplicate and unused door/lift models removed: D000 (unused); 908 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D000",
+          "size": 900,
+          "crc32": "0xBC5C68BD"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x62A9B",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x62AA3",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT12/L162LEV.MAP",
+      "note": "L162LEV.MAP - duplicate and unused door/lift models removed: D000 (unused); 908 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D000",
+          "size": 900,
+          "crc32": "0xEE3E346B"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x30E97",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x30E9F",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT21/L211LEV.MAP",
+      "note": "L211LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000), D002 (same as D000), D003 (same as D000); 2724 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 900,
+          "crc32": "0x7B021EF8"
+        },
+        {
+          "tag": "D002",
+          "size": 900,
+          "crc32": "0x7B021EF8"
+        },
+        {
+          "tag": "D003",
+          "size": 900,
+          "crc32": "0x7B021EF8"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x742FF",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT21/L212LEV.MAP",
+      "note": "L212LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 908 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 900,
+          "crc32": "0xF9C9BCB2"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x79F4F",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x79F57",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x79F5F",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x79F67",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x79F6F",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x79F77",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x79F7F",
+          "bytes": [
+            "0x03"
+          ]
+        },
+        {
+          "offset": "0x79F87",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x79F8F",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x79F97",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x79F9F",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x79FA7",
+          "bytes": [
+            "0x01"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT21/L213LEV.MAP",
+      "note": "L213LEV.MAP - duplicate and unused door/lift models removed: L000 (unused); 2468 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "L000",
+          "size": 2460,
+          "crc32": "0xB16D4E14"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x609B8",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x609C8",
+          "bytes": [
+            "0x03"
+          ]
+        },
+        {
+          "offset": "0x609D8",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x609E8",
+          "bytes": [
+            "0x02"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT21/L222LEV.MAP",
+      "note": "L222LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 908 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 900,
+          "crc32": "0x85CE69C5"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x6E383",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x6E3BB",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT21/L231LEV.MAP",
+      "note": "L231LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000), L001 (same as L000), L003 (same as L000); 5860 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 900,
+          "crc32": "0x374705C6"
+        },
+        {
+          "tag": "L001",
+          "size": 2468,
+          "crc32": "0x71E1F0ED"
+        },
+        {
+          "tag": "L003",
+          "size": 2468,
+          "crc32": "0x71E1F0ED"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x77D0F",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x77D2F",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x77D4C",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x77D5C",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x77D6C",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT21/L232LEV.MAP",
+      "note": "L232LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000), D002 (unused); 1088 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 900,
+          "crc32": "0x26B0CB44"
+        },
+        {
+          "tag": "D002",
+          "size": 172,
+          "crc32": "0x199A47C6"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x77A83",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x77A93",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT32/L391LEV.MAP",
+      "note": "L391LEV.MAP - duplicate and unused door/lift models removed: L000 (unused); 1660 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "L000",
+          "size": 1652,
+          "crc32": "0x273EA7DD"
+        }
+      ],
+      "edits": []
+    },
+    {
+      "target": "SECT90/L901LEV.MAP",
+      "note": "L901LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 668 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 660,
+          "crc32": "0x12647718"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x5BE4B",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x5BE6B",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L902LEV.MAP",
+      "note": "L902LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 668 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 660,
+          "crc32": "0xB57B6A4C"
+        }
+      ],
+      "edits": []
+    },
+    {
+      "target": "SECT90/L903LEV.MAP",
+      "note": "L903LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 908 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 900,
+          "crc32": "0x4AA13566"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x7D667",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x7D66F",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L904LEV.MAP",
+      "note": "L904LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 908 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 900,
+          "crc32": "0x54B1403A"
+        }
+      ],
+      "edits": []
+    },
+    {
+      "target": "SECT90/L905LEV.MAP",
+      "note": "L905LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 908 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 900,
+          "crc32": "0x54B1403A"
+        }
+      ],
+      "edits": []
+    },
+    {
+      "target": "SECT90/L906LEV.MAP",
+      "note": "L906LEV.MAP - duplicate and unused door/lift models removed: D001 (unused); 908 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 900,
+          "crc32": "0x56C439D2"
+        }
+      ],
+      "edits": []
+    },
+    {
+      "target": "SECT90/L907LEV.MAP",
+      "note": "L907LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000), L001 (same as L000), L002 (unused), L003 (same as L000); 7376 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "D001",
+          "size": 900,
+          "crc32": "0x374705C6"
+        },
+        {
+          "tag": "L001",
+          "size": 2468,
+          "crc32": "0x71E1F0ED"
+        },
+        {
+          "tag": "L002",
+          "size": 1508,
+          "crc32": "0xD27A08BC"
+        },
+        {
+          "tag": "L003",
+          "size": 2468,
+          "crc32": "0x71E1F0ED"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x77807",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x77827",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x77844",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x77854",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L909LEV.MAP",
+      "note": "L909LEV.MAP - duplicate and unused door/lift models removed: L000 (unused), L002 (unused); 2056 bytes (Claude, 2026)",
+      "chunks": [
+        {
+          "tag": "L000",
+          "size": 1020,
+          "crc32": "0x4BA9753B"
+        },
+        {
+          "tag": "L002",
+          "size": 1020,
+          "crc32": "0x2451E44A"
+        }
+      ],
+      "edits": [
+        {
+          "offset": "0x5D9F0",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x5DA00",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x5DA10",
+          "bytes": [
+            "0x05"
+          ]
+        },
+        {
+          "offset": "0x5DA20",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x5DA30",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x5DA40",
+          "bytes": [
+            "0x04"
+          ]
+        },
+        {
+          "offset": "0x5DA50",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x5DA60",
+          "bytes": [
+            "0x03"
+          ]
+        },
+        {
+          "offset": "0x5DA70",
+          "bytes": [
+            "0x01"
+          ]
+        }
+      ]
     }
   ]
 }

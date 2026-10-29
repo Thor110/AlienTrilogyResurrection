@@ -15,7 +15,10 @@ namespace ALTViewer
             byte first = BinaryUtility.ReadByteAtOffset(patchDirectory, 0x50BC8); // checks if the first byte of the current patch has been applied
             // second patch – SECT32
             byte last = BinaryUtility.ReadByteAtOffset(gameDirectory + "SECT32\\371GFX.B16", 0x40B0B); // checks if the last byte of the current patch has been applied
-            if (first == 0xFF || last != 0xFA) { button6.Visible = true; } // show patch button if the first byte is unchanged or the last byte is not patched
+            // newest patches - SECT90: the texture scan fixes (last one at 0x42524) and the model removals (the file shrinks to 393852 bytes)
+            string sect90Last = Path.Combine(gameDirectory, "SECT90", "L909LEV.MAP");
+            bool newestDone = File.Exists(sect90Last) && new FileInfo(sect90Last).Length == 393852 && BinaryUtility.ReadByteAtOffset(sect90Last, 0x4252C) == 0xC5;
+            if (first == 0xFF || last != 0xFA || !newestDone) { button6.Visible = true; } // show patch button if any of the patches is still to be applied
         }
         // create new form method
         private void newForm(Form form)
@@ -36,6 +39,75 @@ namespace ALTViewer
         private void button6_Click(object sender, EventArgs e)
         {
             // TODO : remove patchDirectory variable and pass direct values
+            // Duplicate and unused door/lift models removed first: every patch below is written against the files
+            // without them (see Notes/duplicate-level-models.md). Each removal checks the chunks are the expected ones
+            // and does nothing if it has already been done.
+            string modelFile;
+            bool modelsRemoved = true;
+            // L122LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 668 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT11\\L122LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 660u, 0x12647718u) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x5C43FL, new byte[] { 0x00 }), Tuple.Create(0x5C45FL, new byte[] { 0x00 }) });
+            // L131LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000), D002 (unused); 1188 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT11\\L131LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 660u, 0xB57B6A4Cu), new FormChunk("D002", 512u, 0xFA9A4438u) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x75833L, new byte[] { 0x00 }), Tuple.Create(0x7585BL, new byte[] { 0x00 }) });
+            // L141LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 908 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT12\\L141LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 900u, 0x4AA13566u) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x7DEDBL, new byte[] { 0x00 }), Tuple.Create(0x7DEE3L, new byte[] { 0x00 }) });
+            // L154LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000), L001 (unused), L008 (unused); 3720 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT12\\L154LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 900u, 0x54B1403Au), new FormChunk("L001", 1412u, 0xC6773286u), new FormChunk("L008", 1384u, 0x7556E903u) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x73353L, new byte[] { 0x00 }), Tuple.Create(0x7335BL, new byte[] { 0x00 }), Tuple.Create(0x73368L, new byte[] { 0x03 }), Tuple.Create(0x73378L, new byte[] { 0x01 }), Tuple.Create(0x73388L, new byte[] { 0x04 }), Tuple.Create(0x73398L, new byte[] { 0x04 }), Tuple.Create(0x733B8L, new byte[] { 0x02 }), Tuple.Create(0x733C8L, new byte[] { 0x05 }), Tuple.Create(0x733D8L, new byte[] { 0x05 }), Tuple.Create(0x733E8L, new byte[] { 0x06 }) });
+            // L155LEV.MAP - duplicate and unused door/lift models removed: D000 (unused); 908 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT12\\L155LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D000", 900u, 0xBC5C68BDu) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x62A9BL, new byte[] { 0x00 }), Tuple.Create(0x62AA3L, new byte[] { 0x00 }) });
+            // L162LEV.MAP - duplicate and unused door/lift models removed: D000 (unused); 908 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT12\\L162LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D000", 900u, 0xEE3E346Bu) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x30E97L, new byte[] { 0x00 }), Tuple.Create(0x30E9FL, new byte[] { 0x00 }) });
+            // L211LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000), D002 (same as D000), D003 (same as D000); 2724 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT21\\L211LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 900u, 0x7B021EF8u), new FormChunk("D002", 900u, 0x7B021EF8u), new FormChunk("D003", 900u, 0x7B021EF8u) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x742FFL, new byte[] { 0x00 }) });
+            // L212LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 908 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT21\\L212LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 900u, 0xF9C9BCB2u) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x79F4FL, new byte[] { 0x00 }), Tuple.Create(0x79F57L, new byte[] { 0x02 }), Tuple.Create(0x79F5FL, new byte[] { 0x02 }), Tuple.Create(0x79F67L, new byte[] { 0x02 }), Tuple.Create(0x79F6FL, new byte[] { 0x02 }), Tuple.Create(0x79F77L, new byte[] { 0x01 }), Tuple.Create(0x79F7FL, new byte[] { 0x03 }), Tuple.Create(0x79F87L, new byte[] { 0x00 }), Tuple.Create(0x79F8FL, new byte[] { 0x01 }), Tuple.Create(0x79F97L, new byte[] { 0x01 }), Tuple.Create(0x79F9FL, new byte[] { 0x01 }), Tuple.Create(0x79FA7L, new byte[] { 0x01 }) });
+            // L213LEV.MAP - duplicate and unused door/lift models removed: L000 (unused); 2468 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT21\\L213LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("L000", 2460u, 0xB16D4E14u) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x609B8L, new byte[] { 0x00 }), Tuple.Create(0x609C8L, new byte[] { 0x03 }), Tuple.Create(0x609D8L, new byte[] { 0x01 }), Tuple.Create(0x609E8L, new byte[] { 0x02 }) });
+            // L222LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 908 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT21\\L222LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 900u, 0x85CE69C5u) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x6E383L, new byte[] { 0x00 }), Tuple.Create(0x6E3BBL, new byte[] { 0x00 }) });
+            // L231LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000), L001 (same as L000), L003 (same as L000); 5860 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT21\\L231LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 900u, 0x374705C6u), new FormChunk("L001", 2468u, 0x71E1F0EDu), new FormChunk("L003", 2468u, 0x71E1F0EDu) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x77D0FL, new byte[] { 0x00 }), Tuple.Create(0x77D2FL, new byte[] { 0x00 }), Tuple.Create(0x77D4CL, new byte[] { 0x01 }), Tuple.Create(0x77D5CL, new byte[] { 0x00 }), Tuple.Create(0x77D6CL, new byte[] { 0x00 }) });
+            // L232LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000), D002 (unused); 1088 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT21\\L232LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 900u, 0x26B0CB44u), new FormChunk("D002", 172u, 0x199A47C6u) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x77A83L, new byte[] { 0x00 }), Tuple.Create(0x77A93L, new byte[] { 0x00 }) });
+            // L391LEV.MAP - duplicate and unused door/lift models removed: L000 (unused); 1660 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT32\\L391LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("L000", 1652u, 0x273EA7DDu) }, new List<Tuple<long, byte[]>>() {  });
+            // L901LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 668 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT90\\L901LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 660u, 0x12647718u) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x5BE4BL, new byte[] { 0x00 }), Tuple.Create(0x5BE6BL, new byte[] { 0x00 }) });
+            // L902LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 668 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT90\\L902LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 660u, 0xB57B6A4Cu) }, new List<Tuple<long, byte[]>>() {  });
+            // L903LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 908 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT90\\L903LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 900u, 0x4AA13566u) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x7D667L, new byte[] { 0x00 }), Tuple.Create(0x7D66FL, new byte[] { 0x00 }) });
+            // L904LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 908 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT90\\L904LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 900u, 0x54B1403Au) }, new List<Tuple<long, byte[]>>() {  });
+            // L905LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000); 908 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT90\\L905LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 900u, 0x54B1403Au) }, new List<Tuple<long, byte[]>>() {  });
+            // L906LEV.MAP - duplicate and unused door/lift models removed: D001 (unused); 908 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT90\\L906LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 900u, 0x56C439D2u) }, new List<Tuple<long, byte[]>>() {  });
+            // L907LEV.MAP - duplicate and unused door/lift models removed: D001 (same as D000), L001 (same as L000), L002 (unused), L003 (same as L000); 7376 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT90\\L907LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("D001", 900u, 0x374705C6u), new FormChunk("L001", 2468u, 0x71E1F0EDu), new FormChunk("L002", 1508u, 0xD27A08BCu), new FormChunk("L003", 2468u, 0x71E1F0EDu) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x77807L, new byte[] { 0x00 }), Tuple.Create(0x77827L, new byte[] { 0x00 }), Tuple.Create(0x77844L, new byte[] { 0x00 }), Tuple.Create(0x77854L, new byte[] { 0x00 }) });
+            // L909LEV.MAP - duplicate and unused door/lift models removed: L000 (unused), L002 (unused); 2056 bytes (Claude, 2026)
+            modelFile = gameDirectory + "SECT90\\L909LEV.MAP";
+            modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("L000", 1020u, 0x4BA9753Bu), new FormChunk("L002", 1020u, 0x2451E44Au) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x5D9F0L, new byte[] { 0x00 }), Tuple.Create(0x5DA00L, new byte[] { 0x01 }), Tuple.Create(0x5DA10L, new byte[] { 0x05 }), Tuple.Create(0x5DA20L, new byte[] { 0x01 }), Tuple.Create(0x5DA30L, new byte[] { 0x01 }), Tuple.Create(0x5DA40L, new byte[] { 0x04 }), Tuple.Create(0x5DA50L, new byte[] { 0x02 }), Tuple.Create(0x5DA60L, new byte[] { 0x03 }), Tuple.Create(0x5DA70L, new byte[] { 0x01 }) });
+            if (!modelsRemoved) { MessageBox.Show("Some duplicate door/lift models could not be removed: a level file is not the expected version. The other patches are still applied."); }
             // L906LEV.MAP
             List<Tuple<long, byte[]>> replacements = new List<Tuple<long, byte[]>>()
             {
@@ -251,7 +323,7 @@ namespace ALTViewer
             BinaryUtility.ReplaceBytes(replacements, patchDirectory);
             // L162LEV.MAP - D001 - incorrect texture index
             patchDirectory = gameDirectory + "SECT12\\L162LEV.MAP";
-            BinaryUtility.ReplaceByte(0x323E8, 0x67, patchDirectory);
+            BinaryUtility.ReplaceByte(0x3205C, 0x67, patchDirectory); // 0x323E8 before D000 was removed
             // L161LEV.MAP - D002 - incorrect texture index
             patchDirectory = gameDirectory + "SECT12\\L161LEV.MAP";
             replacements = new List<Tuple<long, byte[]>>()

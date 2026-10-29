@@ -46,6 +46,7 @@ add_library(ALTFormats STATIC
     src/Formats/FaceUvPatches.cpp
     src/Formats/PatchLoader.cpp
     src/Formats/PatchRunner.cpp
+    src/Formats/ModelRemoval.cpp
     src/Formats/BndParser.cpp
     src/Formats/PaletteFile.cpp
     src/Formats/RawImageRenderer.cpp
@@ -135,6 +136,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/LevelSnapshotTests.cpp
         tests/RenderMeshTests.cpp
         tests/PatchRunnerTests.cpp
+        tests/ModelRemovalTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
     target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats alt_warnings nlohmann_json::nlohmann_json)

@@ -136,13 +136,11 @@ namespace ALTEngine::Formats
             return model.groups.back();
         };
 
-        size_t lineNumber = 0;
         size_t droppedFaces = 0;
 
         std::string line;
         while (std::getline(file, line))
         {
-            lineNumber++;
             if (!line.empty() && line.back() == '\r') { line.pop_back(); }
             if (line.empty() || line[0] == '#') { continue; }
 

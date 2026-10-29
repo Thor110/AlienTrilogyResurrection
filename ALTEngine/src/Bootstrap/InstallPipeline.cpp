@@ -4,6 +4,7 @@
 #include "../Formats/CddaRipper.h"
 #include "../Formats/DiscManifest.h"
 #include "../Formats/Installer.h"
+#include "../Formats/ModelRemoval.h"
 #include "../Formats/PatchLoader.h"
 #include "../Formats/PatchRunner.h"
 
@@ -39,6 +40,33 @@ namespace ALTEngine::Bootstrap
         {
             std::cout << "Failed to load " << patchesJson.string() << ": " << e.what() << "\n";
             return;
+        }
+
+        // Duplicate and unused door/lift models go first: the byte patches
+        // are written against the files without them (ModelRemoval.h).
+        try
+        {
+            using namespace ALTEngine::Formats;
+            const std::vector<ModelRemoval> removals = ModelRemovalLoader::Load(patchesJson);
+            size_t removed = 0, already = 0, removalFailed = 0;
+            for (const auto& result : ModelRemovalRunner::ApplyAll(cdDirectory, removals))
+            {
+                switch (result.outcome)
+                {
+                case ModelRemovalOutcome::Applied: ++removed; break;
+                case ModelRemovalOutcome::AlreadyApplied: ++already; break;
+                case ModelRemovalOutcome::Failed:
+                    ++removalFailed;
+                    std::cout << "  [FAILED]   " << result.removal->targetFile << " - " << result.error << "\n";
+                    break;
+                }
+            }
+            std::cout << "Model removals: " << removed << " applied, " << already << " already applied, "
+                      << removalFailed << " failed.\n";
+        }
+        catch (const std::exception& e)
+        {
+            std::cout << "Failed to load the model removals from " << patchesJson.string() << ": " << e.what() << "\n";
         }
 
         std::cout << "Applying " << operations.size() << " patch operations...\n";

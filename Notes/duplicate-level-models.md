@@ -1,6 +1,8 @@
 # Duplicate and unused door and lift models
 
-Looked into whether the level files' repeated door ("D") and lift ("L") model chunks can be stripped, with the doors' and lifts' model numbers updated to match. Measured on the patched levels from levels.zip. Nothing has been changed yet.
+Whether the level files' repeated door ("D") and lift ("L") model chunks can be stripped, with the doors' and lifts' model numbers updated to match. Measured on the patched levels from levels.zip.
+
+**Done (zip 39):** every duplicate and unused model below is removed by the `modelRemovals` in `data/Patches.json`, the same removals in ALTViewer's fixer (`BinaryUtility.RemoveFormChunks`), and `Patch/DUPLICATE-MODELS.txt`. See "How it is done" at the end.
 
 ## Can it be done?
 
@@ -66,3 +68,10 @@ The duplicates sit next to the copy they repeat, a few hundred bytes apart, so a
 
 Levels 311-391 and 908/909 have door records but no "D" chunks at all, so there are no door models there to share.
 
+## How it is done
+
+- **A new kind of patch, `modelRemovals`** (`Formats/ModelRemoval.h`). Each entry names the chunks by tag with their size and the CRC-32 of their payload, plus the record bytes to renumber. It is made only if every chunk is there and matches, counts as already done if none is there and the records hold their new values, and otherwise fails without touching the file. The file is written beside the level and moved over it.
+- **It runs before the byte patches**, in the engine's install step (`RunPatches`) and at the top of ALTViewer's fixer, so the byte patches are written against the shortened files. L162's D001 texture fix moved from 0x323E8 to 0x3205C; nothing else moves.
+- **ALTViewer's fix button** now also shows while L909 hasn't been shortened or the last texture fix isn't in place, so an install patched by an older ALTViewer can take the new patches.
+- **Checked** on copies of all 45 levels: everything applies once, and a second run of both the removals and the byte patches changes nothing. MAP0 changes only at the renumbered record bytes. Every door and lift resolves to byte-identical model data. The other chunks are kept, in order. The FORM size is right, and every level loads. ALTViewer's C# (compiled here with Mono's compiler, the closest available) gives byte-identical files to the engine. Tests: `tests/ModelRemovalTests.cpp`.
+- **Still to do:** a play-test of the levels that lose unused models (131, 154, 155, 162, 213, 232, 391, 906, 907, 909).

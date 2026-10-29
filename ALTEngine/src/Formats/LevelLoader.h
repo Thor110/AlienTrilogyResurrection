@@ -78,6 +78,11 @@ namespace ALTEngine::Formats
         std::vector<struct Crate> crates;
         std::vector<struct Door> doors;
         std::vector<struct Lift> lifts;
+        // Where the door and lift records start, counted from the start of the
+        // MAP0 section's data (file offset 0x14 in every level). Tools use
+        // these to patch a record's bytes.
+        size_t doorRecordsPos = 0;
+        size_t liftRecordsPos = 0;
         std::vector<struct ActionGroup> actions;  // always exactly 64, unfiltered - a cell's action byte indexes this directly
         std::vector<struct LogicGroup> logics;    // always exactly 64 entries
         std::vector<LightRecord> lights;          // 128 entries of 28 bytes

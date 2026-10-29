@@ -1,0 +1,153 @@
+Duplicate and unused door/lift models - removed (Claude, 2026)
+
+A level's door models are its "D" chunks and its lift models its "L" chunks, after MAP0. The game keeps
+a pointer to each in a table, in file order, and a door or lift draws table[its record's model number] at
+its own position, so one model can serve any number of doors (the shipped levels already share them).
+These chunks were byte-identical to an earlier one, or no record pointed at them. Each removal drops the
+chunks, rewrites the FORM size at offset 4 (file length - 8), and renumbers the door records (byte 7) and
+lift records (byte 12) listed. The tags of the chunks that stay are not renamed; only their first letter is read.
+
+It is applied before every other patch, which is written against the shortened files. A removal is made
+only if each chunk is there with the size and CRC-32 below, and does nothing if it has already been made.
+L162LEV-D001's texture fix moves with it, from 0x323E8 to 0x3205C. Full list and reasoning:
+Notes/duplicate-level-models.md.
+
+SECT11/L122LEV.MAP
+	remove D001	660 bytes	CRC-32 0x12647718
+	0x5C43F = 00
+	0x5C45F = 00
+
+SECT11/L131LEV.MAP
+	remove D001	660 bytes	CRC-32 0xB57B6A4C
+	remove D002	512 bytes	CRC-32 0xFA9A4438
+	0x75833 = 00
+	0x7585B = 00
+
+SECT12/L141LEV.MAP
+	remove D001	900 bytes	CRC-32 0x4AA13566
+	0x7DEDB = 00
+	0x7DEE3 = 00
+
+SECT12/L154LEV.MAP
+	remove D001	900 bytes	CRC-32 0x54B1403A
+	remove L001	1412 bytes	CRC-32 0xC6773286
+	remove L008	1384 bytes	CRC-32 0x7556E903
+	0x73353 = 00
+	0x7335B = 00
+	0x73368 = 03
+	0x73378 = 01
+	0x73388 = 04
+	0x73398 = 04
+	0x733B8 = 02
+	0x733C8 = 05
+	0x733D8 = 05
+	0x733E8 = 06
+
+SECT12/L155LEV.MAP
+	remove D000	900 bytes	CRC-32 0xBC5C68BD
+	0x62A9B = 00
+	0x62AA3 = 00
+
+SECT12/L162LEV.MAP
+	remove D000	900 bytes	CRC-32 0xEE3E346B
+	0x30E97 = 00
+	0x30E9F = 00
+
+SECT21/L211LEV.MAP
+	remove D001	900 bytes	CRC-32 0x7B021EF8
+	remove D002	900 bytes	CRC-32 0x7B021EF8
+	remove D003	900 bytes	CRC-32 0x7B021EF8
+	0x742FF = 00
+
+SECT21/L212LEV.MAP
+	remove D001	900 bytes	CRC-32 0xF9C9BCB2
+	0x79F4F = 00
+	0x79F57 = 02
+	0x79F5F = 02
+	0x79F67 = 02
+	0x79F6F = 02
+	0x79F77 = 01
+	0x79F7F = 03
+	0x79F87 = 00
+	0x79F8F = 01
+	0x79F97 = 01
+	0x79F9F = 01
+	0x79FA7 = 01
+
+SECT21/L213LEV.MAP
+	remove L000	2460 bytes	CRC-32 0xB16D4E14
+	0x609B8 = 00
+	0x609C8 = 03
+	0x609D8 = 01
+	0x609E8 = 02
+
+SECT21/L222LEV.MAP
+	remove D001	900 bytes	CRC-32 0x85CE69C5
+	0x6E383 = 00
+	0x6E3BB = 00
+
+SECT21/L231LEV.MAP
+	remove D001	900 bytes	CRC-32 0x374705C6
+	remove L001	2468 bytes	CRC-32 0x71E1F0ED
+	remove L003	2468 bytes	CRC-32 0x71E1F0ED
+	0x77D0F = 00
+	0x77D2F = 00
+	0x77D4C = 01
+	0x77D5C = 00
+	0x77D6C = 00
+
+SECT21/L232LEV.MAP
+	remove D001	900 bytes	CRC-32 0x26B0CB44
+	remove D002	172 bytes	CRC-32 0x199A47C6
+	0x77A83 = 00
+	0x77A93 = 00
+
+SECT32/L391LEV.MAP
+	remove L000	1652 bytes	CRC-32 0x273EA7DD
+
+SECT90/L901LEV.MAP
+	remove D001	660 bytes	CRC-32 0x12647718
+	0x5BE4B = 00
+	0x5BE6B = 00
+
+SECT90/L902LEV.MAP
+	remove D001	660 bytes	CRC-32 0xB57B6A4C
+
+SECT90/L903LEV.MAP
+	remove D001	900 bytes	CRC-32 0x4AA13566
+	0x7D667 = 00
+	0x7D66F = 00
+
+SECT90/L904LEV.MAP
+	remove D001	900 bytes	CRC-32 0x54B1403A
+
+SECT90/L905LEV.MAP
+	remove D001	900 bytes	CRC-32 0x54B1403A
+
+SECT90/L906LEV.MAP
+	remove D001	900 bytes	CRC-32 0x56C439D2
+
+SECT90/L907LEV.MAP
+	remove D001	900 bytes	CRC-32 0x374705C6
+	remove L001	2468 bytes	CRC-32 0x71E1F0ED
+	remove L002	1508 bytes	CRC-32 0xD27A08BC
+	remove L003	2468 bytes	CRC-32 0x71E1F0ED
+	0x77807 = 00
+	0x77827 = 00
+	0x77844 = 00
+	0x77854 = 00
+
+SECT90/L909LEV.MAP
+	remove L000	1020 bytes	CRC-32 0x4BA9753B
+	remove L002	1020 bytes	CRC-32 0x2451E44A
+	0x5D9F0 = 00
+	0x5DA00 = 01
+	0x5DA10 = 05
+	0x5DA20 = 01
+	0x5DA30 = 01
+	0x5DA40 = 04
+	0x5DA50 = 02
+	0x5DA60 = 03
+	0x5DA70 = 01
+
+Total: 38316 bytes from 21 levels.

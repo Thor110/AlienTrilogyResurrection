@@ -1,1 +1,2 @@
-0x323E8 = 67
+0x3205C = 67
+^ was 0x323E8 before the unused D000 was removed (Patch/DUPLICATE-MODELS.txt)

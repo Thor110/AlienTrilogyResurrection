@@ -10,7 +10,7 @@ namespace ALTEngine::Formats
     enum class PatchOutcome
     {
         Applied,        // edits were written
-        AlreadyApplied, // first edit's bytes already matched - skipped
+        AlreadyApplied, // every edit's bytes already matched - skipped
         Failed,         // target file missing, too small, or a write error
     };
 
@@ -22,8 +22,8 @@ namespace ALTEngine::Formats
     };
 
     // Applies a list of PatchOperations against a game root directory.
-    // Idempotent: before writing, checks whether the file's bytes at the
-    // first edit's offset already equal that edit's target bytes, and
+    // Idempotent: before writing, checks whether the file already holds
+    // every edit's bytes (later edits winning where two overlap), and
     // skips the whole operation if so. Since every edit in this patch set
     // is a same-length in-place overwrite, re-applying an already-patched
     // file would be harmless anyway - this check is about avoiding

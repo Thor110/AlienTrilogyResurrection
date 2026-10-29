@@ -215,6 +215,7 @@ namespace ALTEngine::Formats
         }
 
         needBytes(static_cast<size_t>(h.doorCount) * 8, "doors");
+        result.doorRecordsPos = pos;
         result.doors.reserve(h.doorCount);
         for (uint16_t i = 0; i < h.doorCount; ++i)
         {
@@ -226,6 +227,7 @@ namespace ALTEngine::Formats
         }
 
         needBytes(static_cast<size_t>(h.liftCount) * 16, "lifts");
+        result.liftRecordsPos = pos;
         result.lifts.reserve(h.liftCount);
         for (uint16_t i = 0; i < h.liftCount; ++i)
         {
