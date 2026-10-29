@@ -245,6 +245,11 @@ namespace ALTEngine::Screens
             bool holdAnimation = false;
             float lastX = 0, lastZ = 0;
 
+            // The body is gone (the common task frees it, 0x34ed4) - until
+            // then a dead creature stays where it fell, on its death
+            // animation's last frame.
+            bool bodyRemoved = false;
+
             // The two per-creature distance thresholds the mode banding uses.
             // GUESSES - the original reads them from entity fields +0x48 and
             // +0x46, populated from the entity template, which has not been read.
@@ -288,10 +293,45 @@ namespace ALTEngine::Screens
             bool fireGrenade = false;
         };
 
-        // The creatures whose animations run on their scripts: the common task's.
+        // The creatures whose animations run on their scripts: the common
+        // task's, the queen, the egg and the colonist - every creature that
+        // draws one. (Vents don't animate.)
         inline bool Scripted(const Enemy& enemy)
         {
-            return CreatureAI::UsesCommonTask(enemy.type);
+            return CreatureAI::UsesCommonTask(enemy.type) || enemy.type == 1 || enemy.type == 7 || enemy.type == 10;
+        }
+
+        inline bool Dead(const Enemy& enemy)
+        {
+            return enemy.state == EnemyBehaviour::STATE_DYING || enemy.state == EnemyBehaviour::STATE_DEAD;
+        }
+
+        // Drawn: alive, or a body that hasn't been taken away. FUN_00030b04
+        // doesn't remove a creature - it plays its death animation (state 7)
+        // and leaves the body (state 8) on the last frame.
+        inline bool BodyShown(const Enemy& enemy)
+        {
+            return enemy.active && (enemy.alive || (Dead(enemy) && !enemy.bodyRemoved));
+        }
+
+        // Those that walk by view and attack on an animation of their own: the
+        // common task's and the queen (whose task is its variant).
+        inline bool WalksByView(const Enemy& enemy)
+        {
+            return CreatureAI::UsesCommonTask(enemy.type) || enemy.type == 7;
+        }
+
+        // What its task waits on, from its script: the common task and the
+        // queen the end flag (+0xb6 bit 1), the colonist likewise; the egg
+        // either end (its idle and opening animations end on OP_END_ALT, its
+        // flinch on OP_END - 0x35721 / 0x357ff).
+        inline bool ScriptEventFor(const Enemy& enemy)
+        {
+            namespace SA = ALTEngine::Formats::SpriteAnim;
+            // A death script ends on either (most on OP_END_ALT, which is the
+            // bit the common task's state 7 waits on, 0x34dfb).
+            const uint8_t mask = (enemy.type == 1 || Dead(enemy)) ? SA::FLAG_ENDED_MASK : SA::FLAG_ENDED;
+            return (enemy.animator.flags & mask) != 0;
         }
 
         // The record's rotation is an 8-direction compass, 45 degrees a step.
@@ -628,6 +668,18 @@ namespace ALTEngine::Screens
             }
         }
 
+        // Whether a script ever raises an end flag: one ending OP_LOOP 0 runs
+        // for ever. A wait on such a script would never finish.
+        inline bool SequenceCanEnd(const ALTEngine::Formats::SpriteAnim::SequenceView& seq)
+        {
+            namespace SA = ALTEngine::Formats::SpriteAnim;
+            if (seq.empty()) { return false; }
+            const uint16_t last = seq[seq.size() - 1];
+            if (!SA::IsOpcode(last)) { return false; }
+            const int op = (last >> 8) & 0x7f;
+            return op == SA::OP_END || op == SA::OP_END_ALT || (op == SA::OP_LOOP && (last & 0xff) != 0);
+        }
+
         // FUN_000314b8: the walk, as seen from the player - the creature's
         // facing octant less the octant it is seen from. The types that mirror
         // draw views 5-7 as 3-1 flipped (the table at 0x31480: all but 1, 10
@@ -645,9 +697,14 @@ namespace ALTEngine::Screens
         // FUN_00033cbc's animation for an attack, by type and band (the near
         // table at 0x33c04 below mode 2, the middle one at 0x33c60). The handler
         // in the middle band throws a grenade five times in eight (`armGrenade`).
-        inline int ActAnimation(int type, int mode, int random, bool& armGrenade)
+        // -2: no attack this time - the queen in the middle band sometimes
+        // goes back to the chase instead (0x33ec8, 0x33ed9).
+        inline constexpr int NO_ATTACK = -2;
+
+        inline int ActAnimation(int type, int mode, int random, bool& armGrenade, bool* mirrored = nullptr)
         {
             armGrenade = false;
+            if (mirrored) { *mirrored = false; }
             const bool nearBand = mode < 2;   // not `near`: a Windows header macro
             switch (type)
             {
@@ -656,6 +713,19 @@ namespace ALTEngine::Screens
             case 4:  return 12;
             case 5:  return nearBand ? 10 : 11;
             case 6:  return nearBand ? 11 : 12;
+            case 7:
+            {
+                // The queen's choice of four (0x33c50 near, 0x33cac middle):
+                // 12, 11, 14, or 14 drawn mirrored (+0xb6 bit 5); in the middle
+                // band the first two only half the time.
+                const int pick = random & 3;
+                const bool coin = ((random >> 2) & 1) != 0;
+                if (pick == 3) { if (mirrored) { *mirrored = true; } return 14; }
+                if (pick == 2) { return 14; }
+                if (nearBand) { return pick == 0 ? 12 : 11; }
+                if (pick == 0) { return coin ? 12 : NO_ATTACK; }
+                return coin ? 11 : NO_ATTACK;
+            }
             case 8:  return 9;
             case 9:  return 8;
             case 0x0b:
@@ -784,12 +854,31 @@ namespace ALTEngine::Screens
             }
             if (enemy.state == EnemyBehaviour::STATE_HIT_RECOVER)
             {
-                PlayAnimation(enemy, EnemyBehaviour::HitAnimation(enemy.type, enemy.walkView));
+                // FUN_000310ac. The colonist flinches on 0x10 + its view, and
+                // not at all once its burster is out; the queen on 0x10 before
+                // her intro has finished, 0x11 after, and on nothing while she
+                // is rising (0x31359, 0x3131d).
+                if (enemy.type == 10)
+                {
+                    if (enemy.colonist.state != CreatureTasks::Colonist::BURST)
+                    {
+                        PlayAnimation(enemy, 0x10 + (enemy.colonist.lastView & 7));
+                    }
+                }
+                else if (enemy.type == 7)
+                {
+                    if (enemy.ai.introPhase < 2) { PlayAnimation(enemy, 0x10); }
+                    else if (enemy.ai.introPhase > 2) { PlayAnimation(enemy, 0x11); enemy.mirrored = false; }
+                }
+                else
+                {
+                    PlayAnimation(enemy, EnemyBehaviour::HitAnimation(enemy.type, enemy.walkView));
+                }
                 return;
             }
             // A scripted creature attacks on the animation its attack started,
             // and otherwise walks by view.
-            if (Scripted(enemy))
+            if (WalksByView(enemy) && !(enemy.type == 7 && enemy.ai.state == CreatureAI::IDLE))
             {
                 if (enemy.ai.state == CreatureAI::ACT && enemy.actAnimation >= 0)
                 {
@@ -1009,10 +1098,19 @@ namespace ALTEngine::Screens
                         enemy.stepX = enemy.stepZ = 0.0f;
                         return;
                     }
-                    bool arm = false;
-                    enemy.actAnimation = ActAnimation(enemy.type, enemy.mode, world.random ? world.random() : 0, arm);
+                    bool arm = false, mirror = false;
+                    enemy.actAnimation = ActAnimation(enemy.type, enemy.mode, world.random ? world.random() : 0, arm, &mirror);
+                    if (enemy.actAnimation == NO_ATTACK)
+                    {
+                        enemy.actAnimation = -1;
+                        a.state = AI::CHASE;
+                        a.vx = a.vz = 0;
+                        enemy.stepX = enemy.stepZ = 0.0f;
+                        return;
+                    }
                     enemy.grenadeArmed = arm;
                     RestartAnimation(enemy, enemy.actAnimation);
+                    if (mirror) { enemy.mirrored = true; }
                 }
             }
 
@@ -1098,7 +1196,10 @@ namespace ALTEngine::Screens
                 // hasn't ended and the creature is past the chase (+0x6f > 2) -
                 // idle and choosing, it holds its frame.
                 namespace SA = ALTEngine::Formats::SpriteAnim;
-                const bool holding = enemy.state == EnemyBehaviour::STATE_ACTING
+                // The other tasks step their scripts in every state
+                // (0x3583d, 0x366b4, 0x3646c).
+                const bool holding = CreatureAI::UsesCommonTask(enemy.type)
+                                  && enemy.state == EnemyBehaviour::STATE_ACTING
                                   && enemy.ai.state <= CreatureAI::CHASE;
                 if (!holding && !enemy.animator.Ended())
                 {
@@ -1106,7 +1207,7 @@ namespace ALTEngine::Screens
                     if (enemy.animator.EventFired()) { enemy.animSound = enemy.animator.param; }
                 }
                 enemy.animationFrame = enemy.animator.frameIndex;
-                enemy.animationEnded = (enemy.animator.flags & SA::FLAG_ENDED) != 0;
+                enemy.animationEnded = ScriptEventFor(enemy);
             }
             else if (++enemy.animationTimer >= ANIMATION_TICKS_PER_FRAME)
             {
@@ -1121,7 +1222,7 @@ namespace ALTEngine::Screens
                 if (enemy.animationFrame >= frames)
                 {
                     enemy.animationEnded = true;
-                    if (enemy.holdAnimation) { enemy.animationFrame = frames - 1; }
+                    if (enemy.holdAnimation || Dead(enemy)) { enemy.animationFrame = frames - 1; }
                 }
             }
 
@@ -1389,8 +1490,8 @@ namespace ALTEngine::Screens
                 // A scripted creature flinches until its hit animation ends
                 // (state 6, 0x34ba4), and is immune for that long.
                 if (Scripted(enemy)) { enemy.stepX = enemy.stepZ = 0.0f; }
-                if (Scripted(enemy) && !enemy.sequence.empty() && !enemy.animator.Ended()) { break; }
-                if (Scripted(enemy))
+                if (Scripted(enemy) && SequenceCanEnd(enemy.sequence) && !enemy.animator.Ended()) { break; }
+                if (CreatureAI::UsesCommonTask(enemy.type))
                 {
                     // Then it decides afresh, facing the player; a burster
                     // backs off first (0x34bd6). OURS: the original re-runs the

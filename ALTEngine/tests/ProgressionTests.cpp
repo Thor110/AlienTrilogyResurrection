@@ -48,10 +48,69 @@ TEST_CASE("Progression: the last campaign level has no successor")
     CHECK(!Game::Progression::NextLevel(levels, "nope").has_value());
 }
 
-TEST_CASE("Progression: assessment percentages")
+TEST_CASE("Progression: the original's campaign order and its bonus levels")
 {
-    auto a = Game::Progression::Assess(7, 28);
-    CHECK(a.aliensPercent == 25.0f);
-    CHECK(a.missionPercent == 100.0f);
-    CHECK(Game::Progression::Assess(0, 0).aliensPercent == 100.0f);
+    namespace PG = Game::Progression;
+    CHECK_EQ(PG::CampaignIndex("111"), 0);
+    CHECK_EQ(PG::CampaignIndex("122"), 3);    // after 113, which is a bonus
+    CHECK_EQ(PG::CampaignIndex("391"), 34);
+    CHECK_EQ(PG::CampaignIndex("361"), -1);   // not in the original's campaign
+    CHECK_EQ(PG::CampaignIndex("900"), -1);
+    for (const char* bonus : { "113", "114", "115", "155", "242", "243", "352", "353" })
+    {
+        CHECK(PG::IsBonusLevel(PG::CampaignIndex(bonus)));
+    }
+    CHECK(!PG::IsBonusLevel(PG::CampaignIndex("112")));
+}
+
+TEST_CASE("Progression: aliens, secrets and mission as the original works them")
+{
+    namespace PG = Game::Progression;
+    PG::LevelTally t;
+    t.total[2] = 20; t.killed[2] = 5;     // huggers
+    t.total[6] = 8;  t.killed[6] = 3;     // warriors
+    t.total[20] = 4; t.killed[20] = 4;    // 1.1.1's objectives: types 20, 25, 23
+    t.total[23] = 4; t.killed[23] = 2;
+    t.secretsTotal = 3; t.secretsFound = 1;
+    const auto a = PG::Assess(t, 0);
+    CHECK_EQ(a.aliensPercent, 28);         // 8 of 28, integer division
+    CHECK_EQ(a.secretsPercent, 33);
+    CHECK_EQ(a.missionPercent, 75);        // 6 of 8
+    CHECK_EQ(a.requiredPercent, 15);
+    CHECK_EQ(a.grade, 1);
+
+    // Nothing to find or do is 100; nothing killed is 0, even with nothing to kill.
+    const auto empty = PG::Assess(PG::LevelTally{}, 2);
+    CHECK_EQ(empty.secretsPercent, 100);
+    CHECK_EQ(empty.missionPercent, 100);
+    CHECK_EQ(empty.aliensPercent, 0);
+}
+
+TEST_CASE("Progression: a failed mission replays, and 85% opens a bonus level")
+{
+    namespace PG = Game::Progression;
+    PG::LevelTally t;
+    t.total[22] = 10;                       // 1.1.2's switches
+    t.killed[22] = 1;                       // 10%: under 15
+    auto a = PG::Assess(t, 1);
+    CHECK_EQ(a.grade, 0);
+    CHECK_EQ(PG::NextCampaignIndex(1, a.grade), 1);
+
+    t.killed[22] = 5;                       // 50%: passed, the bonus skipped
+    a = PG::Assess(t, 1);
+    CHECK_EQ(a.grade, 1);
+    CHECK_EQ(PG::NextCampaignIndex(1, a.grade), 3);   // 112 -> 122
+
+    t.killed[22] = 9;                       // 90%: the bonus level 113 next
+    a = PG::Assess(t, 1);
+    CHECK_EQ(a.grade, 3);
+    CHECK_EQ(PG::NextCampaignIndex(1, a.grade), 2);
+    CHECK_EQ(PG::NextCampaignIndex(2, 2), 3);          // and on from it
+
+    // The required figure rises by chapter, and equalling it fails.
+    CHECK_EQ(PG::Assess(PG::LevelTally{}, 12).requiredPercent, 25);
+    CHECK_EQ(PG::Assess(PG::LevelTally{}, 22).requiredPercent, 45);
+    PG::LevelTally q;                       // 3.1.1's objective, type 34
+    q.total[34] = 20; q.killed[34] = 9;     // exactly 45%
+    CHECK_EQ(PG::Assess(q, 22).grade, 0);
 }

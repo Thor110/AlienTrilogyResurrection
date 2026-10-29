@@ -385,14 +385,45 @@ int main(int, char**)
                 break;
             }
 
-            const auto assessment = ALTEngine::Game::Progression::Assess(played.aliensKilled, played.aliensTotal);
+            // The assessment and where it leads (FUN_00014f44): a failed
+            // mission is played again, and 85% or more opens the bonus level
+            // that follows, if there is one. A level outside the original's
+            // campaign goes on in manifest order.
+            namespace PG = ALTEngine::Game::Progression;
+            const int campaignIndex = PG::CampaignIndex(digits);
+            const auto assessment = PG::Assess(played.tally, campaignIndex);
             MissionAssessmentStats stats;
-            stats.aliensPercent = assessment.aliensPercent;
-            stats.secretsPercent = assessment.secretsPercent;
-            stats.missionPercent = assessment.missionPercent;
+            stats.aliensPercent = static_cast<float>(assessment.aliensPercent);
+            stats.secretsPercent = static_cast<float>(assessment.secretsPercent);
+            stats.missionPercent = static_cast<float>(assessment.missionPercent);
             if (MissionAssessmentScreen::Run(cdDirectory, stats).windowClosed) { return CampaignEnd::WindowClosed; }
+            std::cout << "Assessment: aliens " << assessment.aliensPercent << "%, secrets " << assessment.secretsPercent
+                      << "%, mission " << assessment.missionPercent << "% (needs more than "
+                      << assessment.requiredPercent << "%), grade " << assessment.grade << "\n";
 
-            const auto next = ALTEngine::Game::Progression::NextLevel(levelList, digits);
+            std::optional<ALTEngine::Formats::LevelListEntry> next;
+            if (campaignIndex >= 0)
+            {
+                const int nextIndex = PG::NextCampaignIndex(campaignIndex, assessment.grade);
+                if (nextIndex == campaignIndex) { std::cout << "Mission failed - level " << dotted << " again.\n"; }
+                if (nextIndex < PG::CAMPAIGN_LENGTH)
+                {
+                    next = PG::Find(levelList, PG::CAMPAIGN_ORDER[nextIndex]);
+                    if (!next)
+                    {
+                        // A level the manifest doesn't list: its digits are enough.
+                        ALTEngine::Formats::LevelListEntry entry;
+                        entry.digits = PG::CAMPAIGN_ORDER[nextIndex];
+                        entry.dottedCode = DottedOf(entry.digits);
+                        next = entry;
+                    }
+                    if (PG::IsBonusLevel(nextIndex)) { std::cout << "Bonus level opened: " << next->dottedCode << "\n"; }
+                }
+            }
+            else
+            {
+                next = PG::NextLevel(levelList, digits);
+            }
             if (!next)
             {
                 std::cout << "No level after " << dotted << " - back to the main menu.\n";

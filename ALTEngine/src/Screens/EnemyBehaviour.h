@@ -538,7 +538,9 @@ namespace ALTEngine::Screens
             case 8:  return 8;
             case 9:  return 10;
             case 10: return 25;
-            default: return 10;
+            case 13: return 11;   // single player; in a network game it has none
+            case 14: return 9;
+            default: return 10;   // 11, 12
             }
         }
 

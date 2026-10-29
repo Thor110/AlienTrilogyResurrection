@@ -1,6 +1,7 @@
 #include "LevelLightScanner.h"
 
 #include "../Formats/LevelLoader.h"
+#include "../Formats/RenderMesh.h"
 #include "../Formats/TextureAnimation.h"
 
 #include <nlohmann/json.hpp>
@@ -205,7 +206,7 @@ namespace ALTEngine::Tools
             for (const ALTEngine::Formats::ModelQuad& quad : level.quads)
             {
                 int lightId = quad.reserved & 0x7f;
-                bool animated = (quad.flags == ALTEngine::Formats::DRAW_ROUTINE_ANIMATED);
+                bool animated = ALTEngine::Formats::ClassifyDrawRoutine(quad.flags).animated;
 
                 int mode = -1;
                 if (lightId < static_cast<int>(level.lights.size()))

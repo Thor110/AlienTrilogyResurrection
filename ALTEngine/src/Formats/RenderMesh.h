@@ -139,13 +139,62 @@ namespace ALTEngine::Formats
     // single mesh.
     std::array<RenderMesh, 5> BuildRenderMeshPerGroup(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects);
 
+    // ---- THE DRAW ROUTINES ----------------------------------------------
+    //
+    // A level face's +0x12 byte (ModelQuad::flags) picks one of 35 draw
+    // routines from the table at 0x000a7098 (FUN_00025648 rejects >= 0x23).
+    // Traced from the routines themselves:
+    //
+    //   routine   shape   culled  mirrored  fill
+    //    0        quad    yes     -         A  opaque, lit
+    //    1        tri     yes     -         A
+    //    2        quad    yes     yes       A
+    //    4        quad    no      -         B  cut-out: palette word 0 not drawn, lit
+    //    5        tri     no      -         B
+    //    6        quad    no      yes       B
+    //   12        quad    no      -         C  see-through: palette word 0 not
+    //   13        tri     no      -         C  drawn, the rest averaged 50/50 with
+    //   34        quad    no      yes       C  what's behind, unlit
+    //   14        flat-coloured, untextured (fill 6), not culled
+    //
+    // 8, 10, 26, 28, 30 and 32 are 0, 2, 4, 6, 12 and 34 with the texture
+    // taken through the texture animator (0x20bbc and its like: the face's
+    // texIndex is an animator ordinal, the animator's current output the
+    // descriptor). Every other value - 3, 7, 9, 11, 15-25, 27, 29, 31, 33 -
+    // draws nothing (an empty routine, 0x25640 and its like).
+    //
+    // "Culled" is the projection: 0x48490 and 0x48128 return the winding,
+    // and a face seen from behind is dropped; 0x48ba4 and 0x48924 don't.
+    // "Mirrored" swaps the descriptor's corners the way routine 2 does
+    // relative to 0 (bytes +0x10 and +0x18 exchanged, in both pairs).
+    // The fills are FUN_0004b234 / 0x4b400 / 0x4b5cc setting the span mode
+    // (0x3602d0 = 2, 3, 4) for the span routines at 0x5d3d4, 0x5d77e and
+    // 0x5db67; B and C test the texel's raw palette word against 0.
+    enum class FaceFill : uint8_t { Hidden, Opaque, Cutout, Translucent };
+
+    struct DrawRoutine
+    {
+        FaceFill fill = FaceFill::Hidden;
+        bool culled = true;
+        bool mirrored = false;
+        bool animated = false;
+        bool flat = false;   // routine 14: no texture (drawn textured here)
+    };
+
+    DrawRoutine ClassifyDrawRoutine(uint8_t routine);
+
     // `lights` supplies each quad's colour. Passing nullptr emits white
     // for everything, i.e. the pre-lighting behaviour, which is what the
     // model-preview and any non-gameplay caller wants.
+    //
+    // `fill` selects which faces go in: each fill is drawn its own way
+    // (ModelRenderer), so the level is built once per fill. Hidden faces
+    // are never emitted.
     std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level,
                                                             const std::vector<BxRectangle>& uvDescriptors,
                                                             const std::vector<FaceUvRotation>& uvRotations = {},
                                                             const LightTable* lights = nullptr,
-                                                            const TextureAnimator* animator = nullptr);
+                                                            const TextureAnimator* animator = nullptr,
+                                                            FaceFill fill = FaceFill::Opaque);
 }
 

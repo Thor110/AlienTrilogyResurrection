@@ -247,7 +247,8 @@ namespace ALTEngine::Formats
         std::vector<std::vector<uint16_t>> programs; // indexed by groupId
     };
 
-    // The draw-routine byte value that marks an animated level face. On disk
-    // this is quad +0x12, which ModelQuad calls `flags`.
+    // The first draw-routine byte value that marks an animated level face. On
+    // disk this is quad +0x12, which ModelQuad calls `flags`. 10, 26, 28, 30
+    // and 32 are animated too - ClassifyDrawRoutine (RenderMesh.h) has them all.
     constexpr uint8_t DRAW_ROUTINE_ANIMATED = 8;
 }

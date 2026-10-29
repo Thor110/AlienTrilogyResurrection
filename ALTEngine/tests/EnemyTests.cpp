@@ -259,3 +259,37 @@ TEST_CASE("Enemies: a scripted leap and a swipe both end, and the creature goes 
     }
     Enemies::ResetLevelState();
 }
+
+TEST_CASE("Death: every creature's death animation exists and ends, so its body settles")
+{
+    namespace AD = ALTEngine::Formats::EnemyAnimData;
+    namespace AS = ALTEngine::Formats::EnemyAnimSequences;
+    for (int type = 1; type <= 14; ++type)
+    {
+        const int animation = EnemyBehaviour::DeathAnimation(type);
+        const int creature = AD::CreatureIndexForType(type);
+        CHECK(creature >= 0);
+        CHECK(animation < AD::CREATURES[creature].count);
+        const auto seq = AS::Find(creature, animation);
+        CHECK(seq.count > 0);
+        CHECK(Enemies::SequenceCanEnd({ seq.data, seq.count }));
+    }
+}
+
+TEST_CASE("Death: a killed warrior stays down on its death animation's last frame")
+{
+    Enemies::Enemy e = HuggerAtPlayer(4000.0f, 6);
+    e.health = 1;
+    CHECK(Enemies::ApplyHit(e, 5));
+    for (int t = 0; t < 400; ++t) { Step(e); }
+    CHECK(!e.alive);
+    CHECK(e.state == EnemyBehaviour::STATE_DEAD);
+    CHECK(e.animation == EnemyBehaviour::DeathAnimation(6));
+    CHECK(e.animationEnded);
+    CHECK(Enemies::BodyShown(e));
+    const int frame = e.animationFrame;
+    Step(e);
+    CHECK(e.animationFrame == frame);
+    CHECK(e.stepX == 0.0f && e.stepZ == 0.0f);
+    Enemies::ResetLevelState();
+}

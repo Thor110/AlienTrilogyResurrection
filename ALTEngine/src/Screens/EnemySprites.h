@@ -274,7 +274,7 @@ namespace ALTEngine::Screens
         {
             for (const auto& enemy : enemies)
             {
-                if (!enemy.active || !enemy.alive) { continue; }
+                if (!Enemies::BodyShown(enemy)) { continue; }
 
                 // NOT DRAWN IN THE WORLD WHILE POUNCING - the original replaces
                 // the creature's handler, so its draw is never reached. It is on
@@ -310,7 +310,7 @@ namespace ALTEngine::Screens
                 // Wrap, so an animation that outlives its frame count loops rather
                 // than falling off the end.
                 const auto& frames = anim->second.frames;
-                const size_t index = enemy.holdAnimation
+                const size_t index = (enemy.holdAnimation || Enemies::Dead(enemy))
                     ? std::min(static_cast<size_t>(enemy.animationFrame), frames.size() - 1)
                     : static_cast<size_t>(enemy.animationFrame) % frames.size();
                 const Frame& frame = frames[index];

@@ -231,6 +231,10 @@ namespace ALTEngine::Formats
         uint8_t drop2 = 0;    // index of second pickup dropped
         uint8_t unknown3 = 0;
         uint8_t unknown4 = 0;
+        // +10/+12, two u16s: the first texture animator, and how many, that
+        // step on when the object is destroyed (FUN_00037184 copies them to
+        // +0x24/+0x26; FUN_00037ff8 steps each by one). A window's glass, a
+        // curtain: the faces that show the break. See TextureStepsOnDestroy.
         uint8_t unknown5 = 0;
         uint8_t unknown6 = 0;  // confirmed always 0
         uint8_t unknown7 = 0;
@@ -238,6 +242,10 @@ namespace ALTEngine::Formats
         uint8_t rotation = 0;  // 4-direction: 0=N,2=E,4=S,6=W (only even values - 90 degrees per step, unlike Monster's 8-direction scheme)
         uint8_t unknown10 = 0; // confirmed always 0
     };
+
+    // The texture animators a destroyed object steps on: [first, first + count).
+    inline int TextureStepFirst(const Crate& c) { return c.unknown5 | (c.unknown6 << 8); }
+    inline int TextureStepCount(const Crate& c) { return c.unknown7 | (c.unknown8 << 8); }
 
     // 8 bytes. count = header.doorCount. No explicit Z field - needs the
     // collision grid's floorHeight, same as Crate.

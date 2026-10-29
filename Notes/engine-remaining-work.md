@@ -16,20 +16,20 @@ Details for each item are in the numbered sections below.
 | 4a | Creature line of fire and visibility before attacking (`FUN_0003231c`, `FUN_00033a1c`) | yes | done (zone test approximated) |
 | 4b | Creature chase via the path network (state 2/3) | yes | done for the common task (see section 4 for what's approximated) |
 | 4c | Creatures blocking each other (cell occupancy) | yes | done (barrel blasts still find creatures by position) |
-| 4d | Hit, death and leap-end animations | yes: the scripts are in the image | done for the common task's creatures (death not drawn; egg, colonist, queen still approximated) |
-| 4e | Per-type tasks for types 1, 7, 10, 0x10-0x13 | yes | done (animation events approximated; untested in play) |
+| 4d | Hit, death and leap-end animations | yes: the scripts are in the image | done: bodies stay down on the death animation's last frame; egg, colonist and queen scripted too |
+| 4e | Per-type tasks for types 1, 7, 10, 0x10-0x13 | yes | done, on their animation scripts (untested in play) |
 | 5 | Flame pre-steps damaging objects | yes | done |
 | 6 | Player Jumping option | modern | done (a hop; doesn't reach higher ledges) |
-| 7a | Secrets counter on the assessment screen | yes | open |
+| 7a | Secrets counter on the assessment screen | yes | done, with the mission figure, the grade and the original's campaign order |
 | 7b | Mid-level saves | modern | done: Modern "Save Anywhere" (untested in play) |
 | 7c | Death clip choice | yes | done |
 | 7d | Field renames in `LevelLoader.h` | tidy-up | done for lifts, pickups, crates and monsters |
 | 7e | Direct-to-window rendering | needs real hardware | open |
 | 7f | Multiplayer | large | open |
 | A | Open question: pistol rounds against a standing hugger | needs a check in the original | open |
-| 8a | Walk-through walls and floors: texture mapping (e.g. 3.5.1) | yes | open |
-| 8b | Breakable windows | yes | open |
-| 8c | Cryopod cover (textured like the windows, not breakable) | yes | open |
+| 8a | Walk-through walls and floors: texture mapping (e.g. 3.5.1) | yes | done from the draw-routine table (untested on 3.5.1) |
+| 8b | Breakable windows | yes | done (the break checked on the demo's L112; glass untested in play) |
+| 8c | Cryopod cover (textured like the windows, not breakable) | yes | done as the see-through fill (untested in play) |
 
 ## 1. One logic tick rate
 
@@ -103,11 +103,14 @@ Status in the port:
   - **Rounds per attack**, from the scripts: a guard's burst loops, 4 rounds; the soldier, synth and handler fire 1. A round is 1 damage, then 0x1e ticks of immunity (`FUN_0003e4a8`), so gunners are weak in the original too.
   - **The handler's grenade:** done (`FUN_0002b240`, arm `0x2dd0c`). From 0x180 up, 0x80 along the heading (0x5a when the player is higher or lower), vy 0x20; gravity 2; on the floor it bounces at 0x10, 2 less each time, then slides, halving. It goes off after 0x40 ticks (`0x2da19`), on a drop of more than 0x40 below the floor, on an attribute 0x14 cell, or on the player (0x19, cause 5, and the blast). Simplified: any object in its cell sets it off (`FUN_0002a2d8` tests heights and only blasts on a barrel). Drawn with the grenade pickup model.
   - **Flinch:** a scripted creature is immune until its hit animation ends (8; the synth 8 from behind, else 9; `FUN_000310ac`). Then it faces the player and chases afresh, a burster backing off. The original re-runs the attack's choice in place, and pushes the creature back (speed / 4) while it flinches; neither is done.
-  - **Death animations** are chosen but not drawn: a dying creature is removed on the next tick.
+  - **Death:** `FUN_00030b04` doesn't remove a creature. It sets state 7 and starts the type's death animation (1 egg, 9 hugger, 11 burster and bambi, 13 dog, 10 warrior, 15 queen, 8 ceiling warrior (which becomes a warrior, type 6), 10 ceiling dog (becomes a dog, 5), 25 colonist, 10 guard and soldier, 11 synth, 9 handler). The common task's state 7 (`0x34d99`) waits for the script's end (+0xb6 bit 4, `OP_END_ALT` on most) and goes to state 8; state 8 (`0x34eb3`) is the body, left on its last frame. The port now draws it so.
+    - **Taken away** only in a cell of attribute 6 with under 4 units of headroom (`0x34eb6`), or at once when the killing round was particle type 0x0b, 0x0c or 0x13 (`FUN_000313b0` sets +0x6c bit 0x20, which state 7 tests first). The port fires none of those types, so the second never happens.
+    - **Acid:** above Easy, a dead type 2-6 (the ceiling ones included) turns bare floor (attribute 0) under it to 0x0c, the acid floor that burns the player 1 (`0x34f60`).
+    - **Not done:** the small knockback on death (`FUN_00032f78` at speed BX, which is 0 or -1 there).
   - **Types 0x0b-0x0e** use `FUN_00032aec` instead of `FUN_0003231c` in places. The port uses `FUN_0003231c` for them.
   - **Speeds and timers** are the original's per-tick values. How fast they look depends on the tick rate (item 1).
 - **The other tasks** are now in `Screens/CreatureTasks.h` (egg, colonist, vents) and, for the queen, as a variant of the common task in `Screens/CreatureAI.h`. See "Settled" for what each does. What is still approximated:
-  - **Animation events:** the egg, colonist and queen wait on their animations' script bits (+0xb6 bits 1 and 2). The port has no script VM, so an animation playing through stands in, with a frame count from the sprite set (4 when it has none).
+  - **Animation events:** done. The egg, colonist and queen step their scripts in every state (`0x3583d`, `0x366b4`, `0x3646c`); the egg waits on either end bit (its idle and opening animations end on `OP_END_ALT`), the colonist and queen on bit 2. The colonist has 35 animations, not 18 (the table runs to `0xacb00`), and 25 of the port's frame records had wrong values; both are now read from the image. The queen's attack choice and hit animations are the original's (`0x33c50` / `0x33cac`; `FUN_000310ac`).
   - **The egg's line** uses `FUN_0003231c`; the original uses the variant `FUN_00032aec`.
   - **Vent jets** are drawn as plain puffs; the original's per-type sprites (the table at `0x2d6a0`) aren't read. The vent's sound plays once as the jet starts, since the port's mixer can't hold a loop. A burst pipe shows the barrel explosion; whether `FUN_0002aaf0` also does blast damage is unchecked.
   - **The queen's death** slides her down a slope and can sink her into a pit (cell attribute 6, under 4 units of headroom); neither is done. The colonist's view-dependent death animations (0x1b + view) aren't either.
@@ -130,10 +133,13 @@ Status in the port:
 
 ## 7. Smaller items
 
-- **Assessment screen:** the "secrets" figure is always 0, because nothing tracks secrets.
-  - **Found so far:** two level counters that only ever count up. `DAT_000b0b28` counts doors activated for the first time (`FUN_00029560` / `FUN_00029610`, door flag 0x80), and `DAT_000b0b2a` counts lifts run for the first time (lift flag 0x80). Neither has a direct reader, so the assessment screen probably reads them as a block. Its code is the next thing to read.
+- **Assessment screen:** done (`FUN_00014c68`, `Game/Progression.h`).
+  - **Secrets:** a cell's byte 5 is its secret area. Each frame marks the camera's cell's area as found (`0x274e1`, table `0x245bb4`); the figure is areas 1-255 found over the level's highest area number (level record +0x76). 100 when a level has none.
+  - **Aliens:** kills of types 1-14 over their totals. **Mission:** the same, over the level's objective types (5 per level, table `0xa62e9`). Totals count creature records (crate contents included) and objects below type 0x25; kills count deaths, vents switched off, switches thrown and objects destroyed.
+  - **Grading** (`FUN_00014f44`): the mission figure must pass 15 (levels 0-11), 25 (12-21) or 45 (after). Failing replays the level; 85 or more before a bonus level opens it, otherwise the bonus level is skipped.
+  - **The campaign order** is the table at `0xa4dec`, not the manifest's: 111, 112, 113, 122, 131, 114, 141, 115, 154, 155, 161, 162, 211, 212, 213, 222, 242, 231, 232, 243, 262, 263, 311, 321, 331, 322, 351, 352, 323, 371, 353, 324, 381, 325, 391. The bonus levels are 113, 114, 115, 155, 242, 243, 352 and 353.
 - **Saves:** done as the Modern option **Save Anywhere** (`Screens/LevelSnapshot.h`). Off, Save Game checkpoints the start of the level, as before. On, opening the pause menu captures the level into the checkpoint's `snapshot`, which loading puts back over the freshly built level:
-  - **Kept:** the whole cell grid (16 bytes a cell, so doors, lifts, marks and anything a trigger rewrote), each door's and lift's progress, every trigger's uses, every pickup (taken, still in its crate, waiting on a trigger, where it lies), every crate and barrel (health, broken), the switches, the minimap, the player (position, facing, look, health, armour, items, weapon) and every creature (position, facing, health, dead or alive, alerted, an egg's, vent's or colonist's own state, an unscripted creature's frame).
+  - **Kept:** the whole cell grid (16 bytes a cell, so doors, lifts, marks and anything a trigger rewrote), each door's and lift's progress, every trigger's uses, every pickup (taken, still in its crate, waiting on a trigger, where it lies), every crate and barrel (health, broken), the switches, the minimap, the player (position, facing, look, health, armour, items, weapon) and every creature (position, facing, health, dead or alive, alerted, an egg's, vent's or colonist's own state, its animation, a body taken away), and the texture and light changes switches and breakages made.
   - **Not kept:** rounds and other particles in flight, explosions, debris, sounds, a creature's attack, leap, flinch or face hug in progress (it comes back idle and decides again), and the level's light flicker.
   - Each piece is only restored when it matches the level as built (the same number of doors, creatures and so on), so a save from an edited level can't put anything out of range.
 - **Death clip choice:** done. The causes are the creature attack's, by type (`FUN_00033ff8`, tables `0x33f60` / `0x33fac` by type - 1): huggers and bursters 4 (DEATH1), bambi and dog 1 (DEATH5), warrior drone 0 (DEATH2), queen 2 (DEATH3). Cause 3 is a creature's projectile (particle type 5), and 5 a blast or a vent. The port passed 4 for every creature. Types 8 and up have no arm there at all.
@@ -145,11 +151,24 @@ Status in the port:
 
 ## 8. Reported from play, after the rest of the list
 
-- **Walk-through walls and floors:** some walls (and floors) can be walked through, in the original too, where it isn't obvious either. In the port their textures are not mapped properly. Seen on 3.5.1 and throughout the game.
-- **Breakable windows:** some levels have windows that can be shot out.
-- **Cryopod cover:** looks to take its texture the same way as the windows, but can't be broken.
+All three came down to the level faces' draw routines, which the port mostly ignored. A face's +0x12 byte picks one of 35 routines (table `0xa7098`, `Formats::ClassifyDrawRoutine`):
+
+| Routine | Shape | Culled | Mirrored | Fill |
+|---|---|---|---|---|
+| 0 / 1 / 2 | quad / tri / quad | yes | 2 only | opaque, lit |
+| 4 / 5 / 6 | quad / tri / quad | no | 6 only | cut-out: key texels not drawn, lit |
+| 12 / 13 / 34 | quad / tri / quad | no | 34 only | see-through: key texels not drawn, the rest half and half with what's behind, unlit |
+| 14 | | no | | flat colour, no texture (drawn textured in the port) |
+
+- **Animated forms:** 8, 10, 26, 28, 30 and 32 are 0, 2, 4, 6, 12 and 34 with the texture taken from the texture animator (the face's texIndex is an animator number). The port only did this for 8, so the others showed whatever descriptor had that number. **Every other value draws nothing** (3, 7, 9, 11, 15-25, 27, 29, 31, 33); the port drew them.
+- **Transparency is the face's, not the page's.** The cut-out and see-through spans skip a texel whose CLUT word is 0 (`0x5d77e`, `0x5db67`); opaque faces draw every texel. In the demo's pages the key in practice is magenta (index 0, 0x7c1f): L111's cut-out faces are half index 0 and hold no word-0 texel. The port now keys on both, and opaque faces ignore it. The old per-level index table (`LevelTransparency.h`, now unused) applied to every face of a page, which punched holes in opaque faces (index 255 is 0x0001, a near-black).
+- **Breaking:** object types 0x15, 0x1c and 0x1d have no model (`FUN_00037184`). They stand in the window or panel, block its cell and take the shots. Destroying one steps each of its texture animators by one (`FUN_00037ff8`; first and count are the record's u16s at +10 and +12), which shows the broken frames. Checked on the demo's L112: crate 13 (type 0x15) steps animators 21-28, the eight routine-26/28 louvre faces next to it, from intact to broken. The port had drawn these objects as crates and never stepped the textures.
+- **Saves** now keep the switches' and breakages' texture and light changes (replayed in order).
+- **Untested:** 3.5.1 itself, and the see-through fill: the demo levels have no routine 12, 13, 30, 32 or 34 face.
 
 ## Settled this round (see the code comments for the evidence)
+
+- **-GAP and level override geometry never loaded:** both looked for the level's page textures before they had been uploaded. The pages now upload first.
 
 - **Creatures could only be hurt once:** a hit set the creature's hit-reaction cooldown and nothing counted it down. Anything that survived its first hit (a warrior drone has 30 << 4 = 480 health against a pistol round's 32) was then immune. It now counts down each tick.
 - **When a creature's hit lands** (`FUN_00033ff8`): the player must be in a zone it sees and inside its cone (`FUN_00033a1c`). At contact range that's enough; in the near and middle bands it also needs a clear line, and does the close or middle damage. There's no vertical test. The port had needed contact range, a clear line and a vertical limit all at once, so warriors rarely hit.

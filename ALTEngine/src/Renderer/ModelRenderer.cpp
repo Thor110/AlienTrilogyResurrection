@@ -3,7 +3,6 @@
 #include "../Bootstrap/PlatformPaths.h"
 #include "../Formats/BndParser.h"
 #include "../Formats/BndTextureLoader.h"
-#include "../Formats/LevelTransparency.h"
 #include "../Formats/ModelLoader.h"
 #include "../Formats/RenderMesh.h"
 #include "../Formats/ObjLoader.h"
@@ -105,6 +104,16 @@ namespace ALTEngine::Renderer
             // checked rather than assumed.
             std::array<size_t, 5> groupVertexCounts{};
 
+            // The faces of the other two fills (Formats::FaceFill), one
+            // sub-group per page each, with their own copy of the page keyed
+            // on palette word 0: cut-out faces (routines 4-6, 26, 28) drawn
+            // with the ordinary pipeline, see-through ones (12, 13, 34, 30,
+            // 32) with the half-blend pipeline after everything else.
+            std::array<LevelSubGroup, 5> cutoutGroups;
+            std::array<LevelSubGroup, 5> translucentGroups;
+            std::array<size_t, 5> cutoutVertexCounts{};
+            std::array<size_t, 5> translucentVertexCounts{};
+
             // -GAP override geometry. Hand-made faces that fill holes the
             // original level data leaves - most visibly the slit above a door
             // frame, which the original could never show because it had no
@@ -142,6 +151,11 @@ namespace ALTEngine::Renderer
         SDL_GPUDevice* device = nullptr;
         SDL_GPUGraphicsPipeline* pipeline = nullptr;           // cull_mode=BACK - correct for solid, opaque geometry
         SDL_GPUGraphicsPipeline* doubleSidedPipeline = nullptr; // cull_mode=NONE - see LoadModel's doc comment on why colour-key cutout models need this
+        // The see-through fill (draw routines 12, 13, 34, 30, 32): the texel
+        // and what is already there averaged, (src + dst) / 2, as span routine
+        // 0x5db67 does - a constant blend of one half. No depth write, so it
+        // never hides what is drawn behind it afterwards.
+        SDL_GPUGraphicsPipeline* translucentPipeline = nullptr;
         // Two samplers, chosen by the Graphics > Quality option. `sampler`
         // points at whichever is active; every binding site uses it, so
         // switching is a single pointer assignment with no pipeline rebuild.
@@ -701,6 +715,30 @@ namespace ALTEngine::Renderer
         pipelineInfo.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
         doubleSidedPipeline = SDL_CreateGPUGraphicsPipeline(device, &pipelineInfo);
 
+        // The half blend. Culled like the level's other faces: a two-sided
+        // see-through face carries both windings (RenderMesh), and only the
+        // one facing the camera survives, so it is blended once.
+        {
+            SDL_GPUColorTargetDescription blendDesc = colorDesc;
+            blendDesc.blend_state.enable_blend = true;
+            blendDesc.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_CONSTANT_COLOR;
+            blendDesc.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_CONSTANT_COLOR;
+            blendDesc.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+            blendDesc.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
+            blendDesc.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+            blendDesc.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+            SDL_GPUGraphicsPipelineCreateInfo blendInfo = pipelineInfo;
+            blendInfo.target_info.color_target_descriptions = &blendDesc;
+            blendInfo.depth_stencil_state.enable_depth_write = false;
+            blendInfo.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK;
+            translucentPipeline = SDL_CreateGPUGraphicsPipeline(device, &blendInfo);
+            if (!translucentPipeline)
+            {
+                // Not fatal: the see-through faces are then drawn as cut-outs.
+                SDL_Log("ModelRenderer::Initialize: the see-through pipeline failed: %s", SDL_GetError());
+            }
+        }
+
         SDL_ReleaseGPUShader(device, vertexShader);
         SDL_ReleaseGPUShader(device, fragmentShader);
 
@@ -789,11 +827,14 @@ namespace ALTEngine::Renderer
                 group.texture = nullptr;
             }
 
-            for (auto& group : level.groups)
+            for (auto* groups : { &level.groups, &level.cutoutGroups, &level.translucentGroups })
             {
-                if (group.vertexBuffer) { SDL_ReleaseGPUBuffer(device, group.vertexBuffer); }
-                if (group.indexBuffer) { SDL_ReleaseGPUBuffer(device, group.indexBuffer); }
-                if (group.texture) { SDL_ReleaseGPUTexture(device, group.texture); }
+                for (auto& group : *groups)
+                {
+                    if (group.vertexBuffer) { SDL_ReleaseGPUBuffer(device, group.vertexBuffer); }
+                    if (group.indexBuffer) { SDL_ReleaseGPUBuffer(device, group.indexBuffer); }
+                    if (group.texture) { SDL_ReleaseGPUTexture(device, group.texture); }
+                }
             }
         }
         loadedLevels.clear();
@@ -828,6 +869,7 @@ namespace ALTEngine::Renderer
         sampler = nullptr;
         if (pipeline) { SDL_ReleaseGPUGraphicsPipeline(device, pipeline); pipeline = nullptr; }
         if (doubleSidedPipeline) { SDL_ReleaseGPUGraphicsPipeline(device, doubleSidedPipeline); doubleSidedPipeline = nullptr; }
+        if (translucentPipeline) { SDL_ReleaseGPUGraphicsPipeline(device, translucentPipeline); translucentPipeline = nullptr; }
 
         SDL_DestroyGPUDevice(device);
         device = nullptr;
@@ -1339,25 +1381,19 @@ namespace ALTEngine::Renderer
         if (!device) { return false; }
         if (loadedLevels.count(cacheKey)) { return true; }
 
-        // Level ID (e.g. 111 for "1.1.1") - extracted from the GFX
-        // filename's leading digits (e.g. "111GFX.B16" -> 111), needed
-        // for the per-level, per-texture-group transparency lookup
-        // below (confirmed index-based and level-specific, not a
-        // universal rule - see LevelTransparency.h).
-        std::string gfxStem = gfxPath.stem().string();
-        std::string levelIdDigits;
-        for (char c : gfxStem) { if (c >= '0' && c <= '9') { levelIdDigits += c; } else { break; } }
-        int levelId = levelIdDigits.empty() ? -1 : std::stoi(levelIdDigits);
-
-        std::vector<std::vector<int>> perGroupTransparency;
-        for (int g = 0; g < 5; ++g) { perGroupTransparency.push_back(ALTEngine::Formats::GetLevelTransparencyIndices(levelId, g)); }
+        // Transparency is the face's, not the page's: the draw routine decides
+        // (Formats::ClassifyDrawRoutine), and the cut-out and see-through fills
+        // skip texels whose raw palette word is 0. So the pages load keyed on
+        // that, and the opaque faces get a copy with the alpha ignored. This
+        // replaces the per-level index table (LevelTransparency.h), which made
+        // every face on a page a cut-out.
 
         ALTEngine::Formats::LevelGeometry level;
         BndTextureSet textureSet;
         try
         {
             level = ALTEngine::Formats::LevelLoader::Load(mapPath);
-            textureSet = BndTextureLoader::Load(gfxPath, std::nullopt, perGroupTransparency);
+            textureSet = BndTextureLoader::LoadLevelPages(gfxPath);
         }
         catch (const std::exception& e)
         {
@@ -1397,10 +1433,48 @@ namespace ALTEngine::Renderer
         SDL_Log("ModelRenderer::LoadLevel(%s): %zu texture animators, %zu light records",
                 cacheKey.c_str(), loadedLevel.animator.Count(), level.lights.size());
 
-        auto perGroupMeshes = ALTEngine::Formats::BuildLevelRenderMeshPerGroup(
-            level, textureSet.uvRects, rotations, &loadedLevel.lights, &loadedLevel.animator);
+        namespace FM = ALTEngine::Formats;
+        auto perGroupMeshes = FM::BuildLevelRenderMeshPerGroup(
+            level, textureSet.uvRects, rotations, &loadedLevel.lights, &loadedLevel.animator, FM::FaceFill::Opaque);
+        auto cutoutMeshes = FM::BuildLevelRenderMeshPerGroup(
+            level, textureSet.uvRects, rotations, &loadedLevel.lights, &loadedLevel.animator, FM::FaceFill::Cutout);
+        auto translucentMeshes = FM::BuildLevelRenderMeshPerGroup(
+            level, textureSet.uvRects, rotations, &loadedLevel.lights, &loadedLevel.animator, FM::FaceFill::Translucent);
 
-        for (size_t i = 0; i < 5; ++i) { loadedLevel.groupVertexCounts[i] = perGroupMeshes[i].vertices.size(); }
+        for (size_t i = 0; i < 5; ++i)
+        {
+            loadedLevel.groupVertexCounts[i] = perGroupMeshes[i].vertices.size();
+            loadedLevel.cutoutVertexCounts[i] = cutoutMeshes[i].vertices.size();
+            loadedLevel.translucentVertexCounts[i] = translucentMeshes[i].vertices.size();
+        }
+
+        // Uploaded before the -GAP and override geometry below, which borrow
+        // these page textures (they used to look for them before they were
+        // made, and so never loaded).
+        bool anyGroupUsed = false;
+        for (size_t i = 0; i < 5; ++i)
+        {
+            if (!cutoutMeshes[i].vertices.empty())
+            {
+                loadedLevel.cutoutGroups[i] = UploadMeshWithTexture(cutoutMeshes[i], textureSet.textures[i]);
+                if (loadedLevel.cutoutGroups[i].vertexBuffer) { anyGroupUsed = true; }
+            }
+            if (!translucentMeshes[i].vertices.empty())
+            {
+                loadedLevel.translucentGroups[i] = UploadMeshWithTexture(translucentMeshes[i], textureSet.textures[i]);
+                if (loadedLevel.translucentGroups[i].vertexBuffer) { anyGroupUsed = true; }
+            }
+            // The opaque faces' copy: every texel drawn, palette word 0 as the
+            // black it is. Uploaded even if no opaque face uses the page, since
+            // override geometry may.
+            ALTEngine::Formats::BndTexture opaque = textureSet.textures[i];
+            for (size_t p = 3; p < opaque.rgba.size(); p += 4) { opaque.rgba[p] = 255; }
+            if (!perGroupMeshes[i].vertices.empty())
+            {
+                loadedLevel.groups[i] = UploadMeshWithTexture(perGroupMeshes[i], opaque);
+                if (loadedLevel.groups[i].vertexBuffer) { anyGroupUsed = true; }
+            }
+        }
 
         // -GAP override, if the user has authored one. Sits beside the level
         // .MAP under CD/OVERRIDE, e.g.
@@ -1581,6 +1655,16 @@ namespace ALTEngine::Renderer
                             loadedLevel.groups[i].indexCount = replacement[i].indexCount;
                             loadedLevel.groups[i].texture = pageTexture;
                             loadedLevel.groupVertexCounts[i] = 0;
+
+                            // The replacement is all of the level's geometry:
+                            // the .MAP's cut-out and see-through faces go too.
+                            for (auto* other : { &loadedLevel.cutoutGroups[i], &loadedLevel.translucentGroups[i] })
+                            {
+                                if (other->vertexBuffer) { SDL_ReleaseGPUBuffer(device, other->vertexBuffer); }
+                                if (other->indexBuffer) { SDL_ReleaseGPUBuffer(device, other->indexBuffer); }
+                                if (other->texture) { SDL_ReleaseGPUTexture(device, other->texture); }
+                                *other = LevelSubGroup{};
+                            }
                         }
                         loadedLevel.geometryOverridden = true;
                         SDL_Log("ModelRenderer::LoadLevel(%s): level geometry replaced from %s, "
@@ -1590,14 +1674,6 @@ namespace ALTEngine::Renderer
                     }
                 }
             }
-        }
-
-        bool anyGroupUsed = false;
-        for (size_t i = 0; i < 5; ++i)
-        {
-            if (perGroupMeshes[i].vertices.empty()) { continue; } // this texture group isn't used by this level
-            loadedLevel.groups[i] = UploadMeshWithTexture(perGroupMeshes[i], textureSet.textures[i]);
-            if (loadedLevel.groups[i].vertexBuffer) { anyGroupUsed = true; }
         }
 
         if (!anyGroupUsed)
@@ -1653,26 +1729,41 @@ namespace ALTEngine::Renderer
         level.lastEntries = level.lights.Entries();
         level.lastAnimatorOutputs = outputs;
 
-        auto perGroupMeshes = ALTEngine::Formats::BuildLevelRenderMeshPerGroup(
-            level.geometry, level.uvRects, level.rotations, &level.lights, &level.animator);
-
-        for (size_t i = 0; i < 5; ++i)
+        namespace FM = ALTEngine::Formats;
+        struct Pass
         {
-            if (!level.groups[i].vertexBuffer) { continue; }
+            FM::FaceFill fill;
+            std::array<LevelSubGroup, 5>* groups;
+            const std::array<size_t, 5>* counts;
+        };
+        const Pass passes[] = {
+            { FM::FaceFill::Opaque, &level.groups, &level.groupVertexCounts },
+            { FM::FaceFill::Cutout, &level.cutoutGroups, &level.cutoutVertexCounts },
+            { FM::FaceFill::Translucent, &level.translucentGroups, &level.translucentVertexCounts },
+        };
+        for (const Pass& pass : passes)
+        {
+            auto meshes = FM::BuildLevelRenderMeshPerGroup(
+                level.geometry, level.uvRects, level.rotations, &level.lights, &level.animator, pass.fill);
 
-            // An animated face whose new descriptor sits on a different page
-            // would migrate between per-page buffers. The in-place re-upload
-            // cannot express that, so bail loudly rather than corrupt the
-            // buffer with a mismatched size.
-            if (perGroupMeshes[i].vertices.size() != level.groupVertexCounts[i])
+            for (size_t i = 0; i < 5; ++i)
             {
-                SDL_Log("ModelRenderer::TickLevelLights(%s): group %zu vertex count changed "
-                        "(%zu -> %zu) - an animated face crossed texture pages, which the "
-                        "in-place re-upload does not support. Skipping.",
-                        cacheKey.c_str(), i, level.groupVertexCounts[i], perGroupMeshes[i].vertices.size());
-                continue;
+                if (!(*pass.groups)[i].vertexBuffer) { continue; }
+
+                // An animated face whose new descriptor sits on a different page
+                // would migrate between per-page buffers. The in-place re-upload
+                // cannot express that, so bail loudly rather than corrupt the
+                // buffer with a mismatched size.
+                if (meshes[i].vertices.size() != (*pass.counts)[i])
+                {
+                    SDL_Log("ModelRenderer::TickLevelLights(%s): group %zu vertex count changed "
+                            "(%zu -> %zu) - an animated face crossed texture pages, which the "
+                            "in-place re-upload does not support. Skipping.",
+                            cacheKey.c_str(), i, (*pass.counts)[i], meshes[i].vertices.size());
+                    continue;
+                }
+                ReuploadVertices((*pass.groups)[i], meshes[i]);
             }
-            ReuploadVertices(level.groups[i], perGroupMeshes[i]);
         }
         return true;
     }
@@ -1876,7 +1967,11 @@ namespace ALTEngine::Renderer
         SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(cmd, &colorInfo, 1, &depthInfo);
         SDL_BindGPUGraphicsPipeline(renderPass, pipeline);
 
-        for (const auto& group : level.groups)
+        // The opaque faces, then the cut-outs - same pipeline, the keyed page.
+        // The see-through faces wait until everything else is down.
+        auto levelGroups = { &level.groups, &level.cutoutGroups };
+        for (const auto* groups : levelGroups)
+        for (const auto& group : *groups)
         {
             if (!group.vertexBuffer || group.indexCount == 0) { continue; } // unused texture group for this level
 
@@ -2148,6 +2243,36 @@ namespace ALTEngine::Renderer
                         }
                     }
                 }
+            }
+        }
+
+        // The see-through faces last, over everything they stand in front of:
+        // glass, a cryopod's cover. Half the texel and half what is there
+        // (span routine 0x5db67). Not sorted among themselves - nor were the
+        // original's, which drew in its own face order.
+        if (renderPass)
+        {
+            bool bound = false;
+            for (const auto& group : level.translucentGroups)
+            {
+                if (!group.vertexBuffer || group.indexCount == 0) { continue; }
+                if (!bound)
+                {
+                    SDL_BindGPUGraphicsPipeline(renderPass, translucentPipeline ? translucentPipeline : pipeline);
+                    const SDL_FColor half{ 0.5f, 0.5f, 0.5f, 0.5f };
+                    SDL_SetGPUBlendConstants(renderPass, half);
+                    bound = true;
+                }
+                SDL_GPUBufferBinding vbBinding{ group.vertexBuffer, 0 };
+                SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
+                SDL_GPUBufferBinding ibBinding{ group.indexBuffer, 0 };
+                SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+                SDL_GPUTextureSamplerBinding texBinding{ group.texture, sampler };
+                SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
+                SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
+                float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
+                SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
+                SDL_DrawGPUIndexedPrimitives(renderPass, group.indexCount, 1, 0, 0, 0);
             }
         }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../Game/Progression.h"
 #include <filesystem>
 #include <string>
 
@@ -29,6 +30,8 @@ namespace ALTEngine::Screens
         // For the mission assessment, filled in on LevelComplete.
         int aliensKilled = 0;
         int aliensTotal = 0;
+        // Everything the assessment counts (Game::Progression::Assess).
+        ALTEngine::Game::Progression::LevelTally tally{};
 
         // 1-10 when outcome is LoadGame.
         int loadSlot = 0;

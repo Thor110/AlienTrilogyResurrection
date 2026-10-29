@@ -54,6 +54,19 @@ namespace ALTEngine::Formats
         // per level ID (confirmed against Edward's AlienTrilogyMapLoader.cs
         // GetTransparencyValues, 2026). Out-of-range or empty entries
         // mean "no index-based transparency for that texture".
+        // A level's texture pages, with alpha 0 wherever a texel is the key
+        // colour - the texels the original's cut-out and see-through fills skip
+        // (span routines 0x5d77e / 0x5db67 test the face's CLUT word against
+        // 0). The opaque fill draws them, so the renderer uses these pages with
+        // their alpha for those faces and ignores it for the rest.
+        //
+        // THE KEY IS 0x0000 OR MAGENTA (0x7c1f). The CLUTs are copied in raw
+        // (0x18e65, FUN_0004e368), but in the demo disc's pages index 0 is
+        // 0x7c1f, and L111's cut-out faces are half index 0 with not one texel
+        // of word 0 - so magenta is the key in practice, whether the PC files
+        // store it as 0 or something converts it on the way.
+        static BndTextureSet LoadLevelPages(const std::filesystem::path& bndPath);
+
         static BndTextureSet Load(const std::filesystem::path& bndPath,
                                    std::optional<std::array<uint8_t, 3>> transparentRgb = std::nullopt,
                                    const std::vector<std::vector<int>>& perTextureTransparentIndices = {});

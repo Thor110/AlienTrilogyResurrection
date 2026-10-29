@@ -41,7 +41,8 @@ namespace ALTEngine::Formats
         }
 
         BndTextureSet ParseTextureSet(const std::filesystem::path& bndPath, std::optional<std::array<uint8_t, 3>> transparentRgb,
-                                       const std::vector<std::vector<int>>& perTextureTransparentIndices)
+                                       const std::vector<std::vector<int>>& perTextureTransparentIndices,
+                                       bool keyZeroWord = false)
         {
             // Cached, single-pass parse (Edward, 2026: this used to read
             // the file from disk and separately scan it three full
@@ -109,8 +110,17 @@ namespace ALTEngine::Formats
                 BndTexture texture;
                 texture.index = suffix;
                 const std::vector<int> emptyIndices;
-                const std::vector<int>& indicesForThisTexture =
-                    (texPosition < perTextureTransparentIndices.size()) ? perTextureTransparentIndices[texPosition] : emptyIndices;
+                std::vector<int> zeroWordIndices;
+                if (keyZeroWord)
+                {
+                    for (size_t i = 0; i + 1 < raw16BitPalette.size() && i / 2 < 256; i += 2)
+                    {
+                        const int word = raw16BitPalette[i] | (raw16BitPalette[i + 1] << 8);
+                        if (word == 0x0000 || word == 0x7c1f) { zeroWordIndices.push_back(static_cast<int>(i / 2)); }
+                    }
+                }
+                const std::vector<int>& indicesForThisTexture = keyZeroWord ? zeroWordIndices
+                    : (texPosition < perTextureTransparentIndices.size()) ? perTextureTransparentIndices[texPosition] : emptyIndices;
                 texture.rgba = RawImageRenderer::RenderRGBA(tp.data, palette, TEXTURE_SIZE, TEXTURE_SIZE, indicesForThisTexture, transparentRgb);
                 texture.width = TEXTURE_SIZE;
                 texture.height = TEXTURE_SIZE;
@@ -129,6 +139,11 @@ namespace ALTEngine::Formats
 
             return result;
         }
+    }
+
+    BndTextureSet BndTextureLoader::LoadLevelPages(const std::filesystem::path& bndPath)
+    {
+        return ParseTextureSet(bndPath, std::nullopt, {}, true);
     }
 
     BndTextureSet BndTextureLoader::Load(const std::filesystem::path& bndPath, std::optional<std::array<uint8_t, 3>> transparentRgb,

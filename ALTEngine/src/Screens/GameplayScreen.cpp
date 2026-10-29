@@ -26,6 +26,7 @@
 #include "../Game/Triggers.h"
 #include "SaveSlotScreen.h"
 #include "LevelSnapshot.h"
+#include "../Game/Progression.h"
 
 #include <nlohmann/json.hpp>
 #include "EnemySprites.h"
@@ -119,6 +120,13 @@ namespace ALTEngine::Screens
             case 27: return Obj3D::LargeSwitchBatteryRedLeftLight;        // wide, battery
             default: return -1;
             }
+        }
+
+        // Objects with no model of their own (FUN_00037184's arm for 0x15,
+        // 0x1c and 0x1d sets none).
+        bool IsInvisibleObjectType(uint8_t type)
+        {
+            return type == 0x15 || type == 0x1c || type == 0x1d;
         }
 
         int Obj3DIndexForCrateType(uint8_t type)
@@ -482,6 +490,16 @@ namespace ALTEngine::Screens
         // The held weapon. Driven by the select keys below; the pistol is the
         // only thing available at the start of a level.
         int selectedWeapon = 0;
+        // The mission assessment's tally (Game::Progression::LevelTally): what
+        // the level holds and what has been done to it, by type, and which
+        // secret areas (cell byte 5) the player has stood in.
+        ALTEngine::Game::Progression::LevelTally tally;
+        std::vector<uint8_t> secretsSeen(256, 0);
+        // Every change made to the level's light and texture animators, in
+        // order ({0 texture / 1 light, index, delta}): a thrown switch's panel,
+        // a broken window. The snapshot replays them, since the animators are
+        // the renderer's and start afresh with the level.
+        std::vector<std::array<int, 3>> surfaceChanges;
         ALTEngine::Screens::WeaponSystem::SwitchAnimation weaponSwitch;
         std::array<bool, 6> weaponKeyWasDown{ false, false, false, false, false, false };
 
@@ -604,6 +622,11 @@ namespace ALTEngine::Screens
             j["enemies"] = nlohmann::json::array();
             for (const auto& e : enemies) { j["enemies"].push_back(LS::SaveEnemy(e)); }
             j["minimap"] = hexBytes(minimapVisited);
+            // The assessment's tally so far: what's been killed, destroyed or
+            // thrown, and the secret areas found. The totals are the level's own.
+            j["killed"] = tally.killed;
+            j["secrets"] = hexBytes(secretsSeen);
+            j["surfaces"] = surfaceChanges;
             return j.dump();
         };
 
@@ -679,6 +702,27 @@ namespace ALTEngine::Screens
                     for (size_t i = 0; i < e.size(); ++i) { LS::LoadEnemy(enemies[i], e[i]); }
                 }
                 minimapVisited = bytesFromHex(j.value("minimap", std::string{}));
+                if (j.contains("killed") && j["killed"].is_array() && j["killed"].size() == tally.killed.size())
+                {
+                    for (size_t i = 0; i < tally.killed.size(); ++i) { tally.killed[i] = j["killed"][i]; }
+                }
+                const auto seen = bytesFromHex(j.value("secrets", std::string{}));
+                if (seen.size() == secretsSeen.size()) { secretsSeen = seen; }
+
+                // The switches' panels and the broken windows, replayed onto the
+                // fresh animators in the order they happened.
+                if (j.contains("surfaces") && j["surfaces"].is_array())
+                {
+                    surfaceChanges.clear();
+                    for (const auto& c : j["surfaces"])
+                    {
+                        if (!c.is_array() || c.size() != 3) { continue; }
+                        const std::array<int, 3> change{ c[0].get<int>(), c[1].get<int>(), c[2].get<int>() };
+                        if (change[0] == 1) { ModelRenderer::ToggleLevelLight(cacheKey, change[1], change[2]); }
+                        else { ModelRenderer::ChangeLevelTexture(cacheKey, change[1], change[2]); }
+                        surfaceChanges.push_back(change);
+                    }
+                }
 
                 const auto& player = j["player"];
                 camera.x = player.value("x", camera.x);
@@ -925,6 +969,15 @@ namespace ALTEngine::Screens
                         placed.scaleX = 0.875f;
                         placed.scaleY = 0.875f;
                         placed.scaleZ = 0.875f;
+
+                        // Types 0x15, 0x1c and 0x1d have no model (FUN_00037184
+                        // gives them none): they stand in a window, a
+                        // breakable wall or a curtain, blocking the cell and
+                        // taking the shots, and what shows is the level's own
+                        // faces - which their destruction steps on to the
+                        // broken texture (FUN_00037ff8).
+                        const bool invisibleObject = IsInvisibleObjectType(crate.type);
+                        if (invisibleObject) { placed.visible = false; }
 
                         int familyBase = SwitchFamilyBase(crate.type);
                         if (familyBase >= 0)
@@ -1257,6 +1310,26 @@ namespace ALTEngine::Screens
                         }
 
                         objectState.assign(level.crates.size(), 0);
+
+                        // The tally's totals, as the level builds them: each
+                        // creature record by type (FUN_0002f3b0, those in
+                        // crates too) and each object below 0x25
+                        // (FUN_00037184); the secret areas are as many as the
+                        // highest area number a cell carries (FUN_000282c8).
+                        tally = {};
+                        std::fill(secretsSeen.begin(), secretsSeen.end(), 0);
+                        for (const auto& e : enemies)
+                        {
+                            if (e.type >= 0 && e.type < ALTEngine::Game::Progression::TALLY_SIZE) { tally.total[e.type]++; }
+                        }
+                        for (const auto& crate : level.crates)
+                        {
+                            if (crate.type < ALTEngine::Game::Progression::TALLY_SIZE) { tally.total[crate.type]++; }
+                        }
+                        for (const auto& cell : level.collisionGrid)
+                        {
+                            tally.secretsTotal = std::max<int>(tally.secretsTotal, cell.unknown6);
+                        }
                         triggers = ALTEngine::Game::Triggers::System(level);
 
                         // What Save Game in the pause menu writes: this level,
@@ -1330,12 +1403,14 @@ namespace ALTEngine::Screens
             // Arms (or advances) a light record's variant counter - what brings
             // a blink light to life, matching FUN_00029d44's add-and-clamp.
             ModelRenderer::ToggleLevelLight(cacheKey, light, delta);
+            surfaceChanges.push_back({ 1, light, delta });
             SDL_Log("GameplayScreen: ToggleLight light=%d delta=%d", light, delta);
         };
         triggerHandlers.changeTexture = [&](int animator, int delta) {
             // The texture-animator counterpart of ToggleLight: what makes a
             // control panel change when its switch is thrown.
             ModelRenderer::ChangeLevelTexture(cacheKey, animator, delta);
+            surfaceChanges.push_back({ 0, animator, delta });
             SDL_Log("GameplayScreen: ChangeTexture animator=%d delta=%d", animator, delta);
         };
         triggerHandlers.spawnMonster = [&](int monster, int amount) {
@@ -1384,6 +1459,8 @@ namespace ALTEngine::Screens
                 inventory.batteries--;
             }
             objectState[oi] = 1;
+            // Throwing a switch counts toward the mission (FUN_00036f4c).
+            if (type < ALTEngine::Game::Progression::TALLY_SIZE) { tally.killed[type]++; }
             return true;
         };
         triggerHandlers.endLevel = [&]() {
@@ -1709,6 +1786,9 @@ namespace ALTEngine::Screens
                         if (const auto* cell = ALTEngine::Formats::CellAt(level, cx, cz))
                         {
                             cellAttribute = cell->attribute;
+                            // A secret area found: the original marks the
+                            // camera's cell's area each drawn frame (0x274e1).
+                            if (cell->unknown6 != 0) { secretsSeen[cell->unknown6] = 1; }
                         }
                     }
                     // The hazard flag selects which footstep sound plays. The
@@ -2324,8 +2404,16 @@ namespace ALTEngine::Screens
                             }
                             aiCreature = &enemy;
                             enemy.animationFrames = enemySprites.FrameCount(enemy.type, enemy.animation);
+                            const bool wasAlive = enemy.alive;
                             ALTEngine::Screens::Enemies::Tick(enemy, camera.x, playerFeetY, camera.z,
                                                               &aiWorld, weaponRuntime.noise > 0);
+                            // A creature's death counts toward the assessment
+                            // (FUN_00030b04), whatever killed it.
+                            if (wasAlive && !enemy.alive
+                                && enemy.type >= 0 && enemy.type < ALTEngine::Game::Progression::TALLY_SIZE)
+                            {
+                                tally.killed[enemy.type]++;
+                            }
                             // An egg letting its hugger out (FUN_00035530), or a
                             // colonist its burster (FUN_00035624).
                             if (enemy.releaseMonster >= 0)
@@ -2481,6 +2569,8 @@ namespace ALTEngine::Screens
                                 }
                                 if (enemy.ventSwitchedOff)
                                 {
+                                    // A vent shut off counts as dealt with (FUN_000358a4).
+                                    if (enemy.type < ALTEngine::Game::Progression::TALLY_SIZE) { tally.killed[enemy.type]++; }
                                     if (vp.steam) { hudMessages.ShowSteamValveClosed(language); }
                                     else { hudMessages.ShowFlameJetShutDown(language); }
                                 }
@@ -2557,15 +2647,34 @@ namespace ALTEngine::Screens
                                 // NO EXPLOSION. A creature dying was spawning the
                                 // crate-shatter effect, which is plainly wrong -
                                 // they have their own death frames and fall to the
-                                // floor (Edward, 2026).
-                                //
-                                // The original's death path is FUN_00030b04: it
-                                // sets state 7, clears the ceiling flag so a
-                                // ceiling creature drops, and starts the death
-                                // ANIMATION. Playing that needs the animation
-                                // index, which is the same unresolved piece that
-                                // stops any enemy animating - so nothing is drawn
-                                // here rather than something wrong.
+                                // floor (Edward, 2026). FUN_00030b04 starts the
+                                // death animation (EnemyBehaviour::DeathAnimation)
+                                // and the body stays.
+                            }
+
+                            // The body, once its death animation has played
+                            // (the common task's state 8, 0x34eb3): in a low
+                            // cell of attribute 6 it is taken away; on bare
+                            // floor above Easy an alien's leaves acid there
+                            // (attribute 0x0c, which burns the player).
+                            if (ALTEngine::Screens::CreatureAI::UsesCommonTask(enemy.type)
+                                && enemy.state == ALTEngine::Screens::EnemyBehaviour::STATE_DEAD
+                                && !enemy.bodyRemoved && enemy.animationEnded)
+                            {
+                                auto* cell = ALTEngine::Formats::CellAt(level, ToGridSpaceX(enemy.x, originX) >> 9,
+                                                                        ToGridSpaceZ(enemy.z, originZ) >> 9);
+                                if (cell && cell->attribute == 6 && cell->ceilingHeight - cell->floorHeight < 4)
+                                {
+                                    enemy.bodyRemoved = true;
+                                }
+                                else if (cell && cell->attribute == 0
+                                         && static_cast<int>(difficultySettings.Get()) != 0
+                                         && enemy.type >= 2 && enemy.type <= 9 && enemy.type != 7)
+                                {
+                                    // Types 2-6, and the ceiling ones (8, 9),
+                                    // which become 6 and 5 as they die.
+                                    cell->attribute = 0x0c;
+                                }
                             }
                         }
 
@@ -2715,6 +2824,11 @@ namespace ALTEngine::Screens
                         // because its blast is iterative.
                         std::vector<int> blastQueue;
                         auto DestroyTarget = [&](D::Target& target) {
+                            // Destroying an object counts toward the mission (FUN_00037dd0).
+                            if (target.objectType >= 0 && target.objectType < ALTEngine::Game::Progression::TALLY_SIZE)
+                            {
+                                tally.killed[target.objectType]++;
+                            }
                             if (target.placedObjectIndex >= 0
                                 && target.placedObjectIndex < static_cast<int>(placedObjects.size()))
                             {
@@ -2723,10 +2837,30 @@ namespace ALTEngine::Screens
                             ClearOccupancy(target.cellIndex);
                             ReleaseContents(target.crateIndex, target.x, target.y, target.z, target.cellIndex);
 
+                            // The faces that show it broken: each of its texture
+                            // animators steps on by one - a window's glass, a
+                            // curtain torn down. Only the modelless objects'
+                            // handler does this (FUN_00037ff8).
+                            if (target.crateIndex >= 0 && target.crateIndex < static_cast<int>(level.crates.size())
+                                && IsInvisibleObjectType(level.crates[static_cast<size_t>(target.crateIndex)].type))
+                            {
+                                const auto& crate = level.crates[static_cast<size_t>(target.crateIndex)];
+                                const int first = ALTEngine::Formats::TextureStepFirst(crate);
+                                const int count = ALTEngine::Formats::TextureStepCount(crate);
+                                for (int i = 0; i < count; ++i)
+                                {
+                                    ModelRenderer::ChangeLevelTexture(cacheKey, first + i, 1);
+                                    surfaceChanges.push_back({ 0, first + i, 1 });
+                                }
+                            }
+
                             // Tear the object into pieces of its own mesh. This
                             // is the real break-up; the effect sprites below are
                             // a separate system that plays alongside it.
-                            if (const auto* faces = ALTEngine::Renderer::ModelRenderer::ModelFaces(target.modelKey))
+                            const bool hasModel = target.crateIndex < 0
+                                || target.crateIndex >= static_cast<int>(level.crates.size())
+                                || !IsInvisibleObjectType(level.crates[static_cast<size_t>(target.crateIndex)].type);
+                            if (const auto* faces = hasModel ? ALTEngine::Renderer::ModelRenderer::ModelFaces(target.modelKey) : nullptr)
                             {
                                 shatter.Shatter(*faces,
                                                 ALTEngine::Renderer::ModelRenderer::ModelSheetKey(target.modelKey),
@@ -3820,6 +3954,9 @@ namespace ALTEngine::Screens
         {
             if (!enemy.alive) { result.aliensKilled++; }
         }
+        tally.secretsFound = 0;
+        for (int area = 1; area < 256; ++area) { if (secretsSeen[static_cast<size_t>(area)] != 0) { tally.secretsFound++; } }
+        result.tally = tally;
 
         // The game over sequence, after the level is done being drawn so the last
         // frame the player saw is the one that killed them.

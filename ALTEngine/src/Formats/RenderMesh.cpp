@@ -145,15 +145,14 @@ namespace ALTEngine::Formats
                 return { Uv{x0, y0}, Uv{x1, y0}, Uv{x0, y1}, Uv{x0, y1} };
             }
 
-            switch (q.flags)
+            // Routines 2, 6, 34 and their animated forms (10, 28, 32) swap
+            // the corners as 2 does; everything else maps as 0. (11 draws
+            // nothing in the original.)
+            if (ClassifyDrawRoutine(q.flags).mirrored)
             {
-            case 11: // triangle: fourth corner repeats the third
-                return { Uv{x0, y1}, Uv{x1, y1}, Uv{x1, y0}, Uv{x1, y0} };
-            case 2:  // mirrored horizontally, right way up
                 return { Uv{x1, y1}, Uv{x0, y1}, Uv{x0, y0}, Uv{x1, y0} };
-            default:
-                return { Uv{x0, y1}, Uv{x1, y1}, Uv{x1, y0}, Uv{x0, y0} };
             }
+            return { Uv{x0, y1}, Uv{x1, y1}, Uv{x1, y0}, Uv{x0, y0} };
         }
 
         // Shared vertex-emission + triangulation - identical between
@@ -172,7 +171,7 @@ namespace ALTEngine::Formats
         // passes through untouched.
         uint16_t ResolveAnimatedTexIndex(const ModelQuad& q, const TextureAnimator* animator)
         {
-            if (!animator || q.flags != DRAW_ROUTINE_ANIMATED) { return q.texIndex; }
+            if (!animator || !ClassifyDrawRoutine(q.flags).animated) { return q.texIndex; }
             uint16_t resolved = 0;
             if (!animator->CurrentTexture(static_cast<int>(q.texIndex), resolved)) { return q.texIndex; }
             return resolved;
@@ -257,9 +256,10 @@ namespace ALTEngine::Formats
             uint32_t ib = emitVertex(b, uvB, 1);
             uint32_t ic = emitVertex(c, uvC, 2);
 
-            // Draw routine 4 faces are DOUBLE-SIDED - they are meant to be
-            // visible from behind as well as in front, and with BACK culling on
-            // they vanish from one side (Edward, 2026).
+            // The routines that don't cull (4, 5, 6, 12, 13, 14, 34 and the
+            // animated 26-32 - ClassifyDrawRoutine) are DOUBLE-SIDED - visible
+            // from behind as well as in front; with BACK culling on they vanish
+            // from one side (Edward, 2026, for routine 4).
             //
             // Handled by emitting the reverse winding as extra triangles rather
             // than by routing these faces through the existing
@@ -270,7 +270,7 @@ namespace ALTEngine::Formats
             //
             // Level faces only: `uvsAlreadyOrdered` marks the level path, and
             // model flag values mean something different (see ModelQuad).
-            bool doubleSided = uvsAlreadyOrdered && (q.flags == 4);
+            bool doubleSided = uvsAlreadyOrdered && !ClassifyDrawRoutine(q.flags).culled;
 
             if (isTriangle)
             {
@@ -311,6 +311,35 @@ namespace ALTEngine::Formats
                 }
             }
         }
+    }
+
+    DrawRoutine ClassifyDrawRoutine(uint8_t routine)
+    {
+        DrawRoutine r;
+        auto set = [&](FaceFill fill, bool culled, bool mirrored, bool animated) {
+            r.fill = fill; r.culled = culled; r.mirrored = mirrored; r.animated = animated;
+        };
+        switch (routine)
+        {
+        case 0:  set(FaceFill::Opaque, true, false, false); break;
+        case 1:  set(FaceFill::Opaque, true, false, false); break;
+        case 2:  set(FaceFill::Opaque, true, true, false); break;
+        case 4:  set(FaceFill::Cutout, false, false, false); break;
+        case 5:  set(FaceFill::Cutout, false, false, false); break;
+        case 6:  set(FaceFill::Cutout, false, true, false); break;
+        case 8:  set(FaceFill::Opaque, true, false, true); break;
+        case 10: set(FaceFill::Opaque, true, true, true); break;
+        case 12: set(FaceFill::Translucent, false, false, false); break;
+        case 13: set(FaceFill::Translucent, false, false, false); break;
+        case 14: set(FaceFill::Opaque, false, false, false); r.flat = true; break;
+        case 26: set(FaceFill::Cutout, false, false, true); break;
+        case 28: set(FaceFill::Cutout, false, true, true); break;
+        case 30: set(FaceFill::Translucent, false, false, true); break;
+        case 32: set(FaceFill::Translucent, false, true, true); break;
+        case 34: set(FaceFill::Translucent, false, true, false); break;
+        default: break;   // nothing drawn
+        }
+        return r;
     }
 
     RenderMesh BuildRenderMesh(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects)
@@ -357,12 +386,16 @@ namespace ALTEngine::Formats
                                                             const std::vector<BxRectangle>& uvRects,
                                                             const std::vector<FaceUvRotation>& uvRotations,
                                                             const LightTable* lights,
-                                                            const TextureAnimator* animator)
+                                                            const TextureAnimator* animator,
+                                                            FaceFill fill)
     {
         std::array<RenderMesh, 5> result;
 
         for (const auto& original : level.quads)
         {
+            const DrawRoutine routine = ClassifyDrawRoutine(original.flags);
+            if (routine.fill == FaceFill::Hidden || routine.fill != fill) { continue; }
+
             // Animated faces are redirected to the animator's current output
             // before anything else looks at texIndex, so texture page
             // selection and UV computation both see the real descriptor.
@@ -421,7 +454,10 @@ namespace ALTEngine::Formats
                 break;
             }
 
-            EmitQuad(result[static_cast<size_t>(group)], level.vertices, q, uvs, LevelQuadColours(q, lights), true);
+            // The see-through fill is unlit: it reads the texel's own colour
+            // (the table at 0x2273c8), not the lit one.
+            const QuadColours colours = fill == FaceFill::Translucent ? WhiteColours() : LevelQuadColours(q, lights);
+            EmitQuad(result[static_cast<size_t>(group)], level.vertices, q, uvs, colours, true);
         }
         return result;
     }

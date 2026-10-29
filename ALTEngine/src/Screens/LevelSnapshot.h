@@ -144,7 +144,7 @@ namespace ALTEngine::Screens::LevelSnapshot
             { "vent", { e.vent.state, e.vent.cycle, e.vent.emitCounter, e.vent.switchedOff } },
             { "colonist", { e.colonist.state, e.colonist.lastView, e.colonist.idleTimer } },
             { "animation", e.animation }, { "animationFrame", e.animationFrame },
-            { "animationEnded", e.animationEnded },
+            { "animationEnded", e.animationEnded }, { "bodyRemoved", e.bodyRemoved },
         };
     }
 
@@ -164,6 +164,7 @@ namespace ALTEngine::Screens::LevelSnapshot
         e.triggerCount = j.value("triggerCount", e.triggerCount);
         e.heldMonster = j.value("heldMonster", e.heldMonster);
         e.deathChain = j.value("deathChain", e.deathChain);
+        e.bodyRemoved = j.value("bodyRemoved", false);
 
         const int state = j.value("state", e.state);
         if (!e.alive || state == EnemyBehaviour::STATE_DYING || state == EnemyBehaviour::STATE_DEAD)
@@ -212,14 +213,28 @@ namespace ALTEngine::Screens::LevelSnapshot
         e.grenadeArmed = e.fireGrenade = e.fireShot = false;
         e.recoveredFromHit = e.overlayFinished = false;
 
-        // The animation: a scripted creature's starts over (its script has
-        // no saved position); the others' frame is put back as it was, which
-        // keeps an opened egg open.
+        // The animation: a scripted creature's is replayed up to where it
+        // was (its script has no saved position); the others' frame is put
+        // back as it was. Either keeps an opened egg open and a body down.
         const int animation = j.value("animation", -1);
         if (Enemies::Scripted(e))
         {
+            // Its script from the start, stepped on to the frame it was on (and
+            // to its end, if it had ended) - which keeps an opened egg open.
+            namespace SA = ALTEngine::Formats::SpriteAnim;
             e.animation = -1;
             Enemies::PlayAnimation(e, animation);
+            const int frame = j.value("animationFrame", 0);
+            const bool ended = j.value("animationEnded", false);
+            for (int step = 0; step < 4000 && !e.sequence.empty(); ++step)
+            {
+                if (e.animator.frameIndex == frame && (!ended || e.animator.Ended())) { break; }
+                if (e.animator.Ended()) { break; }
+                SA::Tick(e.animator, e.sequence);
+            }
+            e.animationFrame = e.animator.frameIndex;
+            e.animationEnded = Enemies::ScriptEventFor(e);
+            e.animSound = -1;
         }
         else
         {
