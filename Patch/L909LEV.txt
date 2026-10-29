@@ -1,0 +1,16 @@
+Texture orientation - faces from the texture scan review
+
+These faces had their texture turned or mirrored so it did not run on from the faces next to it.
+Each was found by ALTLevelScan, rendered before and after, and kept after review (Edward, 2026).
+
+A turn rotates the face's four vertex indices (16 bytes at the face's offset), so the face keeps
+its winding. A mirror swaps the flag byte (offset + 0x12) for its mirrored partner: 0 and 2,
+4 and 6, 12 and 34, 8 and 10, 26 and 28, 30 and 32. The texture index and light bytes are
+unchanged.
+
+Face	Offset		Scan	Change	Was					Now
+1631	0x1ADF8	909-19	mirrored	3646, 3650, 3651, 3647	->	3646, 3650, 3651, 3647	flag 0 (0x00)		flag 2 (0x02)
+3917	0x26090	909-14	a half-turn	824, 821, 823, 822	->	823, 822, 824, 821
+4541	0x29150	909-23	mirrored and three quarter-turns	5810, 5819, 5818, 5805	->	5805, 5810, 5819, 5818	flag 0 (0x00)		flag 2 (0x02)
+6022	0x30504	909-15	a half-turn	6815, 6827, 6826, 6813	->	6826, 6813, 6815, 6827
+9710	0x42524	909-20	a quarter-turn	6601, 5940, 5939, 6597	->	5940, 5939, 6597, 6601

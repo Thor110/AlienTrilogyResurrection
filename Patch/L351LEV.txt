@@ -12,3 +12,25 @@ Face	Offset		Was						Now
 
 The flag byte is at offset + 0x12. The vertex lists are rotated, not reordered, so each face
 still faces the same way.
+
+Texture orientation - faces from the texture scan review
+
+These faces had their texture turned or mirrored so it did not run on from the faces next to it.
+Each was found by ALTLevelScan, rendered before and after, and kept after review (Edward, 2026).
+
+A turn rotates the face's four vertex indices (16 bytes at the face's offset), so the face keeps
+its winding. A mirror swaps the flag byte (offset + 0x12) for its mirrored partner: 0 and 2,
+4 and 6, 12 and 34, 8 and 10, 26 and 28, 30 and 32. The texture index and light bytes are
+unchanged.
+
+Face	Offset		Scan	Change	Was					Now
+2826	0x27144	351-11	a quarter-turn	6105, 6122, 6100, 6095	->	6122, 6100, 6095, 6105
+3338	0x29944	351-9	a quarter-turn	2335, 2334, 2320, 2322	->	2334, 2320, 2322, 2335
+4009	0x2CDB0	351-3	mirrored and a half-turn	6069, 5779, 5777, 6066	->	5777, 6066, 6069, 5779	flag 0 (0x00)		flag 2 (0x02)
+4193	0x2DC10	351-3	mirrored and a half-turn	5779, 5773, 5771, 5777	->	5771, 5777, 5779, 5773	flag 2 (0x02)		flag 0 (0x00)
+4441	0x2EF70	351-10	mirrored	3324, 3283, 3276, 3318	->	3324, 3283, 3276, 3318	flag 2 (0x02)		flag 0 (0x00)
+4981	0x319A0	351-5	mirrored and a half-turn	184, 190, 204, 186	->	204, 186, 184, 190	flag 0 (0x00)		flag 2 (0x02)
+8695	0x43BC8	351-12	three quarter-turns	4617, 4618, 4535, 4536	->	4536, 4617, 4618, 4535
+8713	0x43D30	351-13	mirrored and a half-turn	9847, 9845, 9869, 9875	->	9869, 9875, 9847, 9845	flag 2 (0x02)		flag 0 (0x00)
+10389	0x4C020	351-4	a half-turn	7024, 7019, 7017, 7023	->	7017, 7023, 7024, 7019
+11998	0x53DD4	351-7	mirrored and a half-turn	7403, 7397, 7400, 7404	->	7400, 7404, 7403, 7397	flag 2 (0x02)		flag 0 (0x00)

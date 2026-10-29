@@ -256,3 +256,18 @@ Offset		New vertex indices
 0x179E4		5255, 5256, 5237, 5236
 0x179F8		5274, 5275, 5256, 5255
 0x17A84		5256, 5257, 5238, 5237
+
+Texture orientation - faces from the texture scan review
+
+These faces had their texture turned or mirrored so it did not run on from the faces next to it.
+Each was found by ALTLevelScan, rendered before and after, and kept after review (Edward, 2026).
+
+A turn rotates the face's four vertex indices (16 bytes at the face's offset), so the face keeps
+its winding. A mirror swaps the flag byte (offset + 0x12) for its mirrored partner: 0 and 2,
+4 and 6, 12 and 34, 8 and 10, 26 and 28, 30 and 32. The texture index and light bytes are
+unchanged.
+
+Face	Offset		Scan	Change	Was					Now
+674	0xEA9C	391-2	three quarter-turns	3329, 3334, 3363, 3361	->	3361, 3329, 3334, 3363
+2192	0x16134	391-1	a half-turn	4518, 4612, 4508, 4509	->	4508, 4509, 4518, 4612
+2652	0x18524	391-3	a quarter-turn	4523, 4505, 4503, 4614	->	4505, 4503, 4614, 4523

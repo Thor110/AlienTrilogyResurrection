@@ -32,3 +32,26 @@ Offset	From   To
 
 Green Square Fix
 0x1EDE8 == 00 = 23
+
+Texture orientation - faces from the texture scan review
+
+These faces had their texture turned or mirrored so it did not run on from the faces next to it.
+Each was found by ALTLevelScan, rendered before and after, and kept after review (Edward, 2026).
+
+A turn rotates the face's four vertex indices (16 bytes at the face's offset), so the face keeps
+its winding. A mirror swaps the flag byte (offset + 0x12) for its mirrored partner: 0 and 2,
+4 and 6, 12 and 34, 8 and 10, 26 and 28, 30 and 32. The texture index and light bytes are
+unchanged.
+
+Face	Offset		Scan	Change	Was					Now
+143	0x14090	371-5	a quarter-turn	8407, 8320, 8322, 8323	->	8320, 8322, 8323, 8407
+161	0x141F8	371-3	a quarter-turn	8337, 8335, 8333, 8409	->	8335, 8333, 8409, 8337
+444	0x15814	371-1	mirrored and a half-turn	7659, 7656, 7670, 7671	->	7670, 7671, 7659, 7656	flag 0 (0x00)		flag 2 (0x02)
+445	0x15828	371-1	mirrored and a half-turn	7662, 7659, 7671, 7672	->	7671, 7672, 7662, 7659	flag 0 (0x00)		flag 2 (0x02)
+446	0x1583C	371-1	mirrored and a half-turn	7665, 7662, 7672, 7673	->	7672, 7673, 7665, 7662	flag 0 (0x00)		flag 2 (0x02)
+447	0x15850	371-1	mirrored and a half-turn	7667, 7665, 7673, 7674	->	7673, 7674, 7667, 7665	flag 0 (0x00)		flag 2 (0x02)
+451	0x158A0	371-1	mirrored and a half-turn	7671, 7670, 7747, 7748	->	7747, 7748, 7671, 7670	flag 0 (0x00)		flag 2 (0x02)
+452	0x158B4	371-1	mirrored and a half-turn	7672, 7671, 7748, 7749	->	7748, 7749, 7672, 7671	flag 0 (0x00)		flag 2 (0x02)
+453	0x158C8	371-1	mirrored and a half-turn	7673, 7672, 7749, 7750	->	7749, 7750, 7673, 7672	flag 0 (0x00)		flag 2 (0x02)
+454	0x158DC	371-1	mirrored and a half-turn	7674, 7673, 7750, 7751	->	7750, 7751, 7674, 7673	flag 0 (0x00)		flag 2 (0x02)
+5355	0x2D7C0	371-4	a quarter-turn	779, 2719, 777, 780	->	2719, 777, 780, 779

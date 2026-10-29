@@ -51,3 +51,17 @@
 0x462F2 = 00
 0x4632E = 00
 0x4637E = 00
+
+Texture orientation - faces from the texture scan review
+
+These faces had their texture turned or mirrored so it did not run on from the faces next to it.
+Each was found by ALTLevelScan, rendered before and after, and kept after review (Edward, 2026).
+
+A turn rotates the face's four vertex indices (16 bytes at the face's offset), so the face keeps
+its winding. A mirror swaps the flag byte (offset + 0x12) for its mirrored partner: 0 and 2,
+4 and 6, 12 and 34, 8 and 10, 26 and 28, 30 and 32. The texture index and light bytes are
+unchanged.
+
+Face	Offset		Scan	Change	Was					Now
+None	0x23858	905-1	mirrored	6639, 6636, 6641, 6642	->	6639, 6636, 6641, 6642	flag 2 (0x02)		flag 0 (0x00)
+1673	0x238D0	905-1	mirrored	6649, 6642, 6643, 6650	->	6649, 6642, 6643, 6650	flag 2 (0x02)		flag 0 (0x00)

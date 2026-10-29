@@ -134,6 +134,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/CddaTests.cpp
         tests/LevelSnapshotTests.cpp
         tests/RenderMeshTests.cpp
+        tests/PatchRunnerTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
     target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats alt_warnings nlohmann_json::nlohmann_json)

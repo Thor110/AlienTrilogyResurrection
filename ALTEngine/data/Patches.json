@@ -27257,6 +27257,1869 @@
           ]
         }
       ]
+    },
+    {
+      "target": "SECT12/L154LEV.MAP",
+      "note": "L154LEV.MAP - texture orientation: 1 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L154LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x2855C",
+          "bytes": [
+            "0x4B",
+            "0x27",
+            "0x00",
+            "0x00",
+            "0x50",
+            "0x27",
+            "0x00",
+            "0x00",
+            "0x51",
+            "0x27",
+            "0x00",
+            "0x00",
+            "0x4A",
+            "0x27",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2856E",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT12/L161LEV.MAP",
+      "note": "L161LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L161LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x19A1C",
+          "bytes": [
+            "0x17",
+            "0x0E",
+            "0x00",
+            "0x00",
+            "0x1C",
+            "0x0E",
+            "0x00",
+            "0x00",
+            "0x1D",
+            "0x0E",
+            "0x00",
+            "0x00",
+            "0x16",
+            "0x0E",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x19A2E",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x327EC",
+          "bytes": [
+            "0x67",
+            "0x27",
+            "0x00",
+            "0x00",
+            "0x68",
+            "0x27",
+            "0x00",
+            "0x00",
+            "0x69",
+            "0x27",
+            "0x00",
+            "0x00",
+            "0x0F",
+            "0x28",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT21/L211LEV.MAP",
+      "note": "L211LEV.MAP - texture orientation: 3 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L211LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x38D88",
+          "bytes": [
+            "0x62",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0x5F",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0x5E",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0x60",
+            "0x0A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x38D9A",
+          "bytes": [
+            "0x1C"
+          ]
+        },
+        {
+          "offset": "0x3A354",
+          "bytes": [
+            "0x63",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0x62",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0x60",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0x61",
+            "0x0A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3A366",
+          "bytes": [
+            "0x1A"
+          ]
+        },
+        {
+          "offset": "0x3B394",
+          "bytes": [
+            "0x65",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0x63",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0x61",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0x5D",
+            "0x0A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3B3A6",
+          "bytes": [
+            "0x1A"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT22/L263LEV.MAP",
+      "note": "L263LEV.MAP - texture orientation: 1 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L263LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x1B604",
+          "bytes": [
+            "0x1F",
+            "0x1C",
+            "0x00",
+            "0x00",
+            "0x1E",
+            "0x1C",
+            "0x00",
+            "0x00",
+            "0x0B",
+            "0x1C",
+            "0x00",
+            "0x00",
+            "0x0C",
+            "0x1C",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x1B616",
+          "bytes": [
+            "0x02"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT31/L311LEV.MAP",
+      "note": "L311LEV.MAP - texture orientation: 3 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L311LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x3602C",
+          "bytes": [
+            "0xA2",
+            "0x0B",
+            "0x00",
+            "0x00",
+            "0xB6",
+            "0x0B",
+            "0x00",
+            "0x00",
+            "0xB7",
+            "0x0B",
+            "0x00",
+            "0x00",
+            "0xA4",
+            "0x0B",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3FA14",
+          "bytes": [
+            "0xD0",
+            "0x07",
+            "0x00",
+            "0x00",
+            "0xC5",
+            "0x07",
+            "0x00",
+            "0x00",
+            "0xC6",
+            "0x07",
+            "0x00",
+            "0x00",
+            "0xD1",
+            "0x07",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4F824",
+          "bytes": [
+            "0xAE",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x8D",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x8E",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xA5",
+            "0x03",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "L321LEV.MAP - texture orientation: 19 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L321LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x109C4",
+          "bytes": [
+            "0x4A",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x7B",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0xD0",
+            "0x1A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x12044",
+          "bytes": [
+            "0x7C",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x49",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0xD4",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x77",
+            "0x1A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x16FDE",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x19AFE",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x19B3A",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x1C238",
+          "bytes": [
+            "0x0B",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0x99",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x9A",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x0A",
+            "0x01",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x1C24C",
+          "bytes": [
+            "0x0A",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0x9A",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x9B",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x0E",
+            "0x01",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x1C29C",
+          "bytes": [
+            "0x09",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0x0A",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0x0E",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0x0D",
+            "0x01",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x22020",
+          "bytes": [
+            "0x9C",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x1C",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0x1D",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0x9D",
+            "0x1A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x22032",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x22034",
+          "bytes": [
+            "0x9D",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x1D",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0x1F",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0x28",
+            "0x01",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x22046",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x22084",
+          "bytes": [
+            "0x1D",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0x1E",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0x20",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0x1F",
+            "0x01",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x22096",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x2BAD0",
+          "bytes": [
+            "0xB8",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xC8",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xC7",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xBB",
+            "0x18",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2BAE4",
+          "bytes": [
+            "0xBB",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xC7",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xDE",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xC1",
+            "0x18",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2BB34",
+          "bytes": [
+            "0xBA",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xBB",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xC1",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xC0",
+            "0x18",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2E76C",
+          "bytes": [
+            "0x0B",
+            "0x1B",
+            "0x00",
+            "0x00",
+            "0xD0",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xD1",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0x0A",
+            "0x1B",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2E77E",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x2E780",
+          "bytes": [
+            "0x0A",
+            "0x1B",
+            "0x00",
+            "0x00",
+            "0xD1",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xD6",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0x0C",
+            "0x1B",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2E792",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x2E7D0",
+          "bytes": [
+            "0xD1",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xCE",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xD4",
+            "0x18",
+            "0x00",
+            "0x00",
+            "0xD6",
+            "0x18",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2E7E2",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x2FCC0",
+          "bytes": [
+            "0x6D",
+            "0x19",
+            "0x00",
+            "0x00",
+            "0xF4",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0xF0",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0xE9",
+            "0x1A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2FE00",
+          "bytes": [
+            "0x9F",
+            "0x19",
+            "0x00",
+            "0x00",
+            "0x6C",
+            "0x19",
+            "0x00",
+            "0x00",
+            "0xED",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x9B",
+            "0x19",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT31/L322LEV.MAP",
+      "note": "L322LEV.MAP - texture orientation: 4 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L322LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x16FDE",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x19AFE",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x19B3A",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2DE46",
+          "bytes": [
+            "0x04"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT31/L323LEV.MAP",
+      "note": "L323LEV.MAP - texture orientation: 5 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L323LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x12044",
+          "bytes": [
+            "0x7C",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x49",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0xD4",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x77",
+            "0x1A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x16FDE",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x19AFE",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x19B3A",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x1D304",
+          "bytes": [
+            "0x15",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0xFC",
+            "0x00",
+            "0x00",
+            "0x00",
+            "0xFB",
+            "0x00",
+            "0x00",
+            "0x00",
+            "0x16",
+            "0x01",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT31/L324LEV.MAP",
+      "note": "L324LEV.MAP - texture orientation: 5 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L324LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x16FDE",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x19AFE",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x19B3A",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x1D304",
+          "bytes": [
+            "0x15",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0xFC",
+            "0x00",
+            "0x00",
+            "0x00",
+            "0xFB",
+            "0x00",
+            "0x00",
+            "0x00",
+            "0x16",
+            "0x01",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2DE46",
+          "bytes": [
+            "0x04"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT31/L325LEV.MAP",
+      "note": "L325LEV.MAP - texture orientation: 4 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L325LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x109C4",
+          "bytes": [
+            "0x4A",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x7B",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0xD0",
+            "0x1A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x12044",
+          "bytes": [
+            "0x7C",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x49",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0xD4",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x77",
+            "0x1A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x1D304",
+          "bytes": [
+            "0x15",
+            "0x01",
+            "0x00",
+            "0x00",
+            "0xFC",
+            "0x00",
+            "0x00",
+            "0x00",
+            "0xFB",
+            "0x00",
+            "0x00",
+            "0x00",
+            "0x16",
+            "0x01",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2DE46",
+          "bytes": [
+            "0x04"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT31/L331LEV.MAP",
+      "note": "L331LEV.MAP - texture orientation: 5 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L331LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x193F0",
+          "bytes": [
+            "0xCF",
+            "0x2B",
+            "0x00",
+            "0x00",
+            "0xCC",
+            "0x2B",
+            "0x00",
+            "0x00",
+            "0xD2",
+            "0x2B",
+            "0x00",
+            "0x00",
+            "0xD3",
+            "0x2B",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x238C8",
+          "bytes": [
+            "0x0D",
+            "0x0F",
+            "0x00",
+            "0x00",
+            "0x0E",
+            "0x0F",
+            "0x00",
+            "0x00",
+            "0x15",
+            "0x0F",
+            "0x00",
+            "0x00",
+            "0x14",
+            "0x0F",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x23EF2",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x28AD0",
+          "bytes": [
+            "0x6B",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0x3B",
+            "0x31",
+            "0x00",
+            "0x00",
+            "0x3E",
+            "0x31",
+            "0x00",
+            "0x00",
+            "0x2E",
+            "0x0B",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x358D2",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT32/L351LEV.MAP",
+      "note": "L351LEV.MAP - texture orientation: 10 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L351LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x27144",
+          "bytes": [
+            "0xEA",
+            "0x17",
+            "0x00",
+            "0x00",
+            "0xD4",
+            "0x17",
+            "0x00",
+            "0x00",
+            "0xCF",
+            "0x17",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x17",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x29944",
+          "bytes": [
+            "0x1E",
+            "0x09",
+            "0x00",
+            "0x00",
+            "0x10",
+            "0x09",
+            "0x00",
+            "0x00",
+            "0x12",
+            "0x09",
+            "0x00",
+            "0x00",
+            "0x1F",
+            "0x09",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2CDB0",
+          "bytes": [
+            "0x91",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0xB2",
+            "0x17",
+            "0x00",
+            "0x00",
+            "0xB5",
+            "0x17",
+            "0x00",
+            "0x00",
+            "0x93",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2CDC2",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x2DC10",
+          "bytes": [
+            "0x8B",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x91",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x93",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x8D",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2DC22",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2EF82",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x319A0",
+          "bytes": [
+            "0xCC",
+            "0x00",
+            "0x00",
+            "0x00",
+            "0xBA",
+            "0x00",
+            "0x00",
+            "0x00",
+            "0xB8",
+            "0x00",
+            "0x00",
+            "0x00",
+            "0xBE",
+            "0x00",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x319B2",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x43BC8",
+          "bytes": [
+            "0xB8",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x09",
+            "0x12",
+            "0x00",
+            "0x00",
+            "0x0A",
+            "0x12",
+            "0x00",
+            "0x00",
+            "0xB7",
+            "0x11",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x43D30",
+          "bytes": [
+            "0x8D",
+            "0x26",
+            "0x00",
+            "0x00",
+            "0x93",
+            "0x26",
+            "0x00",
+            "0x00",
+            "0x77",
+            "0x26",
+            "0x00",
+            "0x00",
+            "0x75",
+            "0x26",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x43D42",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4C020",
+          "bytes": [
+            "0x69",
+            "0x1B",
+            "0x00",
+            "0x00",
+            "0x6F",
+            "0x1B",
+            "0x00",
+            "0x00",
+            "0x70",
+            "0x1B",
+            "0x00",
+            "0x00",
+            "0x6B",
+            "0x1B",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x53DD4",
+          "bytes": [
+            "0xE8",
+            "0x1C",
+            "0x00",
+            "0x00",
+            "0xEC",
+            "0x1C",
+            "0x00",
+            "0x00",
+            "0xEB",
+            "0x1C",
+            "0x00",
+            "0x00",
+            "0xE5",
+            "0x1C",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x53DE6",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT32/L352LEV.MAP",
+      "note": "L352LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L352LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x1291C",
+          "bytes": [
+            "0x6D",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x63",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x76",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x6C",
+            "0x03",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x12CDC",
+          "bytes": [
+            "0xCD",
+            "0x02",
+            "0x00",
+            "0x00",
+            "0xD6",
+            "0x02",
+            "0x00",
+            "0x00",
+            "0xD5",
+            "0x02",
+            "0x00",
+            "0x00",
+            "0xCC",
+            "0x02",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT32/L353LEV.MAP",
+      "note": "L353LEV.MAP - texture orientation: 4 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L353LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x1291C",
+          "bytes": [
+            "0x6D",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x63",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x76",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x6C",
+            "0x03",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x12CDC",
+          "bytes": [
+            "0xCD",
+            "0x02",
+            "0x00",
+            "0x00",
+            "0xD6",
+            "0x02",
+            "0x00",
+            "0x00",
+            "0xD5",
+            "0x02",
+            "0x00",
+            "0x00",
+            "0xCC",
+            "0x02",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x132B6",
+          "bytes": [
+            "0x06"
+          ]
+        },
+        {
+          "offset": "0x13392",
+          "bytes": [
+            "0x06"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "L371LEV.MAP - texture orientation: 11 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L371LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x14090",
+          "bytes": [
+            "0x80",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x82",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x83",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xD7",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x141F8",
+          "bytes": [
+            "0x8F",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x8D",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x91",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x15814",
+          "bytes": [
+            "0xF6",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xF7",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xEB",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xE8",
+            "0x1D",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x15826",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x15828",
+          "bytes": [
+            "0xF7",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xF8",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xEE",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xEB",
+            "0x1D",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x1583A",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x1583C",
+          "bytes": [
+            "0xF8",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xF9",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xF1",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xEE",
+            "0x1D",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x1584E",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x15850",
+          "bytes": [
+            "0xF9",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xFA",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xF3",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xF1",
+            "0x1D",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x15862",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x158A0",
+          "bytes": [
+            "0x43",
+            "0x1E",
+            "0x00",
+            "0x00",
+            "0x44",
+            "0x1E",
+            "0x00",
+            "0x00",
+            "0xF7",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xF6",
+            "0x1D",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x158B2",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x158B4",
+          "bytes": [
+            "0x44",
+            "0x1E",
+            "0x00",
+            "0x00",
+            "0x45",
+            "0x1E",
+            "0x00",
+            "0x00",
+            "0xF8",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xF7",
+            "0x1D",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x158C6",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x158C8",
+          "bytes": [
+            "0x45",
+            "0x1E",
+            "0x00",
+            "0x00",
+            "0x46",
+            "0x1E",
+            "0x00",
+            "0x00",
+            "0xF9",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xF8",
+            "0x1D",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x158DA",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x158DC",
+          "bytes": [
+            "0x46",
+            "0x1E",
+            "0x00",
+            "0x00",
+            "0x47",
+            "0x1E",
+            "0x00",
+            "0x00",
+            "0xFA",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xF9",
+            "0x1D",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x158EE",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x2D7C0",
+          "bytes": [
+            "0x9F",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0x09",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x0C",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x0B",
+            "0x03",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT32/L381LEV.MAP",
+      "note": "L381LEV.MAP - texture orientation: 1 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L381LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x15E2C",
+          "bytes": [
+            "0x19",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xB7",
+            "0x1C",
+            "0x00",
+            "0x00",
+            "0x82",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x1D",
+            "0x1D",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT32/L391LEV.MAP",
+      "note": "L391LEV.MAP - texture orientation: 3 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L391LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0xEA9C",
+          "bytes": [
+            "0x21",
+            "0x0D",
+            "0x00",
+            "0x00",
+            "0x01",
+            "0x0D",
+            "0x00",
+            "0x00",
+            "0x06",
+            "0x0D",
+            "0x00",
+            "0x00",
+            "0x23",
+            "0x0D",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x16134",
+          "bytes": [
+            "0x9C",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x9D",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0xA6",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x04",
+            "0x12",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x18524",
+          "bytes": [
+            "0x99",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x97",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x06",
+            "0x12",
+            "0x00",
+            "0x00",
+            "0xAB",
+            "0x11",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L905LEV.MAP",
+      "note": "L905LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L905LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x2386A",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x238E2",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L908LEV.MAP",
+      "note": "L908LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L908LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x3FA14",
+          "bytes": [
+            "0xD0",
+            "0x07",
+            "0x00",
+            "0x00",
+            "0xC5",
+            "0x07",
+            "0x00",
+            "0x00",
+            "0xC6",
+            "0x07",
+            "0x00",
+            "0x00",
+            "0xD1",
+            "0x07",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4F824",
+          "bytes": [
+            "0xAE",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x8D",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x8E",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xA5",
+            "0x03",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L909LEV.MAP",
+      "note": "L909LEV.MAP - texture orientation: 5 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L909LEV.txt) (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x1AE0A",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x26090",
+          "bytes": [
+            "0x37",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x36",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x38",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x35",
+            "0x03",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x29150",
+          "bytes": [
+            "0xAD",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0xB2",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0xBB",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0xBA",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x29162",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x30504",
+          "bytes": [
+            "0xAA",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x9D",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0x9F",
+            "0x1A",
+            "0x00",
+            "0x00",
+            "0xAB",
+            "0x1A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x42524",
+          "bytes": [
+            "0x34",
+            "0x17",
+            "0x00",
+            "0x00",
+            "0x33",
+            "0x17",
+            "0x00",
+            "0x00",
+            "0xC5",
+            "0x19",
+            "0x00",
+            "0x00",
+            "0xC9",
+            "0x19",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
     }
   ],
   "faceUvRotations": [
@@ -27279,1044 +29142,6 @@
         10755,
         10760,
         10759
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT12/L161LEV.MAP",
-      "note": "texture scan 161-1: the texture ran against its neighbours",
-      "vertices": [
-        10088,
-        10089,
-        10255,
-        10087
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT12/L161LEV.MAP",
-      "note": "texture scan 161-2: the texture ran against its neighbours",
-      "vertices": [
-        3613,
-        3606,
-        3607,
-        3612
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT21/L211LEV.MAP",
-      "note": "texture scan 211-1: the texture ran against its neighbours",
-      "vertices": [
-        2657,
-        2653,
-        2661,
-        2659
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT21/L211LEV.MAP",
-      "note": "texture scan 211-1: the texture ran against its neighbours",
-      "vertices": [
-        2656,
-        2657,
-        2659,
-        2658
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT21/L211LEV.MAP",
-      "note": "texture scan 211-1: the texture ran against its neighbours",
-      "vertices": [
-        2654,
-        2656,
-        2658,
-        2655
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT22/L263LEV.MAP",
-      "note": "texture scan 263-3: the texture ran against its neighbours",
-      "vertices": [
-        7179,
-        7180,
-        7199,
-        7198
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT31/L311LEV.MAP",
-      "note": "texture scan 311-1: floor panel (the light strip beside it is left as it is)",
-      "vertices": [
-        1990,
-        2001,
-        2000,
-        1989
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT31/L311LEV.MAP",
-      "note": "texture scan 311-12: the texture ran against its neighbours",
-      "vertices": [
-        910,
-        933,
-        942,
-        909
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-1: the texture ran against its neighbours",
-      "vertices": [
-        6810,
-        6811,
-        270,
-        266
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-1: the texture ran against its neighbours",
-      "vertices": [
-        266,
-        270,
-        269,
-        265
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-1: the texture ran against its neighbours",
-      "vertices": [
-        6809,
-        6810,
-        266,
-        267
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-2: the texture ran against its neighbours",
-      "vertices": [
-        284,
-        285,
-        6813,
-        6812
-      ],
-      "steps": 3,
-      "flip": true
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-2: the texture ran against its neighbours",
-      "vertices": [
-        285,
-        287,
-        296,
-        6813
-      ],
-      "steps": 3,
-      "flip": true
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-2: the texture ran against its neighbours",
-      "vertices": [
-        286,
-        288,
-        287,
-        285
-      ],
-      "steps": 3,
-      "flip": true
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-3: the texture ran against its neighbours",
-      "vertices": [
-        6344,
-        6343,
-        6331,
-        6328
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-3: the texture ran against its neighbours",
-      "vertices": [
-        6343,
-        6366,
-        6337,
-        6331
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-3: the texture ran against its neighbours",
-      "vertices": [
-        6331,
-        6337,
-        6336,
-        6330
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-4: the texture ran against its neighbours",
-      "vertices": [
-        6352,
-        6353,
-        6922,
-        6923
-      ],
-      "steps": 3,
-      "flip": true
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-4: the texture ran against its neighbours",
-      "vertices": [
-        6353,
-        6358,
-        6924,
-        6922
-      ],
-      "steps": 3,
-      "flip": true
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-4: the texture ran against its neighbours",
-      "vertices": [
-        6350,
-        6356,
-        6358,
-        6353
-      ],
-      "steps": 3,
-      "flip": true
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-10: the texture ran against its neighbours",
-      "vertices": [
-        6729,
-        6868,
-        6775,
-        6780
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-11: the texture ran against its neighbours",
-      "vertices": [
-        6779,
-        6873,
-        6864,
-        6730
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-12: the texture ran against its neighbours",
-      "vertices": [
-        6900,
-        6896,
-        6889,
-        6509
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-13: the texture ran against its neighbours",
-      "vertices": [
-        6555,
-        6559,
-        6508,
-        6893
-      ],
-      "steps": 1
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-14: the texture ran against its neighbours",
-      "vertices": [
-        3625,
-        3603,
-        3626,
-        4013
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-15: the texture ran against its neighbours",
-      "vertices": [
-        3398,
-        3391,
-        3392,
-        3400
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L321LEV.MAP",
-      "note": "texture scan 321-16: the texture ran against its neighbours",
-      "vertices": [
-        3609,
-        3393,
-        3638,
-        4026
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L322LEV.MAP",
-      "note": "texture scan 322-2: the texture ran against its neighbours",
-      "vertices": [
-        3609,
-        3393,
-        3638,
-        4026
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L322LEV.MAP",
-      "note": "texture scan 322-4: the texture ran against its neighbours",
-      "vertices": [
-        6929,
-        6927,
-        6918,
-        6923
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L322LEV.MAP",
-      "note": "texture scan 322-5: the texture ran against its neighbours",
-      "vertices": [
-        3625,
-        3603,
-        3626,
-        4013
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L322LEV.MAP",
-      "note": "texture scan 322-8: the texture ran against its neighbours",
-      "vertices": [
-        3398,
-        3391,
-        3392,
-        3400
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L323LEV.MAP",
-      "note": "texture scan 323-2: the texture ran against its neighbours",
-      "vertices": [
-        6868,
-        6775,
-        6780,
-        6729
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT31/L323LEV.MAP",
-      "note": "texture scan 323-3: the texture ran against its neighbours",
-      "vertices": [
-        251,
-        278,
-        277,
-        252
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT31/L323LEV.MAP",
-      "note": "texture scan 323-4: the texture ran against its neighbours",
-      "vertices": [
-        3609,
-        3393,
-        3638,
-        4026
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L323LEV.MAP",
-      "note": "texture scan 323-6: the texture ran against its neighbours",
-      "vertices": [
-        3625,
-        3603,
-        3626,
-        4013
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L323LEV.MAP",
-      "note": "texture scan 323-9: the texture ran against its neighbours",
-      "vertices": [
-        3398,
-        3391,
-        3392,
-        3400
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L324LEV.MAP",
-      "note": "texture scan 324-2: the texture ran against its neighbours",
-      "vertices": [
-        251,
-        278,
-        277,
-        252
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT31/L324LEV.MAP",
-      "note": "texture scan 324-3: the texture ran against its neighbours",
-      "vertices": [
-        3609,
-        3393,
-        3638,
-        4026
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L324LEV.MAP",
-      "note": "texture scan 324-5: the texture ran against its neighbours",
-      "vertices": [
-        6929,
-        6927,
-        6918,
-        6923
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L324LEV.MAP",
-      "note": "texture scan 324-8: the texture ran against its neighbours",
-      "vertices": [
-        3398,
-        3391,
-        3392,
-        3400
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L324LEV.MAP",
-      "note": "texture scan 324-9: the texture ran against its neighbours",
-      "vertices": [
-        3625,
-        3603,
-        3626,
-        4013
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L325LEV.MAP",
-      "note": "texture scan 325-2: the texture ran against its neighbours",
-      "vertices": [
-        251,
-        278,
-        277,
-        252
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT31/L325LEV.MAP",
-      "note": "texture scan 325-3: the texture ran against its neighbours",
-      "vertices": [
-        6929,
-        6927,
-        6918,
-        6923
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L325LEV.MAP",
-      "note": "texture scan 325-6: the texture ran against its neighbours",
-      "vertices": [
-        6729,
-        6868,
-        6775,
-        6780
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT31/L325LEV.MAP",
-      "note": "texture scan 325-8: the texture ran against its neighbours",
-      "vertices": [
-        6779,
-        6873,
-        6864,
-        6730
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT31/L331LEV.MAP",
-      "note": "texture scan 331-2: the texture ran against its neighbours",
-      "vertices": [
-        3861,
-        3860,
-        3853,
-        3854
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT31/L331LEV.MAP",
-      "note": "texture scan 331-3: the texture ran against its neighbours",
-      "vertices": [
-        12606,
-        2862,
-        2667,
-        12603
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT31/L331LEV.MAP",
-      "note": "texture scan 331-4: the texture ran against its neighbours",
-      "vertices": [
-        11218,
-        11219,
-        11215,
-        11212
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT31/L331LEV.MAP",
-      "note": "texture scan 331-6: the texture ran against its neighbours",
-      "vertices": [
-        3695,
-        3696,
-        3700,
-        3699
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT31/L331LEV.MAP",
-      "note": "texture scan 331-7: the texture ran against its neighbours",
-      "vertices": [
-        11381,
-        2869,
-        2873,
-        11386
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT32/L351LEV.MAP",
-      "note": "texture scan 351-3: the texture ran against its neighbours",
-      "vertices": [
-        6069,
-        5779,
-        5777,
-        6066
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L351LEV.MAP",
-      "note": "texture scan 351-3: the texture ran against its neighbours",
-      "vertices": [
-        5779,
-        5773,
-        5771,
-        5777
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L351LEV.MAP",
-      "note": "texture scan 351-4: the texture ran against its neighbours",
-      "vertices": [
-        7024,
-        7019,
-        7017,
-        7023
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT32/L351LEV.MAP",
-      "note": "texture scan 351-5: the texture ran against its neighbours",
-      "vertices": [
-        184,
-        190,
-        204,
-        186
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L351LEV.MAP",
-      "note": "texture scan 351-7: the texture ran against its neighbours",
-      "vertices": [
-        7403,
-        7397,
-        7400,
-        7404
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L351LEV.MAP",
-      "note": "texture scan 351-9: the texture ran against its neighbours",
-      "vertices": [
-        2335,
-        2334,
-        2320,
-        2322
-      ],
-      "steps": 1
-    },
-    {
-      "target": "SECT32/L351LEV.MAP",
-      "note": "texture scan 351-10: the texture ran against its neighbours",
-      "vertices": [
-        3324,
-        3283,
-        3276,
-        3318
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT32/L351LEV.MAP",
-      "note": "texture scan 351-11: the texture ran against its neighbours",
-      "vertices": [
-        6105,
-        6122,
-        6100,
-        6095
-      ],
-      "steps": 1
-    },
-    {
-      "target": "SECT32/L351LEV.MAP",
-      "note": "texture scan 351-12: the texture ran against its neighbours",
-      "vertices": [
-        4617,
-        4618,
-        4535,
-        4536
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT32/L351LEV.MAP",
-      "note": "texture scan 351-13: the texture ran against its neighbours",
-      "vertices": [
-        9847,
-        9845,
-        9869,
-        9875
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L352LEV.MAP",
-      "note": "texture scan 352-1: the texture ran against its neighbours",
-      "vertices": [
-        886,
-        876,
-        877,
-        867
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT32/L352LEV.MAP",
-      "note": "texture scan 352-2: the texture ran against its neighbours",
-      "vertices": [
-        725,
-        716,
-        717,
-        726
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT32/L353LEV.MAP",
-      "note": "texture scan 353-1: the texture ran against its neighbours",
-      "vertices": [
-        1696,
-        1697,
-        1700,
-        1699
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT32/L353LEV.MAP",
-      "note": "texture scan 353-1: the texture ran against its neighbours",
-      "vertices": [
-        1697,
-        2691,
-        2689,
-        1700
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT32/L353LEV.MAP",
-      "note": "texture scan 353-2: the texture ran against its neighbours",
-      "vertices": [
-        886,
-        876,
-        877,
-        867
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT32/L353LEV.MAP",
-      "note": "texture scan 353-3: the texture ran against its neighbours",
-      "vertices": [
-        725,
-        716,
-        717,
-        726
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT32/L371LEV.MAP",
-      "note": "texture scan 371-1: the texture ran against its neighbours",
-      "vertices": [
-        7659,
-        7656,
-        7670,
-        7671
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L371LEV.MAP",
-      "note": "texture scan 371-1: the texture ran against its neighbours",
-      "vertices": [
-        7667,
-        7665,
-        7673,
-        7674
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L371LEV.MAP",
-      "note": "texture scan 371-1: the texture ran against its neighbours",
-      "vertices": [
-        7674,
-        7673,
-        7750,
-        7751
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L371LEV.MAP",
-      "note": "texture scan 371-1: the texture ran against its neighbours",
-      "vertices": [
-        7671,
-        7670,
-        7747,
-        7748
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L371LEV.MAP",
-      "note": "texture scan 371-1: the texture ran against its neighbours",
-      "vertices": [
-        7672,
-        7671,
-        7748,
-        7749
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L371LEV.MAP",
-      "note": "texture scan 371-1: the texture ran against its neighbours",
-      "vertices": [
-        7673,
-        7672,
-        7749,
-        7750
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L371LEV.MAP",
-      "note": "texture scan 371-1: the texture ran against its neighbours",
-      "vertices": [
-        7665,
-        7662,
-        7672,
-        7673
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L371LEV.MAP",
-      "note": "texture scan 371-1: the texture ran against its neighbours",
-      "vertices": [
-        7662,
-        7659,
-        7671,
-        7672
-      ],
-      "steps": 2,
-      "flip": true
-    },
-    {
-      "target": "SECT32/L371LEV.MAP",
-      "note": "texture scan 371-3: the texture ran against its neighbours",
-      "vertices": [
-        8337,
-        8335,
-        8333,
-        8409
-      ],
-      "steps": 1
-    },
-    {
-      "target": "SECT32/L371LEV.MAP",
-      "note": "texture scan 371-4: the texture ran against its neighbours",
-      "vertices": [
-        779,
-        2719,
-        777,
-        780
-      ],
-      "steps": 1
-    },
-    {
-      "target": "SECT32/L371LEV.MAP",
-      "note": "texture scan 371-5: the texture ran against its neighbours",
-      "vertices": [
-        8407,
-        8320,
-        8322,
-        8323
-      ],
-      "steps": 1
-    },
-    {
-      "target": "SECT32/L381LEV.MAP",
-      "note": "texture scan 381-1: the texture ran against its neighbours",
-      "vertices": [
-        7351,
-        8834,
-        7453,
-        7449
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT32/L391LEV.MAP",
-      "note": "texture scan 391-1: the texture ran against its neighbours",
-      "vertices": [
-        4518,
-        4612,
-        4508,
-        4509
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT32/L391LEV.MAP",
-      "note": "texture scan 391-2: the texture ran against its neighbours",
-      "vertices": [
-        3329,
-        3334,
-        3363,
-        3361
-      ],
-      "steps": 3
-    },
-    {
-      "target": "SECT32/L391LEV.MAP",
-      "note": "texture scan 391-3: the texture ran against its neighbours",
-      "vertices": [
-        4523,
-        4505,
-        4503,
-        4614
-      ],
-      "steps": 1
-    },
-    {
-      "target": "SECT90/L905LEV.MAP",
-      "note": "texture scan 905-1: the texture ran against its neighbours",
-      "vertices": [
-        6649,
-        6642,
-        6643,
-        6650
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT90/L908LEV.MAP",
-      "note": "texture scan 908-1: floor panel (the light strip beside it is left as it is)",
-      "vertices": [
-        1990,
-        2001,
-        2000,
-        1989
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT90/L908LEV.MAP",
-      "note": "texture scan 908-12: the texture ran against its neighbours",
-      "vertices": [
-        910,
-        933,
-        942,
-        909
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT90/L909LEV.MAP",
-      "note": "texture scan 909-14: the texture ran against its neighbours",
-      "vertices": [
-        824,
-        821,
-        823,
-        822
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT90/L909LEV.MAP",
-      "note": "texture scan 909-15: the texture ran against its neighbours",
-      "vertices": [
-        6815,
-        6827,
-        6826,
-        6813
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT90/L909LEV.MAP",
-      "note": "texture scan 909-19: the texture ran against its neighbours",
-      "vertices": [
-        3646,
-        3650,
-        3651,
-        3647
-      ],
-      "flip": true
-    },
-    {
-      "target": "SECT90/L909LEV.MAP",
-      "note": "texture scan 909-20: the texture ran against its neighbours",
-      "vertices": [
-        6601,
-        5940,
-        5939,
-        6597
-      ],
-      "steps": 1
-    },
-    {
-      "target": "SECT90/L909LEV.MAP",
-      "note": "texture scan 909-23: the texture ran against its neighbours",
-      "vertices": [
-        5810,
-        5819,
-        5818,
-        5805
-      ],
-      "steps": 3,
-      "flip": true
-    },
-    {
-      "target": "SECT31/L311LEV.MAP",
-      "note": "texture scan 311-9: floor panel (seen in 311-61's view)",
-      "vertices": [
-        2999,
-        2980,
-        2978,
-        2998
-      ],
-      "steps": 2
-    },
-    {
-      "target": "SECT12/L154LEV.MAP",
-      "note": "texture scan 154-1: pipe bend, a quarter turn and a flip to run on from the pipe",
-      "vertices": [
-        10058,
-        10059,
-        10064,
-        10065
-      ],
-      "steps": 1,
-      "flip": true
-    },
-    {
-      "target": "SECT90/L905LEV.MAP",
-      "note": "texture scan 905-1's neighbour, one across and one down: mirrored like 905-1",
-      "vertices": [
-        6639,
-        6636,
-        6641,
-        6642
       ],
       "flip": true
     }

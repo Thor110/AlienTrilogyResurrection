@@ -1,0 +1,30 @@
+Texture orientation - faces from the texture scan review
+
+These faces had their texture turned or mirrored so it did not run on from the faces next to it.
+Each was found by ALTLevelScan, rendered before and after, and kept after review (Edward, 2026).
+
+A turn rotates the face's four vertex indices (16 bytes at the face's offset), so the face keeps
+its winding. A mirror swaps the flag byte (offset + 0x12) for its mirrored partner: 0 and 2,
+4 and 6, 12 and 34, 8 and 10, 26 and 28, 30 and 32. The texture index and light bytes are
+unchanged.
+
+Face	Offset		Scan	Change	Was					Now
+600	0x109C4	321-11	three quarter-turns	6779, 6873, 6864, 6730	->	6730, 6779, 6873, 6864
+888	0x12044	321-10	three quarter-turns	6729, 6868, 6775, 6780	->	6780, 6729, 6868, 6775
+1906	0x16FCC	321-14	mirrored	3625, 3603, 3626, 4013	->	3625, 3603, 3626, 4013	flag 2 (0x02)		flag 0 (0x00)
+2458	0x19AEC	321-15	mirrored	3398, 3391, 3392, 3400	->	3398, 3391, 3392, 3400	flag 2 (0x02)		flag 0 (0x00)
+2461	0x19B28	321-16	mirrored	3609, 3393, 3638, 4026	->	3609, 3393, 3638, 4026	flag 2 (0x02)		flag 0 (0x00)
+2961	0x1C238	321-1	three quarter-turns	6809, 6810, 266, 267	->	267, 6809, 6810, 266
+2962	0x1C24C	321-1	three quarter-turns	6810, 6811, 270, 266	->	266, 6810, 6811, 270
+2966	0x1C29C	321-1	three quarter-turns	266, 270, 269, 265	->	265, 266, 270, 269
+4163	0x22020	321-2	mirrored and three quarter-turns	284, 285, 6813, 6812	->	6812, 284, 285, 6813	flag 0 (0x00)		flag 2 (0x02)
+4164	0x22034	321-2	mirrored and three quarter-turns	285, 287, 296, 6813	->	6813, 285, 287, 296	flag 0 (0x00)		flag 2 (0x02)
+4168	0x22084	321-2	mirrored and three quarter-turns	286, 288, 287, 285	->	285, 286, 288, 287	flag 0 (0x00)		flag 2 (0x02)
+6143	0x2BAD0	321-3	three quarter-turns	6344, 6343, 6331, 6328	->	6328, 6344, 6343, 6331
+6144	0x2BAE4	321-3	three quarter-turns	6343, 6366, 6337, 6331	->	6331, 6343, 6366, 6337
+6148	0x2BB34	321-3	three quarter-turns	6331, 6337, 6336, 6330	->	6330, 6331, 6337, 6336
+6714	0x2E76C	321-4	mirrored and three quarter-turns	6352, 6353, 6922, 6923	->	6923, 6352, 6353, 6922	flag 0 (0x00)		flag 2 (0x02)
+6715	0x2E780	321-4	mirrored and three quarter-turns	6353, 6358, 6924, 6922	->	6922, 6353, 6358, 6924	flag 0 (0x00)		flag 2 (0x02)
+6719	0x2E7D0	321-4	mirrored and three quarter-turns	6350, 6356, 6358, 6353	->	6353, 6350, 6356, 6358	flag 0 (0x00)		flag 2 (0x02)
+6987	0x2FCC0	321-12	three quarter-turns	6900, 6896, 6889, 6509	->	6509, 6900, 6896, 6889
+7003	0x2FE00	321-13	a quarter-turn	6555, 6559, 6508, 6893	->	6559, 6508, 6893, 6555
