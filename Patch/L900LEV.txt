@@ -1,6 +1,6 @@
 Incorrect texture flags patched.
 
-Incorrect UVs on some crate faces, fixed in code on export for now (ALTViewer ModelRenderer.cs). ( same as L111LEV )
+Incorrect UVs on some crate faces - these used to be fixed only in ALTViewer's model export and are now fixed in the file (see the end of this file). ( same as L111LEV )
 
 Starting lift panel - mirrored the wrong way (Edward, 2026)
 
@@ -12,3 +12,19 @@ it is now in the file.
 
 Also in this level, at the same offsets as on L111LEV: the lift vertex fix (Patch/new-fix.txt) and the
 texture index fix with its quarter-turn (Patch/another-fix.txt).
+
+Fixes moved from ALTViewer's model export into the file (Claude, 2026)
+
+ALTViewer's OBJ export used to correct crate faces (the same faces as L111LEV) by giving them other UVs, so the fix never reached
+the game. Each one is now a byte change that gives the same result in the level file itself. Same faces, same offsets and same fix as L111LEV.
+
+A turn rotates the face's four vertex indices (16 bytes at the face's offset), keeping its winding. A mirror
+sets the flag byte (offset + 0x12) to its mirrored partner. A texture change sets the texture index
+(offset + 0x10, two bytes) to the one the export borrowed. The old export remap is listed so the mapping
+stays on record: "face N's UVs as a,b,c,d" means corner k took corner p[k] of face N's UVs.
+
+Face	Offset		Old export remap		Change				Was						Now
+1062	0x1D144		face 6527's UVs as 0,1,2,3		texture of face 6527		5451, 5452, 5455, 5454 tex 193 flag 0	->	5451, 5452, 5455, 5454 tex 194 flag 0
+6527	0x37C38		its own UVs as 1,2,3,0		three quarter-turns		11640, 11632, 11669, 11653 tex 194 flag 0	->	11653, 11640, 11632, 11669 tex 194 flag 0
+3622	0x29944		its own UVs as 2,3,0,1		a half-turn		5659, 5818, 5657, 5656 tex 193 flag 0	->	5657, 5656, 5659, 5818 tex 193 flag 0
+7780	0x3DE1C		its own UVs as 2,3,0,1		a half-turn		2002, 1995, 2016, 2015 tex 193 flag 0	->	2016, 2015, 2002, 1995 tex 193 flag 0

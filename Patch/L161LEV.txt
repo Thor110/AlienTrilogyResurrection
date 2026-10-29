@@ -11,3 +11,16 @@ unchanged.
 Face	Offset		Scan	Change	Was					Now
 430	0x19A1C	161-2	mirrored and a half-turn	3613, 3606, 3607, 3612	->	3607, 3612, 3613, 3606	flag 2 (0x02)		flag 0 (0x00)
 5522	0x327EC	161-1	three quarter-turns	10088, 10089, 10255, 10087	->	10087, 10088, 10089, 10255
+
+Fixes moved from ALTViewer's model export into the file (Claude, 2026)
+
+ALTViewer's OBJ export used to correct the secretion-covered wall by giving it other UVs, so the fix never reached
+the game. Each one is now a byte change that gives the same result in the level file itself.
+
+A turn rotates the face's four vertex indices (16 bytes at the face's offset), keeping its winding. A mirror
+sets the flag byte (offset + 0x12) to its mirrored partner. A texture change sets the texture index
+(offset + 0x10, two bytes) to the one the export borrowed. The old export remap is listed so the mapping
+stays on record: "face N's UVs as a,b,c,d" means corner k took corner p[k] of face N's UVs.
+
+Face	Offset		Old export remap		Change				Was						Now
+3505	0x28A58		face 3315's UVs as 2,3,0,1		texture of face 3315 and a half-turn		325, 324, 327, 331 tex 213 flag 0	->	327, 331, 325, 324 tex 214 flag 0

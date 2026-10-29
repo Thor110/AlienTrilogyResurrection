@@ -31,26 +31,10 @@ namespace ALTViewer
         // 0, 2, 11, 128, 139 // door specific flags
         public static void ExportLevel(string levelName, List<BndSection> uvSections, byte[] levelSection, string textureName, string outputPath, bool debug, bool unknown, bool patch)
         {
-            bool L111LEVFIX = false;
-            bool L141LEVFIX = false;
-            bool L161LEVFIX = false;
-            bool L906LEVFIX = false;
-            // switch on level name after checking if the first patch is applied
-            // only update incorrect UVs if the first patch is applied
-            // otherwise retain original imperfections for those that might want to see them
-            if (patch && !debug && !unknown) // test adjustments necessary for unity version (pre-patched)
-            {
-                switch (levelName) // level specific booleans so that string comparison is only done once and only booleans have to be checked when writing every face
-                {
-                    case "L111LEV": L111LEVFIX = true; break;
-                    case "L141LEV": L141LEVFIX = true; break;
-                    case "L161LEV": L161LEVFIX = true; break;
-                    case "L903LEV": L141LEVFIX = true; break; // L903LEV is the same as L141LEV
-                    case "L900LEV": L111LEVFIX = true; break; // L900LEV is the same as L111LEV
-                    case "L906LEV": L906LEVFIX = true; break;
-                }
-            }
-            // above are unique patch specific variables
+            // The level-specific UV corrections that used to be applied here (L111/L900, L141/L903, L161 and L906)
+            // are now byte patches in the level files themselves, applied by the patch button (see the Patch folder).
+            // The export writes the faces exactly as the file has them: the originals on an unpatched game, the
+            // fixed faces on a patched one.
             using var br = new BinaryReader(new MemoryStream(levelSection)); // skip first 20 bytes + 36 below = 56
             ushort vertCount = br.ReadUInt16();         // Number of vertices
             ushort quadCount = br.ReadUInt16();         // Number of quads
@@ -256,160 +240,9 @@ namespace ALTViewer
                 {
                     sw.WriteLine($"f {q.A + 1}/{uv[0]} {q.B + 1}/{uv[1]} {q.C + 1}/{uv[2]}");
                 }
-                else // TODO : I plan to use all of this as reference for fixing the UVs in the original BX sections if possible and when I get a chance
+                else
                 {
-                    // NOTE : These will fix the incorrect UVs in Unity incase I cannot fix the BX sections and are also for me to use to cross reference them
-                    if (L111LEVFIX) // fix some incorrect textures on the first level
-                    {
-                        switch (i)
-                        {
-                            // case 10208, the starting lift panel, is now fixed in the level file itself (flag byte 0x49BCA = 0x02,
-                            // applied by the patch button), so it is no longer swapped here - doing both would mirror it back
-                            case 1062: // hallway crate top as side ( this isn't +1 either???? )
-                                sw.WriteLine($"f {q.A + 1}/{faceUvs[6527][0]} {q.B + 1}/{faceUvs[6527][1]} {q.C + 1}/{faceUvs[6527][2]} {q.D + 1}/{faceUvs[6527][3]}");
-                                continue;
-                            case 6527: // rotate crate UV large room ( and this isn't +1???? )
-                                sw.WriteLine($"f {q.A + 1}/{uv[1]} {q.B + 1}/{uv[2]} {q.C + 1}/{uv[3]} {q.D + 1}/{uv[0]}");
-                                continue;
-                            case 3622: // right side room upside down crate UV small room ( this isn't +1 either???? )
-                            case 7780: // upside down crate UV large room ( why is this +1???? )
-                                sw.WriteLine($"f {q.A + 1}/{uv[2]} {q.B + 1}/{uv[3]} {q.C + 1}/{uv[0]} {q.D + 1}/{uv[1]}");
-                                continue;
-                            default:
-                                sw.WriteLine($"f {q.A + 1}/{uv[0]} {q.B + 1}/{uv[1]} {q.C + 1}/{uv[2]} {q.D + 1}/{uv[3]}");
-                                continue;
-                        }
-                    }
-                    else if (L141LEVFIX) // fix some incorrect textures on weyland yutani crates
-                    {
-                        switch (i)
-                        {
-                            case 2736: // door texture on back of weyland yutani crate side
-                                sw.WriteLine($"f {q.A + 1}/{faceUvs[2727][0]} {q.B + 1}/{faceUvs[2727][1]} {q.C + 1}/{faceUvs[2727][2]} {q.D + 1}/{faceUvs[2727][3]}");
-                                continue;
-                            case 4449:
-                            case 4450: // incorrect weyland yutani crate sides
-                                sw.WriteLine($"f {q.A + 1}/{faceUvs[4268][0]} {q.B + 1}/{faceUvs[4268][1]} {q.C + 1}/{faceUvs[4268][2]} {q.D + 1}/{faceUvs[4268][3]}");
-                                continue;
-                            case 4451: // incorrect weyland yutani crate top // maybe adjust more????
-                                sw.WriteLine($"f {q.A + 1}/{faceUvs[4269][0]} {q.B + 1}/{faceUvs[4269][1]} {q.C + 1}/{faceUvs[4269][2]} {q.D + 1}/{faceUvs[4269][3]}");
-                                continue;
-                            case 6168:
-                            case 6169: // incorrect weyland yutani crate sides
-                                sw.WriteLine($"f {q.A + 1}/{faceUvs[6173][0]} {q.B + 1}/{faceUvs[6173][1]} {q.C + 1}/{faceUvs[6173][2]} {q.D + 1}/{faceUvs[6173][3]}");
-                                continue;
-                            case 6186: // weyland yutani sideways crate
-                                sw.WriteLine($"f {q.A + 1}/{uv[1]} {q.B + 1}/{uv[2]} {q.C + 1}/{uv[3]} {q.D + 1}/{uv[0]}");
-                                continue;
-                            /*case 7431: // rotate weyland yutani crate top // open crate or not open crate????
-                                sw.WriteLine($"f {q.A + 1}/{faceUvs[7413][0]} {q.B + 1}/{faceUvs[7413][1]} {q.C + 1}/{faceUvs[7413][2]} {q.D + 1}/{faceUvs[7413][3]}");
-                                continue;*/
-                            case 7413: // rotate weyland yutani crate top
-                                sw.WriteLine($"f {q.A + 1}/{uv[3]} {q.B + 1}/{uv[0]} {q.C + 1}/{uv[1]} {q.D + 1}/{uv[2]}");
-                                continue;
-                            /*case 7962: // weyland yutani crate top // open crate or not open crate????
-                                sw.WriteLine($"f {q.A + 1}/{faceUvs[7965][0]} {q.B + 1}/{faceUvs[7965][1]} {q.C + 1}/{faceUvs[7965][2]} {q.D + 1}/{faceUvs[7965][3]}");
-                                continue;*/
-                            case 8108: // grey crate side
-                                sw.WriteLine($"f {q.A + 1}/{faceUvs[8110][1]} {q.B + 1}/{faceUvs[8110][2]} {q.C + 1}/{faceUvs[8110][3]} {q.D + 1}/{faceUvs[8110][0]}");
-                                continue;
-                            case 8111: // grey crate side
-                                sw.WriteLine($"f {q.A + 1}/{faceUvs[8110][3]} {q.B + 1}/{faceUvs[8110][0]} {q.C + 1}/{faceUvs[8110][1]} {q.D + 1}/{faceUvs[8110][2]}");
-                                continue;
-                            case 8112: // grey crate top
-                                sw.WriteLine($"f {q.A + 1}/{faceUvs[8111][0]} {q.B + 1}/{faceUvs[8111][1]} {q.C + 1}/{faceUvs[8111][2]} {q.D + 1}/{faceUvs[8111][3]}");
-                                continue;
-                            default:
-                                sw.WriteLine($"f {q.A + 1}/{uv[0]} {q.B + 1}/{uv[1]} {q.C + 1}/{uv[2]} {q.D + 1}/{uv[3]}");
-                                continue;
-                        }
-                    }
-                    else if (L161LEVFIX)
-                    {
-                        switch (i)
-                        {
-                            case 3505: // secretion covered wall
-                                sw.WriteLine($"f {q.A + 1}/{faceUvs[3315][2]} {q.B + 1}/{faceUvs[3315][3]} {q.C + 1}/{faceUvs[3315][0]} {q.D + 1}/{faceUvs[3315][1]}");
-                                continue;
-                            default:
-                                sw.WriteLine($"f {q.A + 1}/{uv[0]} {q.B + 1}/{uv[1]} {q.C + 1}/{uv[2]} {q.D + 1}/{uv[3]}");
-                                continue;
-                        }
-                    }
-                    else if (L906LEVFIX) // fix for the misaligned UVs on L906LEV
-                    {
-                        switch(i)
-                        {
-                            case 10900:
-                                sw.WriteLine($"f {q.A + 1}/{uv[2]} {q.B + 1}/{uv[1]} {q.C + 1}/{uv[0]} {q.D + 1}/{uv[3]}");
-                                continue;
-                            case 8580:
-                            case 8598:
-                            case 8602:
-                            case 7826:
-                            case 7830:
-                            case 7834:
-                            case 5428:
-                            case 5586:
-                            case 5948:
-                            case 6655:
-                            case 6839:
-                            case 5375:
-                            case 5379:
-                            case 5383:
-                            case 4550:
-                            case 4546:
-                            case 4542:
-                            case 6830:
-                            case 6932:
-                            case 7079:
-                            case 7006:
-                            case 6887:
-                            case 6736:
-                            case 6787:
-                                sw.WriteLine($"f {q.A + 1}/{uv[0]} {q.B + 1}/{uv[3]} {q.C + 1}/{uv[2]} {q.D + 1}/{uv[1]}");
-                                continue;
-                            case 8596:
-                            case 8600:
-                            case 8604:
-                            case 7824:
-                            case 7828:
-                            case 7832:
-                            case 6857:
-                            case 5607:
-                            case 5410:
-                            case 5773:
-                            case 6411:
-                            case 6766:
-                            case 5377:
-                            case 5381:
-                            case 5385:
-                            case 4548:
-                            case 4544:
-                            case 4540:
-                            case 6730:
-                            case 6881:
-                            case 7000:
-                            case 7085:
-                            case 6938:
-                            case 6836:
-                                sw.WriteLine($"f {q.A + 1}/{uv[1]} {q.B + 1}/{uv[2]} {q.C + 1}/{uv[3]} {q.D + 1}/{uv[0]}");
-                                continue;
-                            case 5357:
-                            case 5373:
-                            case 4538:
-                            case 4522:
-                                sw.WriteLine($"f {q.A + 1}/{uv[3]} {q.B + 1}/{uv[2]} {q.C + 1}/{uv[1]} {q.D + 1}/{uv[0]}");//upside down?
-                                continue;
-                            default:
-                                sw.WriteLine($"f {q.A + 1}/{uv[0]} {q.B + 1}/{uv[1]} {q.C + 1}/{uv[2]} {q.D + 1}/{uv[3]}");
-                                continue;
-                        }
-                    }
-                    else
-                    {
-                        sw.WriteLine($"f {q.A + 1}/{uv[0]} {q.B + 1}/{uv[1]} {q.C + 1}/{uv[2]} {q.D + 1}/{uv[3]}");
-                    }
+                    sw.WriteLine($"f {q.A + 1}/{uv[0]} {q.B + 1}/{uv[1]} {q.C + 1}/{uv[2]} {q.D + 1}/{uv[3]}");
                 }
             }
         }

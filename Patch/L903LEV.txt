@@ -9,3 +9,26 @@ Offset		Cell		From	To
 0x69502		(11,43)		00	14	pillar
 0x6AE52		(11,48)		00	14	pillar
 0x6E862		(49,59)		00	15
+
+Fixes moved from ALTViewer's model export into the file (Claude, 2026)
+
+ALTViewer's OBJ export used to correct Weyland-Yutani and grey crate faces (the same faces as L141LEV) by giving them other UVs, so the fix never reached
+the game. Each one is now a byte change that gives the same result in the level file itself. Same faces, same offsets and same fix as L141LEV.
+
+A turn rotates the face's four vertex indices (16 bytes at the face's offset), keeping its winding. A mirror
+sets the flag byte (offset + 0x12) to its mirrored partner. A texture change sets the texture index
+(offset + 0x10, two bytes) to the one the export borrowed. The old export remap is listed so the mapping
+stays on record: "face N's UVs as a,b,c,d" means corner k took corner p[k] of face N's UVs.
+
+Face	Offset		Old export remap		Change				Was						Now
+2736	0x28B84		face 2727's UVs as 0,1,2,3		texture of face 2727		2552, 2560, 2530, 2285 tex 219 flag 0	->	2552, 2560, 2530, 2285 tex 220 flag 0
+4449	0x31158		face 4268's UVs as 0,1,2,3		none needed, already right in the file		5163, 5162, 8525, 8528 tex 217 flag 0	->	5163, 5162, 8525, 8528 tex 217 flag 0
+4450	0x3116C		face 4268's UVs as 0,1,2,3		texture of face 4268		8525, 8526, 8527, 8528 tex 218 flag 0	->	8525, 8526, 8527, 8528 tex 217 flag 0
+4451	0x31180		face 4269's UVs as 0,1,2,3		texture of face 4269		3654, 5162, 3662, 3655 tex 193 flag 0	->	3654, 5162, 3662, 3655 tex 127 flag 0
+6168	0x397A4		face 6173's UVs as 0,1,2,3		texture of face 6173		10909, 9101, 9083, 9113 tex 217 flag 0	->	10909, 9101, 9083, 9113 tex 255 flag 0
+6169	0x397B8		face 6173's UVs as 0,1,2,3		texture of face 6173		8683, 9111, 9112, 12482 tex 217 flag 0	->	8683, 9111, 9112, 12482 tex 255 flag 0
+6186	0x3990C		its own UVs as 1,2,3,0		three quarter-turns		9182, 10932, 9144, 9143 tex 218 flag 0	->	9143, 9182, 10932, 9144 tex 218 flag 0
+7413	0x3F8E8		its own UVs as 3,0,1,2		a quarter-turn		9006, 9007, 9061, 9064 tex 218 flag 0	->	9007, 9061, 9064, 9006 tex 218 flag 0
+8108	0x42F34		face 8110's UVs as 1,2,3,0		texture of face 8110 and three quarter-turns		10294, 8542, 10298, 10297 tex 226 flag 0	->	10297, 10294, 8542, 10298 tex 224 flag 0
+8111	0x42F70		face 8110's UVs as 3,0,1,2		texture of face 8110 and a quarter-turn		10297, 10298, 10299, 10296 tex 225 flag 0	->	10298, 10299, 10296, 10297 tex 224 flag 0
+8112	0x42F84		face 8111's UVs as 0,1,2,3		texture of face 8111		10290, 8603, 8601, 5299 tex 85 flag 0	->	10290, 8603, 8601, 5299 tex 225 flag 0

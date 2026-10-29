@@ -591,7 +591,7 @@ Here it is with the fix I applied to the level.
   <img src="Images/L906LEV-bridge-fixed.png" alt="L906LEV Patched">
 </div>
 
-Currently this is only fixed when exporting the model and partially fixed in the original game files.
+This used to be fixed only when exporting the model, on top of a partial fix in the game files. All 53 bridge faces are now fixed in the level file itself: UV rotation corrected on 24, UV flipped and rotation corrected on 29. Applied by both ALTEngine and ALTViewer's patch button. The face list, with the old export remap for each, is in Patch/L906LEV.txt.
 
 ## L906LEV Multiplayer Map 7 Fix 6
 
@@ -647,7 +647,7 @@ Patch listed at Patch/L905LEV.txt
 
 [These fixes are the same as on L141LEV](#L141LEV-Fix-1)
 	
-Currently this is only fixed when exporting the level model.
+This used to be fixed only when exporting the level model. It is now fixed in the level file, on the same faces at the same offsets as L141LEV. Applied by both ALTEngine and ALTViewer's patch button. Details in Patch/L903LEV.txt.
 
 ## L903LEV Multiplayer Map 4 Fix 2
 
@@ -684,7 +684,7 @@ Here it is with the fix I applied to the level.
 
 [These fixes are the same as on L111LEV](#L111LEV-Fix-1)
 
-Currently this is only fixed when exporting the level model.
+This used to be fixed only when exporting the level model. It is now fixed in the level file, on the same faces at the same offsets as L111LEV. Applied by both ALTEngine and ALTViewer's patch button. Details in Patch/L900LEV.txt.
 
 ## L900LEV Multiplayer Map 1 Fix 2
 
@@ -732,7 +732,7 @@ Here it is with the fix I applied to the level.
   <img src="Images/L111LEV-texture-fixed.png" alt="L111LEV Original">
 </div>
 
-Currently this is only fixed when exporting the level model.
+This used to be fixed only when exporting the level model. The four crate faces are now fixed in the level file itself: one had the wrong texture index, one needed its UV rotation corrected, and two were upside down (a half-turn). Applied by both ALTEngine and ALTViewer's patch button. Details in Patch/L111LEV.txt.
 
 ## L111LEV Fix 2
 
@@ -810,9 +810,9 @@ Here it is with the fixes I applied to the level.
   <img src="Images/L141LEV-texture-fixed-2.png" alt="L141LEV Patched">
 </div>
 
-Currently this is only fixed when exporting the level model.
+This used to be fixed only when exporting the level model. The crate faces are now fixed in the level file itself: eight had the wrong texture index (two of them also needed their UV rotation corrected), two needed only their UV rotation corrected, and one was already right in the file. Applied by both ALTEngine and ALTViewer's patch button. Details in Patch/L141LEV.txt.
 
-There are a few other similar issues with textures that I have fixed but which I have not screenshotted here, the exact indices of the faces which have been adjusted can be found in the code : (https://github.com/Thor110/AlienTrilogyResurrection/blob/main/ALTViewer/ModelRenderer.cs#L267)
+The exact faces, their old export remaps and the bytes that now fix them are listed in Patch/L141LEV.txt.
 
 ## L154LEV Fix 1
 
@@ -836,7 +836,7 @@ Here it is with the fix I applied to the level.
   <img src="Images/L161LEV-texture-fixed.png" alt="L161LEV Patched">
 </div>
 
-Currently this is only fixed when exporting the level model.
+This used to be fixed only when exporting the level model. The wall face is now fixed in the level file itself: it takes the correct texture index, with its UV rotation corrected (a half-turn). Applied by both ALTEngine and ALTViewer's patch button. Details in Patch/L161LEV.txt.
 
 ## L161LEV Fix 2
 
