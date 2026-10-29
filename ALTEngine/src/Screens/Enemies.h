@@ -795,8 +795,13 @@ namespace ALTEngine::Screens
                 {
                     PlayAnimation(enemy, enemy.actAnimation);
                 }
-                else
+                else if (enemy.animation < 0 || enemy.animation > 7
+                         || enemy.ai.state > CreatureAI::CHASE)
                 {
+                    // An idle creature keeps the view it started with: the
+                    // original re-picks it only when it turns or moves
+                    // (FUN_000314b8's callers). Re-picking every tick as the
+                    // player walked about restarted the walk, and its sound.
                     PlayWalkByView(enemy, enemy.ai.bearingToPlayer);
                 }
                 return;

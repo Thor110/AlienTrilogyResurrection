@@ -1,10 +1,12 @@
 #include "DirectoryBrowser.h"
 #include "Font8x8.h"
 #include "AppWindow.h"
+#include "PlatformPaths.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <string>
 
 #if defined(_WIN32)
@@ -84,6 +86,19 @@ namespace ALTEngine::Bootstrap
             }
 #else
             entries.push_back({ "/", std::filesystem::path("/"), false });
+            if (const char* home = std::getenv("HOME"))
+            {
+                entries.push_back({ std::string("Home (") + home + ")", std::filesystem::path(home), false });
+            }
+            // Discs and mounted images.
+            for (const auto& root : MountRoots())
+            {
+                std::error_code rootEc;
+                if (std::filesystem::is_directory(root, rootEc))
+                {
+                    entries.push_back({ root.string(), root, false });
+                }
+            }
 #endif
             return entries;
         }

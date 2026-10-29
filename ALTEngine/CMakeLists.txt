@@ -5,10 +5,14 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Warnings for this project's own targets only (alt_warnings below), so the
+# libraries fetched when not installed (SDL3, nlohmann-json) build with their
+# own settings.
+add_library(alt_warnings INTERFACE)
 if (MSVC)
-    add_compile_options(/W4 /permissive-)
+    target_compile_options(alt_warnings INTERFACE /W4 /permissive-)
 else()
-    add_compile_options(-Wall -Wextra)
+    target_compile_options(alt_warnings INTERFACE -Wall -Wextra)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -16,7 +20,18 @@ endif()
 # binary patching). No windowing, no rendering, no platform-specific calls
 # beyond filesystem.
 # ---------------------------------------------------------------------------
-find_package(nlohmann_json CONFIG REQUIRED)
+# nlohmann-json: an installed one (vcpkg on Windows, nlohmann-json3-dev on
+# Linux, brew's nlohmann-json on macOS), or else the release fetched at
+# configure time. It is header-only, so the fetch is quick.
+find_package(nlohmann_json CONFIG QUIET)
+if (NOT nlohmann_json_FOUND)
+    message(STATUS "nlohmann-json not found: fetching 3.11.3")
+    include(FetchContent)
+    FetchContent_Declare(nlohmann_json
+        URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+        URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d)
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()
 
 add_library(ALTFormats STATIC
     src/Formats/ModelIndices.h
@@ -50,7 +65,7 @@ add_library(ALTFormats STATIC
     src/Formats/SpriteFrameLoader.cpp
 )
 target_include_directories(ALTFormats PUBLIC src)
-target_link_libraries(ALTFormats PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(ALTFormats PRIVATE nlohmann_json::nlohmann_json alt_warnings)
 
 # ---------------------------------------------------------------------------
 # ALTGame - gameplay rules (triggers, doors, ...) pulled out of
@@ -70,7 +85,7 @@ add_library(ALTGame STATIC
 )
 target_include_directories(ALTGame PUBLIC src)
 target_link_libraries(ALTGame PUBLIC ALTFormats)
-target_link_libraries(ALTGame PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(ALTGame PRIVATE nlohmann_json::nlohmann_json alt_warnings)
 
 # ---------------------------------------------------------------------------
 # Tests. SDL-free, so they build and run anywhere ALTFormats does:
@@ -100,14 +115,32 @@ if (ALTENGINE_BUILD_TESTS)
         tests/PlayerMoverTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
-    target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats)
+    target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats alt_warnings)
     target_compile_definitions(ALTEngineTests PRIVATE
         ALT_TEST_DEMO_ROOT="${CMAKE_SOURCE_DIR}/../Notes/repack-disc-comparison/DEMO"
         ALT_TEST_DATA_ROOT="${CMAKE_SOURCE_DIR}/data")
     add_test(NAME ALTEngineTests COMMAND ALTEngineTests)
 endif()
 
-find_package(SDL3 CONFIG REQUIRED)
+# SDL3: an installed one (vcpkg on Windows, brew's sdl3 on macOS), or else
+# SDL built from source as a static library the first time you configure
+# (Ubuntu 24.04 has no SDL3 package). On Linux that needs X11/Wayland and
+# audio development packages - see .github/workflows/build.yml.
+find_package(SDL3 CONFIG QUIET)
+if (NOT SDL3_FOUND)
+    message(STATUS "SDL3 not found: fetching SDL 3.2.30 (first configure only, takes a few minutes)")
+    include(FetchContent)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(SDL3
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG release-3.2.30
+        GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(SDL3)
+endif()
 
 # FFmpeg (vcpkg's ffmpeg port ships pkg-config .pc files, not a CMake
 # package config like SDL3/nlohmann-json do - pkg-config is the standard
@@ -181,6 +214,33 @@ if (WIN32)
         add_custom_target(CompileModelShaders ALL
             DEPENDS "${SHADER_DIR}/model.vert.dxil" "${SHADER_DIR}/model.frag.dxil")
     endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# The same shaders for Vulkan and Metal: data/shaders/*.glsl (the HLSL's GLSL
+# twins) -> SPIR-V (glslangValidator) -> MSL (spirv-cross). The outputs are
+# committed next to the DXIL, so a build without these tools still has them;
+# with the tools (apt glslang-tools spirv-cross, brew glslang spirv-cross)
+# they are rebuilt whenever a .glsl changes.
+# ---------------------------------------------------------------------------
+find_program(GLSLANG_VALIDATOR glslangValidator)
+find_program(SPIRV_CROSS spirv-cross)
+if (GLSLANG_VALIDATOR AND SPIRV_CROSS)
+    set(SHADER_DIR "${CMAKE_SOURCE_DIR}/data/shaders")
+    set(_alt_portable_shaders "")
+    foreach (_stage vert frag)
+        add_custom_command(
+            OUTPUT "${SHADER_DIR}/model.${_stage}.spv" "${SHADER_DIR}/model.${_stage}.msl"
+            COMMAND ${GLSLANG_VALIDATOR} -V -S ${_stage} -o "${SHADER_DIR}/model.${_stage}.spv" "${SHADER_DIR}/model.${_stage}.glsl"
+            COMMAND ${SPIRV_CROSS} "${SHADER_DIR}/model.${_stage}.spv" --msl --msl-version 20000 --output "${SHADER_DIR}/model.${_stage}.msl"
+            DEPENDS "${SHADER_DIR}/model.${_stage}.glsl"
+            COMMENT "Compiling model.${_stage}.glsl -> SPIR-V and MSL"
+        )
+        list(APPEND _alt_portable_shaders "${SHADER_DIR}/model.${_stage}.spv" "${SHADER_DIR}/model.${_stage}.msl")
+    endforeach()
+    add_custom_target(CompilePortableShaders ALL DEPENDS ${_alt_portable_shaders})
+else()
+    message(STATUS "glslangValidator or spirv-cross not found: using the committed SPIR-V and MSL shaders")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -279,9 +339,13 @@ target_include_directories(ALTEngine PRIVATE src)
 target_link_libraries(ALTEngine PRIVATE ALTGame ALTFormats)
 target_link_libraries(ALTEngine PRIVATE SDL3::SDL3)
 target_link_libraries(ALTEngine PRIVATE PkgConfig::FFMPEG)
+target_link_libraries(ALTEngine PRIVATE alt_warnings)
 
 if (WIN32 AND DXC_EXECUTABLE)
     add_dependencies(ALTEngine CompileModelShaders)
+endif()
+if (TARGET CompilePortableShaders)
+    add_dependencies(ALTEngine CompilePortableShaders)
 endif()
 
 set_target_properties(ALTEngine PROPERTIES

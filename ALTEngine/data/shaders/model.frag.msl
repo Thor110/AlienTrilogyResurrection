@@ -1,0 +1,49 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct FogParams
+{
+    float4 fogParams;
+};
+
+struct main0_out
+{
+    float4 outColour [[color(0)]];
+};
+
+struct main0_in
+{
+    float2 inUV [[user(locn0)]];
+    float3 inColour [[user(locn1)]];
+    float inDistance [[user(locn2)]];
+};
+
+fragment main0_out main0(main0_in in [[stage_in]], constant FogParams& _49 [[buffer(0)]], texture2d<float> ModelTexture [[texture(0)]], sampler ModelTextureSmplr [[sampler(0)]])
+{
+    main0_out out = {};
+    float4 color = ModelTexture.sample(ModelTextureSmplr, in.inUV);
+    if (color.w < 0.5)
+    {
+        discard_fragment();
+    }
+    float4 _35 = color;
+    float3 _37 = _35.xyz * in.inColour;
+    color.x = _37.x;
+    color.y = _37.y;
+    color.z = _37.z;
+    if (_49.fogParams.x > 0.5)
+    {
+        float d = abs(in.inDistance);
+        float t = fast::clamp((d - _49.fogParams.y) / fast::max(_49.fogParams.z, 1.0), 0.0, 1.0);
+        float4 _77 = color;
+        float3 _79 = _77.xyz * (1.0 - t);
+        color.x = _79.x;
+        color.y = _79.y;
+        color.z = _79.z;
+    }
+    out.outColour = color;
+    return out;
+}
+

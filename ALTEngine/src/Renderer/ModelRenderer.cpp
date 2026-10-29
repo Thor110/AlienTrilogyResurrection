@@ -202,6 +202,17 @@ namespace ALTEngine::Renderer
             return data;
         }
 
+        // One shader format per backend: DXIL for Direct3D 12 (Windows),
+        // SPIR-V for Vulkan (Linux, and Windows if SDL picks it) and MSL for
+        // Metal (macOS). DXIL first keeps Windows on what it has always used.
+        SDL_GPUShaderFormat PickShaderFormat(SDL_GPUShaderFormat backendFormats)
+        {
+            if (backendFormats & SDL_GPU_SHADERFORMAT_DXIL) { return SDL_GPU_SHADERFORMAT_DXIL; }
+            if (backendFormats & SDL_GPU_SHADERFORMAT_SPIRV) { return SDL_GPU_SHADERFORMAT_SPIRV; }
+            if (backendFormats & SDL_GPU_SHADERFORMAT_MSL) { return SDL_GPU_SHADERFORMAT_MSL; }
+            return SDL_GPU_SHADERFORMAT_INVALID;
+        }
+
         SDL_GPUShader* LoadShader(SDL_GPUDevice* dev, const std::filesystem::path& path, SDL_GPUShaderStage stage,
                                    Uint32 numSamplers, Uint32 numUniformBuffers)
         {
@@ -212,20 +223,19 @@ namespace ALTEngine::Renderer
                 return nullptr;
             }
 
-            SDL_GPUShaderFormat backendFormats = SDL_GetGPUShaderFormats(dev);
-            SDL_GPUShaderFormat format;
-            if (backendFormats & SDL_GPU_SHADERFORMAT_SPIRV) { format = SDL_GPU_SHADERFORMAT_SPIRV; }
-            else if (backendFormats & SDL_GPU_SHADERFORMAT_DXIL) { format = SDL_GPU_SHADERFORMAT_DXIL; }
-            else
+            const SDL_GPUShaderFormat format = PickShaderFormat(SDL_GetGPUShaderFormats(dev));
+            if (format == SDL_GPU_SHADERFORMAT_INVALID)
             {
-                SDL_Log("ModelRenderer: no supported shader format (need SPIRV or DXIL)");
+                SDL_Log("ModelRenderer: no supported shader format (need DXIL, SPIR-V or MSL)");
                 return nullptr;
             }
 
             SDL_GPUShaderCreateInfo info{};
             info.code = code.data();
             info.code_size = code.size();
-            info.entrypoint = "main";
+            // spirv-cross names the MSL entry point main0: "main" isn't
+            // allowed in Metal.
+            info.entrypoint = format == SDL_GPU_SHADERFORMAT_MSL ? "main0" : "main";
             info.format = format;
             info.stage = stage;
             info.num_samplers = numSamplers;
@@ -585,20 +595,21 @@ namespace ALTEngine::Renderer
         // silently failed against a null device (Edward, 2026).
         if (device) { return true; }
 
-        device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL, false, nullptr);
+        device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL,
+                                     false, nullptr);
         if (!device)
         {
             SDL_Log("ModelRenderer::Initialize: SDL_CreateGPUDevice failed: %s", SDL_GetError());
             return false;
         }
 
-        // Shader format determines which compiled file to load - .spv or
-        // .dxil, matching the two-track approach (HLSL shipped/compiled
-        // to DXIL for the real Windows build; SPIR-V used for local
-        // testing here, same source logic, different compiler).
-        SDL_GPUShaderFormat backendFormats = SDL_GetGPUShaderFormats(device);
+        // The shader format decides which compiled file to load: .dxil from
+        // the HLSL (dxc), .spv from the GLSL twin (glslangValidator) and .msl
+        // converted from that SPIR-V (spirv-cross). See data/shaders.
+        const SDL_GPUShaderFormat shaderFormat = PickShaderFormat(SDL_GetGPUShaderFormats(device));
         std::filesystem::path shaderDir = ExecutableDirectory() / "data" / "shaders";
-        std::string ext = (backendFormats & SDL_GPU_SHADERFORMAT_SPIRV) ? ".spv" : ".dxil";
+        std::string ext = shaderFormat == SDL_GPU_SHADERFORMAT_DXIL ? ".dxil"
+                        : shaderFormat == SDL_GPU_SHADERFORMAT_SPIRV ? ".spv" : ".msl";
 
         SDL_GPUShader* vertexShader = LoadShader(device, shaderDir / ("model.vert" + ext), SDL_GPU_SHADERSTAGE_VERTEX, 0, 1);
         SDL_GPUShader* fragmentShader = LoadShader(device, shaderDir / ("model.frag" + ext), SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 1);

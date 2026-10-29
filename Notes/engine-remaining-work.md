@@ -10,7 +10,7 @@ Details for each item are in the numbered sections below.
 
 | # | Item | Can be done from the binary alone | Status |
 |---|---|---|---|
-| 1 | One logic tick rate (find the game's clock) | yes | done: 69.74 Hz for the player, doors and lifts, 34.87 Hz for creatures |
+| 1 | One logic tick rate (find the game's clock) | yes | done: 34.87 Hz for everything (`-so`); Speed Compensation gives 69.74 Hz for the player, doors and lifts |
 | 2 | Player movement exactly (`FUN_0003d85c` / `FUN_0003dc44`) | yes | done |
 | 3 | Lifts (trigger commands 5 and 7) | yes | done (tested on 3.5.1: heights and platform position) |
 | 4a | Creature line of fire and visibility before attacking (`FUN_0003231c`, `FUN_00033a1c`) | yes | done (zone test approximated) |
@@ -51,14 +51,14 @@ The port runs two clocks:
   - **The last pass only** (`cmp byte [0x6164], 1`): firing (`FUN_0003d5b0`), the HUD, drawing, and most sounds.
 - **So at the design point** (a frame drawn within two interrupts, 35 fps): two passes a frame. The player, doors and lifts tick at ~70 Hz, while creatures, particles and firing tick at ~35 Hz. On slower frames the compensation falls short: c = 4 gives 52 Hz and 35 Hz; c = 6 gives 46 Hz and 23 Hz. On a machine that draws faster than 70 fps nothing waits, so everything speeds up with the frame rate.
 
-**What the port does now:** the design point, fixed. A base tick of 69.74 Hz (`PlayerCamera::TICK_HZ`), with drawing free of it and the camera smoothed between ticks:
+**What the port does now:** by default, the original's `-so` timing: one 34.87 Hz tick for everything, creatures included (Edward, 2026: with speed compensation as the default, "everything is insanely fast"). The Modern option **Speed Compensation** gives the original's default instead, described next: the design point, fixed. A base tick of 69.74 Hz (`PlayerCamera::TICK_HZ`), with drawing free of it and the camera smoothed between ticks:
 - **Every tick (69.74 Hz):** the player's movement and state, doors and lifts.
 - **Every other tick (34.87 Hz, `CREATURE_TICK_HZ`):** creatures, particles, explosions and debris, the handlers' grenades, firing, the weapon's animation and its swap, thrown pickups, and the cosmetic cadences: lights, HUD timers, messages, the tracker, the face-hug overlay, the pickups' spin and the switch lights. A fire-on-press weapon's press is held over to the next such tick.
 - **Modern "Faster Enemies"** (in the Modernised preset): creatures run on every tick. Particles and firing stay on the alternate tick.
 - **Changes-16 was wrong:** it ran the player at 34.87 Hz and creatures at half that. That kept the 2:1 ratio but halved every creature's speed: slow huggers and drones. The creatures are at 34.87 Hz in every mode of the original (with `-so`, n is 1 and pass 1 is odd).
 - **The player's walk** is 0x78 a tick (the move vector is rotated at full scale, `FUN_00026a20` / `FUN_00047e84`), so 8370 units a second at 69.74 Hz. Changes-15 to 18 had it at half that.
 - **Player Jumping** is scaled to keep its height and timing: lift 0x24 and gravity 3 a tick.
-- **Modern "Speed Compensation Off"** is the original's own `-so` switch: one pass per two interrupts, so every tick is 34.87 Hz and is also a creature tick. The player moves at half the default pace (the pace of changes-15 to 18) while creatures keep theirs. Jumping doubles its lift and quadruples its gravity to stay the same hop.
+- **The default, the original's own `-so` switch:** one pass per two interrupts, so every tick is 34.87 Hz and is also a creature tick. The player moves at half the compensated pace (the pace of changes-15 to 18) while creatures keep theirs. Jumping doubles its lift and quadruples its gravity to stay the same hop. Faster Enemies only changes anything with Speed Compensation on, since creatures already run on every tick without it.
 - **Not reproduced:** the frame-rate dependence itself, which would only hurt on modern hardware.
 
 ## 2. Player movement, exactly

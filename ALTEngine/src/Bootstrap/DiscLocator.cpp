@@ -1,5 +1,6 @@
 #include "DiscLocator.h"
 #include "FsUtil.h"
+#include "PlatformPaths.h"
 
 #include <string>
 #include <vector>
@@ -63,6 +64,20 @@ namespace ALTEngine::Bootstrap
         for (const auto& drive : otherDrives)
         {
             if (Validate(drive)) { return { true, drive }; }
+        }
+#else
+        // A disc or a mounted image is a folder under one of the mount
+        // roots (/Volumes, /media/<user>, ...): check each one there.
+        for (const auto& root : MountRoots())
+        {
+            std::error_code ec;
+            if (!std::filesystem::is_directory(root, ec)) { continue; }
+            for (std::filesystem::directory_iterator it(root, std::filesystem::directory_options::skip_permission_denied, ec), end;
+                 !ec && it != end; it.increment(ec))
+            {
+                std::error_code dirEc;
+                if (it->is_directory(dirEc) && Validate(it->path())) { return { true, it->path() }; }
+            }
         }
 #endif
         return { false, {} };

@@ -69,11 +69,11 @@ namespace ALTEngine::Bootstrap
         // run; this lets them move like the real thing.
         FasterEnemies,
 
-        // The original's own -so switch ("Speed compensation overridden"):
-        // the task list runs once per two timer interrupts, so the player
-        // ticks at 34.87 Hz with the creatures instead of at 69.74 Hz. Its
-        // default ran the player at twice the creatures' rate.
-        SpeedCompensationOff,
+        // The original's speed compensation, its default unless "-so" was
+        // given: the player, doors and lifts tick at 69.74 Hz, twice the
+        // creatures' 34.87. Off, the port runs as -so does: everything at
+        // 34.87 Hz (Edward, 2026: on, "everything is insanely fast").
+        SpeedCompensation,
     };
 
     class ModernSettings
@@ -112,7 +112,7 @@ namespace ALTEngine::Bootstrap
             ModernFeature::LiveMinimap,
             ModernFeature::EnableCheats,
             ModernFeature::FasterEnemies,
-            ModernFeature::SpeedCompensationOff,
+            ModernFeature::SpeedCompensation,
         };
 
         // The individual toggle's own stored value, ignoring the mode.
@@ -209,7 +209,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::LiveMinimap: return "Live Minimap";
             case ModernFeature::EnableCheats: return "Enable Cheats";
             case ModernFeature::FasterEnemies: return "Faster Enemies";
-            case ModernFeature::SpeedCompensationOff: return "Speed Compensation Off";
+            case ModernFeature::SpeedCompensation: return "Speed Compensation";
             }
             return "";
         }
@@ -229,7 +229,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::LiveMinimap: return "ModernLiveMinimap";
             case ModernFeature::EnableCheats: return "ModernEnableCheats";
             case ModernFeature::FasterEnemies: return "ModernFasterEnemies";
-            case ModernFeature::SpeedCompensationOff: return "ModernSpeedCompensationOff";
+            case ModernFeature::SpeedCompensation: return "ModernSpeedCompensation";
             }
             return "ModernUnknown";
         }
@@ -247,3 +247,8 @@ namespace ALTEngine::Bootstrap
         Config& config;
     };
 }
+
+// PresetEnables is an inline function defined in ModernPresets.h. Every file
+// that calls IsActive needs that definition, so it comes in with this header:
+// MSVC let a file without it link, GCC and Clang do not.
+#include "ModernPresets.h"

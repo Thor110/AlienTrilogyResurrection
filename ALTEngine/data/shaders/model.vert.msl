@@ -1,0 +1,35 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct UniformBlock
+{
+    float4x4 mvp;
+};
+
+struct main0_out
+{
+    float2 outUV [[user(locn0)]];
+    float3 outColour [[user(locn1)]];
+    float outDistance [[user(locn2)]];
+    float4 gl_Position [[position]];
+};
+
+struct main0_in
+{
+    float3 inPosition [[attribute(0)]];
+    float2 inUV [[attribute(1)]];
+    float3 inColour [[attribute(2)]];
+};
+
+vertex main0_out main0(main0_in in [[stage_in]], constant UniformBlock& _19 [[buffer(0)]])
+{
+    main0_out out = {};
+    out.gl_Position = _19.mvp * float4(in.inPosition, 1.0);
+    out.outUV = in.inUV;
+    out.outColour = in.inColour;
+    out.outDistance = out.gl_Position.w;
+    return out;
+}
+

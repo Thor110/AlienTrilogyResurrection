@@ -409,10 +409,11 @@ namespace ALTEngine::Screens
         // Modern: Faster Enemies. Off, creatures run on alternate ticks, as
         // the original's do (see logicTick).
         bool fasterEnemies = false;
-        // The original's -so switch (Modern: Speed Compensation Off): one pass
-        // of the task list per two interrupts, so every tick is a creature
-        // tick and the base tick is half as fast.
-        bool speedCompensationOff = false;
+        // The original's -so switch, the port's default: one pass of the task
+        // list per two interrupts, so every tick is a creature tick and the
+        // base tick is half as fast. Modern: Speed Compensation turns it off,
+        // for the original's default (the player at twice the creatures' rate).
+        bool speedCompensationOff = true;
         // Knockback (Game::PlayerMover): its strength and heading.
         int knockbackStrength = 0;
         int knockbackYaw = 0;
@@ -487,7 +488,7 @@ namespace ALTEngine::Screens
             freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
             playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
             fasterEnemies = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterEnemies);
-            speedCompensationOff = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensationOff);
+            speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
             ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
 
@@ -1270,7 +1271,7 @@ namespace ALTEngine::Screens
                         freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
                         playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
                         fasterEnemies = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterEnemies);
-                        speedCompensationOff = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensationOff);
+                        speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
                         liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
                         ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
 
@@ -2266,7 +2267,16 @@ namespace ALTEngine::Screens
                             }
 
                             // The animation script's sound cue (FUN_00040d44).
-                            if (enemy.animSound >= 0)
+                            // OURS: only from a creature in a zone the player
+                            // can see, or within 0x1400 (where the original's
+                            // volume bottoms out). The original attenuates but
+                            // never cuts, and every creature's walk starts, and
+                            // cues, at the level's start (Edward, 2026: "I can
+                            // hear facehuggers all over the place from the
+                            // moment I spawn").
+                            if (enemy.animSound >= 0
+                                && (enemy.zoneVisible || enemy.distance < 0x1400)
+                                && enemy.ticks > 1)
                             {
                                 ALTEngine::Audio::SfxPlayer::PlaySlotAtVolume(
                                     enemy.animSound,

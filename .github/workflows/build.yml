@@ -1,0 +1,106 @@
+# Builds ALTEngine and runs its tests on Windows, Linux and macOS on every push and pull request.
+#
+# GitHub only runs workflows from the repository root's .github/workflows folder, so this file is
+# here and every step runs in the engine's folder, PROJECT_DIR below.
+#
+# Where the libraries come from:
+#   Windows  vcpkg (vcpkg.json: SDL3, nlohmann-json, FFmpeg) through the windows-release preset,
+#            the same as a local Visual Studio build. Its built packages are cached, so only the
+#            first run (or a change to vcpkg.json) builds FFmpeg from source.
+#   Linux    apt: FFmpeg, nlohmann-json, the shader tools. Ubuntu has no SDL3 package, so CMake
+#            builds SDL from source (CMakeLists.txt), which needs the X11/Wayland and audio
+#            development packages.
+#   macOS    Homebrew: SDL3, FFmpeg, nlohmann-json, pkg-config and the shader tools.
+name: build
+
+on: [push, pull_request]
+
+# A new push to a branch (or a pull request) cancels its run still in progress, on all three
+# systems, so only the latest commit is tested.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_DIR: ALTEngine
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ env.PROJECT_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          trap 'echo "::error::the step stopped at its line $LINENO: $BASH_COMMAND" >&2' ERR # names the failing line
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config nlohmann-json3-dev glslang-tools spirv-cross \
+            libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev \
+            libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl1-mesa-dev \
+            libgl1-mesa-dev libasound2-dev libpulse-dev libudev-dev libdbus-1-dev
+
+      - name: macOS packages
+        if: runner.os == 'macOS'
+        run: brew install ninja pkg-config sdl3 ffmpeg nlohmann-json glslang spirv-cross
+
+      # vcpkg's built packages, kept between runs: building FFmpeg from source takes most of an hour.
+      - name: vcpkg cache
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('ALTEngine/vcpkg.json') }}
+          restore-keys: vcpkg-${{ runner.os }}-
+
+      # The Visual Studio compiler on the PATH, for Ninja.
+      - name: MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        run: |
+          trap 'echo "::error::the step stopped at its line $LINENO: $BASH_COMMAND" >&2' ERR
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            export VCPKG_ROOT="$VCPKG_INSTALLATION_ROOT"
+            mkdir -p "$GITHUB_WORKSPACE/vcpkg-cache"
+            export VCPKG_DEFAULT_BINARY_CACHE="$GITHUB_WORKSPACE/vcpkg-cache"
+            cmake --preset windows-release
+          else
+            cmake -S . -B out/build/release -G Ninja -DCMAKE_BUILD_TYPE=Release
+          fi
+
+      - name: Build
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then dir=out/build/windows-release; else dir=out/build/release; fi
+          cmake --build "$dir" --parallel
+
+      # The unit tests need no window, sound or game data (the demo disc fixtures are in Notes/).
+      - name: Tests
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then dir=out/build/windows-release; else dir=out/build/release; fi
+          ctest --test-dir "$dir" --output-on-failure
+
+      # The built game: the executable with its data, shaders, languages and licences next to it.
+      - name: Package
+        run: |
+          trap 'echo "::error::the step stopped at its line $LINENO: $BASH_COMMAND" >&2' ERR
+          if [ "$RUNNER_OS" = "Windows" ]; then dir=out/build/windows-release; else dir=out/build/release; fi
+          mkdir -p "$GITHUB_WORKSPACE/package"
+          cp -R "$dir/data" "$dir/GameData" "$dir/licenses" "$GITHUB_WORKSPACE/package/"
+          if [ "$RUNNER_OS" = "Windows" ]; then cp "$dir"/*.exe "$dir"/*.dll "$GITHUB_WORKSPACE/package/"; rm -f "$GITHUB_WORKSPACE/package/ALTEngineTests.exe"
+          else cp "$dir/ALTEngine" "$GITHUB_WORKSPACE/package/"; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ALTEngine-${{ runner.os }}
+          path: package

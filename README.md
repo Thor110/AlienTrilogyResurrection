@@ -197,6 +197,42 @@ First Level
   <img src="Images/ALTEngine/first-level.png" alt="First Level">
 </div>
 
+### Building the engine
+
+The engine builds on Windows, Linux and macOS; every push is built and tested on all three by `.github/workflows/build.yml`, which keeps each build as a downloadable artifact.
+
+Windows (Visual Studio 2022 with vcpkg, `VCPKG_ROOT` set):
+
+```
+cd ALTEngine
+cmake --preset windows-release
+cmake --build out/build/windows-release
+```
+
+Linux (Ubuntu 24.04 or similar; SDL3 is built from source the first time, as Ubuntu has no package for it):
+
+```
+sudo apt-get install ninja-build pkg-config nlohmann-json3-dev glslang-tools spirv-cross \
+  libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev \
+  libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev \
+  libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl1-mesa-dev \
+  libgl1-mesa-dev libasound2-dev libpulse-dev libudev-dev libdbus-1-dev
+cd ALTEngine
+cmake -S . -B out/build/release -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build out/build/release
+```
+
+macOS (Homebrew):
+
+```
+brew install ninja pkg-config sdl3 ffmpeg nlohmann-json glslang spirv-cross
+cd ALTEngine
+cmake -S . -B out/build/release -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build out/build/release
+```
+
+The tests run with `ctest --test-dir <build folder>`. Ripping the music from a CD is only done on Windows; elsewhere, install from a copy of the disc (a mounted disc under `/Volumes`, `/media` or `/mnt` is found automatically).
+
 ## Alien Trilogy Viewer
 
 The main program window.

@@ -156,8 +156,8 @@ namespace ALTEngine::Bootstrap
             "Jump",
             "Faster Enemies",
             "Creatures move at the player's pace, not the original's half pace",
-            "Speed Compensation Off",
-            "The original's -so switch: you move at half its usual pace, creatures at theirs",
+            "Speed Compensation",
+            "The original's default timing: you, doors and lifts at twice the creatures' rate",
         };
         return table;
     }
