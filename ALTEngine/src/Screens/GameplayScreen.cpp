@@ -1563,6 +1563,12 @@ namespace ALTEngine::Screens
                                 // Including a creature that shares it: clearing
                                 // the player's mark clears the cell.
                                 if ((x >> 9) == ownCellX && (z >> 9) == ownCellZ) { return false; }
+                                // An object - crate, barrel, switch - stamps its
+                                // type into the cell at spawn (+0xc).
+                                if (const auto* c = ALTEngine::Formats::CellAt(level, x >> 9, z >> 9))
+                                {
+                                    if (c->unknown13 != 0 && c->unknown13 != 0xFF) { return true; }
+                                }
                                 for (const auto& other : enemies)
                                 {
                                     if (!other.active || !other.alive || ALTEngine::Screens::IsVent(other.type)) { continue; }
@@ -1576,8 +1582,12 @@ namespace ALTEngine::Screens
                             const int gy = static_cast<int>(std::lround(playerFeetY));
                             const int nx = PM::MoveX(mw, gx, gz, gy, static_cast<int>(std::lround(stepX)));
                             const int nz = PM::MoveZ(mw, nx, gz, gy, static_cast<int>(std::lround(stepZ)));
-                            camera.x += static_cast<float>(nx - gx);
-                            camera.z += static_cast<float>(nz - gz);
+                            // Exactly where the mover put the player. Keeping a
+                            // fraction left the position a unit off the slide's
+                            // 200 clearance, so the cross-axis probe caught the
+                            // wall and the slide along it stuttered.
+                            camera.x = static_cast<float>(nx) - originX;
+                            camera.z = static_cast<float>(nz) - originZ;
                         }
                         else
                         {

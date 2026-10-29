@@ -84,3 +84,18 @@ TEST_CASE("PlayerMover: slippery ramps push downhill")
     CHECK_EQ(x, 0x40);
     CHECK(!PM::RampPush(0x31, 0, x, z));
 }
+
+TEST_CASE("PlayerMover: walking into a wall at an angle slides along it at full speed")
+{
+    Room r;
+    for (int cz = 0; cz < 8; ++cz) { r.At(4, cz).attribute = 1; }   // a wall along x = 0x800
+    int x = 0x700, z = 0x200;
+    for (int t = 0; t < 12; ++t)
+    {
+        const int nx = PM::MoveX(r.w, x, z, 0, 0x30);
+        const int nz = PM::MoveZ(r.w, nx, z, 0, 0x30);
+        if (t >= 3) { CHECK_EQ(nz - z, 0x30); }   // never held back along the wall
+        x = nx; z = nz;
+    }
+    CHECK_EQ(x, 0x800 - 201);
+}
