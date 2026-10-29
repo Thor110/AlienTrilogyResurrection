@@ -51,10 +51,12 @@ The port runs two clocks:
   - **The last pass only** (`cmp byte [0x6164], 1`): firing (`FUN_0003d5b0`), the HUD, drawing, and most sounds.
 - **So at the design point** (a frame drawn within two interrupts, 35 fps): two passes a frame. The player, doors and lifts tick at ~70 Hz, while creatures, particles and firing tick at ~35 Hz. On slower frames the compensation falls short: c = 4 gives 52 Hz and 35 Hz; c = 6 gives 46 Hz and 23 Hz. On a machine that draws faster than 70 fps nothing waits, so everything speeds up with the frame rate.
 
-**What the port does now:** one fixed tick of 34.87 Hz (69.74 / 2, `PlayerCamera::TICK_HZ`) for everything: player, weapons, creatures, particles, doors, lifts, lights, HUD and tracker. Drawing runs at whatever rate the display allows, with the camera smoothed between ticks.
-- **Why that rate:** it's the original's own target, one pass per two interrupts. That is what `-so` gives on a machine that keeps up, and what the compensation is meant to hold: its formula runs one pass more than it needs (c/2 + 1), so a fast machine actually ran the player at ~70 Hz.
-- **It matches the old hand-tuned walk:** 0x3c a tick at 34.87 Hz is 2092 units a second, against about 2000.
-- **Not reproduced:** the frame-rate dependence itself (faster on a fast machine, slower on a slow one), which would only hurt on modern hardware.
+**What the port does now:** one fixed tick of 34.87 Hz (69.74 / 2, `PlayerCamera::TICK_HZ`), with drawing free of it and the camera smoothed between ticks. On it, as in the original's task list:
+- **Every tick:** the player, doors, lifts, lights, the HUD and the tracker.
+- **Every other tick:** creatures, particles, explosions and debris, firing, and the weapon's animation. That's the original's odd-pass and drawing-pass gating, so the player-to-creature ratio is the original's 2:1. A fire-on-press weapon's press is held over to the next such tick.
+- **Modern "Faster Enemies"** (in the Modernised preset): creatures run on every tick, like a real xenomorph rather than the original's walk. Particles and firing stay on the alternate tick.
+- **Why 34.87:** it's the original's target, one pass per two interrupts, which is what `-so` gives on a machine that keeps up. The compensation's formula runs one pass more than it needs (c/2 + 1). It also matches the old hand-tuned walk: 0x3c a tick at 34.87 Hz is 2092 units a second, against about 2000.
+- **Not reproduced:** the frame-rate dependence itself, which would only hurt on modern hardware.
 
 ## 2. Player movement, exactly
 

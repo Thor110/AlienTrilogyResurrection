@@ -62,6 +62,12 @@ namespace ALTEngine::Bootstrap
         // themselves are inert until it is on - so a normal game cannot reach
         // them by accident.
         EnableCheats,
+
+        // Creatures run on every logic tick instead of every other one. The
+        // original ran them - and the particles - on alternate passes of its
+        // task list, half the player's rate, so its aliens walk rather than
+        // run; this lets them move like the real thing.
+        FasterEnemies,
     };
 
     class ModernSettings
@@ -99,6 +105,7 @@ namespace ALTEngine::Bootstrap
             ModernFeature::LevelSelect,
             ModernFeature::LiveMinimap,
             ModernFeature::EnableCheats,
+            ModernFeature::FasterEnemies,
         };
 
         // The individual toggle's own stored value, ignoring the mode.
@@ -194,6 +201,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::LevelSelect: return "Level Select";
             case ModernFeature::LiveMinimap: return "Live Minimap";
             case ModernFeature::EnableCheats: return "Enable Cheats";
+            case ModernFeature::FasterEnemies: return "Faster Enemies";
             }
             return "";
         }
@@ -212,6 +220,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::LevelSelect: return "ModernLevelSelect";
             case ModernFeature::LiveMinimap: return "ModernLiveMinimap";
             case ModernFeature::EnableCheats: return "ModernEnableCheats";
+            case ModernFeature::FasterEnemies: return "ModernFasterEnemies";
             }
             return "ModernUnknown";
         }

@@ -419,6 +419,17 @@ namespace ALTEngine::Screens
         // Modern: Player Jumping. The height of the jump above the floor and
         // its vertical speed, per player tick, and the key's last state.
         bool playerJumping = false;
+        // Modern: Faster Enemies. Off, creatures run on alternate ticks, as
+        // the original's do (see logicTick).
+        bool fasterEnemies = false;
+        // Counts logic ticks. The original runs its creatures, its particles
+        // and its firing only on alternate passes of the task list
+        // (`test byte [0x6164], 1` at 0x342c1 and 0x2d929; firing and the
+        // weapon's animation on the drawing pass) - half the rate of the
+        // player, the doors and the lifts. A fire-on-press weapon's press
+        // waits for the next such tick rather than being lost.
+        unsigned logicTick = 0;
+        bool firePressPending = false;
         float jumpOffset = 0.0f;
         float jumpVelocity = 0.0f;
         bool jumpHeld = false;
@@ -477,6 +488,7 @@ namespace ALTEngine::Screens
             autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
             freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
             playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
+            fasterEnemies = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterEnemies);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
             ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
 
@@ -1257,6 +1269,7 @@ namespace ALTEngine::Screens
                         autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
                         freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
                         playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
+                        fasterEnemies = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterEnemies);
                         liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
                         ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
 
@@ -1431,6 +1444,9 @@ namespace ALTEngine::Screens
                 {
                     playerTickAccumulator -= playerTickLength;
                     playerTicksThisFrame++;
+                    // The original's alternate pass (see logicTick).
+                    const bool halfPass = (logicTick++ & 1u) == 0;
+                    const bool creaturePass = halfPass || fasterEnemies;
 
                     prevCamX = camera.x;
                     prevCamZ = camera.z;
@@ -1598,8 +1614,12 @@ namespace ALTEngine::Screens
                     weaponRuntime.weapon = hudState.currentWeapon;
                     weaponRuntime.stateChanged = false;
 
-                    const bool triggerActive =
-                        (WS::Def(weaponRuntime.weapon).primary == WS::FIRE_ON_PRESS) ? firePressed : fireHeld;
+                    // Firing happens on the alternate pass only (FUN_0003d5b0
+                    // runs on the drawing pass); a press in between is kept.
+                    if (firePressed) { firePressPending = true; }
+                    const bool onPress = WS::Def(weaponRuntime.weapon).primary == WS::FIRE_ON_PRESS;
+                    const bool triggerActive = halfPass && (onPress ? firePressPending : fireHeld);
+                    if (halfPass) { firePressPending = false; }
 
                     if (triggerActive && WS::TryPrimaryFire(weaponRuntime, inventory))
                     {
@@ -1821,7 +1841,7 @@ namespace ALTEngine::Screens
                     }
 
                     weaponView.SetCameraDip(playerCam.bobOffsetY * 64);
-                    if (weaponView.Tick())
+                    if (halfPass && weaponView.Tick())
                     {
                         // The sequence ending is what returns the weapon to idle
                         // (FUN_0003e93c), except from the latched empty states.
@@ -2016,6 +2036,9 @@ namespace ALTEngine::Screens
                         };
 
 
+                        // Creatures run on the original's alternate pass, or on
+                        // every tick with Faster Enemies.
+                        if (creaturePass)
                         for (auto& enemy : enemies)
                         {
                             // The player's FEET, not the eye: FUN_00032154 measures
@@ -2277,8 +2300,8 @@ namespace ALTEngine::Screens
                                 if (landed >= 0) { live.cellIndex = landed; }
                             }
                         }
-                        explosions.Tick();
-                        shatter.Tick([&](float sx, float sz) {
+                        if (halfPass) { explosions.Tick(); }
+                        if (halfPass) shatter.Tick([&](float sx, float sz) {
                             return ALTEngine::Formats::FindFloorHeightGridSpace(
                                 level, ToGridSpaceX(sx, originX), ToGridSpaceZ(sz, originZ));
                         });
@@ -2485,6 +2508,8 @@ namespace ALTEngine::Screens
 
                         // The vents' jets (ParticleSystem.h TickVents): they
                         // scald the player with cause 5, as FUN_0002a8f8 does.
+                        // Particles too run on the alternate pass (0x2d929).
+                        if (halfPass)
                         particles.TickVents(
                             [&](float px, float pz, float& floorY, float& ceilingY) {
                                 const auto* cell = ALTEngine::Formats::CellAt(
@@ -2501,6 +2526,7 @@ namespace ALTEngine::Screens
                         // How a particle meets the world, in the original's own order
                         // - see Game/ProjectileCollision.h. Returns 0 to keep going,
                         // 1 to stop (a round shatters), 2 to stop without shattering.
+                        if (halfPass)
                         particles.Tick([&](float px, float py, float pz, int hitType, int hitLife,
                                            float clearX, float clearY, float clearZ, int& roundLatch) -> int {
                             namespace PCol = ALTEngine::Game::ProjectileCollision;

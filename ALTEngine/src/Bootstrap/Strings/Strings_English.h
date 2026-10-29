@@ -154,6 +154,8 @@ namespace ALTEngine::Bootstrap
             "Maximum Health",
             "Health held at its maximum, including derm patch overcharge",
             "Jump",
+            "Faster Enemies",
+            "Creatures move at the player's pace, not the original's half pace",
         };
         return table;
     }

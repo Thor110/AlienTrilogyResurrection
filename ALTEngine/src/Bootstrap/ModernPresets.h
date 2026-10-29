@@ -31,7 +31,7 @@ namespace ALTEngine::Bootstrap
 
         // Features this preset enables. Anything not listed is off. Sized to
         // the feature count so a preset can name all of them.
-        std::array<ModernFeature, 8> enabled;
+        std::array<ModernFeature, 11> enabled;
         int enabledCount;
 
         bool Enables(ModernFeature feature) const
@@ -66,8 +66,9 @@ namespace ALTEngine::Bootstrap
               ModernFeature::KeepItems,
               ModernFeature::SkipEndLevelScreen,
               ModernFeature::FreeLook,
-              ModernFeature::RenderDistance },
-            5
+              ModernFeature::RenderDistance,
+              ModernFeature::FasterEnemies },
+            6
         },
         // For working on the port rather than playing it.
         {
