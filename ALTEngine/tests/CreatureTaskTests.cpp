@@ -260,3 +260,38 @@ TEST_CASE("Death clips: each creature's attack passes its own cause")
     CHECK_EQ(GO::DeathVideoForCause(GO::CAUSE_WARRIOR), 2);
     CHECK_EQ(GO::DeathVideoForCause(GO::CAUSE_QUEEN), 3);
 }
+
+TEST_CASE("Damage: a creature that survives a hit can be hit again once its reaction is over")
+{
+    EN::Enemy w;
+    w.type = 6; w.active = true; w.alive = true; w.health = 480;
+    w.x = 0; w.z = 0;
+    REQUIRE(!EN::ApplyHit(w, 32));
+    CHECK_EQ(w.health, 448);
+    CHECK(!EN::ApplyHit(w, 32));             // still reacting: no damage
+    CHECK_EQ(w.health, 448);
+    for (int t = 0; t < 10; ++t) { EN::Tick(w, 300, 0, 0); }
+    EN::ApplyHit(w, 32);
+    CHECK_EQ(w.health, 416);                 // it used to stay at 448 for good
+}
+
+TEST_CASE("Damage: a creature's hit lands from the near and middle bands with a clear line")
+{
+    namespace EB = ALTEngine::Screens::EnemyBehaviour;
+    EN::Enemy w;
+    w.type = 6; w.zoneVisible = true; w.coneHalfWidth = 0x200;
+    w.x = 0; w.z = 0;
+    w.facing = EN::BearingTo(w, 0, -1000);
+    w.mode = 0; w.lineOfFire = false;
+    CHECK_EQ(EN::ResolveAttack(w, 0, -1000), EB::AttackDamage(6, 0));   // contact: no line needed
+    w.mode = 1;
+    CHECK_EQ(EN::ResolveAttack(w, 0, -1000), 0);
+    w.lineOfFire = true;
+    CHECK_EQ(EN::ResolveAttack(w, 0, -1000), 15);
+    w.mode = 2;
+    CHECK_EQ(EN::ResolveAttack(w, 0, -1000), 10);
+    w.mode = 3;
+    CHECK_EQ(EN::ResolveAttack(w, 0, -1000), 0);
+    w.mode = 0; w.zoneVisible = false;
+    CHECK_EQ(EN::ResolveAttack(w, 0, -1000), 0);
+}

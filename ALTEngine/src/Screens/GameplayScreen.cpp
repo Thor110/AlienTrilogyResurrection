@@ -509,7 +509,7 @@ namespace ALTEngine::Screens
         float tickAccumulator = 0.0f;
 
         // Player camera state. Runs at the original's own logic rate rather
-        // than the 60 Hz door tick - see PlayerCamera::TICK_HZ.
+        // than the door tick - see PlayerCamera::TICK_HZ.
         ALTEngine::Screens::PlayerCamera::State playerCam;
         float playerTickAccumulator = 0.0f;
         float pendingMouseYaw = 0.0f;   // angle units, accumulated between player ticks
@@ -1421,9 +1421,9 @@ namespace ALTEngine::Screens
                     playerCamSeeded = true;
                 }
 
-                // The player runs at the original's own logic rate. Every
-                // constant in PlayerCamera.h is per-tick at that rate, so this
-                // deliberately does NOT share the 60 Hz door tick below.
+                // The player runs at the original's own logic rate (see
+                // PlayerCamera::TICK_HZ), as do the doors and everything else
+                // below. Every constant in PlayerCamera.h is per tick at it.
                 playerTickAccumulator += dt;
                 const float playerTickLength = 1.0f / static_cast<float>(PC::TICK_HZ);
                 int playerTicksThisFrame = 0;
@@ -2133,6 +2133,23 @@ namespace ALTEngine::Screens
                                 enemy.dropPickup = -1;
                             }
 
+                            // A gunner's round (CreatureTasks::Gunner), aimed at
+                            // the player's chest along the creature's heading.
+                            if (enemy.fireShot)
+                            {
+                                namespace GN = ALTEngine::Screens::CreatureTasks::Gunner;
+                                namespace PCm = ALTEngine::Screens::PlayerCamera;
+                                enemy.fireShot = false;
+                                const float sy = enemy.y + static_cast<float>(GN::LaunchHeight(enemy.type));
+                                const float flat = std::max(1.0f, std::hypot(camera.x - enemy.x, camera.z - enemy.z));
+                                const float pitch = std::atan2(playerFeetY + GN::AIM_HEIGHT - sy, flat);
+                                const float along = std::cos(pitch) * GN::SPEED;
+                                particles.SpawnEnemyRound(enemy.x, sy, enemy.z,
+                                                          PCm::Sin(enemy.facing) / 4096.0f * along,
+                                                          std::sin(pitch) * GN::SPEED,
+                                                          -PCm::Cos(enemy.facing) / 4096.0f * along);
+                            }
+
                             // A vent's jet, sound, burst and switch-off
                             // (CreatureTasks::Vent). The sound plays once as the
                             // jet starts: the port's mixer has no loops to hold.
@@ -2520,6 +2537,35 @@ namespace ALTEngine::Screens
                                 return (wall || py < ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz)) ? 1 : 0;
                             }
 
+                            // ---- a creature's round (the arm at 0x2de7e) -------
+                            // The world first: a wall, floor or ceiling stops
+                            // it with a puff. Then the player (FUN_0002a8f8):
+                            // 0 to 0x400 above the feet and 0x100 across, 1
+                            // damage, cause 3.
+                            if (hitType == P::TYPE_ENEMY_ROUND)
+                            {
+                                const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
+                                const float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
+                                const bool solid = !cell || ALTEngine::Formats::IsCellBlocking(level, gx, gz)
+                                    || py < floorY
+                                    || py > static_cast<float>(cell->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT;
+                                if (solid)
+                                {
+                                    explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_IMPACT, clearX, clearY, clearZ);
+                                    return 2;
+                                }
+                                const float above = py - playerFeetY;
+                                if (above >= 0.0f && above <= P::VENT_TOUCH_HEIGHT
+                                    && std::fabs(px - camera.x) < P::VENT_TOUCH_HALF
+                                    && std::fabs(pz - camera.z) < P::VENT_TOUCH_HALF)
+                                {
+                                    hudState.ApplyDamage(1, ALTEngine::Screens::GameOverSequence::CAUSE_ENEMY_PROJECTILE);
+                                    checkPlayerDeath();
+                                    return 2;
+                                }
+                                return 0;
+                            }
+
                             // ---- the player's rounds --------------------------
                             const auto def = P::DefFor(hitType);
 
@@ -2757,14 +2803,15 @@ namespace ALTEngine::Screens
                     }
                     prevUseHeld = useHeld;
 
-                    // Fixed 60 Hz tick - the original moves doors one
+                    // The same fixed tick - the original moves doors one
                     // height unit per tick, and quantising matters: the
                     // 32-unit step is what keeps the step-up test and
                     // clearance behaving.
                     tickAccumulator += dt;
-                    while (tickAccumulator >= 1.0f / 60.0f)
+                    const float worldTickLength = 1.0f / static_cast<float>(ALTEngine::Screens::PlayerCamera::TICK_HZ);
+                    while (tickAccumulator >= worldTickLength)
                     {
-                        tickAccumulator -= 1.0f / 60.0f;
+                        tickAccumulator -= worldTickLength;
 
                         // Level lights. Steps the blink state machines and
                         // re-uploads vertex colours only when a light

@@ -201,6 +201,10 @@ namespace ALTEngine::Screens
             // A command chain to run as this creature dies: the queen's record
             // byte 6 (her state 8, FUN_00040e2c). -1 for none.
             int deathChain = -1;
+            // A gunner's round, due part-way through its attack (Gunner): the
+            // ticks until it fires, and the tick it does, for the caller.
+            int shotCountdown = 0;
+            bool fireShot = false;
             bool ventDown = false;      // a vertical vent hung from the ceiling
             // What a vent did this tick, for the caller: put out a jet, start
             // its sound, burst (an explosion), or switch off for good.
@@ -747,17 +751,19 @@ namespace ALTEngine::Screens
             enemy.y = y;
         }
 
-        // The hit at the end of an attack (FUN_00033ff8): contact range, within
-        // 0x600 vertically, in view, in a clear line and inside the cone.
+        // The hit at the end of an attack (FUN_00033ff8). The player must be in
+        // a zone the creature sees and inside its cone (FUN_00033a1c); then at
+        // contact range (mode 0) it lands outright, and in the near and middle
+        // bands (1, 2) with a clear line (FUN_0003231c), for the close or middle
+        // damage. No vertical test: reaching up or down is the attack state's.
         inline int ResolveAttack(const Enemy& enemy, float playerX, float playerZ)
         {
             int delta = (enemy.facing - BearingTo(enemy, playerX, playerZ)) & PlayerCamera::ANGLE_MASK;
             if (delta > PlayerCamera::ANGLE_UNITS / 2) { delta = PlayerCamera::ANGLE_UNITS - delta; }
-            const bool inReach = enemy.mode == 0
-                && enemy.separationY <= EnemyBehaviour::ATTACK_MAX_VERTICAL
-                && enemy.zoneVisible && enemy.lineOfFire
-                && EnemyBehaviour::WithinAttackCone(0, delta, enemy.coneHalfWidth);
-            return inReach ? EnemyBehaviour::AttackDamage(enemy.type, enemy.mode) : 0;
+            if (!enemy.zoneVisible || !EnemyBehaviour::WithinAttackCone(0, delta, enemy.coneHalfWidth)) { return 0; }
+            if (enemy.mode == 0) { return EnemyBehaviour::AttackDamage(enemy.type, 0); }
+            if (enemy.mode <= 2 && enemy.lineOfFire) { return EnemyBehaviour::AttackDamage(enemy.type, enemy.mode); }
+            return 0;
         }
 
         // How long a swipe or spit plays before its hit lands. The original
@@ -807,6 +813,14 @@ namespace ALTEngine::Screens
             }
             enemy.recoveredFromHit = false;
 
+            // A gunner's round goes off half-way through its act - the stand-in
+            // for the animation event that fires it.
+            enemy.fireShot = false;
+            if (a.state == AI::ACT && enemy.shotCountdown > 0 && --enemy.shotCountdown == 0)
+            {
+                enemy.fireShot = true;
+            }
+
             // Has the act ended: a leap on landing, a swipe when it has played.
             if (a.state == AI::ACT)
             {
@@ -855,6 +869,7 @@ namespace ALTEngine::Screens
                 else
                 {
                     enemy.actTicks = NON_LEAP_ACT_TICKS;
+                    if (CreatureTasks::Gunner::IsGunner(enemy.type)) { enemy.shotCountdown = NON_LEAP_ACT_TICKS / 2; }
                 }
             }
 
@@ -886,6 +901,11 @@ namespace ALTEngine::Screens
             enemy.dropPickup = -1;
             enemy.cried = false;
             if (!enemy.active) { return; }
+
+            // The hit reaction's immunity runs out. It was set on every hit
+            // and never counted down, so anything that survived its first hit
+            // - a warrior drone, say - could not be hurt again.
+            if (enemy.hitCooldown > 0) { enemy.hitCooldown--; }
 
             // Perception - the axis separations and the banded distance.
             enemy.separationX = std::fabs(playerX - enemy.x);

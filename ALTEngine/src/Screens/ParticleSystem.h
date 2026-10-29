@@ -46,6 +46,9 @@ namespace ALTEngine::Screens
             TYPE_PULSE = 2,
             TYPE_FLAME = 3,      // FUN_0002bcac's stream, weapon slot 4
             TYPE_SMARTGUN = 4,   // FUN_0002c1d4's aimed rounds, weapon slot 3
+            // A guard's, soldier's, synthetic's or handler's round
+            // (FUN_0002af8c): 0x80 a tick, 0x40 ticks of life, 1 damage.
+            TYPE_ENEMY_ROUND = 5,
             TYPE_FRAGMENT = 7,   // what a projectile shatters INTO
             // Blood a creature sprays when a round hits it (FUN_0002ada4), the
             // type chosen by creature (Game::ProjectileCollision::
@@ -463,6 +466,20 @@ namespace ALTEngine::Screens
                 return p;
             }
 
+            // FUN_0002af8c: a creature's round, already aimed (see
+            // CreatureTasks::Gunner). Its +0x1a is the damage, 1.
+            Particle* SpawnEnemyRound(float x, float y, float z, float vx, float vy, float vz)
+            {
+                Particle* p = Take();
+                if (!p) { return nullptr; }
+                p->type = TYPE_ENEMY_ROUND;
+                p->life = p->strength = 0x40;
+                p->speed = 1;
+                p->x = x; p->y = y; p->z = z;
+                p->vx = vx; p->vy = vy; p->vz = vz;
+                return p;
+            }
+
             // FUN_0002b37c. Ejected right, with scatter.
             Particle* SpawnCasing(int casingType, float eyeX, float eyeY, float eyeZ,
                                   int viewYaw, int playerSpeed)
@@ -728,7 +745,7 @@ namespace ALTEngine::Screens
 
                     const bool isProjectile = (p.type == TYPE_PISTOL || p.type == TYPE_SHOTGUN
                                             || p.type == TYPE_PULSE || p.type == TYPE_FLAME
-                                            || p.type == TYPE_SMARTGUN);
+                                            || p.type == TYPE_SMARTGUN || p.type == TYPE_ENEMY_ROUND);
 
                     // Substep. A pistol round covers 376 units a tick and a
                     // crate is about 256 across, so testing only the endpoint

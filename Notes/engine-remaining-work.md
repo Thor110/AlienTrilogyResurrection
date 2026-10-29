@@ -10,7 +10,7 @@ Details for each item are in the numbered sections below.
 
 | # | Item | Can be done from the binary alone | Status |
 |---|---|---|---|
-| 1 | One logic tick rate (find the game's clock) | yes | clock found; rates wait on a check in play |
+| 1 | One logic tick rate (find the game's clock) | yes | done: one fixed 34.87 Hz tick |
 | 2 | Player movement exactly (`FUN_0003d85c` / `FUN_0003dc44`) | yes | open |
 | 3 | Lifts (trigger commands 5 and 7) | yes | done (tested on 3.5.1: heights and platform position) |
 | 4a | Creature line of fire and visibility before attacking (`FUN_0003231c`, `FUN_00033a1c`) | yes | done (zone test approximated) |
@@ -51,9 +51,10 @@ The port runs two clocks:
   - **The last pass only** (`cmp byte [0x6164], 1`): firing (`FUN_0003d5b0`), the HUD, drawing, and most sounds.
 - **So at the design point** (a frame drawn within two interrupts, 35 fps): two passes a frame. The player, doors and lifts tick at ~70 Hz, while creatures, particles and firing tick at ~35 Hz. On slower frames the compensation falls short: c = 4 gives 52 Hz and 35 Hz; c = 6 gives 46 Hz and 23 Hz. On a machine that draws faster than 70 fps nothing waits, so everything speeds up with the frame rate.
 
-**What this means for the port:** the player should tick twice as often as creatures and particles, and doors and lifts at the player's rate. The port has player = creatures = 30 Hz and doors = 60 Hz. Fixing that changes how fast something feels whichever rate is chosen, so it waits on a check against the original (see `PlayerCamera::TICK_HZ` for the footstep measurement). Two choices:
-- **Player and doors at 70, creatures, particles and firing at 35:** the design point.
-- **Keep creatures at 30, player and doors at 60.**
+**What the port does now:** one fixed tick of 34.87 Hz (69.74 / 2, `PlayerCamera::TICK_HZ`) for everything: player, weapons, creatures, particles, doors, lifts, lights, HUD and tracker. Drawing runs at whatever rate the display allows, with the camera smoothed between ticks.
+- **Why that rate:** it's the original's own target, one pass per two interrupts. That is what `-so` gives on a machine that keeps up, and what the compensation is meant to hold: its formula runs one pass more than it needs (c/2 + 1), so a fast machine actually ran the player at ~70 Hz.
+- **It matches the old hand-tuned walk:** 0x3c a tick at 34.87 Hz is 2092 units a second, against about 2000.
+- **Not reproduced:** the frame-rate dependence itself (faster on a fast machine, slower on a slow one), which would only hurt on modern hardware.
 
 ## 2. Player movement, exactly
 
@@ -91,7 +92,7 @@ Done as `Game::Lifts` (see section "Settled"). Still to check against a retail m
 Status in the port:
 - **The common task** (`LAB_000342b4`, used by types 2-6, 8, 9 and 0x0b-0x0e) now runs state by state in `Screens/CreatureAI.h`: idle, chase, move, attack and act, with the flow field (`Game/FlowField.h`). What is still approximated:
   - **Act length:** a non-leap act lasts a fixed 0x18 ticks. The original waits for the attack animation's script to set `+0xb6` bit 2.
-  - **Mid-attack event:** the act's `+0xb6` bit 8 event (`FUN_0002af8c` / `FUN_0002b240`, a creature's projectile or spit) isn't implemented.
+  - **Gunners' rounds:** done for `FUN_0002af8c` (types 0x0b-0x0e). They fire half-way through the act, standing in for the `+0xb6` bit 3 event. The grenade (`FUN_0002b240`, particle 0x0d, 25 damage, used when `+0x6c` bit 0 is set) isn't done, since nothing traced sets that bit.
   - **Types 0x0b-0x0e** use `FUN_00032aec` instead of `FUN_0003231c` in places. The port uses `FUN_0003231c` for them.
   - **Speeds and timers** are the original's per-tick values. How fast they look depends on the tick rate (item 1).
 - **The other tasks** are now in `Screens/CreatureTasks.h` (egg, colonist, vents) and, for the queen, as a variant of the common task in `Screens/CreatureAI.h`. See "Settled" for what each does. What is still approximated:
@@ -133,6 +134,10 @@ Status in the port:
 - **Cryopod cover:** looks to take its texture the same way as the windows, but can't be broken.
 
 ## Settled this round (see the code comments for the evidence)
+
+- **Creatures could only be hurt once:** a hit set the creature's hit-reaction cooldown and nothing counted it down. Anything that survived its first hit (a warrior drone has 30 << 4 = 480 health against a pistol round's 32) was then immune. It now counts down each tick.
+- **When a creature's hit lands** (`FUN_00033ff8`): the player must be in a zone it sees and inside its cone (`FUN_00033a1c`). At contact range that's enough; in the near and middle bands it also needs a clear line, and does the close or middle damage. There's no vertical test. The port had needed contact range, a clear line and a vertical limit all at once, so warriors rarely hit.
+- **Gunners** (types 0x0b-0x0e) have no arm in that routine. Their harm is a round (`FUN_0002af8c`, particle type 5): from 0x2c0 up for a guard and 0x240 for the others, aimed 0x280 above the player's feet, 0x80 a tick, 0x40 ticks of life, 1 damage, cause 3. It's stopped by walls (`0x2de7e`).
 
 - **The egg** (`LAB_000356a0`): its own thresholds (0x800 near, 0xc00 middle) replace the record's, and its record's byte 6 is the monster it holds. Closed, it rechecks every 0x40-0xbf ticks. With the player in the middle band it opens (animation 2), and once open, with the player in the near band and a clear line, it lets the hugger out and dies. The hugger (`FUN_00035530`) appears at the egg, alerted, facing the player and already leaping: 0x40 along, 0x60 up. A hit opens a closed egg.
 - **The colonist** (`LAB_000364d4`): a captive in the wall, pushed 0x40 out along its facing and 0x40 up. It turns its head to whichever eighth the player is in (animation 8 + view) and cries out (sound 0x6e) in the middle band. Close and straight in front (view 4, near band) it plays 0x1a and the chestburster its speed word names comes out (`FUN_00035624`: 0x60 along, 0x78 up, animation 0xd). Its byte 6 pickup is thrown out (`FUN_0003bc9c`).

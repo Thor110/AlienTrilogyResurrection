@@ -127,6 +127,22 @@ namespace ALTEngine::Screens::CreatureTasks
         }
     }
 
+    // THE GUNNERS - types 0x0b-0x0e (guard, soldier, synthetic, handler).
+    // FUN_00033ff8 has no arm for them: they do no harm at the end of the
+    // attack. Their harm is a round fired part-way through it, when the
+    // attack animation's script raises +0xb6 bit 3 (0x34892) - FUN_0002af8c,
+    // or the lobbed grenade FUN_0002b240 when +0x6c bit 0 is set (nothing
+    // traced sets it). The round leaves the creature 0x2c0 up (a guard) or
+    // 0x240 (the others), aimed at a point 0x280 above the player's feet, at
+    // 0x80 a tick; it lives 0x40 ticks and does 1 damage with cause 3.
+    namespace Gunner
+    {
+        inline constexpr bool IsGunner(int type) { return type >= 0x0b && type <= 0x0e; }
+        inline constexpr int LaunchHeight(int type) { return type == 0x0b ? 0x2c0 : 0x240; }
+        inline constexpr int AIM_HEIGHT = 0x280;
+        inline constexpr int SPEED = 0x80;
+    }
+
     // What FUN_00035530 does to the monster it lets out: it stands in the
     // egg's cell, faces the way the egg sees the player (+0x54), is already
     // alerted (+0x6c bit 2) with no idle wait, and is launched into the act

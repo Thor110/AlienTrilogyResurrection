@@ -169,45 +169,32 @@ namespace ALTEngine::Screens
         constexpr int SFX_FOOTSTEP = 0x2c;
         constexpr int SFX_FOOTSTEP_FLAGGED = 0x26;
 
-        // The original's logic tick rate.
+        // The original's logic tick rate: 34.87 Hz, one tick for every two
+        // interrupts of its own 69.74 Hz timer (PIT divisor 0x42d5, installed
+        // at 0x5ab80). Everything - player, creatures, particles, doors, lifts,
+        // lights, the HUD - runs on it, and drawing is free of it.
         //
-        // THIS IS THE ONE UNRESOLVED KNOB AND IT SCALES EVERYTHING. Every
-        // constant above is per-tick, so the tick rate alone decides how fast
-        // the player actually moves. Nothing in the decompilation states it.
+        // HOW THE ORIGINAL GETS THERE (Notes/engine-remaining-work.md, item
+        // 1). Its frame waits for an even number of interrupts
+        // (FUN_0004d2c8) and then runs the task list n times (FUN_00012590),
+        // drawing on the last pass. Its target is one pass per two
+        // interrupts: that is what its own "-so" switch gives on a machine that
+        // keeps up, every task once per 2/69.74 s. The "speed compensation"
+        // that is on by default is meant to hold that rate on a slower machine
+        // by running extra passes, but its formula, n = c/2 + 1 for c
+        // interrupts, runs one more than it needs. So a fast machine actually
+        // ran the player at ~70 Hz, and slower ones somewhere between. The
+        // creatures and particles, which only run on odd passes, stayed near
+        // 35 Hz throughout.
         //
-        // 30 is used here for two independent reasons, neither conclusive:
-        // the PC release is a port of a 30fps PSX title, and 30 puts the
-        // footstep cadence at a believable ~2.6 steps/second walking (see
-        // FootstepsPerSecond below) where 60 gives an implausible ~5.3.
-        //
-        // TO SOLVE IT PROPERLY: footsteps fire every time the bob phase
-        // crosses 0x800, so
-        //     steps/second = TICK_HZ * (speed * 3 / 2) / 0x800
-        // Count footsteps over ten seconds of walking in a recording of the
-        // original and solve for TICK_HZ. That is exact and needs no guessing.
-        //
-        // A TESTABLE CONSEQUENCE: if 30 is right, the motion tracker's 48-tick
-        // sweep is currently running at twice the original's speed, because
-        // GameplayScreen ticks it at 60. Worth watching for.
-        //
-        // EVIDENCE SO FAR, and it does not all point the same way:
-        //   - Footstep cadence favours 30. Anything below about 25 puts walking
-        //     under two steps a second, which is a stroll.
-        //   - The pistol's firing animation is 3 frames at 2 ticks each, so 6
-        //     ticks. At 30 that is 0.20s, which reads as slightly too fast
-        //     against the original (Edward, 2026). 0.30s would be 20Hz.
-        //   - The hand-tuned MOVE_SPEED this replaced was 2000 units/second,
-        //     which against a walk speed of 0x78 implies about 17Hz.
-        //
-        // Two of the three favour something near 17-20. The footstep number is
-        // the only one that can be measured EXACTLY rather than judged, which is
-        // why it is still the thing to settle this:
-        //     steps/second = TICK_HZ * (speed * 3 / 2) / 0x800
-        // Count footsteps over ten seconds of walking in a recording of the
-        // original and solve. Left at 30 until then, because changing it moves
-        // movement speed by the same proportion and that is not a change to make
-        // on a judgement call about an animation.
-        constexpr int TICK_HZ = 30;   // GUESS - see above
+        // THE CHOICE. One fixed rate for everything, at that design point. It
+        // keeps every system at the speed relative to the others that the
+        // original had at its target, makes the game independent of the frame
+        // rate, and leaves the render rate to the display. The old hand-tuned
+        // walk speed of about 2000 units a second agrees: the walk (0x3c a
+        // tick, half of 0x78) at 34.87 Hz is 2092.
+        constexpr double ORIGINAL_TIMER_HZ = 1193182.0 / 17109.0;   // 69.74
+        constexpr double TICK_HZ = ORIGINAL_TIMER_HZ / 2.0;          // 34.87
 
         // Modern: Player Jumping - OURS, the original has none. The lift is a
         // short hop (an apex of about 0x48^2 / 2 / 0xc = 216 units, under the
