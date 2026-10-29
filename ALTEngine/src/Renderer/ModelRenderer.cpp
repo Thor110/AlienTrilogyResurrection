@@ -2270,7 +2270,10 @@ namespace ALTEngine::Renderer
                 SDL_GPUTextureSamplerBinding texBinding{ group.texture, sampler };
                 SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
                 SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
-                float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
+                // No distance fade: the original applies it to the light
+                // colour (FUN_0004ecdc), which this fill never reads - span
+                // 0x5db67 takes the texel's own colour (table 0x2273c8).
+                float fog[4] = { 0.0f, fogStart, fogRange, 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
                 SDL_DrawGPUIndexedPrimitives(renderPass, group.indexCount, 1, 0, 0, 0);
             }

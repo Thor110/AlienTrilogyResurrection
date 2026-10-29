@@ -109,17 +109,31 @@ namespace ALTEngine::Screens
 
         // Base (RedLeft) mesh of the family a crate type belongs to, or -1 if
         // the type is not a switch.
-        int SwitchFamilyBase(uint8_t type)
+        //
+        // FUN_00037184's switch on the object type. The four switch types and
+        // the plain crate take a second model on episode 3's levels (campaign
+        // index 0x16-0x22, 3.1.1 onward) and on 908/909 (the byte table at
+        // 0xa706b): the boneship switches and the egg husk.
+        int SwitchFamilyBase(uint8_t type, bool episodeThree)
         {
             using namespace ALTEngine::Formats::ModelIndices;
             switch (type)
             {
-            case 22: return Obj3D::SwitchRedLeftLight;                    // small switch
-            case 24: return Obj3D::SwitchRedLeftLight;                    // small switch, "with animation"
-            case 26: return Obj3D::LargeSwitchBatteryRedLeftLight;        // wide, battery
-            case 27: return Obj3D::LargeSwitchBatteryRedLeftLight;        // wide, battery
+            case 0x16: return episodeThree ? Obj3D::BoneshipSwitchRedLeftLight3 : Obj3D::SwitchBatteryRedLeftLight;
+            case 0x18: return episodeThree ? Obj3D::BoneshipSwitchRedLeftLight1 : Obj3D::SwitchRedLeftLight;
+            case 0x1a: return episodeThree ? Obj3D::BoneshipSwitchRedLeftLight4 : Obj3D::LargeSwitchBatteryRedLeftLight;
+            case 0x1b: return episodeThree ? Obj3D::BoneshipSwitchRedLeftLight2 : Obj3D::LargeSwitchRedLeftLight;
             default: return -1;
             }
+        }
+
+        // The objects whose model changes on episode 3 (FUN_00037184's test of
+        // DAT_000b0ca8): campaign levels 3.1.1 to 3.9.1, and 908 and 909.
+        bool EpisodeThreeObjects(const std::string& digits)
+        {
+            const int index = ALTEngine::Game::Progression::CampaignIndex(digits);
+            if (index >= 0x16 && index <= 0x22) { return true; }
+            return digits == "908" || digits == "909";
         }
 
         // Objects with no model of their own (FUN_00037184's arm for 0x15,
@@ -129,32 +143,23 @@ namespace ALTEngine::Screens
             return type == 0x15 || type == 0x1c || type == 0x1d;
         }
 
-        int Obj3DIndexForCrateType(uint8_t type)
+        // The OBJ3D model an object type draws with (FUN_00037184; the
+        // model pointers at DAT_00247b84 are OBJ3D's models in order).
+        int Obj3DIndexForCrateType(uint8_t type, bool episodeThree)
         {
             using namespace ALTEngine::Formats::ModelIndices;
+            // A switch shows both lights off until its state says otherwise.
+            const int family = SwitchFamilyBase(type, episodeThree);
+            if (family >= 0) { return family + static_cast<int>(SwitchState::BothOff); }
             switch (type)
             {
-            case 23: return Obj3D::ExplosiveBarrel;  // "barrel explodes"
-            case 25: return Obj3D::DoubleCrate;       // "double stacked boxes"
-            case 33: return Obj3D::SteelCoil;
-            // Switches (Edward, 2026: "there are supposed to be switches
-            // in the level in a few places, currently they are crates,
-            // if I recall that was just for testing") - per
-            // AlienTrilogyMapLoader.cs's own type comments: 22/24 are
-            // small switches, 26/27 are wide switches that require a
-            // battery. Crate carries no field for which light-state
-            // variant (red-left/red-right/both-off/both-yellow) a given
-            // instance should actually show, so these pick one
-            // representative model per family - the switch SHAPE is now
-            // correct, the exact light state shown is still a
-            // placeholder until that's resolved (likely needs the
-            // level's door/lock state, not anything in the Crate record
-            // itself).
-            case 22: return Obj3D::SwitchBothLightsOff;             // "another small switch"
-            case 24: return Obj3D::SwitchBothLightsOff;             // "switch with animation (small switch)"
-            case 26: return Obj3D::LargeSwitchBatteryBothLightsOff; // "wide switch with zipper" - battery required
-            case 27: return Obj3D::LargeSwitchBatteryBothLightsOff; // "wide switch without zipper" - battery required
-            default: return Obj3D::SingleCrate;       // 20/21/28/29/32/>37 and anything else - "a regular box", still a placeholder for these
+            case 0x14: return episodeThree ? Obj3D::EggHusk : Obj3D::SingleCrate;
+            case 0x17: return Obj3D::ExplosiveBarrel;
+            case 0x19: return Obj3D::DoubleCrate;
+            case 0x20: return Obj3D::StasisPodCover;
+            case 0x21: case 0x22: case 0x23: case 0x24: case 0x25:
+                return Obj3D::SteelCoil + (type - 0x21);   // 35-39
+            default: return Obj3D::SingleCrate;            // and the modelless 0x15/0x1c/0x1d, never drawn
             }
         }
 
@@ -813,20 +818,22 @@ namespace ALTEngine::Screens
                     // open/close animation state this static placement
                     // approach doesn't cover.
                     std::vector<ALTEngine::Renderer::PreloadRequest> crateRequests;
-                    std::vector<int> meshesToLoad = {
-                        ALTEngine::Formats::ModelIndices::Obj3D::ExplosiveBarrel,
-                        ALTEngine::Formats::ModelIndices::Obj3D::SingleCrate,
-                        ALTEngine::Formats::ModelIndices::Obj3D::DoubleCrate,
-                        ALTEngine::Formats::ModelIndices::Obj3D::SteelCoil,
+                    // Every model the level's objects use. For a switch, all
+                    // FOUR state meshes, not just the one shown at spawn: the
+                    // renderer silently skips a PlacedObject whose mesh was
+                    // never loaded, so a switch would vanish the moment it
+                    // changed state otherwise.
+                    const bool episodeThree = EpisodeThreeObjects(digits);
+                    std::vector<int> meshesToLoad;
+                    auto want = [&](int mesh) {
+                        if (std::find(meshesToLoad.begin(), meshesToLoad.end(), mesh) == meshesToLoad.end()) { meshesToLoad.push_back(mesh); }
                     };
-                    // All FOUR state meshes of every switch family, not just
-                    // the one shown at spawn. The renderer silently skips a
-                    // PlacedObject whose mesh was never loaded, so a switch
-                    // would vanish the moment it changed state otherwise.
-                    for (int base : { ALTEngine::Formats::ModelIndices::Obj3D::SwitchRedLeftLight,
-                                      ALTEngine::Formats::ModelIndices::Obj3D::LargeSwitchBatteryRedLeftLight })
+                    want(ALTEngine::Formats::ModelIndices::Obj3D::SingleCrate);
+                    for (const auto& crate : level.crates)
                     {
-                        for (int state = 0; state < 4; ++state) { meshesToLoad.push_back(base + state); }
+                        want(Obj3DIndexForCrateType(crate.type, episodeThree));
+                        const int family = SwitchFamilyBase(crate.type, episodeThree);
+                        if (family >= 0) { for (int state = 0; state < 4; ++state) { want(family + state); } }
                     }
                     for (int meshNumber : meshesToLoad)
                     {
@@ -903,7 +910,7 @@ namespace ALTEngine::Screens
                         float floorY = ALTEngine::Formats::FindFloorHeight(level, crate.x, crate.y);
 
                         ALTEngine::Renderer::PlacedObject placed;
-                        placed.cacheKey = { ALTEngine::Renderer::ModelCatalog::Obj3d, Obj3DIndexForCrateType(crate.type) };
+                        placed.cacheKey = { ALTEngine::Renderer::ModelCatalog::Obj3d, Obj3DIndexForCrateType(crate.type, episodeThree) };
                         placed.x = worldX;
                         placed.y = floorY;
                         placed.z = worldZ;
@@ -979,7 +986,7 @@ namespace ALTEngine::Screens
                         const bool invisibleObject = IsInvisibleObjectType(crate.type);
                         if (invisibleObject) { placed.visible = false; }
 
-                        int familyBase = SwitchFamilyBase(crate.type);
+                        int familyBase = SwitchFamilyBase(crate.type, episodeThree);
                         if (familyBase >= 0)
                         {
                             switchVisuals.push_back({ placedObjects.size(), ci, familyBase });

@@ -1,0 +1,14 @@
+Resin wall top row - incorrect texture orientation (the wall at z -19712, x -3840 to -1792)
+
+The wall is one 64x96 picture on page 4 (descriptors 280-299), laid out on the wall as
+L R | R' L' (the right half mirrored). The middle and bottom rows follow that; the top row had
+its two corner faces rotated a quarter-turn and its two centre faces mirrored the wrong way.
+
+Face	Offset		Was						Now
+178	0x1A264		2828, 2825, 1805, 2829	flag 30 (0x1E)	2825, 1805, 2829, 2828	flag 32 (0x20)
+184	0x1A2DC		flag 30 (0x1E)					flag 32 (0x20)
+190	0x1A354		flag 32 (0x20)					flag 30 (0x1E)
+198	0x1A3F4		2823, 2826, 1771, 1770	flag 32 (0x20)	1770, 2823, 2826, 1771	flag 30 (0x1E)
+
+The flag byte is at offset + 0x12. The vertex lists are rotated, not reordered, so each face
+still faces the same way.
