@@ -88,6 +88,14 @@ namespace ALTEngine::Screens
         return monsterType >= VENT_STEAM_HORIZONTAL && monsterType <= VENT_FLAME_VERTICAL;
     }
 
+    // The aliens: the egg, hugger, burster, bambi, dog, warrior, queen and the
+    // two ceiling creatures. Not the colonist (a person, cocooned), the guard,
+    // soldier, synth and handler, or the vents.
+    inline constexpr bool IsXenomorph(int monsterType)
+    {
+        return monsterType >= 0x01 && monsterType <= 0x09;
+    }
+
     inline const char* EnemyFileForType(int monsterType)
     {
         if (monsterType < 0 || monsterType >= ENEMY_TYPE_COUNT) { return nullptr; }

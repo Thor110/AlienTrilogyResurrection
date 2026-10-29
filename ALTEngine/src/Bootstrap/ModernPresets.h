@@ -68,7 +68,7 @@ namespace ALTEngine::Bootstrap
               ModernFeature::SkipEndLevelScreen,
               ModernFeature::FreeLook,
               ModernFeature::RenderDistance,
-              ModernFeature::FasterEnemies,
+              ModernFeature::FasterXenomorphs,
               ModernFeature::SaveAnywhere },
             7
         },

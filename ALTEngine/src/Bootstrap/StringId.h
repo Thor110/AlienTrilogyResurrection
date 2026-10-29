@@ -167,8 +167,8 @@ namespace ALTEngine::Bootstrap
         // The Jump action (Modern: Player Jumping). OURS - the original has
         // no jump, so no string of its own to borrow.
         ActionJump,
-        FasterEnemies,
-        DescFasterEnemies,
+        FasterXenomorphs,
+        DescFasterXenomorphs,
         SpeedCompensation,
         DescSpeedCompensation,
         SaveAnywhere,

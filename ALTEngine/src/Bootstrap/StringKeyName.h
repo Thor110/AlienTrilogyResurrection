@@ -151,8 +151,8 @@ namespace ALTEngine::Bootstrap
         case StringId::MaximumHealth: return "MaximumHealth";
         case StringId::DescMaximumHealth: return "DescMaximumHealth";
         case StringId::ActionJump: return "ActionJump";
-        case StringId::FasterEnemies: return "FasterEnemies";
-        case StringId::DescFasterEnemies: return "DescFasterEnemies";
+        case StringId::FasterXenomorphs: return "FasterXenomorphs";
+        case StringId::DescFasterXenomorphs: return "DescFasterXenomorphs";
         case StringId::SpeedCompensation: return "SpeedCompensation";
         case StringId::DescSpeedCompensation: return "DescSpeedCompensation";
         case StringId::SaveAnywhere: return "SaveAnywhere";
@@ -484,8 +484,10 @@ namespace ALTEngine::Bootstrap
         if (name == "MaximumHealth") { return StringId::MaximumHealth; }
         if (name == "DescMaximumHealth") { return StringId::DescMaximumHealth; }
         if (name == "ActionJump") { return StringId::ActionJump; }
-        if (name == "FasterEnemies") { return StringId::FasterEnemies; }
-        if (name == "DescFasterEnemies") { return StringId::DescFasterEnemies; }
+        if (name == "FasterXenomorphs") { return StringId::FasterXenomorphs; }
+        if (name == "FasterEnemies") { return StringId::FasterXenomorphs; }   // its old name
+        if (name == "DescFasterXenomorphs") { return StringId::DescFasterXenomorphs; }
+        if (name == "DescFasterEnemies") { return StringId::DescFasterXenomorphs; }   // its old name
         if (name == "SpeedCompensation") { return StringId::SpeedCompensation; }
         if (name == "DescSpeedCompensation") { return StringId::DescSpeedCompensation; }
         if (name == "SaveAnywhere") { return StringId::SaveAnywhere; }

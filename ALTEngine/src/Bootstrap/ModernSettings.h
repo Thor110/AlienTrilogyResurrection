@@ -63,11 +63,13 @@ namespace ALTEngine::Bootstrap
         // them by accident.
         EnableCheats,
 
-        // Creatures run on every logic tick instead of every other one. The
-        // original ran them - and the particles - on alternate passes of its
-        // task list, half the player's rate, so its aliens walk rather than
-        // run; this lets them move like the real thing.
-        FasterEnemies,
+        // The aliens run on every logic tick instead of every other one. The
+        // original ran its creatures - and the particles - on alternate passes
+        // of its task list, half the player's rate, so its aliens walk rather
+        // than run; this lets them move like the real thing. People and the
+        // synthetic (the colonist, the soldiers, the synth) and the vents keep
+        // the original's pace, which suits them.
+        FasterXenomorphs,
 
         // The original's speed compensation, its default unless "-so" was
         // given: the player, doors and lifts tick at 69.74 Hz, twice the
@@ -116,7 +118,7 @@ namespace ALTEngine::Bootstrap
             ModernFeature::LevelSelect,
             ModernFeature::LiveMinimap,
             ModernFeature::EnableCheats,
-            ModernFeature::FasterEnemies,
+            ModernFeature::FasterXenomorphs,
             ModernFeature::SpeedCompensation,
             ModernFeature::SaveAnywhere,
         };
@@ -214,7 +216,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::LevelSelect: return "Level Select";
             case ModernFeature::LiveMinimap: return "Live Minimap";
             case ModernFeature::EnableCheats: return "Enable Cheats";
-            case ModernFeature::FasterEnemies: return "Faster Enemies";
+            case ModernFeature::FasterXenomorphs: return "Faster Xenomorphs";
             case ModernFeature::SpeedCompensation: return "Speed Compensation";
             case ModernFeature::SaveAnywhere: return "Save Anywhere";
             }
@@ -236,7 +238,8 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::LevelSelect: return "ModernLevelSelect";
             case ModernFeature::LiveMinimap: return "ModernLiveMinimap";
             case ModernFeature::EnableCheats: return "ModernEnableCheats";
-            case ModernFeature::FasterEnemies: return "ModernFasterEnemies";
+            // Stored under its old name, so a saved setting carries over.
+            case ModernFeature::FasterXenomorphs: return "ModernFasterEnemies";
             case ModernFeature::SpeedCompensation: return "ModernSpeedCompensation";
             case ModernFeature::SaveAnywhere: return "ModernSaveAnywhere";
             }

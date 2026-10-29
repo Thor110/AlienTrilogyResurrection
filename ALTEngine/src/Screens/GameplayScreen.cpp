@@ -422,9 +422,10 @@ namespace ALTEngine::Screens
         // Modern: Player Jumping. The height of the jump above the floor and
         // its vertical speed, per player tick, and the key's last state.
         bool playerJumping = false;
-        // Modern: Faster Enemies. Off, creatures run on alternate ticks, as
-        // the original's do (see logicTick).
-        bool fasterEnemies = false;
+        // Modern: Faster Xenomorphs. Off, creatures run on alternate ticks, as
+        // the original's do (see logicTick); on, the aliens run on every tick
+        // and everything else stays on the alternate ones.
+        bool fasterXenomorphs = false;
         // The original's -so switch, the port's default: one pass of the task
         // list per two interrupts, so every tick is a creature tick and the
         // base tick is half as fast. Modern: Speed Compensation turns it off,
@@ -517,7 +518,7 @@ namespace ALTEngine::Screens
             autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
             freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
             playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
-            fasterEnemies = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterEnemies);
+            fasterXenomorphs = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterXenomorphs);
             speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
             saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
@@ -1549,7 +1550,7 @@ namespace ALTEngine::Screens
                         autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
                         freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
                         playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
-                        fasterEnemies = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterEnemies);
+                        fasterXenomorphs = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterXenomorphs);
                         speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
                         saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
                         liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
@@ -1729,7 +1730,7 @@ namespace ALTEngine::Screens
                     playerTicksThisFrame++;
                     // The original's alternate pass (see logicTick).
                     const bool halfPass = ((logicTick++ & 1u) == 0) || speedCompensationOff;
-                    const bool creaturePass = halfPass || fasterEnemies;
+                    const bool creaturePass = halfPass || fasterXenomorphs;
 
                     prevCamX = camera.x;
                     prevCamZ = camera.z;
@@ -2409,8 +2410,8 @@ namespace ALTEngine::Screens
                         };
 
 
-                        // Creatures run on the original's alternate pass, or on
-                        // every tick with Faster Enemies.
+                        // Creatures run on the original's alternate pass; with
+                        // Faster Xenomorphs the aliens run on every tick.
                         // What the renderer would have drawn from here: the
                         // zones creatures test the player against.
                         const uint16_t drawnZones = ALTEngine::Game::CreatureSight::DrawnZoneMask(level,
@@ -2418,6 +2419,7 @@ namespace ALTEngine::Screens
                         if (creaturePass)
                         for (auto& enemy : enemies)
                         {
+                            if (!halfPass && !ALTEngine::Screens::IsXenomorph(enemy.type)) { continue; }
                             // The player's FEET, not the eye: FUN_00032154 measures
                             // the vertical separation from DAT_000b0a4a.
                             // What the creature can see of the player, for its attack
