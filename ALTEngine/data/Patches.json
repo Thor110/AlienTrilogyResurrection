@@ -27281,6 +27281,1044 @@
         10759
       ],
       "flip": true
+    },
+    {
+      "target": "SECT12/L161LEV.MAP",
+      "note": "texture scan 161-1: the texture ran against its neighbours",
+      "vertices": [
+        10088,
+        10089,
+        10255,
+        10087
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT12/L161LEV.MAP",
+      "note": "texture scan 161-2: the texture ran against its neighbours",
+      "vertices": [
+        3613,
+        3606,
+        3607,
+        3612
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT21/L211LEV.MAP",
+      "note": "texture scan 211-1: the texture ran against its neighbours",
+      "vertices": [
+        2657,
+        2653,
+        2661,
+        2659
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT21/L211LEV.MAP",
+      "note": "texture scan 211-1: the texture ran against its neighbours",
+      "vertices": [
+        2656,
+        2657,
+        2659,
+        2658
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT21/L211LEV.MAP",
+      "note": "texture scan 211-1: the texture ran against its neighbours",
+      "vertices": [
+        2654,
+        2656,
+        2658,
+        2655
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT22/L263LEV.MAP",
+      "note": "texture scan 263-3: the texture ran against its neighbours",
+      "vertices": [
+        7179,
+        7180,
+        7199,
+        7198
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT31/L311LEV.MAP",
+      "note": "texture scan 311-1: floor panel (the light strip beside it is left as it is)",
+      "vertices": [
+        1990,
+        2001,
+        2000,
+        1989
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT31/L311LEV.MAP",
+      "note": "texture scan 311-12: the texture ran against its neighbours",
+      "vertices": [
+        910,
+        933,
+        942,
+        909
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-1: the texture ran against its neighbours",
+      "vertices": [
+        6810,
+        6811,
+        270,
+        266
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-1: the texture ran against its neighbours",
+      "vertices": [
+        266,
+        270,
+        269,
+        265
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-1: the texture ran against its neighbours",
+      "vertices": [
+        6809,
+        6810,
+        266,
+        267
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-2: the texture ran against its neighbours",
+      "vertices": [
+        284,
+        285,
+        6813,
+        6812
+      ],
+      "steps": 3,
+      "flip": true
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-2: the texture ran against its neighbours",
+      "vertices": [
+        285,
+        287,
+        296,
+        6813
+      ],
+      "steps": 3,
+      "flip": true
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-2: the texture ran against its neighbours",
+      "vertices": [
+        286,
+        288,
+        287,
+        285
+      ],
+      "steps": 3,
+      "flip": true
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-3: the texture ran against its neighbours",
+      "vertices": [
+        6344,
+        6343,
+        6331,
+        6328
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-3: the texture ran against its neighbours",
+      "vertices": [
+        6343,
+        6366,
+        6337,
+        6331
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-3: the texture ran against its neighbours",
+      "vertices": [
+        6331,
+        6337,
+        6336,
+        6330
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-4: the texture ran against its neighbours",
+      "vertices": [
+        6352,
+        6353,
+        6922,
+        6923
+      ],
+      "steps": 3,
+      "flip": true
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-4: the texture ran against its neighbours",
+      "vertices": [
+        6353,
+        6358,
+        6924,
+        6922
+      ],
+      "steps": 3,
+      "flip": true
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-4: the texture ran against its neighbours",
+      "vertices": [
+        6350,
+        6356,
+        6358,
+        6353
+      ],
+      "steps": 3,
+      "flip": true
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-10: the texture ran against its neighbours",
+      "vertices": [
+        6729,
+        6868,
+        6775,
+        6780
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-11: the texture ran against its neighbours",
+      "vertices": [
+        6779,
+        6873,
+        6864,
+        6730
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-12: the texture ran against its neighbours",
+      "vertices": [
+        6900,
+        6896,
+        6889,
+        6509
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-13: the texture ran against its neighbours",
+      "vertices": [
+        6555,
+        6559,
+        6508,
+        6893
+      ],
+      "steps": 1
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-14: the texture ran against its neighbours",
+      "vertices": [
+        3625,
+        3603,
+        3626,
+        4013
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-15: the texture ran against its neighbours",
+      "vertices": [
+        3398,
+        3391,
+        3392,
+        3400
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L321LEV.MAP",
+      "note": "texture scan 321-16: the texture ran against its neighbours",
+      "vertices": [
+        3609,
+        3393,
+        3638,
+        4026
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L322LEV.MAP",
+      "note": "texture scan 322-2: the texture ran against its neighbours",
+      "vertices": [
+        3609,
+        3393,
+        3638,
+        4026
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L322LEV.MAP",
+      "note": "texture scan 322-4: the texture ran against its neighbours",
+      "vertices": [
+        6929,
+        6927,
+        6918,
+        6923
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L322LEV.MAP",
+      "note": "texture scan 322-5: the texture ran against its neighbours",
+      "vertices": [
+        3625,
+        3603,
+        3626,
+        4013
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L322LEV.MAP",
+      "note": "texture scan 322-8: the texture ran against its neighbours",
+      "vertices": [
+        3398,
+        3391,
+        3392,
+        3400
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L323LEV.MAP",
+      "note": "texture scan 323-2: the texture ran against its neighbours",
+      "vertices": [
+        6868,
+        6775,
+        6780,
+        6729
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT31/L323LEV.MAP",
+      "note": "texture scan 323-3: the texture ran against its neighbours",
+      "vertices": [
+        251,
+        278,
+        277,
+        252
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT31/L323LEV.MAP",
+      "note": "texture scan 323-4: the texture ran against its neighbours",
+      "vertices": [
+        3609,
+        3393,
+        3638,
+        4026
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L323LEV.MAP",
+      "note": "texture scan 323-6: the texture ran against its neighbours",
+      "vertices": [
+        3625,
+        3603,
+        3626,
+        4013
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L323LEV.MAP",
+      "note": "texture scan 323-9: the texture ran against its neighbours",
+      "vertices": [
+        3398,
+        3391,
+        3392,
+        3400
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L324LEV.MAP",
+      "note": "texture scan 324-2: the texture ran against its neighbours",
+      "vertices": [
+        251,
+        278,
+        277,
+        252
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT31/L324LEV.MAP",
+      "note": "texture scan 324-3: the texture ran against its neighbours",
+      "vertices": [
+        3609,
+        3393,
+        3638,
+        4026
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L324LEV.MAP",
+      "note": "texture scan 324-5: the texture ran against its neighbours",
+      "vertices": [
+        6929,
+        6927,
+        6918,
+        6923
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L324LEV.MAP",
+      "note": "texture scan 324-8: the texture ran against its neighbours",
+      "vertices": [
+        3398,
+        3391,
+        3392,
+        3400
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L324LEV.MAP",
+      "note": "texture scan 324-9: the texture ran against its neighbours",
+      "vertices": [
+        3625,
+        3603,
+        3626,
+        4013
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L325LEV.MAP",
+      "note": "texture scan 325-2: the texture ran against its neighbours",
+      "vertices": [
+        251,
+        278,
+        277,
+        252
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT31/L325LEV.MAP",
+      "note": "texture scan 325-3: the texture ran against its neighbours",
+      "vertices": [
+        6929,
+        6927,
+        6918,
+        6923
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L325LEV.MAP",
+      "note": "texture scan 325-6: the texture ran against its neighbours",
+      "vertices": [
+        6729,
+        6868,
+        6775,
+        6780
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT31/L325LEV.MAP",
+      "note": "texture scan 325-8: the texture ran against its neighbours",
+      "vertices": [
+        6779,
+        6873,
+        6864,
+        6730
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT31/L331LEV.MAP",
+      "note": "texture scan 331-2: the texture ran against its neighbours",
+      "vertices": [
+        3861,
+        3860,
+        3853,
+        3854
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT31/L331LEV.MAP",
+      "note": "texture scan 331-3: the texture ran against its neighbours",
+      "vertices": [
+        12606,
+        2862,
+        2667,
+        12603
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT31/L331LEV.MAP",
+      "note": "texture scan 331-4: the texture ran against its neighbours",
+      "vertices": [
+        11218,
+        11219,
+        11215,
+        11212
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT31/L331LEV.MAP",
+      "note": "texture scan 331-6: the texture ran against its neighbours",
+      "vertices": [
+        3695,
+        3696,
+        3700,
+        3699
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT31/L331LEV.MAP",
+      "note": "texture scan 331-7: the texture ran against its neighbours",
+      "vertices": [
+        11381,
+        2869,
+        2873,
+        11386
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT32/L351LEV.MAP",
+      "note": "texture scan 351-3: the texture ran against its neighbours",
+      "vertices": [
+        6069,
+        5779,
+        5777,
+        6066
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L351LEV.MAP",
+      "note": "texture scan 351-3: the texture ran against its neighbours",
+      "vertices": [
+        5779,
+        5773,
+        5771,
+        5777
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L351LEV.MAP",
+      "note": "texture scan 351-4: the texture ran against its neighbours",
+      "vertices": [
+        7024,
+        7019,
+        7017,
+        7023
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT32/L351LEV.MAP",
+      "note": "texture scan 351-5: the texture ran against its neighbours",
+      "vertices": [
+        184,
+        190,
+        204,
+        186
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L351LEV.MAP",
+      "note": "texture scan 351-7: the texture ran against its neighbours",
+      "vertices": [
+        7403,
+        7397,
+        7400,
+        7404
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L351LEV.MAP",
+      "note": "texture scan 351-9: the texture ran against its neighbours",
+      "vertices": [
+        2335,
+        2334,
+        2320,
+        2322
+      ],
+      "steps": 1
+    },
+    {
+      "target": "SECT32/L351LEV.MAP",
+      "note": "texture scan 351-10: the texture ran against its neighbours",
+      "vertices": [
+        3324,
+        3283,
+        3276,
+        3318
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT32/L351LEV.MAP",
+      "note": "texture scan 351-11: the texture ran against its neighbours",
+      "vertices": [
+        6105,
+        6122,
+        6100,
+        6095
+      ],
+      "steps": 1
+    },
+    {
+      "target": "SECT32/L351LEV.MAP",
+      "note": "texture scan 351-12: the texture ran against its neighbours",
+      "vertices": [
+        4617,
+        4618,
+        4535,
+        4536
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT32/L351LEV.MAP",
+      "note": "texture scan 351-13: the texture ran against its neighbours",
+      "vertices": [
+        9847,
+        9845,
+        9869,
+        9875
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L352LEV.MAP",
+      "note": "texture scan 352-1: the texture ran against its neighbours",
+      "vertices": [
+        886,
+        876,
+        877,
+        867
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT32/L352LEV.MAP",
+      "note": "texture scan 352-2: the texture ran against its neighbours",
+      "vertices": [
+        725,
+        716,
+        717,
+        726
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT32/L353LEV.MAP",
+      "note": "texture scan 353-1: the texture ran against its neighbours",
+      "vertices": [
+        1696,
+        1697,
+        1700,
+        1699
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT32/L353LEV.MAP",
+      "note": "texture scan 353-1: the texture ran against its neighbours",
+      "vertices": [
+        1697,
+        2691,
+        2689,
+        1700
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT32/L353LEV.MAP",
+      "note": "texture scan 353-2: the texture ran against its neighbours",
+      "vertices": [
+        886,
+        876,
+        877,
+        867
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT32/L353LEV.MAP",
+      "note": "texture scan 353-3: the texture ran against its neighbours",
+      "vertices": [
+        725,
+        716,
+        717,
+        726
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "texture scan 371-1: the texture ran against its neighbours",
+      "vertices": [
+        7659,
+        7656,
+        7670,
+        7671
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "texture scan 371-1: the texture ran against its neighbours",
+      "vertices": [
+        7667,
+        7665,
+        7673,
+        7674
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "texture scan 371-1: the texture ran against its neighbours",
+      "vertices": [
+        7674,
+        7673,
+        7750,
+        7751
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "texture scan 371-1: the texture ran against its neighbours",
+      "vertices": [
+        7671,
+        7670,
+        7747,
+        7748
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "texture scan 371-1: the texture ran against its neighbours",
+      "vertices": [
+        7672,
+        7671,
+        7748,
+        7749
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "texture scan 371-1: the texture ran against its neighbours",
+      "vertices": [
+        7673,
+        7672,
+        7749,
+        7750
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "texture scan 371-1: the texture ran against its neighbours",
+      "vertices": [
+        7665,
+        7662,
+        7672,
+        7673
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "texture scan 371-1: the texture ran against its neighbours",
+      "vertices": [
+        7662,
+        7659,
+        7671,
+        7672
+      ],
+      "steps": 2,
+      "flip": true
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "texture scan 371-3: the texture ran against its neighbours",
+      "vertices": [
+        8337,
+        8335,
+        8333,
+        8409
+      ],
+      "steps": 1
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "texture scan 371-4: the texture ran against its neighbours",
+      "vertices": [
+        779,
+        2719,
+        777,
+        780
+      ],
+      "steps": 1
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "texture scan 371-5: the texture ran against its neighbours",
+      "vertices": [
+        8407,
+        8320,
+        8322,
+        8323
+      ],
+      "steps": 1
+    },
+    {
+      "target": "SECT32/L381LEV.MAP",
+      "note": "texture scan 381-1: the texture ran against its neighbours",
+      "vertices": [
+        7351,
+        8834,
+        7453,
+        7449
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT32/L391LEV.MAP",
+      "note": "texture scan 391-1: the texture ran against its neighbours",
+      "vertices": [
+        4518,
+        4612,
+        4508,
+        4509
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT32/L391LEV.MAP",
+      "note": "texture scan 391-2: the texture ran against its neighbours",
+      "vertices": [
+        3329,
+        3334,
+        3363,
+        3361
+      ],
+      "steps": 3
+    },
+    {
+      "target": "SECT32/L391LEV.MAP",
+      "note": "texture scan 391-3: the texture ran against its neighbours",
+      "vertices": [
+        4523,
+        4505,
+        4503,
+        4614
+      ],
+      "steps": 1
+    },
+    {
+      "target": "SECT90/L905LEV.MAP",
+      "note": "texture scan 905-1: the texture ran against its neighbours",
+      "vertices": [
+        6649,
+        6642,
+        6643,
+        6650
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT90/L908LEV.MAP",
+      "note": "texture scan 908-1: floor panel (the light strip beside it is left as it is)",
+      "vertices": [
+        1990,
+        2001,
+        2000,
+        1989
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT90/L908LEV.MAP",
+      "note": "texture scan 908-12: the texture ran against its neighbours",
+      "vertices": [
+        910,
+        933,
+        942,
+        909
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT90/L909LEV.MAP",
+      "note": "texture scan 909-14: the texture ran against its neighbours",
+      "vertices": [
+        824,
+        821,
+        823,
+        822
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT90/L909LEV.MAP",
+      "note": "texture scan 909-15: the texture ran against its neighbours",
+      "vertices": [
+        6815,
+        6827,
+        6826,
+        6813
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT90/L909LEV.MAP",
+      "note": "texture scan 909-19: the texture ran against its neighbours",
+      "vertices": [
+        3646,
+        3650,
+        3651,
+        3647
+      ],
+      "flip": true
+    },
+    {
+      "target": "SECT90/L909LEV.MAP",
+      "note": "texture scan 909-20: the texture ran against its neighbours",
+      "vertices": [
+        6601,
+        5940,
+        5939,
+        6597
+      ],
+      "steps": 1
+    },
+    {
+      "target": "SECT90/L909LEV.MAP",
+      "note": "texture scan 909-23: the texture ran against its neighbours",
+      "vertices": [
+        5810,
+        5819,
+        5818,
+        5805
+      ],
+      "steps": 3,
+      "flip": true
+    },
+    {
+      "target": "SECT31/L311LEV.MAP",
+      "note": "texture scan 311-9: floor panel (seen in 311-61's view)",
+      "vertices": [
+        2999,
+        2980,
+        2978,
+        2998
+      ],
+      "steps": 2
+    },
+    {
+      "target": "SECT12/L154LEV.MAP",
+      "note": "texture scan 154-1: pipe bend, a quarter turn and a flip to run on from the pipe",
+      "vertices": [
+        10058,
+        10059,
+        10064,
+        10065
+      ],
+      "steps": 1,
+      "flip": true
+    },
+    {
+      "target": "SECT90/L905LEV.MAP",
+      "note": "texture scan 905-1's neighbour, one across and one down: mirrored like 905-1",
+      "vertices": [
+        6639,
+        6636,
+        6641,
+        6642
+      ],
+      "flip": true
     }
   ]
 }
