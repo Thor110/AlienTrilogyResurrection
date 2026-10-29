@@ -372,7 +372,9 @@ int main(int, char**)
             stats.aliensPercent = static_cast<float>(assessment.aliensPercent);
             stats.secretsPercent = static_cast<float>(assessment.secretsPercent);
             stats.missionPercent = static_cast<float>(assessment.missionPercent);
-            if (MissionAssessmentScreen::Run(cdDirectory, stats).windowClosed) { return CampaignEnd::WindowClosed; }
+            stats.requiredPercent = assessment.requiredPercent;
+            stats.levelDigits = digits;
+            if (MissionAssessmentScreen::Run(cdDirectory, stats, language).windowClosed) { return CampaignEnd::WindowClosed; }
             std::cout << "Assessment: aliens " << assessment.aliensPercent << "%, secrets " << assessment.secretsPercent
                       << "%, mission " << assessment.missionPercent << "% (needs more than "
                       << assessment.requiredPercent << "%), grade " << assessment.grade << "\n";
