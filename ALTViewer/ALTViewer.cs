@@ -272,10 +272,13 @@ namespace ALTViewer
             };
             BinaryUtility.ReplaceBytes(replacements, patchDirectory);
             // L371LEV.MAP - inaccessible secret fix discovered by @bambamalicious
+            // 0x6F78E is lift 3's threshold (byte 10 of its record). The lift starts at the top; stepping on it
+            // (trigger 5) adds 1 only as the final count, and the switch that adds the other (trigger 6, object 0)
+            // is at the bottom inside the secret. Above 1, nothing can take the lift down - see Patch/L371LEV.txt
             patchDirectory = gameDirectory + "SECT32\\L371LEV.MAP";
             replacements = new List<Tuple<long, byte[]>>()
             {
-                Tuple.Create(0x6F78EL, new byte[] { 0x01 }),    // inaccessible secret fix discovered by @bambamalicious
+                Tuple.Create(0x6F78EL, new byte[] { 0x01 }),    // lift 3 threshold = 1 - inaccessible secret fix discovered by @bambamalicious
                 Tuple.Create(0x274ACL, new byte[] { 0xEA }),    // incorrect texture indexes fixed by @thor110
                 Tuple.Create(0x1EDE8L, new byte[] { 0x23 })     // incorrect texture indexes fixed by @thor110
             };

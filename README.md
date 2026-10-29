@@ -121,7 +121,7 @@ They also pointed me to the partial file format documentation and the texture de
 
 Also a big thanks to Lex Safanov for posting their source code for decompression of .B16 files, I used this as reference when reimplementing it for this project.
 
-A thanks to bambamalicious for discovering the fix for the inaccessible secret on L371LEV, this fix isn't perfect; it forcefully enables the lift instead of fixing whatever objective was tied to it but this allows for the level to be 100% completed.
+A thanks to bambamalicious for discovering the fix for the inaccessible secret on L371LEV. It sets the lift's trigger threshold to 1, which turns out to be the value the level's own scripts were built for: the lift's only other trigger is a switch at the bottom, inside the secret, so with the original value the lift could never be taken down (see Patch/L371LEV.txt).
 
 And thanks to Kaiser for information regarding animated textures and some other previously unknown bytes.
 

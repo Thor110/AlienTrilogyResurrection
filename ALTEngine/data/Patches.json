@@ -1303,7 +1303,7 @@
     },
     {
       "target": "SECT32/L371LEV.MAP",
-      "note": "L371LEV.MAP - inaccessible secret fix discovered by @bambamalicious",
+      "note": "L371LEV.MAP - inaccessible secret: lift 3's threshold (record byte 10) set to 1, so stepping on it at the top takes it down into the secret pit (trigger 5, a final-count add); its other add, the switch (trigger 6), is at the bottom - discovered by @bambamalicious, traced by Claude (2026). Plus two texture index fixes by @thor110",
       "edits": [
         {
           "offset": "0x6F78E",
