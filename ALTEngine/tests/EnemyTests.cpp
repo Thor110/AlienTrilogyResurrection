@@ -433,3 +433,78 @@ TEST_CASE("Deaths: a colonist's body looks the way the player sees it")
     CHECK(behind != view);
     CHECK_EQ(e.animation, CO::ANIM_BODY + behind);
 }
+
+namespace
+{
+    CreatureAI::World OpenWorld(uint32_t& seed)
+    {
+        CreatureAI::World world;
+        world.cellOpenOrPlayer = [](int, int) { return true; };
+        world.cellOpen = [](int, int) { return true; };
+        world.lineTo = [](int, int, int) { return true; };
+        world.nodeAt = [](int, int) { return -1; };
+        world.nodeToward = [](int) { return -1; };
+        world.nodeAway = [](int) { return -1; };
+        world.nodePosition = [](int, int&, int&) { return false; };
+        world.random = [&seed]() { seed = seed * 1103515245u + 12345u; return static_cast<int>((seed >> 16) & 0xffff); };
+        return world;
+    }
+}
+
+TEST_CASE("Ceiling creatures: hang under the ceiling, and let go as warriors when they attack")
+{
+    Enemies::ResetLevelState();
+    uint32_t seed = 11;
+    CreatureAI::World world = OpenWorld(seed);
+    constexpr float CEILING = 0x700;
+    Enemies::Enemy e = HuggerAtPlayer(900.0f, 8);
+    e.ai.type = 8;
+    e.ai.speed = 0x40;
+    e.ai.wakeRange = 0x1000;
+    e.ai.alerted = true;
+    e.lineOfFire = true;
+    e.zoneVisible = true;
+    e.onCeiling = e.ai.ceilingCrawler = true;
+    Enemies::SettleVertical(e, 0.0f, CEILING, 0x100);
+    CHECK(e.y == CEILING - EnemyBehaviour::STAND_CLEARANCE);
+
+    bool dropped = false;
+    for (int t = 0; t < 600 && !dropped; ++t)
+    {
+        Enemies::Tick(e, 0, 0, 0, &world, false);
+        e.x += e.stepX; e.z += e.stepZ;
+        Enemies::SettleVertical(e, 0.0f, CEILING, 0x100);
+        if (e.onCeiling) { CHECK(e.y == CEILING - EnemyBehaviour::STAND_CLEARANCE); }
+        dropped = !e.onCeiling;
+    }
+    REQUIRE(dropped);
+    CHECK_EQ(e.type, 6);                     // a warrior now
+    CHECK(!e.ai.ceilingCrawler);
+    CHECK_EQ(e.animation, EnemyBehaviour::CEILING_WARRIOR_DROP_ANIMATION);
+    CHECK(e.y == EnemyBehaviour::STAND_CLEARANCE);   // on the floor
+    Enemies::ResetLevelState();
+}
+
+TEST_CASE("Ceiling creatures: one killed up there falls, and No Hit Immunity lets every hit land")
+{
+    Enemies::Enemy dog = HuggerAtPlayer(900.0f, 9);
+    dog.onCeiling = dog.ai.ceilingCrawler = true;
+    dog.health = 1;
+    CHECK(Enemies::ApplyHit(dog, 5));
+    Enemies::Tick(dog, 0, 0, 0);
+    CHECK(!dog.onCeiling);
+    CHECK_EQ(dog.type, 9);                   // its own death, on its own sprites
+    Enemies::SettleVertical(dog, 0.0f, 0x700, 0x100);
+    CHECK(dog.y == EnemyBehaviour::STAND_CLEARANCE);
+
+    // A warrior mid-flinch: immune, unless the option is on; and dying is
+    // never hit again.
+    Enemies::Enemy w = HuggerAtPlayer(900.0f, 6);
+    CHECK(!Enemies::ApplyHit(w, 5));
+    CHECK(!Enemies::ApplyHit(w, 5));
+    CHECK_EQ(w.health, 59);
+    CHECK(!Enemies::ApplyHit(w, 5, true));
+    CHECK_EQ(w.health, 54);
+    CHECK(Enemies::ApplyHit(w, 100, true));
+    CHECK(!Enemies::ApplyHit(w, 100, true));
+}

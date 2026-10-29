@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
-project(ALTEngine LANGUAGES CXX)
+
+# The release version lives in one place, VERSION, next to this file:
+# tools/make_release.bat names the release folder from it, and the engine
+# reports it (ALTENGINE_VERSION). Change it there and nowhere else.
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" ALTENGINE_VERSION LIMIT_COUNT 1)
+string(STRIP "${ALTENGINE_VERSION}" ALTENGINE_VERSION)
+project(ALTEngine VERSION ${ALTENGINE_VERSION} LANGUAGES CXX)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -351,6 +358,7 @@ if (MSVC)
 endif()
 
 target_include_directories(ALTEngine PRIVATE src)
+target_compile_definitions(ALTEngine PRIVATE ALTENGINE_VERSION="${ALTENGINE_VERSION}")
 target_link_libraries(ALTEngine PRIVATE ALTGame ALTFormats)
 target_link_libraries(ALTEngine PRIVATE SDL3::SDL3)
 target_link_libraries(ALTEngine PRIVATE PkgConfig::FFMPEG)

@@ -209,6 +209,8 @@ cmake --preset windows-release
 cmake --build out/build/windows-release
 ```
 
+To gather a release from that build, run `tools\make_release.bat` from the `ALTEngine` folder (`/zip` also packs it). It copies only what the game needs into `out\build\ALTEngine-v<version>`: the executable and its DLLs, the licences, `data`, and the language, override and custom folders. The version number is in `ALTEngine\VERSION`.
+
 Linux (Ubuntu 24.04 or similar; SDL3 is built from source the first time, as Ubuntu has no package for it):
 
 ```

@@ -328,6 +328,8 @@ namespace ALTEngine::Screens
                 // from the creature's anchor, in the original's screen space, so
                 // it is not applied here - the sprite is placed in the world.
                 sprite.y = enemy.y + sprite.halfHeight;
+                // Hanging from the ceiling: the frame's top at the ceiling.
+                if (enemy.onCeiling) { sprite.y = enemy.y + EnemyBehaviour::STAND_CLEARANCE - sprite.halfHeight; }
 
                 out.push_back(sprite);
             }

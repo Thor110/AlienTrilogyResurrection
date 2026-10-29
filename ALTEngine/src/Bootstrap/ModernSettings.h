@@ -32,7 +32,7 @@ namespace ALTEngine::Bootstrap
         KeepItems,          // carry weapons and ammo between levels instead of restarting each level with the pistol
         SkipEndLevelScreen, // go straight on rather than showing the end-of-level prompt
         PlayerJumping,      // enable a jump action, and the extra control binding it needs
-        StunnedEnemies,     // disable enemy stun-lock so they can be damaged repeatedly
+        NoHitImmunity,      // every hit lands: no immunity while a creature flinches or just after
 
         // Mouse pitch control. The original had NO free look: the camera's
         // pitch was driven entirely by the floor, panning up or down as the
@@ -110,7 +110,7 @@ namespace ALTEngine::Bootstrap
             ModernFeature::KeepItems,
             ModernFeature::SkipEndLevelScreen,
             ModernFeature::PlayerJumping,
-            ModernFeature::StunnedEnemies,
+            ModernFeature::NoHitImmunity,
             ModernFeature::FreeLook,
             ModernFeature::RenderDistance,
             ModernFeature::LevelSelect,
@@ -208,7 +208,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::KeepItems: return "Keep Items";
             case ModernFeature::SkipEndLevelScreen: return "Skip End Level Screen";
             case ModernFeature::PlayerJumping: return "Player Jumping";
-            case ModernFeature::StunnedEnemies: return "Stunned Enemies";
+            case ModernFeature::NoHitImmunity: return "No Hit Immunity";
             case ModernFeature::FreeLook: return "Free Look";
             case ModernFeature::RenderDistance: return "Render Distance";
             case ModernFeature::LevelSelect: return "Level Select";
@@ -229,7 +229,8 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::KeepItems: return "ModernKeepItems";
             case ModernFeature::SkipEndLevelScreen: return "ModernSkipEndLevelScreen";
             case ModernFeature::PlayerJumping: return "ModernPlayerJumping";
-            case ModernFeature::StunnedEnemies: return "ModernStunnedEnemies";
+            // Stored under its old name, so a saved setting carries over.
+            case ModernFeature::NoHitImmunity: return "ModernStunnedEnemies";
             case ModernFeature::FreeLook: return "ModernFreeLook";
             case ModernFeature::RenderDistance: return "ModernRenderDistance";
             case ModernFeature::LevelSelect: return "ModernLevelSelect";

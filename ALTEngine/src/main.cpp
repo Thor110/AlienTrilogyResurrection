@@ -165,7 +165,10 @@ namespace
 
 int main(int, char**)
 {
-    std::cout << "ALTEngine boot starting...\n";
+#ifndef ALTENGINE_VERSION
+#define ALTENGINE_VERSION "unknown"
+#endif
+    std::cout << "ALTEngine " ALTENGINE_VERSION " boot starting...\n";
 
     Config config;
     std::cout << "Config file: " << config.FilePath().string() << "\n";

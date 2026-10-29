@@ -145,6 +145,7 @@ namespace ALTEngine::Screens::LevelSnapshot
             { "colonist", { e.colonist.state, e.colonist.lastView, e.colonist.idleTimer } },
             { "animation", e.animation }, { "animationFrame", e.animationFrame },
             { "animationEnded", e.animationEnded }, { "bodyRemoved", e.bodyRemoved },
+            { "type", e.type }, { "onCeiling", e.onCeiling },
         };
     }
 
@@ -165,6 +166,11 @@ namespace ALTEngine::Screens::LevelSnapshot
         e.heldMonster = j.value("heldMonster", e.heldMonster);
         e.deathChain = j.value("deathChain", e.deathChain);
         e.bodyRemoved = j.value("bodyRemoved", false);
+        // A ceiling creature that has let go is the warrior or dog it became.
+        e.type = j.value("type", e.type);
+        e.ai.type = e.type;
+        e.onCeiling = j.value("onCeiling", e.onCeiling);
+        e.ai.ceilingCrawler = e.onCeiling;
 
         const int state = j.value("state", e.state);
         if (!e.alive || state == EnemyBehaviour::STATE_DYING || state == EnemyBehaviour::STATE_DEAD)

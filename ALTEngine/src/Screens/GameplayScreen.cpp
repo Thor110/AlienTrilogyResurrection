@@ -452,7 +452,8 @@ namespace ALTEngine::Screens
         float jumpVelocity = 0.0f;
         bool jumpHeld = false;
         bool liveMinimap = false;
-        // Modern "Stunned Enemies": hits land during a creature's hit reaction.
+        // Modern "No Hit Immunity": every hit lands, during a creature's hit
+        // reaction and the immunity after it.
         bool ignoreStun = false;
         bool cheatFullyLoaded = false;
         bool cheatMaximumHealth = false;
@@ -520,7 +521,7 @@ namespace ALTEngine::Screens
             speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
             saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
-            ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
+            ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
 
             // The cheat's own stored state, so it stays on across levels while
             // Enable Cheats is active.
@@ -1529,7 +1530,7 @@ namespace ALTEngine::Screens
                         speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
                         saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
                         liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
-                        ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
+                        ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
 
                         ModelRenderer::SetDrawDistanceFade(
                             !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance));
@@ -2275,6 +2276,7 @@ namespace ALTEngine::Screens
                             q.targetZ = static_cast<float>(ToGridSpaceZ(static_cast<float>(z), originZ));
                             q.distance = distance;
                             q.halfHeight = ALTEngine::Game::ProjectileCollision::CreatureExtents(aiCreature->type).y;
+                            q.ceilingCrawler = aiCreature->onCeiling;
                             q.tallType = (aiCreature->type == 7);
                             q.occupancy = &occupancy;
                             return CS::LineOfFire(level, q);
@@ -2299,12 +2301,22 @@ namespace ALTEngine::Screens
                             return static_cast<int>((creatureRandom >> 16) & 0xffff);
                         };
 
-                        auto enemyAxisClear = [&](float x, float z, bool alongX, float velocity, float halfHeight) {
+                        auto enemyAxisClear = [&](float x, float z, bool alongX, float velocity, float halfHeight, bool hanging) {
                             namespace EB = ALTEngine::Screens::EnemyBehaviour;
                             // FUN_000315f0's height tests run against the floor
                             // the creature stands on now.
                             const float standing = ALTEngine::Formats::FindFloorHeightGridSpace(
                                 level, ToGridSpaceX(x, originX), ToGridSpaceZ(z, originZ));
+                            // A creature on the ceiling measures the ceiling
+                            // instead (FUN_000315f0's +0x6c bit 8 arm): no fall
+                            // of it by more than 0x200, the probes within 0x200
+                            // of one another, and no headroom test.
+                            float standingCeiling = 0.0f;
+                            if (hanging)
+                            {
+                                const auto* here = ALTEngine::Formats::CellAt(level, ToGridSpaceX(x, originX) >> 9, ToGridSpaceZ(z, originZ) >> 9);
+                                standingCeiling = here ? static_cast<float>(here->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT : 0.0f;
+                            }
                             float highest = -1e9f, lowest = 1e9f;
                             const float lead = (velocity >= 0.0f) ? EB::MOVE_PROBE_LEAD
                                                                   : -EB::MOVE_PROBE_LEAD;
@@ -2338,9 +2350,16 @@ namespace ALTEngine::Screens
                                 // half height above that floor.
                                 const float floorHere = ALTEngine::Formats::FindFloorHeightGridSpace(
                                     level, ToGridSpaceX(sx, originX), ToGridSpaceZ(sz, originZ));
-                                if (floorHere > standing && floorHere - standing > EB::CREATURE_STEP_UP) { return false; }
                                 const float ceilingHere = static_cast<float>(cell->ceilingHeight)
                                                         * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT;
+                                if (hanging)
+                                {
+                                    if (ceilingHere < standingCeiling && standingCeiling - ceilingHere > EB::CEILING_STEP) { return false; }
+                                    highest = std::max(highest, ceilingHere);
+                                    lowest = std::min(lowest, ceilingHere);
+                                    continue;
+                                }
+                                if (floorHere > standing && floorHere - standing > EB::CREATURE_STEP_UP) { return false; }
                                 if (ceilingHere < standing + halfHeight) { return false; }
                                 highest = std::max(highest, floorHere);
                                 lowest = std::min(lowest, floorHere);
@@ -2371,7 +2390,7 @@ namespace ALTEngine::Screens
                             }
                             // Nor may the three probes disagree by more than 0x100
                             // - the leading edge must be level enough to stand on.
-                            if (highest - lowest > EB::CREATURE_STEP_UP) { return false; }
+                            if (highest - lowest > (hanging ? EB::CEILING_STEP : EB::CREATURE_STEP_UP)) { return false; }
                             return true;
                         };
 
@@ -2413,6 +2432,7 @@ namespace ALTEngine::Screens
                                     q.targetZ = static_cast<float>(pgz);
                                     q.distance = enemy.distance;
                                     q.halfHeight = ALTEngine::Game::ProjectileCollision::CreatureExtents(enemy.type).y;
+                                    q.ceilingCrawler = enemy.onCeiling;
                                     q.tallType = (enemy.type == 7);
                                     q.occupancy = &occupancy;
                                     enemy.lineOfFire = CS::LineOfFire(level, q);
@@ -2637,7 +2657,7 @@ namespace ALTEngine::Screens
                                     const int gx = ToGridSpaceX(enemy.x, originX);
                                     const int step = static_cast<int>(std::lround(enemy.stepX));
                                     int to = 0;
-                                    if (enemyAxisClear(enemy.x, enemy.z, true, enemy.stepX, stepHalfHeight))
+                                    if (enemyAxisClear(enemy.x, enemy.z, true, enemy.stepX, stepHalfHeight, enemy.onCeiling))
                                     {
                                         to = EB::LedgeStep(gx + step, step, startFloor,
                                             ALTEngine::Formats::FindFloorHeightGridSpace(level, gx + step, ToGridSpaceZ(enemy.z, originZ)),
@@ -2651,7 +2671,7 @@ namespace ALTEngine::Screens
                                     const int gz = ToGridSpaceZ(enemy.z, originZ);
                                     const int step = static_cast<int>(std::lround(enemy.stepZ));
                                     int to = 0;
-                                    if (enemyAxisClear(enemy.x, enemy.z, false, enemy.stepZ, stepHalfHeight))
+                                    if (enemyAxisClear(enemy.x, enemy.z, false, enemy.stepZ, stepHalfHeight, enemy.onCeiling))
                                     {
                                         to = EB::LedgeStep(gz + step, step, startFloor,
                                             ALTEngine::Formats::FindFloorHeightGridSpace(level, ToGridSpaceX(enemy.x, originX), gz + step),
@@ -2988,7 +3008,7 @@ namespace ALTEngine::Screens
                                 if (!creature.active) { return; }
                                 if (creature.type != Blast::IMMUNE_CREATURE_TYPE && creature.alive)
                                 {
-                                    ALTEngine::Screens::Enemies::ApplyHit(creature, creature.health);
+                                    ALTEngine::Screens::Enemies::ApplyHit(creature, creature.health, ignoreStun);
                                 }
                                 explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE,
                                                  creature.x, creature.y + 0x100, creature.z);
@@ -3173,7 +3193,7 @@ namespace ALTEngine::Screens
                             for (auto& enemy : enemies)
                             {
                                 // From the hit reaction on, rounds pass straight
-                                // through - unless the Stunned Enemies option is on.
+                                // through - unless the No Hit Immunity option is on.
                                 const bool targetable = PCol::CreatureTargetable(enemy.state)
                                     || (ignoreStun && enemy.state == D::STATE_HIT);
                                 if (!enemy.active || !enemy.alive || !targetable) { continue; }

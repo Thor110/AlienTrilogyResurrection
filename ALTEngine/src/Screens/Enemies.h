@@ -164,6 +164,9 @@ namespace ALTEngine::Screens
             // it, because only it can probe the level.
             float stepX = 0, stepZ = 0;
             float pushX = 0, pushZ = 0;   // a hit's or a death's push (FUN_00032f78)
+            // Hanging from the ceiling (+0x6c bit 8): the ceiling warrior and
+            // dog (8, 9) from their spawn until they attack or die.
+            bool onCeiling = false;
             // The attribute of the cell it stands in (the byte 10 of the cell
             // +0x78 points at), set by the caller before each tick.
             int standingAttribute = 0;
@@ -417,6 +420,19 @@ namespace ALTEngine::Screens
                     static_cast<int>(record.x) * 512 + 256,
                     static_cast<int>(record.y) * 512 + 256);
 
+                // The ceiling warrior and dog hang 0x20 under the ceiling
+                // (FUN_0002e638's arms at 0x2eb43 / 0x2ebab set +0x6c bit 8).
+                if (record.type == 8 || record.type == 9)
+                {
+                    const auto* cell = ALTEngine::Formats::CellAt(level, record.x, record.y);
+                    if (cell)
+                    {
+                        enemy.onCeiling = true;
+                        enemy.ai.ceilingCrawler = true;
+                        enemy.y = static_cast<float>(cell->ceilingHeight) * 32.0f - EnemyBehaviour::STAND_CLEARANCE;
+                    }
+                }
+
                 // Threshold 0 is in play immediately; anything else waits for
                 // whatever triggers it.
                 enemy.active = ActiveAtStart(record);
@@ -598,14 +614,16 @@ namespace ALTEngine::Screens
         // sequences are wired through it.
         inline constexpr int ANIMATION_TICKS_PER_FRAME = 6;
 
-        // `ignoreStun` is the Modern "Stunned Enemies" option: hits land during
+        // `ignoreStun` is the Modern "No Hit Immunity" option: hits land during
         // the hit reaction as well, instead of the creature being immune until
         // it recovers.
         inline bool ApplyHit(Enemy& enemy, int damage, bool ignoreStun = false)
         {
             if (!enemy.alive || !enemy.active) { return false; }
-            const bool stunned = enemy.state == Damage::STATE_HIT || enemy.hitCooldown != 0;
-            if (!(ignoreStun && stunned) && !Damage::CanBeDamaged(enemy.state, enemy.hitCooldown, 0)) { return false; }
+            // The option lifts the flinch and the timer after it, but not the
+            // rule that a creature already dying takes no more.
+            const int state = (ignoreStun && enemy.state == Damage::STATE_HIT) ? EnemyBehaviour::STATE_ACTING : enemy.state;
+            if (!Damage::CanBeDamaged(state, ignoreStun ? 0 : enemy.hitCooldown, 0)) { return false; }
 
             enemy.health -= damage;
             if (enemy.health > 0)
@@ -941,7 +959,9 @@ namespace ALTEngine::Screens
         inline void SettleVertical(Enemy& enemy, float floorY, float ceilingY, float halfHeight)
         {
             namespace EB = EnemyBehaviour;
-            float y = floorY + EB::STAND_CLEARANCE;
+            // FUN_00031f3c: 0x20 over the floor, or under the ceiling for a
+            // creature hanging there.
+            float y = enemy.onCeiling ? ceilingY - EB::STAND_CLEARANCE : floorY + EB::STAND_CLEARANCE;
             if (enemy.vy != 0.0f)
             {
                 const float next = enemy.y + enemy.vy;
@@ -983,6 +1003,17 @@ namespace ALTEngine::Screens
         // waits for the attack animation's script to set +0xb6 bit 2; those
         // scripts are not read yet, so this stands in. GUESS.
         inline constexpr int NON_LEAP_ACT_TICKS = 0x18;
+
+        // FUN_0002f1b0: a ceiling creature drops. The ceiling warrior becomes
+        // a warrior (6) and the ceiling dog a dog (5), boxes and all.
+        inline void LetGo(Enemy& enemy)
+        {
+            if (enemy.type == 8) { enemy.type = 6; }
+            else if (enemy.type == 9) { enemy.type = 5; }
+            enemy.ai.type = enemy.type;
+            enemy.onCeiling = false;
+            enemy.ai.ceilingCrawler = false;
+        }
 
         // One tick of the common creature task for this creature (see
         // CreatureAI.h), in world coordinates.
@@ -1082,7 +1113,28 @@ namespace ALTEngine::Screens
 
             if (a.startAct)
             {
-                // FUN_00033cbc's per-type arms.
+                // FUN_00033cbc's per-type arms. A ceiling creature attacks
+                // by letting go (FUN_0002f1b0): it becomes the warrior or the
+                // dog it hangs as, on that one's animations, and the mover
+                // puts it on the floor. From the middle band it idles two
+                // ticks instead (0x33ea5).
+                if (enemy.type == 8 || enemy.type == 9)
+                {
+                    enemy.leaping = false;
+                    a.vx = a.vz = 0;
+                    enemy.stepX = enemy.stepZ = 0.0f;
+                    if (enemy.mode >= 2)
+                    {
+                        a.state = AI::IDLE;
+                        a.idleTimer = 2;
+                        return;
+                    }
+                    const int animation = enemy.type == 8 ? EB::CEILING_WARRIOR_DROP_ANIMATION : EB::CEILING_DOG_DROP_ANIMATION;
+                    LetGo(enemy);
+                    enemy.actAnimation = animation;
+                    RestartAnimation(enemy, animation);
+                    return;
+                }
                 const bool melee = EB::AttackForSubtype(enemy.type).melee;
                 if (enemy.type == 2 && enemy.mode == 0
                     && enemy.separationY <= EB::FACE_HUG_MAX_VERTICAL && !pounceLockHeld)
@@ -1110,17 +1162,6 @@ namespace ALTEngine::Screens
 
                 if (Scripted(enemy))
                 {
-                    // A ceiling creature in the middle band doesn't attack: it
-                    // idles for two ticks instead (0x33ea5).
-                    if ((enemy.type == 8 || enemy.type == 9) && enemy.mode >= 2)
-                    {
-                        enemy.leaping = false;
-                        a.state = AI::IDLE;
-                        a.idleTimer = 2;
-                        a.vx = a.vz = 0;
-                        enemy.stepX = enemy.stepZ = 0.0f;
-                        return;
-                    }
                     bool arm = false, mirror = false;
                     enemy.actAnimation = ActAnimation(enemy.type, enemy.mode, world.random ? world.random() : 0, arm, &mirror);
                     if (enemy.actAnimation == NO_ATTACK)
@@ -1544,6 +1585,10 @@ namespace ALTEngine::Screens
                 // ceiling creatures just drop.
                 enemy.pushX = enemy.pushZ = 0.0f;
                 enemy.bodyDown = false;
+                // A ceiling creature falls (FUN_00030b04 clears +0x6c bit 8;
+                // it keeps its own death animation, and here its sprites).
+                enemy.onCeiling = false;
+                enemy.ai.ceilingCrawler = false;
                 if (EnemyBehaviour::PushedOnDeath(enemy.type)
                     && enemy.standingAttribute < EnemyBehaviour::RAMP_ATTRIBUTE_MIN)
                 {

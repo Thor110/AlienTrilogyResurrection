@@ -418,6 +418,10 @@ namespace ALTEngine::Screens
         // the ceiling and fall when they act. Whatever stops them acting in the
         // original is a separate question, and now a much better defined one.
         inline constexpr int CEILING_FLAG = 8;         // bit 8 of the byte at +0x6c
+        // What a ceiling creature plays as it lets go, from the table of the
+        // creature it becomes (FUN_00033cbc: 9 of the warrior's, 8 of the dog's).
+        inline constexpr int CEILING_WARRIOR_DROP_ANIMATION = 9;
+        inline constexpr int CEILING_DOG_DROP_ANIMATION = 8;
         inline constexpr int ENTITY_FLAG_ACTING = 0x01;
         inline constexpr int ENTITY_FLAG_SPRUNG = 0x02;
         inline constexpr int ENTITY_FLAG_DAMAGED = 0x20;
@@ -454,6 +458,8 @@ namespace ALTEngine::Screens
         inline constexpr int MOVE_PROBE_LEAD = 200;
         // FUN_000315f0's rise limit, and the most its three probes may differ.
         inline constexpr float CREATURE_STEP_UP = 0x100;
+        // The same for a creature on the ceiling, measured on the ceiling.
+        inline constexpr float CEILING_STEP = 0x200;
         inline constexpr int MOVE_FOOTPRINT_HALF = 200;
 
         // FUN_000315b4 / FUN_00031ab8: a refused step still goes as far as 201

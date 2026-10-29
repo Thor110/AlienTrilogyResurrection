@@ -129,6 +129,7 @@ Status in the port:
 ## 6. Modern options
 
 - **Player Jumping:** done. A Jump action (default J, in the Controls list, translated in all six string tables) gives a hop with the original's gravity (0xc a creature tick, so 3 a player tick), lift 0x24: about 216 units high. It's held under the ceiling. Movement's step-up rules are unchanged, so a jump doesn't reach a ledge more than the usual 256 up.
+- **No Hit Immunity** (was "Stunned Enemies", same saved setting): every hit lands, through a creature's flinch and the 0x10 ticks after it, from rounds and from blasts alike; a creature already dying still takes nothing more.
 - **All other options** are now read by gameplay or the menu.
 
 ## 7. Smaller items
@@ -283,7 +284,7 @@ All three came down to the level faces' draw routines, which the port mostly ign
 
 ## Still open (creatures)
 
-- **The ceiling creatures** (types 8 and 9) spawn with `+0x6c` bit 8 set (`0x2eb43`, `0x2ebab`): they hang from the ceiling, their mover tests the ceiling (`FUN_00027fb0`) instead of the floor, and starting an action (`FUN_0002f1b0`) or dying clears the bit, dropping them; dying also turns them into a warrior (6) or a dog (5). The port keeps them on the floor.
+- **The ceiling creatures:** done. Types 8 and 9 spawn with `+0x6c` bit 8 (`0x2eb43`, `0x2ebab`) and hang 0x20 under the ceiling (`FUN_00031f3c`); their mover measures the ceiling, refusing a fall of it over 0x200 or probes more than 0x200 apart, with no headroom test (`FUN_000315f0`), and their line follows the ceiling (`FUN_0003231c`). They let go only by attacking from the contact or near band (`FUN_00033cbc` -> `FUN_0002f1b0`: the ceiling warrior becomes a warrior, 6, playing its animation 9, the dog a dog, 5, playing 8; from the middle band they idle 2 ticks instead) or by dying (`FUN_00030b04` clears the bit; they keep their own death animation). Nothing in the original climbs walls: the mover knows only the floor and the ceiling. If they seemed never to come down in the original, it is that they wait until the player is within the near band (about 0x600).
 
 ## The level UV scan
 

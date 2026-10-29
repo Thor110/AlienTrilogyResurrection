@@ -122,13 +122,13 @@ namespace ALTEngine::Bootstrap
         case StringId::KeepItems: return "KeepItems";
         case StringId::SkipEndLevelScreen: return "SkipEndLevelScreen";
         case StringId::PlayerJumping: return "PlayerJumping";
-        case StringId::StunnedEnemies: return "StunnedEnemies";
+        case StringId::NoHitImmunity: return "NoHitImmunity";
         case StringId::DescEnableAll: return "DescEnableAll";
         case StringId::DescAutomaticDoors: return "DescAutomaticDoors";
         case StringId::DescKeepItems: return "DescKeepItems";
         case StringId::DescSkipEndLevel: return "DescSkipEndLevel";
         case StringId::DescPlayerJumping: return "DescPlayerJumping";
-        case StringId::DescStunnedEnemies: return "DescStunnedEnemies";
+        case StringId::DescNoHitImmunity: return "DescNoHitImmunity";
         case StringId::FreeLook: return "FreeLook";
         case StringId::DescFreeLook: return "DescFreeLook";
         case StringId::RenderDistance: return "RenderDistance";
@@ -453,13 +453,15 @@ namespace ALTEngine::Bootstrap
         if (name == "KeepItems") { return StringId::KeepItems; }
         if (name == "SkipEndLevelScreen") { return StringId::SkipEndLevelScreen; }
         if (name == "PlayerJumping") { return StringId::PlayerJumping; }
-        if (name == "StunnedEnemies") { return StringId::StunnedEnemies; }
+        if (name == "NoHitImmunity") { return StringId::NoHitImmunity; }
+        if (name == "StunnedEnemies") { return StringId::NoHitImmunity; }   // its old name
         if (name == "DescEnableAll") { return StringId::DescEnableAll; }
         if (name == "DescAutomaticDoors") { return StringId::DescAutomaticDoors; }
         if (name == "DescKeepItems") { return StringId::DescKeepItems; }
         if (name == "DescSkipEndLevel") { return StringId::DescSkipEndLevel; }
         if (name == "DescPlayerJumping") { return StringId::DescPlayerJumping; }
-        if (name == "DescStunnedEnemies") { return StringId::DescStunnedEnemies; }
+        if (name == "DescNoHitImmunity") { return StringId::DescNoHitImmunity; }
+        if (name == "DescStunnedEnemies") { return StringId::DescNoHitImmunity; }   // its old name
         if (name == "FreeLook") { return StringId::FreeLook; }
         if (name == "DescFreeLook") { return StringId::DescFreeLook; }
         if (name == "RenderDistance") { return StringId::RenderDistance; }
