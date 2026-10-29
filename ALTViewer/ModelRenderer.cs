@@ -263,9 +263,8 @@ namespace ALTViewer
                     {
                         switch (i)
                         {
-                            case 10208: // starting lift panel ( this is +1 as well???? )
-                                sw.WriteLine($"f {q.A + 1}/{uv[1]} {q.B + 1}/{uv[0]} {q.C + 1}/{uv[3]} {q.D + 1}/{uv[2]}");
-                                continue;
+                            // case 10208, the starting lift panel, is now fixed in the level file itself (flag byte 0x49BCA = 0x02,
+                            // applied by the patch button), so it is no longer swapped here - doing both would mirror it back
                             case 1062: // hallway crate top as side ( this isn't +1 either???? )
                                 sw.WriteLine($"f {q.A + 1}/{faceUvs[6527][0]} {q.B + 1}/{faceUvs[6527][1]} {q.C + 1}/{faceUvs[6527][2]} {q.D + 1}/{faceUvs[6527][3]}");
                                 continue;

@@ -1,5 +1,18 @@
 L111LEV.MAP and L900LEV.MAP incorrect texture index
 0x46DC4 = 38
-UV also needs adjusting manually, not practical for the original file as it uses the texture index.
 
-Remapped directly in-engine instead.
+The face is the triangle 8052, 8049, 8113 at 0x46DB4. With the right texture index its texture also
+needs a quarter-turn counter-clockwise. That used to be done in the engine at render time; it is now
+in the file, by rotating the triangle's vertex list one place, as the texture scan fixes do:
+
+Offset		Was				Now
+0x46DB4		8052, 8049, 8113, -1	->	8049, 8113, 8052, -1
+		74 1F 00 00 71 1F 00 00 B1 1F 00 00 FF FF FF FF
+		->	71 1F 00 00 B1 1F 00 00 74 1F 00 00 FF FF FF FF
+0x46DC4		F1			->	38
+
+The rotation keeps the face's winding and its texture index, flag and light bytes. Checked against the
+engine's old render-time rotation: the rebuilt level mesh is identical, vertex for vertex.
+
+The same bug at the same offsets in both levels; L900LEV previously got neither fix.
+Applied by ALTEngine (data/Patches.json) and by ALTViewer's patch button.

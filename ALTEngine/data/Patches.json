@@ -22004,12 +22004,90 @@
     },
     {
       "target": "SECT11/L111LEV.MAP",
-      "note": "L111LEV.MAP - incorrect texture index on one face",
+      "note": "L111LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38), and the face's texture turned a quarter-turn counter-clockwise by rotating its vertex list (8052, 8049, 8113 -> 8049, 8113, 8052) - see Patch/another-fix.txt",
       "edits": [
+        {
+          "offset": "0x46DB4",
+          "bytes": [
+            "0x71",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0xB1",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0x74",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
         {
           "offset": "0x46DC4",
           "bytes": [
             "0x38"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L900LEV.MAP",
+      "note": "L900LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38), and the face's texture turned a quarter-turn counter-clockwise by rotating its vertex list (8052, 8049, 8113 -> 8049, 8113, 8052), same bug as L111LEV.MAP at the identical offset - see Patch/another-fix.txt",
+      "edits": [
+        {
+          "offset": "0x46DB4",
+          "bytes": [
+            "0x71",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0xB1",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0x74",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x46DC4",
+          "bytes": [
+            "0x38"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT11/L111LEV.MAP",
+      "note": "L111LEV.MAP - starting lift panel (face 10208, vertices 10759, 10760, 10756, 10755) mirrored the wrong way: flag byte 0x00 -> 0x02, its mirrored partner (Edward, 2026) - see Patch/L111LEV.txt",
+      "edits": [
+        {
+          "offset": "0x49BCA",
+          "bytes": [
+            "0x02"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L900LEV.MAP",
+      "note": "L900LEV.MAP - starting lift panel (face 10208, vertices 10759, 10760, 10756, 10755) mirrored the wrong way: flag byte 0x00 -> 0x02, its mirrored partner (Edward, 2026), same bug as L111LEV.MAP at the identical offset - see Patch/L900LEV.txt",
+      "edits": [
+        {
+          "offset": "0x49BCA",
+          "bytes": [
+            "0x02"
           ]
         }
       ]
@@ -29152,30 +29230,7 @@
       ]
     }
   ],
-  "faceUvRotations": [
-    {
-      "target": "SECT11/L111LEV.MAP",
-      "note": "one face's texture needs rotating counter-clockwise",
-      "vertices": [
-        8052,
-        8049,
-        8113,
-        -1
-      ],
-      "steps": 1
-    },
-    {
-      "target": "SECT11/L111LEV.MAP",
-      "note": "face 10208 - wrong orientation, needs mirroring (Edward, 2026)",
-      "vertices": [
-        10756,
-        10755,
-        10760,
-        10759
-      ],
-      "flip": true
-    }
-  ],
+  "faceUvRotations": [],
   "modelRemovals": [
     {
       "target": "SECT11/L122LEV.MAP",

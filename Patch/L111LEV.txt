@@ -1,4 +1,4 @@
-Incorrect UVs on some faces, fixed in code on export for now.
+Incorrect UVs on some crate faces, fixed in code on export for now (ALTViewer ModelRenderer.cs).
 
 Some faces, 16 to be specific, wrongly have flag 4 on L111LEV, this doesn't make any real noticeable difference, except from very specific angles.
 
@@ -27,3 +27,14 @@ Above Door Wall Sides
 11506, 11507, 11556, 11566	0x38D66	= 00
 12013, 11993, 12054, 11951	0x30936	= 00
 11993, 11996, 12052, 12054	0x30922	= 00
+
+Starting lift panel - mirrored the wrong way (Edward, 2026)
+
+Face 10208, vertices 10759, 10760, 10756, 10755 at 0x49BB8. Its flag byte (offset + 0x12) is set to its
+mirrored partner. This used to be done in code (ALTViewer's model export, and the engine at render time);
+it is now in the file.
+
+0x49BCA		00	->	02
+
+Also in this level, at the same offsets as on L900LEV: the lift vertex fix (Patch/new-fix.txt) and the
+texture index fix with its quarter-turn (Patch/another-fix.txt).

@@ -2,3 +2,6 @@ L111LEV vertice coordinate fix (lift)
 L900LEV vertice coordinate fix (lift)
 
 0x14EFA = 00 00
+
+The same bug at the same offset in both levels (Edward, 2026).
+Applied by ALTEngine (data/Patches.json) and by ALTViewer's patch button.

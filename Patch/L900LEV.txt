@@ -1,3 +1,14 @@
 Incorrect texture flags patched.
 
-Incorrect UVs on some faces, fixed in code on export for now. ( same as L111LEV )
+Incorrect UVs on some crate faces, fixed in code on export for now (ALTViewer ModelRenderer.cs). ( same as L111LEV )
+
+Starting lift panel - mirrored the wrong way (Edward, 2026)
+
+Face 10208, vertices 10759, 10760, 10756, 10755 at 0x49BB8. Its flag byte (offset + 0x12) is set to its
+mirrored partner. This used to be done in code (ALTViewer's model export, and the engine at render time);
+it is now in the file.
+
+0x49BCA		00	->	02
+
+Also in this level, at the same offsets as on L111LEV: the lift vertex fix (Patch/new-fix.txt) and the
+texture index fix with its quarter-turn (Patch/another-fix.txt).

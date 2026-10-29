@@ -93,10 +93,12 @@ The road map for this project.
 	- [Patched an issue on L900LEV where multiple texture flags were incorrectly set.](#L900LEV-Multiplayer-Map-1-Fix-2)
 	- [Patched an issue on L900LEV where a vertex in the first lift had the wrong Z coordinate.](#L900LEV-Multiplayer-Map-1-Fix-3)
 	- [Patched an issue on L900LEV where a face was assigned the wrong texture index.](#L900LEV-Multiplayer-Map-1-Fix-4)
+- [Patched an issue on L900LEV where the starting lift panel had its texture flipped.](#L900LEV-Multiplayer-Map-1-Fix-5)
 	- [Patched an issue on L111LEV where four crates had textures which were sideways.](#L111LEV-Fix-1)
 	- [Patched an issue on L111LEV where multiple texture flags were incorrectly set.](#L111LEV-Fix-2)
 	- [Patched an issue on L111LEV where a vertex in the first lift had the wrong Z coordinate.](#L111LEV-Fix-3)
 	- [Patched an issue on L111LEV where a face was assigned the wrong texture index.](#L111LEV-Fix-4)
+- [Patched an issue on L111LEV where the starting lift panel had its texture flipped.](#L111LEV-Fix-5)
 	- [Patched an issue on L141LEV where some crates had incorrect textures.](#L141LEV-Fix-1)
 	- [Patched an issue on L161LEV where one face had an incorrect texture.](#L161LEV-Fix-1)
 	- [Patched an issue on L161LEV where one face on a door had an incorrect texture.](#L161LEV-Fix-2)
@@ -376,10 +378,12 @@ Fixes marked "texture scan" were found by ALTLevelScan, which looks for faces wh
 - [Patched an issue on L900LEV where multiple texture flags were incorrectly set.](#L900LEV-Multiplayer-Map-1-Fix-2)
 - [Patched an issue on L900LEV where a vertex on a lift had a misplaced coordinate.](#L900LEV-Multiplayer-Map-1-Fix-3)
 - [Patched an issue on L900LEV where a face was assigned the wrong texture index.](#L900LEV-Multiplayer-Map-1-Fix-4)
+- [Patched an issue on L900LEV where the starting lift panel had its texture flipped.](#L900LEV-Multiplayer-Map-1-Fix-5)
 - [Patched an issue on L111LEV where four crates had textures which were sideways.](#L111LEV-Fix-1)
 - [Patched an issue on L111LEV where multiple texture flags were incorrectly set.](#L111LEV-Fix-2)
 - [Patched an issue on L111LEV where a vertex on a lift had a misplaced coordinate.](#L111LEV-Fix-3)
 - [Patched an issue on L111LEV where a face was assigned the wrong texture index.](#L111LEV-Fix-4)
+- [Patched an issue on L111LEV where the starting lift panel had its texture flipped.](#L111LEV-Fix-5)
 - [Patched an issue on L141LEV where some crates had incorrect textures.](#L141LEV-Fix-1)
 - [Patched an issue on L154LEV where one face had its texture flipped and rotated (texture scan 154-1).](#L154LEV-Fix-1)
 - [Patched an issue on L161LEV where one face had an incorrect texture.](#L161LEV-Fix-1)
@@ -692,15 +696,25 @@ A vertex on one of the lifts had a misplaced coordinate, the same bug at the sam
 
 Patch listed at Patch/new-fix.txt
 
-Applied by the engine when it installs the game files (ALTEngine/data/Patches.json); not in the toolkit yet.
+Applied by both ALTEngine and ALTViewer's patch button.
 
 ## L900LEV Multiplayer Map 1 Fix 4
 
-[The same as L111LEV Fix 4](#L111LEV-Fix-4)
+[The same as L111LEV Fix 4](#L111LEV-Fix-4): the wrong texture index, and the UV rotation that goes with it. L900LEV previously got neither.
 
 Patch listed at Patch/another-fix.txt
 
-Applied by the engine when it installs the game files (ALTEngine/data/Patches.json); not in the toolkit yet.
+Applied by both ALTEngine and ALTViewer's patch button.
+
+## L900LEV Multiplayer Map 1 Fix 5
+
+UV flipped.
+
+The panel on the starting lift (face 10208) was mirrored the wrong way. Its flag byte is set to its mirrored partner, so the texture now reads the right way round. This used to be done only when exporting the model (and by the engine while drawing); it is now in the level file. [The same as L111LEV Fix 5](#L111LEV-Fix-5).
+
+Patch listed at Patch/L900LEV.txt
+
+Applied by both ALTEngine and ALTViewer's patch button.
 
 ## L111LEV Fix 1
 
@@ -742,19 +756,31 @@ A vertex on one of the lifts had a misplaced coordinate, the same bug at the sam
 
 Patch listed at Patch/new-fix.txt
 
-Applied by the engine when it installs the game files (ALTEngine/data/Patches.json); not in the toolkit yet.
+Applied by both ALTEngine and ALTViewer's patch button.
 
 ## L111LEV Fix 4
 
 Patched an issue on L111LEV where a face was assigned the wrong texture index.
 
+UV rotation corrected: with the right texture, the face also needed its texture turned a quarter-turn counter-clockwise. This used to be done by the engine while drawing; it is now in the level file, by rotating the face's vertex list.
+
 Patch listed at Patch/another-fix.txt
 
-Applied by the engine when it installs the game files (ALTEngine/data/Patches.json); not in the toolkit yet.
+Applied by both ALTEngine and ALTViewer's patch button.
 
 <div align="center">
   <img src="Images/L111LEV-incorrect-texture-index.png" alt="L111LEV Patched">
 </div>
+
+## L111LEV Fix 5
+
+UV flipped.
+
+The panel on the starting lift (face 10208) was mirrored the wrong way. Its flag byte is set to its mirrored partner, so the texture now reads the right way round. This used to be done only when exporting the model (and by the engine while drawing); it is now in the level file.
+
+Patch listed at Patch/L111LEV.txt
+
+Applied by both ALTEngine and ALTViewer's patch button.
 
 ## L141LEV Fix 1
 
