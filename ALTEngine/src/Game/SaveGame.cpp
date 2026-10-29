@@ -2,6 +2,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <fstream>
 
 namespace ALTEngine::Game::SaveGame
@@ -98,7 +99,11 @@ namespace ALTEngine::Game::SaveGame
             data.name = root.value("name", std::string{});
             data.levelDigits = root.value("level", std::string{});
             data.difficulty = root.value("difficulty", 0);
-            if (data.levelDigits.empty()) { return std::nullopt; }
+            // A level is three digits ("111"). The value becomes part of the level's
+            // file path, so anything else - a hand-edited or damaged save - is refused.
+            const bool threeDigits = data.levelDigits.size() == 3
+                && std::all_of(data.levelDigits.begin(), data.levelDigits.end(), [](char c) { return c >= '0' && c <= '9'; });
+            if (!threeDigits) { return std::nullopt; }
 
             const nlohmann::json& inv = root.at("inventory");
             const nlohmann::json& weapons = inv.at("weapons");

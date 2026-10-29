@@ -93,4 +93,18 @@ TEST_CASE("SaveGame: bad slots and broken files are rejected, not crashed on")
         out << R"({"version": 999, "level": "111", "inventory": {"weapons": []}})";
     }
     CHECK(!SaveGame::Read(dir, 5).has_value());
+    // The level must be three digits: it becomes part of a file path.
+    for (const char* level : { "", "11", "1111", "1a1", "../" })
+    {
+        {
+            std::ofstream out(SaveGame::SlotPath(dir, 6));
+            out << R"({"version": 1, "level": ")" << level << R"(", "inventory": {"weapons": []}})";
+        }
+        CHECK(!SaveGame::Read(dir, 6).has_value());
+    }
+    {
+        std::ofstream out(SaveGame::SlotPath(dir, 6));
+        out << R"({"version": 1, "level": "352", "inventory": {"weapons": []}})";
+    }
+    CHECK(SaveGame::Read(dir, 6).has_value());
 }

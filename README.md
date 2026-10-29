@@ -8,7 +8,7 @@ This project aims to create a modding toolkit and possibly more for Alien Trilog
 
 # Notes
 
-This optional step has been removed as it needs revising sometime in the future, so ignoer it for now.
+This optional step has been removed as it needs revising sometime in the future, so ignore it for now.
 
 - # : Optional : Use the cleanup script and files provided in "Notes\repack-disc-comparison\CLEANUPSCRIPT" to delete 83.35MBs of unused files from the game. ( documentation and details on these files and more can be found in "Notes\repack-disc-comparison\readme.txt" )
 
@@ -31,8 +31,8 @@ This optional step has been removed as it needs revising sometime in the future,
 	- May or may not extend it to level viewer and editor functionality one day.
 	- Need to implement an export feature for the location of level objects, enemies, crates, pickups, switches, doors etc
 - Patches
-	- Multiple UVs across the games levels, lifts and doors need fixing.
-	- The UVs for the Queens Egg Sack from the final level need fixing.
+	- The texture scan has more candidates on L263LEV, L351LEV and L371LEV still to be reviewed.
+	- The UVs for the Queens Egg Sack from the final level are now fixed (see L391LEV Fix 1).
 
 # Road Map
 
@@ -93,12 +93,12 @@ The road map for this project.
 	- [Patched an issue on L900LEV where multiple texture flags were incorrectly set.](#L900LEV-Multiplayer-Map-1-Fix-2)
 	- [Patched an issue on L900LEV where a vertex in the first lift had the wrong Z coordinate.](#L900LEV-Multiplayer-Map-1-Fix-3)
 	- [Patched an issue on L900LEV where a face was assigned the wrong texture index.](#L900LEV-Multiplayer-Map-1-Fix-4)
-- [Patched an issue on L900LEV where the starting lift panel had its texture flipped.](#L900LEV-Multiplayer-Map-1-Fix-5)
+	- [Patched an issue on L900LEV where the starting lift panel had its texture flipped.](#L900LEV-Multiplayer-Map-1-Fix-5)
 	- [Patched an issue on L111LEV where four crates had textures which were sideways.](#L111LEV-Fix-1)
 	- [Patched an issue on L111LEV where multiple texture flags were incorrectly set.](#L111LEV-Fix-2)
 	- [Patched an issue on L111LEV where a vertex in the first lift had the wrong Z coordinate.](#L111LEV-Fix-3)
 	- [Patched an issue on L111LEV where a face was assigned the wrong texture index.](#L111LEV-Fix-4)
-- [Patched an issue on L111LEV where the starting lift panel had its texture flipped.](#L111LEV-Fix-5)
+	- [Patched an issue on L111LEV where the starting lift panel had its texture flipped.](#L111LEV-Fix-5)
 	- [Patched an issue on L141LEV where some crates had incorrect textures.](#L141LEV-Fix-1)
 	- [Patched an issue on L161LEV where one face had an incorrect texture.](#L161LEV-Fix-1)
 	- [Patched an issue on L161LEV where one face on a door had an incorrect texture.](#L161LEV-Fix-2)
@@ -106,6 +106,7 @@ The road map for this project.
 	- [Patched an issue on L371LEV where a secret area was inaccessible.](#L371LEV-Fix-1)
 	- [Patched an issue on L371LEV where two faces had incorrect textures.](#L371LEV-Fix-2)
 	- [Patched an issue on L371LEV where one of the textures unused tiles showed up at the edges of some faces.](#L371LEV-Fix-3)
+	- [Plus the texture scan fixes, the walk-through pillars on L903LEV and the duplicate door and lift model removal: see the full list.](#patches)
 - [✅ 8 : Easter Eggs](#easter-eggs) ( ??% Complete )
 	- [Grade 33 Steel](#easter-egg-1)
 	- [End Times](#easter-egg-2)

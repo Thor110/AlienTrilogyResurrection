@@ -14,6 +14,18 @@ public static class BinaryUtility
         return reader.ReadByte();               // read the byte
     }
     /// <summary>
+    /// Reads a single byte like ReadByteAtOffset, but returns -1 instead of throwing when the file is missing
+    /// or shorter than *offset*.
+    /// </summary>
+    public static int TryReadByteAtOffset(string path, long offset)
+    {
+        if (!File.Exists(path)) { return -1; }
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read);
+        if (offset < 0 || offset >= stream.Length) { return -1; }
+        stream.Seek(offset, SeekOrigin.Begin);
+        return stream.ReadByte();
+    }
+    /// <summary>
     /// The ReplaceBndFrameWith8ByteAlignment method replaces a section of a BND file with new data, ensuring that the new data is aligned to 8-byte boundaries.
     /// </summary>
     public static void ReplaceBndFrameWith8ByteAlignment(string filePath, long offset, int lengthToReplace, byte[] newData)

@@ -8,20 +8,26 @@ namespace ALTViewer
         {
             InitializeComponent();
             gameDirectory = Utilities.CheckDirectory();
-            if(gameDirectory == "") { MessageBox.Show("Game directory not found. Please ensure this program is in the correct directory."); Close(); }
+            if(gameDirectory == "") { MessageBox.Show("Game directory not found. Please ensure this program is in the correct directory."); Close(); return; }
             patchDirectory = Path.Combine(gameDirectory, "SECT90", "L906LEV.MAP"); // setup patchDirectory for the first patch
             string sect32File = Path.Combine(gameDirectory, "SECT32", "371GFX.B16");
+            // Each check reads -1 instead of throwing when its file is missing or too short, so a partial or
+            // unexpected install no longer crashes on start; the patch button then stays hidden, since patching
+            // would fail on the same files.
             // first patch – SECT90
-            byte first = BinaryUtility.ReadByteAtOffset(patchDirectory, 0x50BC8); // checks if the first byte of the current patch has been applied
+            int first = BinaryUtility.TryReadByteAtOffset(patchDirectory, 0x50BC8); // checks if the first byte of the current patch has been applied
             // second patch – SECT32
-            byte last = BinaryUtility.ReadByteAtOffset(gameDirectory + "SECT32\\371GFX.B16", 0x40B0B); // checks if the last byte of the current patch has been applied
+            int last = BinaryUtility.TryReadByteAtOffset(sect32File, 0x40B0B); // checks if the last byte of the current patch has been applied
             // newest patches - SECT90: the texture scan fixes (last one at 0x42524), the model removals (the file shrinks to 393852 bytes), L903's pillars, L900's lift panel and the former export fixes
             string sect90Last = Path.Combine(gameDirectory, "SECT90", "L909LEV.MAP");
-            bool newestDone = File.Exists(sect90Last) && new FileInfo(sect90Last).Length == 393852 && BinaryUtility.ReadByteAtOffset(sect90Last, 0x4252C) == 0xC5
-                && BinaryUtility.ReadByteAtOffset(Path.Combine(gameDirectory, "SECT90", "L903LEV.MAP"), 0x6AE52) == 0x14
-                && BinaryUtility.ReadByteAtOffset(Path.Combine(gameDirectory, "SECT90", "L900LEV.MAP"), 0x49BCA) == 0x02
-                && BinaryUtility.ReadByteAtOffset(Path.Combine(gameDirectory, "SECT12", "L161LEV.MAP"), 0x28A68) == 0xD6; // the export fixes, now in the files
-            if (first == 0xFF || last != 0xFA || !newestDone) { button6.Visible = true; } // show patch button if any of the patches is still to be applied
+            int scanFix = BinaryUtility.TryReadByteAtOffset(sect90Last, 0x4252C);
+            int pillars = BinaryUtility.TryReadByteAtOffset(Path.Combine(gameDirectory, "SECT90", "L903LEV.MAP"), 0x6AE52);
+            int liftPanel = BinaryUtility.TryReadByteAtOffset(Path.Combine(gameDirectory, "SECT90", "L900LEV.MAP"), 0x49BCA);
+            int exportFix = BinaryUtility.TryReadByteAtOffset(Path.Combine(gameDirectory, "SECT12", "L161LEV.MAP"), 0x28A68); // the export fixes, now in the files
+            bool filesPresent = first >= 0 && last >= 0 && scanFix >= 0 && pillars >= 0 && liftPanel >= 0 && exportFix >= 0;
+            bool newestDone = filesPresent && new FileInfo(sect90Last).Length == 393852 && scanFix == 0xC5
+                && pillars == 0x14 && liftPanel == 0x02 && exportFix == 0xD6;
+            if (filesPresent && (first == 0xFF || last != 0xFA || !newestDone)) { button6.Visible = true; } // show patch button if any of the patches is still to be applied
         }
         // create new form method
         private void newForm(Form form)
