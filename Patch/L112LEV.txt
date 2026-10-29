@@ -1,0 +1,21 @@
+L112LEV.MAP overlapping faces under the hanging sign (Claude, 2026)
+
+A corner of the sloped base below the hanging sign, near the floor below the handrail, is covered twice.
+Face 5843 alone covers the corner; faces 5849 and 5850 cover exactly the same area again (their new
+vertices 13158 and 13159 lie on 5843's edges), so the two sets fought for the same pixels and pale
+slivers of texture 0 showed through.
+
+Face	Offset		Vertices			Texture
+5843	0x3AF30		985, 981, 920, -1		105	kept
+5849	0x3AFA8		13158, 985, 13159, -1		0	made zero-area
+5850	0x3AFBC		13158, 13159, 981, 920		105	made zero-area
+
+The fix points every corner of 5849 and 5850 at vertex 985, which both already share with 5843, so they
+cover no area and draw nothing. Their texture, flag and light bytes are left as they were.
+
+Offset		Was						Now
+0x3AFA8		66 33 00 00 D9 03 00 00 67 33 00 00 FF FF FF FF	D9 03 00 00 D9 03 00 00 D9 03 00 00 FF FF FF FF
+0x3AFBC		66 33 00 00 67 33 00 00 D5 03 00 00 98 03 00 00	D9 03 00 00 D9 03 00 00 D9 03 00 00 D9 03 00 00
+
+Only L112LEV has these faces.
+Applied by ALTEngine (data/Patches.json) and by ALTViewer's patch button.

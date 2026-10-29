@@ -22069,6 +22069,54 @@
       ]
     },
     {
+      "target": "SECT11/L112LEV.MAP",
+      "note": "L112LEV.MAP - a corner of the sloped base under the hanging sign was covered twice: triangle 5843 (985, 981, 920) and, over exactly the same area, a tex 0 triangle 5849 (13158, 985, 13159) and a strip 5850 (13158, 13159, 981, 920). The two fought for the same pixels, showing pale tex 0 slivers. 5849 and 5850 are made zero-area by pointing every corner at vertex 985, leaving 5843 - see Patch/L112LEV.txt",
+      "edits": [
+        {
+          "offset": "0x3AFA8",
+          "bytes": [
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x3AFBC",
+          "bytes": [
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
       "target": "SECT11/L111LEV.MAP",
       "note": "L111LEV.MAP - starting lift panel (face 10208, vertices 10759, 10760, 10756, 10755) mirrored the wrong way: flag byte 0x00 -> 0x02, its mirrored partner (Edward, 2026) - see Patch/L111LEV.txt",
       "edits": [

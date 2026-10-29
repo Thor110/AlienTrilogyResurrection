@@ -922,6 +922,15 @@ namespace ALTViewer
                 Tuple.Create(0x6E862L, new byte[] { 0x15 })
             };
             BinaryUtility.ReplaceBytes(replacements, patchDirectory);
+            // L112LEV.MAP - a corner under the hanging sign was covered twice: faces 5849 and 5850 lay over triangle 5843
+            //   and fought it for the same pixels; both are made zero-area at vertex 985 (see Patch/L112LEV.txt)
+            patchDirectory = gameDirectory + "SECT11\\L112LEV.MAP";
+            replacements = new List<Tuple<long, byte[]>>()
+            {
+                Tuple.Create(0x3AFA8L, new byte[] { 0xD9, 0x03, 0x00, 0x00, 0xD9, 0x03, 0x00, 0x00, 0xD9, 0x03, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF }),
+                Tuple.Create(0x3AFBCL, new byte[] { 0xD9, 0x03, 0x00, 0x00, 0xD9, 0x03, 0x00, 0x00, 0xD9, 0x03, 0x00, 0x00, 0xD9, 0x03, 0x00, 0x00 })
+            };
+            BinaryUtility.ReplaceBytes(replacements, patchDirectory);
             // L111LEV.MAP and L900LEV.MAP - the same three bugs at the same offsets in both
             //   0x14EFA: misplaced vertex coordinate on a lift (Patch/new-fix.txt, Edward, 2026)
             //   0x46DC4: one triangle had the wrong texture index; 0x46DB4 writes its vertex list back to the original

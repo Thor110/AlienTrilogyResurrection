@@ -99,6 +99,7 @@ The road map for this project.
 	- [Patched an issue on L111LEV where a vertex in the first lift had the wrong Z coordinate.](#L111LEV-Fix-3)
 	- [Patched an issue on L111LEV where a face was assigned the wrong texture index.](#L111LEV-Fix-4)
 	- [Patched an issue on L111LEV where the starting lift panel had its texture flipped.](#L111LEV-Fix-5)
+- [Patched an issue on L112LEV where a corner under the hanging sign was covered by two sets of faces.](#L112LEV-Fix-1)
 	- [Patched an issue on L141LEV where some crates had incorrect textures.](#L141LEV-Fix-1)
 	- [Patched an issue on L161LEV where one face had an incorrect texture.](#L161LEV-Fix-1)
 	- [Patched an issue on L161LEV where one face on a door had an incorrect texture.](#L161LEV-Fix-2)
@@ -385,6 +386,7 @@ Fixes marked "texture scan" were found by ALTLevelScan, which looks for faces wh
 - [Patched an issue on L111LEV where a vertex on a lift had a misplaced coordinate.](#L111LEV-Fix-3)
 - [Patched an issue on L111LEV where a face was assigned the wrong texture index.](#L111LEV-Fix-4)
 - [Patched an issue on L111LEV where the starting lift panel had its texture flipped.](#L111LEV-Fix-5)
+- [Patched an issue on L112LEV where a corner under the hanging sign was covered by two sets of faces.](#L112LEV-Fix-1)
 - [Patched an issue on L141LEV where some crates had incorrect textures.](#L141LEV-Fix-1)
 - [Patched an issue on L154LEV where one face had its texture flipped and rotated (texture scan 154-1).](#L154LEV-Fix-1)
 - [Patched an issue on L161LEV where one face had an incorrect texture.](#L161LEV-Fix-1)
@@ -782,6 +784,26 @@ The panel on the starting lift (face 10208) was mirrored the wrong way. Its flag
 Patch listed at Patch/L111LEV.txt
 
 Applied by both ALTEngine and ALTViewer's patch button.
+
+## L112LEV Fix 1
+
+Overlapping faces.
+
+A corner of the sloped base under the hanging sign was covered twice. Triangle 5843 covers the whole corner; a second triangle (5849, texture 0) and a strip (5850) cover exactly the same area again. The two sets fought for the same pixels, so pale slivers of the wrong texture showed through the corner. The patch makes 5849 and 5850 zero-area by pointing all their corners at vertex 985, one of the corners they already shared with 5843, which is left as the corner's only face.
+
+Patch listed at Patch/L112LEV.txt
+
+Applied by both ALTEngine and ALTViewer's patch button.
+
+Before and after (rendered by ALTEngine, brightened):
+
+<div align="center">
+  <img src="Images/L112LEV-overlapping-faces.png" alt="L112LEV Original">
+</div>
+
+<div align="center">
+  <img src="Images/L112LEV-overlapping-faces-fixed.png" alt="L112LEV Patched">
+</div>
 
 ## L141LEV Fix 1
 
