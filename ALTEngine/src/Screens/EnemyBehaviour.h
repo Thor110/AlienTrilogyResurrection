@@ -513,10 +513,14 @@ namespace ALTEngine::Screens
             }
         }
 
-        inline int HitAnimation(int subtype)
+        // The gunners (0x0b-0x0e) flinch on 8 as well (0x311c5); the synth
+        // only seen from behind (walk views 7, 0 and 1), and on 9 otherwise
+        // (0x312bb) - `view` is the walk view it was last drawn in.
+        inline int HitAnimation(int subtype, int view = 0)
         {
             if (subtype == 1) { return 3; }
-            if (subtype >= 2 && subtype <= 10) { return 8; }
+            if (subtype == 0x0d) { return (view == 0 || view == 1 || view == 7) ? 8 : 9; }
+            if (subtype >= 2 && subtype <= 0x0e) { return 8; }
             return 9;
         }
 
@@ -653,7 +657,8 @@ namespace ALTEngine::Screens
         //     to 0x60 along its heading, animation 10 starts, and if it is not
         //     already in the air its vertical velocity becomes 0x80.
         //
-        // Type 3 always leaps, with animation 12. After the leap a hugger goes
+        // Type 3 always leaps, with animation 12, at 0x40 rather than 0x60
+        // (0x33d79, both bands). After the leap a hugger goes
         // back to the chase (0x348f9); type 3 stays in the attack state. The mover then takes 0xc off
         // the vertical velocity each tick and lands the creature at floor +
         // 0x20. State 5 ends the leap (0x34874): both velocities cleared, then
@@ -663,6 +668,8 @@ namespace ALTEngine::Screens
         // The end of the leap is a flag (+0xb6 bit 2) set by the animation
         // script, which is not read yet; the port ends it on landing.
         inline constexpr int LEAP_SPEED = 0x60;
+        inline constexpr int LEAP_SPEED_TYPE_3 = 0x40;
+        inline constexpr int LeapSpeed(int type) { return type == 3 ? LEAP_SPEED_TYPE_3 : LEAP_SPEED; }
         inline constexpr int LEAP_LIFT = 0x80;
         inline constexpr int GRAVITY = 0xc;
         inline constexpr int ATTACK_REACH_VERTICAL = 0x400;

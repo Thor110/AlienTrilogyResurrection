@@ -169,39 +169,44 @@ namespace ALTEngine::Screens
         constexpr int SFX_FOOTSTEP = 0x2c;
         constexpr int SFX_FOOTSTEP_FLAGGED = 0x26;
 
-        // The original's logic tick rate: 34.87 Hz, one tick for every two
-        // interrupts of its own 69.74 Hz timer (PIT divisor 0x42d5, installed
-        // at 0x5ab80). Everything - player, creatures, particles, doors, lifts,
-        // lights, the HUD - runs on it, and drawing is free of it.
+        // The original's logic tick rates. Its own timer interrupt runs at
+        // 69.74 Hz (PIT divisor 0x42d5, installed at 0x5ab80).
         //
-        // HOW THE ORIGINAL GETS THERE (Notes/engine-remaining-work.md, item
-        // 1). Its frame waits for an even number of interrupts
-        // (FUN_0004d2c8) and then runs the task list n times (FUN_00012590),
-        // drawing on the last pass. Its target is one pass per two
-        // interrupts: that is what its own "-so" switch gives on a machine that
-        // keeps up, every task once per 2/69.74 s. The "speed compensation"
-        // that is on by default is meant to hold that rate on a slower machine
-        // by running extra passes, but its formula, n = c/2 + 1 for c
-        // interrupts, runs one more than it needs. So a fast machine actually
-        // ran the player at ~70 Hz, and slower ones somewhere between. The
-        // creatures and particles, which only run on odd passes, stayed near
-        // 35 Hz throughout.
+        // HOW THE ORIGINAL RUNS (Notes/engine-remaining-work.md, item 1). Its
+        // frame waits for an even number of interrupts (FUN_0004d2c8) and then
+        // runs the task list n times (FUN_00012590), counting 0x6164 down from
+        // n to 1 and drawing on the last pass. With its "speed compensation",
+        // which is on unless the -so switch is given, n = c/2 + 1 for a frame of
+        // c interrupts. At its design point, a frame drawn in two interrupts
+        // (35 fps), that is two passes a frame:
+        //   - every pass: the player's movement and state, doors and lifts, so
+        //     they tick at 69.74 Hz;
+        //   - odd passes only (test byte [0x6164], 1): the common creature task
+        //     (0x342c1) and the particles (0x2d929), so 34.87 Hz;
+        //   - the last pass only (0x6164 == 1): firing (FUN_0003d5b0), the weapon
+        //     animation and drawing, also 34.87 Hz.
+        // The creatures are at 34.87 Hz in every mode: with -so, n is 1, and
+        // pass 1 is odd.
         //
-        // THE CHOICE. One fixed rate for everything, at that design point. It
-        // keeps every system at the speed relative to the others that the
-        // original had at its target, makes the game independent of the frame
-        // rate, and leaves the render rate to the display. The old hand-tuned
-        // walk speed of about 2000 units a second agrees: the walk (0x3c a
-        // tick, half of 0x78) at 34.87 Hz is 2092.
+        // THE PORT. A fixed tick at the interrupt rate, TICK_HZ, for the player,
+        // doors and lifts, and every other tick (CREATURE_TICK_HZ) for the rest,
+        // as at the design point. Drawing is free of both, and the view is
+        // smoothed between player ticks. Every per-tick constant in this file is
+        // per TICK_HZ tick, as in the original.
+        //
+        // changes-16 ran the player at 34.87 Hz and creatures at half that,
+        // which kept the original's ratio but halved every creature's speed.
         constexpr double ORIGINAL_TIMER_HZ = 1193182.0 / 17109.0;   // 69.74
-        constexpr double TICK_HZ = ORIGINAL_TIMER_HZ / 2.0;          // 34.87
+        constexpr double TICK_HZ = ORIGINAL_TIMER_HZ;                // 69.74
+        constexpr double CREATURE_TICK_HZ = TICK_HZ / 2.0;           // 34.87
 
         // Modern: Player Jumping - OURS, the original has none. The lift is a
-        // short hop (an apex of about 0x48^2 / 2 / 0xc = 216 units, under the
-        // 256-unit step); the gravity is the original's own, a creature's
-        // 0xc a tick. The head keeps 0x20 below the ceiling.
-        constexpr float JUMP_LIFT = 0x48;
-        constexpr float JUMP_GRAVITY = 0x0c;
+        // short hop: an apex of 0x24^2 / 2 / 3 = 216 units, under the 256-unit
+        // step, reached in 12 ticks (0.17 s). The gravity is a creature's own
+        // 0xc a creature tick, which is 3 a player tick. The head keeps 0x20
+        // below the ceiling.
+        constexpr float JUMP_LIFT = 0x24;
+        constexpr float JUMP_GRAVITY = 3;
         constexpr float JUMP_HEAD_CLEARANCE = 0x20;
 
         inline double FootstepsPerSecond(int speed)

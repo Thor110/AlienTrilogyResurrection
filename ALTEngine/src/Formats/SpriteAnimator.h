@@ -108,7 +108,20 @@ namespace ALTEngine::Formats
         // actually sees is entry 2. That is why the loop target is 2 and not 1.
         // Transcribed rather than tidied; a sequence built for this layout needs
         // a filler at index 1.
-        inline void Start(Animator& animator, const std::vector<uint16_t>& sequence)
+        // A read-only view of a sequence that lives in static data (the
+        // creatures' scripts, EnemyAnimSequences.h). The functions below take
+        // either this or a std::vector.
+        struct SequenceView
+        {
+            const uint16_t* data = nullptr;
+            size_t length = 0;
+            size_t size() const { return length; }
+            bool empty() const { return length == 0; }
+            uint16_t operator[](size_t i) const { return data[i]; }
+        };
+
+        template <typename Sequence>
+        inline void Start(Animator& animator, const Sequence& sequence)
         {
             animator = Animator{};
             if (sequence.empty()) { return; }
@@ -120,7 +133,8 @@ namespace ALTEngine::Formats
 
         // FUN_000288e0. Runs control codes until it reaches a frame entry or an
         // opcode stops it.
-        inline void RunOpcodes(Animator& animator, const std::vector<uint16_t>& sequence)
+        template <typename Sequence>
+        inline void RunOpcodes(Animator& animator, const Sequence& sequence)
         {
             bool stop = false;
             animator.flags = static_cast<uint8_t>(animator.flags & ~FLAG_EVENT);
@@ -203,7 +217,8 @@ namespace ALTEngine::Formats
 
         // FUN_00028a6c. One tick. Returns true on a tick where the displayed
         // frame changed, so callers can skip redundant work.
-        inline bool Tick(Animator& animator, const std::vector<uint16_t>& sequence)
+        template <typename Sequence>
+        inline bool Tick(Animator& animator, const Sequence& sequence)
         {
             // FLAG_EVENT is a ONE-TICK PULSE. RunOpcodes raises it and clears it
             // on its own entry, but it only runs on the ticks where the frame

@@ -30,6 +30,16 @@ namespace ALTEngine::Audio
         static void PlaySlot(int slotId, const char* levelCode,
                              const std::filesystem::path& cdDirectory);
 
+        // The same, at a fraction of the SFX volume: a creature's sound, which
+        // the original plays louder the nearer it is (FUN_00040c38).
+        static void PlaySlotAtVolume(int slotId, float volume, const char* levelCode,
+                                     const std::filesystem::path& cdDirectory);
+
+        // FUN_00040c38's volume for a creature's sound (its mode 2): the
+        // distance as max(|dx|, |dz|) + min / 2, held at 0x1400, taken off
+        // 0x2fff, out of 0x3fff. So 3/4 volume close to, falling to 0.44.
+        static float CreatureVolume(float dx, float dz);
+
         // Samples are read once and kept. Call between levels to release them.
         static void ClearCache();
 
@@ -37,6 +47,7 @@ namespace ALTEngine::Audio
         static void SetVolume(int volume0to10);
 
     private:
-        static void PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory);
+        static void PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory,
+                             float volume = 1.0f);
     };
 }

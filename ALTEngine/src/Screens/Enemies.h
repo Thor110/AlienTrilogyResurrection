@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Formats/EnemyAnimData.h"
+#include "../Formats/EnemyAnimSequences.h"
 #include "../Formats/LevelLoader.h"
 #include "../Formats/SpriteAnimator.h"
 #include "DamageSystem.h"
@@ -266,8 +268,31 @@ namespace ALTEngine::Screens
             bool active = false;        // released and in play
             bool alive = true;
 
+            // THE ANIMATION SCRIPT, for the creatures on the common task (see
+            // Scripted): the original's own sequence, on the shared VM, at
+            // entity +0x80. It times the frames, cues the creature's sounds,
+            // fires a gunner's rounds (OP_SET_FLAG8) and ends the attack
+            // (FLAG_ENDED).
             ALTEngine::Formats::SpriteAnim::Animator animator;
+            ALTEngine::Formats::SpriteAnim::SequenceView sequence;
+            // The attack's animation, chosen when it starts (FUN_00033cbc).
+            int actAnimation = -1;
+            // Views 5-7 of a walk are 3-1 drawn mirrored (+0xb6 bit 5).
+            bool mirrored = false;
+            int walkView = 0;   // +0x6e
+            // A sound the script cued this tick (OP_EVENT, FUN_00040d44), or -1.
+            int animSound = -1;
+            // The handler's grenade throw is armed (+0x6c bit 0).
+            bool grenadeArmed = false;
+            // The script's shot this tick: a round, or a grenade when armed.
+            bool fireGrenade = false;
         };
+
+        // The creatures whose animations run on their scripts: the common task's.
+        inline bool Scripted(const Enemy& enemy)
+        {
+            return CreatureAI::UsesCommonTask(enemy.type);
+        }
 
         // The record's rotation is an 8-direction compass, 45 degrees a step.
         inline int FacingFromRotation(uint8_t rotation)
@@ -503,6 +528,10 @@ namespace ALTEngine::Screens
                 enemy.ai.alerted = true;
                 enemy.ai.idleTimer = 0;
                 enemy.ai.state = CreatureAI::ACT;
+                // An egg's hugger leaps out on its walk (FUN_00035530 starts no
+                // animation), so its leap ends on landing; the caller gives a
+                // burster its own.
+                enemy.actAnimation = -1;
                 enemy.leaping = true;
                 enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * static_cast<float>(speed);
                 enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * static_cast<float>(speed);
@@ -583,6 +612,61 @@ namespace ALTEngine::Screens
             enemy.animationChanged = true;
             enemy.animationFrames = 0;
             enemy.animationEnded = false;
+            enemy.mirrored = false;
+
+            // FUN_0002f4b0: the script from its start, and one step at once.
+            if (Scripted(enemy))
+            {
+                namespace SA = ALTEngine::Formats::SpriteAnim;
+                const auto seq = ALTEngine::Formats::EnemyAnimSequences::Find(
+                    ALTEngine::Formats::EnemyAnimData::CreatureIndexForType(enemy.type), animation);
+                enemy.sequence = { seq.data, seq.count };
+                SA::Start(enemy.animator, enemy.sequence);
+                SA::Tick(enemy.animator, enemy.sequence);
+                enemy.animationFrame = enemy.animator.frameIndex;
+                if (enemy.animator.EventFired()) { enemy.animSound = enemy.animator.param; }
+            }
+        }
+
+        // FUN_000314b8: the walk, as seen from the player - the creature's
+        // facing octant less the octant it is seen from. The types that mirror
+        // draw views 5-7 as 3-1 flipped (the table at 0x31480: all but 1, 10
+        // and 13).
+        inline void PlayWalkByView(Enemy& enemy, int bearingToPlayer)
+        {
+            const int facingOctant = ((enemy.facing + 0x100) >> 9) & 7;
+            const int viewOctant = ((bearingToPlayer + 0x900) >> 9) & 7;
+            const int view = (facingOctant - viewOctant) & 7;
+            enemy.walkView = view;
+            PlayAnimation(enemy, view);
+            enemy.mirrored = view >= 5 && enemy.type != 1 && enemy.type != 10 && enemy.type != 13;
+        }
+
+        // FUN_00033cbc's animation for an attack, by type and band (the near
+        // table at 0x33c04 below mode 2, the middle one at 0x33c60). The handler
+        // in the middle band throws a grenade five times in eight (`armGrenade`).
+        inline int ActAnimation(int type, int mode, int random, bool& armGrenade)
+        {
+            armGrenade = false;
+            const bool near = mode < 2;
+            switch (type)
+            {
+            case 2:  return 10;
+            case 3:  return 12;
+            case 4:  return 12;
+            case 5:  return near ? 10 : 11;
+            case 6:  return near ? 11 : 12;
+            case 8:  return 9;
+            case 9:  return 8;
+            case 0x0b:
+            case 0x0c: return 9;
+            case 0x0d: return 16;
+            case 0x0e:
+                if (near || (random & 7) <= 2) { return 11; }
+                armGrenade = true;
+                return 10;
+            default: return EnemyBehaviour::ActingAnimation(type);
+            }
         }
 
         // FUN_0002f4b0 itself, which starts the animation over even when it is
@@ -700,7 +784,21 @@ namespace ALTEngine::Screens
             }
             if (enemy.state == EnemyBehaviour::STATE_HIT_RECOVER)
             {
-                PlayAnimation(enemy, EnemyBehaviour::HitAnimation(enemy.type));
+                PlayAnimation(enemy, EnemyBehaviour::HitAnimation(enemy.type, enemy.walkView));
+                return;
+            }
+            // A scripted creature attacks on the animation its attack started,
+            // and otherwise walks by view.
+            if (Scripted(enemy))
+            {
+                if (enemy.ai.state == CreatureAI::ACT && enemy.actAnimation >= 0)
+                {
+                    PlayAnimation(enemy, enemy.actAnimation);
+                }
+                else
+                {
+                    PlayWalkByView(enemy, enemy.ai.bearingToPlayer);
+                }
                 return;
             }
             if (enemy.leaping)
@@ -816,15 +914,36 @@ namespace ALTEngine::Screens
             // A gunner's round goes off half-way through its act - the stand-in
             // for the animation event that fires it.
             enemy.fireShot = false;
-            if (a.state == AI::ACT && enemy.shotCountdown > 0 && --enemy.shotCountdown == 0)
+            namespace SA = ALTEngine::Formats::SpriteAnim;
+            const bool scripted = Scripted(enemy) && !enemy.sequence.empty();
+            if (scripted)
+            {
+                // 0x34881: the script's flag 8 fires the round, or the grenade
+                // when the throw is armed, and both are cleared.
+                if (a.state == AI::ACT && (enemy.animator.flags & SA::FLAG_USER8) != 0)
+                {
+                    if (enemy.grenadeArmed) { enemy.fireGrenade = true; }
+                    else { enemy.fireShot = true; }
+                }
+                enemy.animator.flags = static_cast<uint8_t>(enemy.animator.flags & ~SA::FLAG_USER8);
+                enemy.grenadeArmed = enemy.grenadeArmed && !enemy.fireGrenade;
+            }
+            else if (a.state == AI::ACT && enemy.shotCountdown > 0 && --enemy.shotCountdown == 0)
             {
                 enemy.fireShot = true;
             }
 
-            // Has the act ended: a leap on landing, a swipe when it has played.
+            // Has the act ended: with a script, when it raises its end flag
+            // (0x348b8, +0xb6 bit 1) - for a leap too, which slides on until
+            // then; without one, a leap on landing and a swipe when it has
+            // played.
             if (a.state == AI::ACT)
             {
-                if (enemy.leaping) { a.actFinished = (enemy.vy == 0.0f); }
+                if (scripted && enemy.actAnimation >= 0 && enemy.animation == enemy.actAnimation)
+                {
+                    a.actFinished = (enemy.animator.flags & SA::FLAG_ENDED) != 0;
+                }
+                else if (enemy.leaping) { a.actFinished = (enemy.vy == 0.0f); }
                 else if (enemy.actTicks > 0) { a.actFinished = (--enemy.actTicks == 0); }
                 else { a.actFinished = true; }
                 if (a.actFinished && enemy.leaping)
@@ -862,14 +981,33 @@ namespace ALTEngine::Screens
                 if (melee)
                 {
                     enemy.leaping = true;
-                    enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * EB::LEAP_SPEED;
-                    enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * EB::LEAP_SPEED;
+                    enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * EB::LeapSpeed(enemy.type);
+                    enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * EB::LeapSpeed(enemy.type);
                     if (enemy.vy == 0.0f) { enemy.vy = EB::LEAP_LIFT; }
                 }
                 else
                 {
                     enemy.actTicks = NON_LEAP_ACT_TICKS;
                     if (CreatureTasks::Gunner::IsGunner(enemy.type)) { enemy.shotCountdown = NON_LEAP_ACT_TICKS / 2; }
+                }
+
+                if (Scripted(enemy))
+                {
+                    // A ceiling creature in the middle band doesn't attack: it
+                    // idles for two ticks instead (0x33ea5).
+                    if ((enemy.type == 8 || enemy.type == 9) && enemy.mode >= 2)
+                    {
+                        enemy.leaping = false;
+                        a.state = AI::IDLE;
+                        a.idleTimer = 2;
+                        a.vx = a.vz = 0;
+                        enemy.stepX = enemy.stepZ = 0.0f;
+                        return;
+                    }
+                    bool arm = false;
+                    enemy.actAnimation = ActAnimation(enemy.type, enemy.mode, world.random ? world.random() : 0, arm);
+                    enemy.grenadeArmed = arm;
+                    RestartAnimation(enemy, enemy.actAnimation);
                 }
             }
 
@@ -900,6 +1038,8 @@ namespace ALTEngine::Screens
             enemy.releaseMonster = -1;
             enemy.dropPickup = -1;
             enemy.cried = false;
+            enemy.animSound = -1;
+            enemy.fireGrenade = false;
             if (!enemy.active) { return; }
 
             // The hit reaction's immunity runs out. It was set on every hit
@@ -947,13 +1087,30 @@ namespace ALTEngine::Screens
             // it. The frame duration comes from the sequence in the original; a
             // fixed rate stands in until the sequences are fed through the VM.
             UpdateAnimation(enemy);
-            if (++enemy.animationTimer >= ANIMATION_TICKS_PER_FRAME)
+            if (Scripted(enemy))
+            {
+                // The common task's tail (0x34f82): the script steps while it
+                // hasn't ended and the creature is past the chase (+0x6f > 2) -
+                // idle and choosing, it holds its frame.
+                namespace SA = ALTEngine::Formats::SpriteAnim;
+                const bool holding = enemy.state == EnemyBehaviour::STATE_ACTING
+                                  && enemy.ai.state <= CreatureAI::CHASE;
+                if (!holding && !enemy.animator.Ended())
+                {
+                    SA::Tick(enemy.animator, enemy.sequence);
+                    if (enemy.animator.EventFired()) { enemy.animSound = enemy.animator.param; }
+                }
+                enemy.animationFrame = enemy.animator.frameIndex;
+                enemy.animationEnded = (enemy.animator.flags & SA::FLAG_ENDED) != 0;
+            }
+            else if (++enemy.animationTimer >= ANIMATION_TICKS_PER_FRAME)
             {
                 enemy.animationTimer = 0;
                 enemy.animationFrame++;
             }
             // Played through. Without a frame count from the sprites, four
             // frames stand in.
+            if (!Scripted(enemy))
             {
                 const int frames = enemy.animationFrames > 0 ? enemy.animationFrames : 4;
                 if (enemy.animationFrame >= frames)
@@ -1155,8 +1312,8 @@ namespace ALTEngine::Screens
                         }
 
                         enemy.leaping = true;
-                        enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * EB::LEAP_SPEED;
-                        enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * EB::LEAP_SPEED;
+                        enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * EB::LeapSpeed(enemy.type);
+                        enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * EB::LeapSpeed(enemy.type);
                         if (enemy.vy == 0.0f) { enemy.vy = EB::LEAP_LIFT; }
                         enemy.stepX = enemy.leapX;
                         enemy.stepZ = enemy.leapZ;
@@ -1224,6 +1381,23 @@ namespace ALTEngine::Screens
                 break;
 
             case EnemyBehaviour::STATE_HIT_RECOVER:
+                // A scripted creature flinches until its hit animation ends
+                // (state 6, 0x34ba4), and is immune for that long.
+                if (Scripted(enemy)) { enemy.stepX = enemy.stepZ = 0.0f; }
+                if (Scripted(enemy) && !enemy.sequence.empty() && !enemy.animator.Ended()) { break; }
+                if (Scripted(enemy))
+                {
+                    // Then it decides afresh, facing the player; a burster
+                    // backs off first (0x34bd6). OURS: the original re-runs the
+                    // attack's choice in place; the chase reaches the same one.
+                    enemy.ai.facing = enemy.ai.target = BearingTo(enemy, playerX, playerZ);
+                    enemy.facing = enemy.ai.facing;
+                    enemy.ai.vx = enemy.ai.vz = 0;
+                    enemy.ai.state = CreatureAI::CHASE;
+                    if (enemy.type == 3) { enemy.ai.retreating = true; }
+                    enemy.leaping = false;
+                    enemy.leapX = enemy.leapZ = 0.0f;
+                }
                 // The reaction has played out: back to acting.
                 enemy.state = EnemyBehaviour::STATE_ACTING;
                 enemy.recoveredFromHit = true;

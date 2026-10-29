@@ -10,13 +10,13 @@ Details for each item are in the numbered sections below.
 
 | # | Item | Can be done from the binary alone | Status |
 |---|---|---|---|
-| 1 | One logic tick rate (find the game's clock) | yes | done: one fixed 34.87 Hz tick |
+| 1 | One logic tick rate (find the game's clock) | yes | done: 69.74 Hz for the player, doors and lifts, 34.87 Hz for creatures |
 | 2 | Player movement exactly (`FUN_0003d85c` / `FUN_0003dc44`) | yes | done |
 | 3 | Lifts (trigger commands 5 and 7) | yes | done (tested on 3.5.1: heights and platform position) |
 | 4a | Creature line of fire and visibility before attacking (`FUN_0003231c`, `FUN_00033a1c`) | yes | done (zone test approximated) |
 | 4b | Creature chase via the path network (state 2/3) | yes | done for the common task (see section 4 for what's approximated) |
 | 4c | Creatures blocking each other (cell occupancy) | yes | done (barrel blasts still find creatures by position) |
-| 4d | Hit, death and leap-end animations | needs the animation scripts | open |
+| 4d | Hit, death and leap-end animations | yes: the scripts are in the image | done for the common task's creatures (death not drawn; egg, colonist, queen still approximated) |
 | 4e | Per-type tasks for types 1, 7, 10, 0x10-0x13 | yes | done (animation events approximated; untested in play) |
 | 5 | Flame pre-steps damaging objects | yes | done |
 | 6 | Player Jumping option | modern | done (a hop; doesn't reach higher ledges) |
@@ -51,11 +51,14 @@ The port runs two clocks:
   - **The last pass only** (`cmp byte [0x6164], 1`): firing (`FUN_0003d5b0`), the HUD, drawing, and most sounds.
 - **So at the design point** (a frame drawn within two interrupts, 35 fps): two passes a frame. The player, doors and lifts tick at ~70 Hz, while creatures, particles and firing tick at ~35 Hz. On slower frames the compensation falls short: c = 4 gives 52 Hz and 35 Hz; c = 6 gives 46 Hz and 23 Hz. On a machine that draws faster than 70 fps nothing waits, so everything speeds up with the frame rate.
 
-**What the port does now:** one fixed tick of 34.87 Hz (69.74 / 2, `PlayerCamera::TICK_HZ`), with drawing free of it and the camera smoothed between ticks. On it, as in the original's task list:
-- **Every tick:** the player, doors, lifts, lights, the HUD and the tracker.
-- **Every other tick:** creatures, particles, explosions and debris, firing, and the weapon's animation. That's the original's odd-pass and drawing-pass gating, so the player-to-creature ratio is the original's 2:1. A fire-on-press weapon's press is held over to the next such tick.
-- **Modern "Faster Enemies"** (in the Modernised preset): creatures run on every tick, like a real xenomorph rather than the original's walk. Particles and firing stay on the alternate tick.
-- **Why 34.87:** it's the original's target, one pass per two interrupts, which is what `-so` gives on a machine that keeps up. The compensation's formula runs one pass more than it needs (c/2 + 1). It also matches the old hand-tuned walk: 0x3c a tick at 34.87 Hz is 2092 units a second, against about 2000.
+**What the port does now:** the design point, fixed. A base tick of 69.74 Hz (`PlayerCamera::TICK_HZ`), with drawing free of it and the camera smoothed between ticks:
+- **Every tick (69.74 Hz):** the player's movement and state, doors and lifts.
+- **Every other tick (34.87 Hz, `CREATURE_TICK_HZ`):** creatures, particles, explosions and debris, the handlers' grenades, firing, the weapon's animation and its swap, thrown pickups, and the cosmetic cadences: lights, HUD timers, messages, the tracker, the face-hug overlay, the pickups' spin and the switch lights. A fire-on-press weapon's press is held over to the next such tick.
+- **Modern "Faster Enemies"** (in the Modernised preset): creatures run on every tick. Particles and firing stay on the alternate tick.
+- **Changes-16 was wrong:** it ran the player at 34.87 Hz and creatures at half that. That kept the 2:1 ratio but halved every creature's speed: slow huggers and drones. The creatures are at 34.87 Hz in every mode of the original (with `-so`, n is 1 and pass 1 is odd).
+- **The player's walk** is 0x78 a tick (the move vector is rotated at full scale, `FUN_00026a20` / `FUN_00047e84`), so 8370 units a second at 69.74 Hz. Changes-15 to 18 had it at half that.
+- **Player Jumping** is scaled to keep its height and timing: lift 0x24 and gravity 3 a tick.
+- **Modern "Speed Compensation Off"** is the original's own `-so` switch: one pass per two interrupts, so every tick is 34.87 Hz and is also a creature tick. The player moves at half the default pace (the pace of changes-15 to 18) while creatures keep theirs. Jumping doubles its lift and quadruples its gravity to stay the same hop.
 - **Not reproduced:** the frame-rate dependence itself, which would only hurt on modern hardware.
 
 ## 2. Player movement, exactly
@@ -94,8 +97,13 @@ Done as `Game::Lifts` (see section "Settled"). Still to check against a retail m
 
 Status in the port:
 - **The common task** (`LAB_000342b4`, used by types 2-6, 8, 9 and 0x0b-0x0e) now runs state by state in `Screens/CreatureAI.h`: idle, chase, move, attack and act, with the flow field (`Game/FlowField.h`). What is still approximated:
-  - **Act length:** a non-leap act lasts a fixed 0x18 ticks. The original waits for the attack animation's script to set `+0xb6` bit 2.
-  - **Gunners' rounds:** done for `FUN_0002af8c` (types 0x0b-0x0e). They fire half-way through the act, standing in for the `+0xb6` bit 3 event. The grenade (`FUN_0002b240`, particle 0x0d, 25 damage, used when `+0x6c` bit 0 is set) isn't done, since nothing traced sets that bit.
+  - **Animation scripts:** done (`Formats/EnemyAnimSequences.h`, generated from the pairs at `0xac3a0`: frame table, then sequence, both offsets into the `0x90000` object). For the common task's creatures the script now times the frames, cues the creature's sounds (`OP_EVENT`, `FUN_00040d44`, at `FUN_00040c38`'s distance volume), fires a gunner's rounds (`OP_SET_FLAG8`, `0x34881`) and ends the attack and the flinch (`FLAG_ENDED`, `0x348b8` / `0x34ba4`). The script only steps past the chase (`+0x6f` > 2, `0x34f8b`).
+  - **Walk by view** (`FUN_000314b8`): animation = (facing octant - octant seen from) & 7, views 5-7 mirrored for all but types 1, 10 and 13. The port had played each creature's attack animation as its walk.
+  - **The attack's animation** (`FUN_00033cbc`'s tables, near `0x33c04` and middle `0x33c60`): hugger 10, burster 12 (leaping at 0x40, not 0x60), bambi 12, dog 10 / 11, warrior 11 / 12, ceiling warrior 9, ceiling dog 8, guard and soldier 9, synth 16, handler 11, or its grenade throw 10 (middle band, five times in eight). A ceiling creature in the middle band doesn't attack: it idles 2 ticks (`0x33ea5`).
+  - **Rounds per attack**, from the scripts: a guard's burst loops, 4 rounds; the soldier, synth and handler fire 1. A round is 1 damage, then 0x1e ticks of immunity (`FUN_0003e4a8`), so gunners are weak in the original too.
+  - **The handler's grenade:** done (`FUN_0002b240`, arm `0x2dd0c`). From 0x180 up, 0x80 along the heading (0x5a when the player is higher or lower), vy 0x20; gravity 2; on the floor it bounces at 0x10, 2 less each time, then slides, halving. It goes off after 0x40 ticks (`0x2da19`), on a drop of more than 0x40 below the floor, on an attribute 0x14 cell, or on the player (0x19, cause 5, and the blast). Simplified: any object in its cell sets it off (`FUN_0002a2d8` tests heights and only blasts on a barrel). Drawn with the grenade pickup model.
+  - **Flinch:** a scripted creature is immune until its hit animation ends (8; the synth 8 from behind, else 9; `FUN_000310ac`). Then it faces the player and chases afresh, a burster backing off. The original re-runs the attack's choice in place, and pushes the creature back (speed / 4) while it flinches; neither is done.
+  - **Death animations** are chosen but not drawn: a dying creature is removed on the next tick.
   - **Types 0x0b-0x0e** use `FUN_00032aec` instead of `FUN_0003231c` in places. The port uses `FUN_0003231c` for them.
   - **Speeds and timers** are the original's per-tick values. How fast they look depends on the tick rate (item 1).
 - **The other tasks** are now in `Screens/CreatureTasks.h` (egg, colonist, vents) and, for the queen, as a variant of the common task in `Screens/CreatureAI.h`. See "Settled" for what each does. What is still approximated:
@@ -104,11 +112,11 @@ Status in the port:
   - **Vent jets** are drawn as plain puffs; the original's per-type sprites (the table at `0x2d6a0`) aren't read. The vent's sound plays once as the jet starts, since the port's mixer can't hold a loop. A burst pipe shows the barrel explosion; whether `FUN_0002aaf0` also does blast damage is unchecked.
   - **The queen's death** slides her down a slope and can sink her into a pit (cell attribute 6, under 4 units of headroom); neither is done. The colonist's view-dependent death animations (0x1b + view) aren't either.
 - **Visibility mask:** `FUN_00033a1c`'s zone test uses the zones of the player's own cell. The original's mask is every zone the renderer drew that frame (`0x274c2` onward).
-- **Leap end:** the original ends a leap when the animation script sets `+0xb6` bit 2. The port ends it on landing.
+- **Leap end:** done for the common task. The leap ends when its script ends, sliding on after landing until then, as in the original.
 - **Walking off a ledge** gives a creature a small hop (`vy = 0x3c`, `FUN_000315f0`). Not implemented.
 - **Creature steps** now refuse a rise over 0x100, uneven ground (probes more than 0x100 apart) and a ceiling below the creature's half height (`FUN_000315f0`).
 - **Hit and death animations:** `FUN_0002f4b0` starts an animation and `FUN_00030b04` is death.
-- **Cell occupancy:** rebuilt every tick in the original's pattern: the player's cell is marked `0xff`, and each live creature lifts its own mark before it looks or moves, then marks where it ends up. Movement and line of fire both refuse marked cells. Barrel blasts still find creatures by position instead of by the mark's type and index.
+- **Cell occupancy:** rebuilt every tick in the original's pattern: the player's cell is marked `0xff`, and each live creature lifts its own mark before it looks or moves, then marks where it ends up. A hugger on the player's face marks nothing: the pounce clears its cell (`0x33d3e`) and its handler never marks one. Movement and line of fire both refuse marked cells. Barrel blasts still find creatures by position instead of by the mark's type and index.
 
 ## 5. Weapons still approximated
 
@@ -117,7 +125,7 @@ Status in the port:
 
 ## 6. Modern options
 
-- **Player Jumping:** done. A Jump action (default J, in the Controls list, translated in all six string tables) gives a hop with the original's gravity (0xc a tick, a creature's), lift 0x48: about 216 units high. It's held under the ceiling. Movement's step-up rules are unchanged, so a jump doesn't reach a ledge more than the usual 256 up.
+- **Player Jumping:** done. A Jump action (default J, in the Controls list, translated in all six string tables) gives a hop with the original's gravity (0xc a creature tick, so 3 a player tick), lift 0x24: about 216 units high. It's held under the ceiling. Movement's step-up rules are unchanged, so a jump doesn't reach a ledge more than the usual 256 up.
 - **All other options** are now read by gameplay or the menu.
 
 ## 7. Smaller items

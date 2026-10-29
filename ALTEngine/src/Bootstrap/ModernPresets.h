@@ -31,7 +31,7 @@ namespace ALTEngine::Bootstrap
 
         // Features this preset enables. Anything not listed is off. Sized to
         // the feature count so a preset can name all of them.
-        std::array<ModernFeature, 11> enabled;
+        std::array<ModernFeature, 12> enabled;
         int enabledCount;
 
         bool Enables(ModernFeature feature) const

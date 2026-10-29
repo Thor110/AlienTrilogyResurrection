@@ -376,6 +376,16 @@ namespace ALTEngine::Screens
             uint8_t triggerThreshold = 0;
         };
         std::vector<LivePickup> livePickups;
+        // A handler's grenades in flight (FUN_0002b240, particle type 0xd),
+        // stepped on the particle pass by the arm at 0x2dd0c.
+        struct EnemyGrenade
+        {
+            float x = 0, y = 0, z = 0;
+            float vx = 0, vy = 0, vz = 0;
+            int bounce = 0x10;   // +0x18: the next bounce's lift, 2 less each time
+            int life = 0x40;     // +0x1c: goes off when it runs out
+        };
+        std::vector<EnemyGrenade> enemyGrenades;
         // Switch/object state, indexed by object record. Non-zero means
         // already thrown - the original latches on this and fails, which
         // aborts the whole command chain rather than re-running it.
@@ -399,6 +409,10 @@ namespace ALTEngine::Screens
         // Modern: Faster Enemies. Off, creatures run on alternate ticks, as
         // the original's do (see logicTick).
         bool fasterEnemies = false;
+        // The original's -so switch (Modern: Speed Compensation Off): one pass
+        // of the task list per two interrupts, so every tick is a creature
+        // tick and the base tick is half as fast.
+        bool speedCompensationOff = false;
         // Knockback (Game::PlayerMover): its strength and heading.
         int knockbackStrength = 0;
         int knockbackYaw = 0;
@@ -410,6 +424,10 @@ namespace ALTEngine::Screens
         // waits for the next such tick rather than being lost.
         unsigned logicTick = 0;
         bool firePressPending = false;
+        // The same split on the world tick: doors and lifts run on every
+        // tick, the lights, the HUD timers and the other cosmetic cadences on
+        // alternate ones, as they did before the base tick doubled.
+        unsigned worldTick = 0;
         float jumpOffset = 0.0f;
         float jumpVelocity = 0.0f;
         bool jumpHeld = false;
@@ -469,6 +487,7 @@ namespace ALTEngine::Screens
             freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
             playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
             fasterEnemies = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterEnemies);
+            speedCompensationOff = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensationOff);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
             ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
 
@@ -1046,6 +1065,7 @@ namespace ALTEngine::Screens
                         // The enemy roster for this difficulty. Monsters parked
                         // off the playable map are crate contents and start out
                         // of play.
+                        enemyGrenades.clear();
                         enemies = ALTEngine::Screens::Enemies::Build(
                             level, static_cast<int>(difficultySettings.Get()), originX, originZ);
                         {
@@ -1250,6 +1270,7 @@ namespace ALTEngine::Screens
                         freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
                         playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
                         fasterEnemies = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterEnemies);
+                        speedCompensationOff = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensationOff);
                         liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
                         ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
 
@@ -1415,17 +1436,18 @@ namespace ALTEngine::Screens
                 }
 
                 // The player runs at the original's own logic rate (see
-                // PlayerCamera::TICK_HZ), as do the doors and everything else
-                // below. Every constant in PlayerCamera.h is per tick at it.
+                // PlayerCamera::TICK_HZ), as do the doors and lifts below; the
+                // creatures, particles and firing on every other tick. Every
+                // constant in PlayerCamera.h is per tick at it.
                 playerTickAccumulator += dt;
-                const float playerTickLength = 1.0f / static_cast<float>(PC::TICK_HZ);
+                const float playerTickLength = (speedCompensationOff ? 2.0f : 1.0f) / static_cast<float>(PC::TICK_HZ);
                 int playerTicksThisFrame = 0;
                 while (playerTickAccumulator >= playerTickLength)
                 {
                     playerTickAccumulator -= playerTickLength;
                     playerTicksThisFrame++;
                     // The original's alternate pass (see logicTick).
-                    const bool halfPass = (logicTick++ & 1u) == 0;
+                    const bool halfPass = ((logicTick++ & 1u) == 0) || speedCompensationOff;
                     const bool creaturePass = halfPass || fasterEnemies;
 
                     prevCamX = camera.x;
@@ -1481,13 +1503,15 @@ namespace ALTEngine::Screens
                         const bool jumpDown = playerJumping && keys[keyBindings.GetKey(InputAction::Jump)];
                         if (jumpDown && !jumpHeld && jumpOffset <= 0.0f && jumpVelocity == 0.0f)
                         {
-                            jumpVelocity = PC::JUMP_LIFT;
+                            // Twice the lift and four times the gravity on a
+                            // tick twice as long: the same hop.
+                            jumpVelocity = PC::JUMP_LIFT * (speedCompensationOff ? 2.0f : 1.0f);
                         }
                         jumpHeld = jumpDown;
                         if (jumpVelocity != 0.0f || jumpOffset > 0.0f)
                         {
                             jumpOffset += jumpVelocity;
-                            jumpVelocity -= PC::JUMP_GRAVITY;
+                            jumpVelocity -= PC::JUMP_GRAVITY * (speedCompensationOff ? 4.0f : 1.0f);
                             if (jumpOffset <= 0.0f) { jumpOffset = 0.0f; jumpVelocity = 0.0f; }
                         }
                     }
@@ -1571,7 +1595,7 @@ namespace ALTEngine::Screens
                                 }
                                 for (const auto& other : enemies)
                                 {
-                                    if (!other.active || !other.alive || ALTEngine::Screens::IsVent(other.type)) { continue; }
+                                    if (!other.active || !other.alive || other.pouncing || ALTEngine::Screens::IsVent(other.type)) { continue; }
                                     if ((ToGridSpaceX(other.x, originX) >> 9) == (x >> 9)
                                         && (ToGridSpaceZ(other.z, originZ) >> 9) == (z >> 9)) { return true; }
                                 }
@@ -1629,7 +1653,8 @@ namespace ALTEngine::Screens
                     firePressedLastTick = fireHeld;
 
                     // The swap happens at the bottom of the lower, out of sight.
-                    const int swapTo = weaponSwitch.Tick();
+                    // On the weapon's own (drawing-pass) rate, like its animation.
+                    const int swapTo = halfPass ? weaponSwitch.Tick() : -1;
                     if (swapTo >= 0)
                     {
                         const int equipped = inventory.Equip(swapTo);
@@ -1932,10 +1957,13 @@ namespace ALTEngine::Screens
                         };
                         mark(occupancyCell(camera.x, camera.z), 0xff);
                         // Vents stand in walls and floors and never move: they
-                        // don't take part.
+                        // don't take part. Nor does a hugger on the player's
+                        // face: the pounce clears its cell and leaves the
+                        // creature list's cell tests (FUN_00030918's handler
+                        // never marks one).
                         for (const auto& other : enemies)
                         {
-                            if (other.active && other.alive && !ALTEngine::Screens::IsVent(other.type))
+                            if (other.active && other.alive && !other.pouncing && !ALTEngine::Screens::IsVent(other.type))
                             {
                                 mark(occupancyCell(other.x, other.z), 1);
                             }
@@ -2138,6 +2166,8 @@ namespace ALTEngine::Screens
                                     colonist ? CT::Colonist::BURSTER_LIFT : CT::EggRelease::LIFT);
                                 if (released && colonist)
                                 {
+                                    // Its leap plays this to its end (0x35643).
+                                    released->actAnimation = CT::Colonist::BURSTER_ANIMATION;
                                     ALTEngine::Screens::Enemies::RestartAnimation(
                                         *released, CT::Colonist::BURSTER_ANIMATION);
                                 }
@@ -2215,6 +2245,36 @@ namespace ALTEngine::Screens
                                                           -PCm::Cos(enemy.facing) / 4096.0f * along);
                             }
 
+                            // A handler's grenade (FUN_0002b240): thrown from 0x180
+                            // up at 0x80 along its heading - pitched 45 degrees,
+                            // so 0x5a flat, when the player stands higher or
+                            // lower - and lofted at 0x20.
+                            if (enemy.fireGrenade)
+                            {
+                                namespace PCm = ALTEngine::Screens::PlayerCamera;
+                                enemy.fireGrenade = false;
+                                EnemyGrenade g;
+                                g.x = enemy.x;
+                                g.y = enemy.y + 0x180;
+                                g.z = enemy.z;
+                                const float flat = std::fabs(playerFeetY - (enemy.y - ALTEngine::Screens::EnemyBehaviour::STAND_CLEARANCE)) > 1.0f
+                                    ? 0x80 * 0.70710678f : 0x80;
+                                g.vx = PCm::Sin(enemy.facing) / 4096.0f * flat;
+                                g.vz = -PCm::Cos(enemy.facing) / 4096.0f * flat;
+                                g.vy = 0x20;
+                                enemyGrenades.push_back(g);
+                            }
+
+                            // The animation script's sound cue (FUN_00040d44).
+                            if (enemy.animSound >= 0)
+                            {
+                                ALTEngine::Audio::SfxPlayer::PlaySlotAtVolume(
+                                    enemy.animSound,
+                                    ALTEngine::Audio::SfxPlayer::CreatureVolume(enemy.x - camera.x, enemy.z - camera.z),
+                                    digits.c_str(), cdDirectory);
+                                enemy.animSound = -1;
+                            }
+
                             // A vent's jet, sound, burst and switch-off
                             // (CreatureTasks::Vent). The sound plays once as the
                             // jet starts: the port's mixer has no loops to hold.
@@ -2260,7 +2320,7 @@ namespace ALTEngine::Screens
                             }
 
                             // And mark wherever it ended up.
-                            if (marks && enemy.alive) { mark(occupancyCell(enemy.x, enemy.z), 1); }
+                            if (marks && enemy.alive && !enemy.pouncing) { mark(occupancyCell(enemy.x, enemy.z), 1); }
 
                             // Moving sets the velocity flag; attacking and dying
                             // clear it. Nothing else touches it, so a creature's
@@ -2327,9 +2387,11 @@ namespace ALTEngine::Screens
                             }
                         }
 
-                        // Items still in the air after a crate threw them.
+                        // Items still in the air after a crate threw them, at
+                        // the rate they were tuned at (every other tick).
                         for (auto& live : livePickups)
                         {
+                            if (!halfPass) { break; }
                             if (!live.falling || live.placedIndex >= placedObjects.size()) { continue; }
                             auto& placed = placedObjects[live.placedIndex];
 
@@ -2357,9 +2419,14 @@ namespace ALTEngine::Screens
                             return ALTEngine::Formats::FindFloorHeightGridSpace(
                                 level, ToGridSpaceX(sx, originX), ToGridSpaceZ(sz, originZ));
                         });
-                        hudState.TickCarriedItems();
-                        hudMessages.Tick();
-                        faceHug.Tick();
+                        // At the rate they were tuned at, and in step with the
+                        // pouncing hugger's own clock.
+                        if (halfPass)
+                        {
+                            hudState.TickCarriedItems();
+                            hudMessages.Tick();
+                            faceHug.Tick();
+                        }
 
                         // The crawl runs while a hugger is pouncing.
                         {
@@ -2741,6 +2808,79 @@ namespace ALTEngine::Screens
                             triggers.OnShotEnterCell(roundLatch, roundCell, triggerHandlers);
                             return 0;
                         });
+
+                        // A handler's grenades, on the particle pass (0x2dd0c).
+                        // In the original's order: its time running out
+                        // (0x2da19), the cell and object test (FUN_0002a2d8),
+                        // the player (FUN_0002a8f8: 0x19, then the blast as
+                        // well), then the floor.
+                        if (halfPass && !enemyGrenades.empty())
+                        {
+                            auto detonate = [&](const EnemyGrenade& g) {
+                                const int cell = ALTEngine::Formats::CellIndex(
+                                    level, ToGridSpaceX(g.x, originX) >> 9, ToGridSpaceZ(g.z, originZ) >> 9);
+                                explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_BARREL,
+                                                 g.x, g.y + EXPLOSION_HEIGHT_OFFSET, g.z);
+                                if (cell >= 0) { blastQueue.push_back(cell); }
+                                for (size_t q = 0; q < blastQueue.size(); ++q)
+                                {
+                                    ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                        ALTEngine::Formats::SoundIds::BARREL_EXPLODE, digits.c_str(), cdDirectory);
+                                    RunBlast(blastQueue[q]);
+                                }
+                                blastQueue.clear();
+                            };
+                            for (size_t gi = 0; gi < enemyGrenades.size();)
+                            {
+                                EnemyGrenade& g = enemyGrenades[gi];
+                                bool gone = false;
+                                const int gx = ToGridSpaceX(g.x, originX);
+                                const int gz = ToGridSpaceZ(g.z, originZ);
+                                const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
+                                if (!cell) { gone = true; }
+                                else if (--g.life <= 0) { detonate(g); gone = true; }
+                                // OURS, simplified: FUN_0002a2d8 blasts on an
+                                // attribute 0x14 cell and on a barrel, and also
+                                // tests the height of other objects; here any
+                                // object in the cell sets it off.
+                                else if (cell->attribute == 0x14
+                                         || (cell->unknown13 >= 0x14 && cell->unknown13 != 0xFF))
+                                {
+                                    detonate(g); gone = true;
+                                }
+                                else if (g.y - playerFeetY >= 0.0f && g.y - playerFeetY <= 0x400
+                                         && std::fabs(g.x - camera.x) < 0x100 && std::fabs(g.z - camera.z) < 0x100)
+                                {
+                                    hudState.ApplyDamage(0x19, ALTEngine::Screens::GameOverSequence::CAUSE_EXPLOSION);
+                                    checkPlayerDeath();
+                                    detonate(g); gone = true;
+                                }
+                                else
+                                {
+                                    const float floor = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
+                                    if (g.y < floor + 0x20)
+                                    {
+                                        if (floor - g.y > 0x40) { detonate(g); gone = true; }
+                                        else
+                                        {
+                                            // A bounce, lower each time; then it
+                                            // slides, halving its speed.
+                                            g.y = floor + 0x20;
+                                            g.vy = static_cast<float>(g.bounce);
+                                            if (g.bounce > 4) { g.bounce -= 2; }
+                                            else { g.vx = std::trunc(g.vx / 2.0f); g.vz = std::trunc(g.vz / 2.0f); }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        g.vy -= 2.0f;
+                                    }
+                                    if (!gone) { g.x += g.vx; g.y += g.vy; g.z += g.vz; }
+                                }
+                                if (gone) { enemyGrenades.erase(enemyGrenades.begin() + static_cast<std::ptrdiff_t>(gi)); }
+                                else { ++gi; }
+                            }
+                        }
                     }
 
                     // The animation's own sound cue. OP_EVENT's operand IS a
@@ -2894,77 +3034,82 @@ namespace ALTEngine::Screens
                     // 32-unit step is what keeps the step-up test and
                     // clearance behaving.
                     tickAccumulator += dt;
-                    const float worldTickLength = 1.0f / static_cast<float>(ALTEngine::Screens::PlayerCamera::TICK_HZ);
+                    const float worldTickLength = (speedCompensationOff ? 2.0f : 1.0f)
+                                                / static_cast<float>(ALTEngine::Screens::PlayerCamera::TICK_HZ);
                     while (tickAccumulator >= worldTickLength)
                     {
                         tickAccumulator -= worldTickLength;
+                        const bool worldHalf = ((worldTick++ & 1u) == 0) || speedCompensationOff;
 
-                        // Level lights. Steps the blink state machines and
-                        // re-uploads vertex colours only when a light
-                        // actually changed state. The jitter argument is
-                        // the (rand & 3) + 1 the original adds to each
-                        // blink duration.
-                        ModelRenderer::TickLevelLights(cacheKey, SDL_rand(256));
-
-                        hudState.Tick();
-                        if (cheatFullyLoaded) { inventory.GiveEverything(); }
-
-                        // 200 is the game's own ceiling: pickup type 0x17 sets it
-                        // outright and FUN_0003a674 clamps the derm patch display
-                        // there, so it is the real maximum rather than 100.
-                        if (cheatMaximumHealth)
+                        if (worldHalf)
                         {
-                            hudState.health = 200;
-                            hudState.dead = false;
-                        }
-                        hud.TickTracker();
+                            // Level lights. Steps the blink state machines and
+                            // re-uploads vertex colours only when a light
+                            // actually changed state. The jitter argument is
+                            // the (rand & 3) + 1 the original adds to each
+                            // blink duration.
+                            ModelRenderer::TickLevelLights(cacheKey, SDL_rand(256));
 
-                        // Remember where the player has been, for the map's fog
-                        // of war. Without this the visited array stays empty and
-                        // the map draws nothing but the player marker.
-                        if (levelReady)
-                        {
-                            ALTEngine::Renderer::MarkMinimapVisited(
-                                level, minimapVisited,
-                                ToGridSpaceX(camera.x, originX) >> 9,
-                                ToGridSpaceZ(camera.z, originZ) >> 9);
-                        }
+                            hudState.Tick();
+                            if (cheatFullyLoaded) { inventory.GiveEverything(); }
 
-                        // Switch objects. A switch that has not been thrown
-                        // alternates its two red lights; once thrown it holds
-                        // both-yellow. Same states and same 16-tick cadence as
-                        // the animated control-panel FACES (animator group 3
-                        // runs descriptors 238 -> 239 -> 240 on a speed-6
-                        // hold), because they are the same state machine - the
-                        // panel swaps texture, the object has to swap mesh.
-                        //
-                        // NOT VERIFIED: the cadence is taken from the texture
-                        // animator's opcode 6 rather than read out of an
-                        // object-animation path, and BothOff is never shown -
-                        // it is most likely the unpowered state for a
-                        // battery switch before its battery is fitted, but
-                        // nothing has been traced that selects it.
-                        switchBlinkTicks++;
-                        if (switchBlinkTicks >= 16)
-                        {
-                            switchBlinkTicks = 0;
-                            switchBlinkPhase = !switchBlinkPhase;
-                        }
-                        for (const SwitchVisual& sv : switchVisuals)
-                        {
-                            if (sv.placedIndex >= placedObjects.size()) { continue; }
-                            bool thrown = (sv.crateIndex < objectState.size()) && (objectState[sv.crateIndex] != 0);
-                            SwitchState state = thrown ? SwitchState::BothYellow
-                                                       : (switchBlinkPhase ? SwitchState::RedRight : SwitchState::RedLeft);
-                            placedObjects[sv.placedIndex].cacheKey.modelIndex =
-                                sv.familyBase + static_cast<int>(state);
-                        }
+                            // 200 is the game's own ceiling: pickup type 0x17 sets it
+                            // outright and FUN_0003a674 clamps the derm patch display
+                            // there, so it is the real maximum rather than 100.
+                            if (cheatMaximumHealth)
+                            {
+                                hudState.health = 200;
+                                hudState.dead = false;
+                            }
+                            hud.TickTracker();
 
-                        // 0x10 of a 4096-step turn per tick.
-                        pickupAngle += 6.28318531f * 16.0f / 4096.0f;
-                        for (size_t pi : pickupPlaced)
-                        {
-                            if (pi < placedObjects.size()) { placedObjects[pi].rotationRadians = pickupAngle; }
+                            // Remember where the player has been, for the map's fog
+                            // of war. Without this the visited array stays empty and
+                            // the map draws nothing but the player marker.
+                            if (levelReady)
+                            {
+                                ALTEngine::Renderer::MarkMinimapVisited(
+                                    level, minimapVisited,
+                                    ToGridSpaceX(camera.x, originX) >> 9,
+                                    ToGridSpaceZ(camera.z, originZ) >> 9);
+                            }
+
+                            // Switch objects. A switch that has not been thrown
+                            // alternates its two red lights; once thrown it holds
+                            // both-yellow. Same states and same 16-tick cadence as
+                            // the animated control-panel FACES (animator group 3
+                            // runs descriptors 238 -> 239 -> 240 on a speed-6
+                            // hold), because they are the same state machine - the
+                            // panel swaps texture, the object has to swap mesh.
+                            //
+                            // NOT VERIFIED: the cadence is taken from the texture
+                            // animator's opcode 6 rather than read out of an
+                            // object-animation path, and BothOff is never shown -
+                            // it is most likely the unpowered state for a
+                            // battery switch before its battery is fitted, but
+                            // nothing has been traced that selects it.
+                            switchBlinkTicks++;
+                            if (switchBlinkTicks >= 16)
+                            {
+                                switchBlinkTicks = 0;
+                                switchBlinkPhase = !switchBlinkPhase;
+                            }
+                            for (const SwitchVisual& sv : switchVisuals)
+                            {
+                                if (sv.placedIndex >= placedObjects.size()) { continue; }
+                                bool thrown = (sv.crateIndex < objectState.size()) && (objectState[sv.crateIndex] != 0);
+                                SwitchState state = thrown ? SwitchState::BothYellow
+                                                           : (switchBlinkPhase ? SwitchState::RedRight : SwitchState::RedLeft);
+                                placedObjects[sv.placedIndex].cacheKey.modelIndex =
+                                    sv.familyBase + static_cast<int>(state);
+                            }
+
+                            // 0x10 of a 4096-step turn per tick.
+                            pickupAngle += 6.28318531f * 16.0f / 4096.0f;
+                            for (size_t pi : pickupPlaced)
+                            {
+                                if (pi < placedObjects.size()) { placedObjects[pi].rotationRadians = pickupAngle; }
+                            }
                         }
 
                         for (size_t li = 0; li < lifts.size(); ++li)
@@ -3183,6 +3328,21 @@ namespace ALTEngine::Screens
                         shell.scaleX = shell.scaleY = shell.scaleZ = CASING_MODEL_SCALE;
                         placedObjects.push_back(shell);
                     }
+
+                    // A handler's grenades. OURS: the original draws its own
+                    // model, which isn't traced; the pulse rifle's grenade
+                    // pickup stands in, small.
+                    for (const EnemyGrenade& g : enemyGrenades)
+                    {
+                        ALTEngine::Renderer::PlacedObject shell;
+                        shell.cacheKey = { ALTEngine::Renderer::ModelCatalog::Pickmod,
+                                           ALTEngine::Formats::ModelIndices::PickMod::PulseRifleGrenade };
+                        shell.x = g.x;
+                        shell.y = g.y - 0x20;
+                        shell.z = g.z;
+                        shell.scaleX = shell.scaleY = shell.scaleZ = CASING_MODEL_SCALE * 2.0f;
+                        placedObjects.push_back(shell);
+                    }
                 }
 
                 // The view, drawn between the last two player ticks (see
@@ -3192,7 +3352,7 @@ namespace ALTEngine::Screens
                 if (prevCamValid)
                 {
                     namespace PC = ALTEngine::Screens::PlayerCamera;
-                    const float tickLength = 1.0f / static_cast<float>(PC::TICK_HZ);
+                    const float tickLength = (speedCompensationOff ? 2.0f : 1.0f) / static_cast<float>(PC::TICK_HZ);
                     const float alpha = std::clamp(playerTickAccumulator / tickLength, 0.0f, 1.0f);
                     view.x = prevCamX + (camera.x - prevCamX) * alpha;
                     view.z = prevCamZ + (camera.z - prevCamZ) * alpha;

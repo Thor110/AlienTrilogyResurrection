@@ -270,9 +270,73 @@ TEST_CASE("Damage: a creature that survives a hit can be hit again once its reac
     CHECK_EQ(w.health, 448);
     CHECK(!EN::ApplyHit(w, 32));             // still reacting: no damage
     CHECK_EQ(w.health, 448);
+    // The flinch lasts until its animation ends (state 6 waits for the
+    // script's end flag): a warrior's hit animation, 8, is four frames of four
+    // ticks.
     for (int t = 0; t < 10; ++t) { EN::Tick(w, 300, 0, 0); }
+    CHECK(!EN::ApplyHit(w, 32));
+    CHECK_EQ(w.health, 448);
+    for (int t = 0; t < 20; ++t) { EN::Tick(w, 300, 0, 0); }
     EN::ApplyHit(w, 32);
     CHECK_EQ(w.health, 416);                 // it used to stay at 448 for good
+}
+
+TEST_CASE("Animation scripts: a guard's attack fires four rounds, the others one")
+{
+    namespace SA = ALTEngine::Formats::SpriteAnim;
+    namespace AS = ALTEngine::Formats::EnemyAnimSequences;
+    namespace AD = ALTEngine::Formats::EnemyAnimData;
+    auto shots = [](int type, int animation) {
+        const auto seq = AS::Find(AD::CreatureIndexForType(type), animation);
+        const SA::SequenceView view{ seq.data, seq.count };
+        SA::Animator a;
+        SA::Start(a, view);
+        int fired = 0;
+        for (int t = 0; t < 400 && !a.Ended(); ++t)
+        {
+            SA::Tick(a, view);
+            if (a.flags & SA::FLAG_USER8) { ++fired; a.flags = static_cast<uint8_t>(a.flags & ~SA::FLAG_USER8); }
+        }
+        CHECK(a.Ended());
+        return fired;
+    };
+    CHECK_EQ(shots(0x0b, 9), 4);    // guard: its burst loops three more times
+    CHECK_EQ(shots(0x0c, 9), 1);    // soldier
+    CHECK_EQ(shots(0x0d, 16), 1);   // synth
+    CHECK_EQ(shots(0x0e, 11), 1);   // handler's shot
+    CHECK_EQ(shots(0x0e, 10), 1);   // handler's throw
+}
+
+TEST_CASE("Animation scripts: the walk is chosen by view, and views 5-7 mirror")
+{
+    EN::Enemy h;
+    h.type = 2; h.active = true; h.alive = true;
+    h.facing = 0;
+    // Facing the player head on: the front view, 4.
+    EN::PlayWalkByView(h, 0);
+    CHECK_EQ(h.animation, 4);
+    CHECK(!h.mirrored);
+    // Turned a quarter away: a side view, and one side is mirrored.
+    h.facing = 0x400;
+    EN::PlayWalkByView(h, 0);
+    CHECK_EQ(h.animation, 6);
+    CHECK(h.mirrored);
+    // The script drives the frame: a hugger's walk holds each frame 4 ticks.
+    CHECK_EQ(h.sequence.size() > 0, true);
+    CHECK_EQ(h.animator.frameDuration, 4);
+}
+
+TEST_CASE("Animation scripts: a handler throws a grenade five times in eight in the middle band")
+{
+    bool arm = false;
+    CHECK_EQ(EN::ActAnimation(0x0e, 0, 7, arm), 11);
+    CHECK(!arm);
+    CHECK_EQ(EN::ActAnimation(0x0e, 2, 2, arm), 11);
+    CHECK(!arm);
+    CHECK_EQ(EN::ActAnimation(0x0e, 2, 3, arm), 10);
+    CHECK(arm);
+    CHECK_EQ(EN::ActAnimation(6, 0, 0, arm), 11);   // a warrior's swipe
+    CHECK_EQ(EN::ActAnimation(6, 2, 0, arm), 12);   // and its middle-band attack
 }
 
 TEST_CASE("Damage: a creature's hit lands from the near and middle bands with a clear line")

@@ -153,6 +153,8 @@ namespace ALTEngine::Bootstrap
         case StringId::ActionJump: return "ActionJump";
         case StringId::FasterEnemies: return "FasterEnemies";
         case StringId::DescFasterEnemies: return "DescFasterEnemies";
+        case StringId::SpeedCompensationOff: return "SpeedCompensationOff";
+        case StringId::DescSpeedCompensationOff: return "DescSpeedCompensationOff";
         case StringId::GsOptions: return "GsOptions";
         case StringId::GsRedefineKeyboard: return "GsRedefineKeyboard";
         case StringId::GsRedefineMouse: return "GsRedefineMouse";
@@ -480,6 +482,8 @@ namespace ALTEngine::Bootstrap
         if (name == "ActionJump") { return StringId::ActionJump; }
         if (name == "FasterEnemies") { return StringId::FasterEnemies; }
         if (name == "DescFasterEnemies") { return StringId::DescFasterEnemies; }
+        if (name == "SpeedCompensationOff") { return StringId::SpeedCompensationOff; }
+        if (name == "DescSpeedCompensationOff") { return StringId::DescSpeedCompensationOff; }
         if (name == "GsOptions") { return StringId::GsOptions; }
         if (name == "GsRedefineKeyboard") { return StringId::GsRedefineKeyboard; }
         if (name == "GsRedefineMouse") { return StringId::GsRedefineMouse; }

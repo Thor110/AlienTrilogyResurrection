@@ -51,6 +51,7 @@ namespace ALTEngine::Bootstrap
 
         // Applies to every voice, now and for later sounds. 0..1.
         void SetSfxGain(float gain);
+        float SfxGain() const { return sfxGain; }
 
         static constexpr int SFX_VOICE_COUNT = 12;
 

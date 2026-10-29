@@ -207,3 +207,55 @@ TEST_CASE("Enemies: with a world, the common task wakes, closes and leaps")
     CHECK(leapt);
     CHECK(e.ai.alerted);
 }
+
+TEST_CASE("Enemies: a scripted leap and a swipe both end, and the creature goes on")
+{
+    Enemies::ResetLevelState();
+    CreatureAI::World world;
+    uint32_t seed = 5;
+    world.cellOpenOrPlayer = [](int, int) { return true; };
+    world.cellOpen = [](int, int) { return true; };
+    world.lineTo = [](int, int, int) { return true; };
+    world.nodeAt = [](int, int) { return -1; };
+    world.nodeToward = [](int) { return -1; };
+    world.nodeAway = [](int) { return -1; };
+    world.nodePosition = [](int, int&, int&) { return false; };
+    world.random = [&]() { seed = seed * 1103515245u + 12345u; return static_cast<int>((seed >> 16) & 0xffff); };
+
+    // A hugger (the pounce lock held, so it leaps rather than face-hugs) and a
+    // warrior, each run long enough to attack and come out of it.
+    for (int type : { 2, 6 })
+    {
+        Enemies::pounceLockHeld = (type == 2);
+        Enemies::Enemy e = HuggerAtPlayer(900.0f);
+        e.type = type;
+        e.ai.type = type;
+        e.ai.speed = 0x40;
+        e.ai.wakeRange = 0x1000;
+        // An act starts on entering the state, or when a finished one is
+        // started again in place (a warrior at contact range swipes on).
+        int acts = 0, actTicks = 0, longest = 0, previousState = -1, previousFrame = 0;
+        bool sawAttackAnimation = false;
+        for (int t = 0; t < 1500; ++t)
+        {
+            Enemies::Tick(e, 0, 0, 0, &world, false);
+            e.x += e.stepX; e.z += e.stepZ;
+            Enemies::SettleVertical(e, 0.0f, 100000.0f, 0x200);
+            const bool inAct = e.ai.state == CreatureAI::ACT;
+            const bool onAttack = inAct && e.actAnimation >= 0 && e.animation == e.actAnimation;
+            if (onAttack) { sawAttackAnimation = true; }
+            if (inAct && (previousState != CreatureAI::ACT || (onAttack && e.animationFrame < previousFrame)))
+            {
+                ++acts;
+                actTicks = 0;
+            }
+            if (inAct) { longest = std::max(longest, ++actTicks); }
+            previousState = e.ai.state;
+            previousFrame = e.animationFrame;
+        }
+        CHECK(acts >= 2);              // it attacked, and attacked again
+        CHECK(longest < 200);          // no act runs on for ever
+        CHECK(sawAttackAnimation);
+    }
+    Enemies::ResetLevelState();
+}

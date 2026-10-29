@@ -169,6 +169,8 @@ namespace ALTEngine::Bootstrap
         ActionJump,
         FasterEnemies,
         DescFasterEnemies,
+        SpeedCompensationOff,
+        DescSpeedCompensationOff,
 
 
         // The original game's own text, extracted from LANGUAGE/*.BIN. The

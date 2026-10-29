@@ -68,6 +68,12 @@ namespace ALTEngine::Bootstrap
         // task list, half the player's rate, so its aliens walk rather than
         // run; this lets them move like the real thing.
         FasterEnemies,
+
+        // The original's own -so switch ("Speed compensation overridden"):
+        // the task list runs once per two timer interrupts, so the player
+        // ticks at 34.87 Hz with the creatures instead of at 69.74 Hz. Its
+        // default ran the player at twice the creatures' rate.
+        SpeedCompensationOff,
     };
 
     class ModernSettings
@@ -106,6 +112,7 @@ namespace ALTEngine::Bootstrap
             ModernFeature::LiveMinimap,
             ModernFeature::EnableCheats,
             ModernFeature::FasterEnemies,
+            ModernFeature::SpeedCompensationOff,
         };
 
         // The individual toggle's own stored value, ignoring the mode.
@@ -202,6 +209,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::LiveMinimap: return "Live Minimap";
             case ModernFeature::EnableCheats: return "Enable Cheats";
             case ModernFeature::FasterEnemies: return "Faster Enemies";
+            case ModernFeature::SpeedCompensationOff: return "Speed Compensation Off";
             }
             return "";
         }
@@ -221,6 +229,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::LiveMinimap: return "ModernLiveMinimap";
             case ModernFeature::EnableCheats: return "ModernEnableCheats";
             case ModernFeature::FasterEnemies: return "ModernFasterEnemies";
+            case ModernFeature::SpeedCompensationOff: return "ModernSpeedCompensationOff";
             }
             return "ModernUnknown";
         }

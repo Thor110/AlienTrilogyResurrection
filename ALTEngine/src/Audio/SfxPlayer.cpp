@@ -28,7 +28,7 @@ namespace ALTEngine::Audio
         };
     }
 
-    void SfxPlayer::PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory)
+    void SfxPlayer::PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory, float volume)
     {
         if (stem.empty()) { return; }
 
@@ -63,8 +63,11 @@ namespace ALTEngine::Audio
         // Each sound gets a voice of its own and the device mixes them, so
         // gunfire, footsteps and impacts overlap the way the original's
         // channel driver lets them (AppWindow::AcquireSfxVoice).
-        SDL_AudioStream* voice = ALTEngine::Bootstrap::AppWindow::Instance().AcquireSfxVoice();
+        auto& app = ALTEngine::Bootstrap::AppWindow::Instance();
+        SDL_AudioStream* voice = app.AcquireSfxVoice();
         if (!voice) { return; }
+        // Voices are shared, so every sound sets its own gain.
+        SDL_SetAudioStreamGain(voice, app.SfxGain() * volume);
         SDL_PutAudioStreamData(voice, it->second.data(), static_cast<int>(it->second.size()));
     }
 
@@ -85,6 +88,23 @@ namespace ALTEngine::Audio
         // fired once. Nothing drives a continuous sound yet, so they are played
         // as one-shots for now - noted so it is not mistaken for correct.
         PlayFile(name, cdDirectory);
+    }
+
+    void SfxPlayer::PlaySlotAtVolume(int slotId, float volume, const char* levelCode,
+                                     const std::filesystem::path& cdDirectory)
+    {
+        const char* name = SfxBank::SlotName(levelCode, slotId);
+        if (!name || name[0] == '\0') { return; }
+        PlayFile(name, cdDirectory, volume);
+    }
+
+    float SfxPlayer::CreatureVolume(float dx, float dz)
+    {
+        const float ax = dx < 0 ? -dx : dx;
+        const float az = dz < 0 ? -dz : dz;
+        float d = ax > az ? ax + az / 2.0f : az + ax / 2.0f;
+        if (d > 0x1400) { d = 0x1400; }
+        return (static_cast<float>(0x2fff) - d) / static_cast<float>(0x3fff);
     }
 
     void SfxPlayer::SetVolume(int volume0to10)

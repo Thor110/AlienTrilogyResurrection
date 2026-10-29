@@ -14,6 +14,7 @@
 #include "../Formats/EnemyAnimData.h"
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ALTEngine::Screens
@@ -316,6 +317,8 @@ namespace ALTEngine::Screens
 
                 ALTEngine::Renderer::PlacedSprite sprite;
                 sprite.textureKey = frame.key;
+                // Walk views 5-7 are 3-1 flipped (FUN_000314b8, +0xb6 bit 5).
+                if (enemy.mirrored) { std::swap(sprite.u0, sprite.u1); }
                 sprite.x = enemy.x;
                 sprite.z = enemy.z;
                 sprite.halfWidth = frame.width * 0.5f * WORLD_UNITS_PER_PIXEL;
