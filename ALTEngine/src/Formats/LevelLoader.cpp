@@ -179,12 +179,12 @@ namespace ALTEngine::Formats
             m.type = data[pos + 0]; m.x = data[pos + 1]; m.y = data[pos + 2]; m.z = data[pos + 3]; m.rotation = data[pos + 4];
             m.health = data[pos + 5]; m.drop = data[pos + 6]; m.triggerCount = data[pos + 7]; m.triggerThreshold = data[pos + 8];
             m.unk4 = data[pos + 9];
-            m.unknownA = static_cast<uint16_t>(data[pos + 10] | (data[pos + 11] << 8));
-            m.unknownB = static_cast<uint16_t>(data[pos + 12] | (data[pos + 13] << 8));
+            m.coneHalfWidth = static_cast<uint16_t>(data[pos + 10] | (data[pos + 11] << 8));
+            m.wakeRange = static_cast<uint16_t>(data[pos + 12] | (data[pos + 13] << 8));
             m.middleThreshold = static_cast<uint16_t>(data[pos + 16] | (data[pos + 17] << 8));
             m.nearThreshold = static_cast<uint16_t>(data[pos + 18] | (data[pos + 19] << 8));
             m.unknown4 = data[pos + 9]; m.unknown5 = data[pos + 10]; m.unknown6 = data[pos + 11]; m.unknown7 = data[pos + 12];
-            m.unknown8 = data[pos + 13]; m.speed = data[pos + 14]; m.unknown9 = data[pos + 15]; m.unknown10 = data[pos + 16];
+            m.unknown8 = data[pos + 13]; m.speed = data[pos + 14]; m.speedHigh = data[pos + 15]; m.unknown10 = data[pos + 16];
             m.unknown11 = data[pos + 17]; m.unknown12 = data[pos + 18]; m.unknown13 = data[pos + 19];
             pos += 20;
             result.monsters.push_back(m);
@@ -196,7 +196,7 @@ namespace ALTEngine::Formats
         {
             Pickup p;
             p.x = data[pos + 0]; p.y = data[pos + 1]; p.type = data[pos + 2]; p.amount = data[pos + 3];
-            p.multiplier = data[pos + 4]; p.unknown1 = data[pos + 5]; p.z = data[pos + 6]; p.unknown2 = data[pos + 7];
+            p.multiplier = data[pos + 4]; p.triggerCount = data[pos + 5]; p.triggerThreshold = data[pos + 6]; p.unknown2 = data[pos + 7];
             pos += 8;
             result.pickups.push_back(p);
         }
@@ -206,8 +206,8 @@ namespace ALTEngine::Formats
         for (uint16_t i = 0; i < h.objectCount; ++i)
         {
             Crate c;
-            c.x = data[pos + 0]; c.y = data[pos + 1]; c.type = data[pos + 2]; c.drop = data[pos + 3];
-            c.unknown1 = data[pos + 4]; c.unknown2 = data[pos + 5]; c.drop1 = data[pos + 6]; c.drop2 = data[pos + 7];
+            c.x = data[pos + 0]; c.y = data[pos + 1]; c.type = data[pos + 2]; c.flags = data[pos + 3];
+            c.healthDiv16 = data[pos + 4]; c.unknown2 = data[pos + 5]; c.drop1 = data[pos + 6]; c.drop2 = data[pos + 7];
             c.unknown3 = data[pos + 8]; c.unknown4 = data[pos + 9]; c.unknown5 = data[pos + 10]; c.unknown6 = data[pos + 11];
             c.unknown7 = data[pos + 12]; c.unknown8 = data[pos + 13]; c.rotation = data[pos + 14]; c.unknown10 = data[pos + 15];
             pos += 16;
@@ -230,10 +230,10 @@ namespace ALTEngine::Formats
         for (uint16_t i = 0; i < h.liftCount; ++i)
         {
             Lift l;
-            l.x = data[pos + 0]; l.y = data[pos + 1]; l.z = data[pos + 2]; l.unknown1 = data[pos + 3];
-            l.unknown2 = data[pos + 4]; l.unknown3 = data[pos + 5]; l.unknown4 = data[pos + 6]; l.unknown5 = data[pos + 7];
-            l.unknown6 = data[pos + 8]; l.unknown7 = data[pos + 9]; l.unknown8 = data[pos + 10]; l.unknown9 = data[pos + 11];
-            l.unknown10 = data[pos + 12]; l.unknown11 = data[pos + 13]; l.unknown12 = data[pos + 14]; l.unknown13 = data[pos + 15];
+            l.x = data[pos + 0]; l.y = data[pos + 1]; l.width = data[pos + 2]; l.depth = data[pos + 3];
+            l.low = data[pos + 4]; l.travel = data[pos + 5]; l.unknown6Always1 = data[pos + 6]; l.flags = data[pos + 7];
+            l.autoDwell = data[pos + 8]; l.dwell = data[pos + 9]; l.threshold = data[pos + 10]; l.counter = data[pos + 11];
+            l.model = data[pos + 12]; l.unknown11 = data[pos + 13]; l.unknown12 = data[pos + 14]; l.unknown13 = data[pos + 15];
             pos += 16;
             result.lifts.push_back(l);
         }

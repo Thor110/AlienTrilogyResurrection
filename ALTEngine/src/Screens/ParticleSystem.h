@@ -332,6 +332,9 @@ namespace ALTEngine::Screens
             bool falls = false;          // gravity applies - casings only
             bool isBlood = false;        // falls at BLOOD_GRAVITY and is gone when it lands
             int lastTrigger = 0;         // +0x1f, the shot-trigger latch (FUN_000414f0)
+            // Steps a flame still owes from its spawn (FUN_0002bcac takes them
+            // at once, each through the full collision test, FUN_0002a448).
+            int preSteps = 0;
 
             uint8_t type = TYPE_PISTOL;  // +0x1e
             int strength = 0;            // +0x1d, the value life started at
@@ -686,6 +689,27 @@ namespace ALTEngine::Screens
                 for (Particle& p : particles)
                 {
                     if (!p.alive || IsVentParticle(p.type)) { continue; }
+
+                    // A flame's spawn steps, before it moves on its own. Each
+                    // goes through the same test as a flying round, so a crate,
+                    // barrel or creature in the first cells takes the hit; a
+                    // blocked step leaves the flame burning there.
+                    if (p.preSteps > 0)
+                    {
+                        for (; p.preSteps > 0; --p.preSteps)
+                        {
+                            const float nx = p.x + p.vx, ny = p.y + p.vy, nz = p.z + p.vz;
+                            if (blocked(nx, ny, nz, static_cast<int>(p.type), p.life,
+                                        p.x, p.y, p.z, p.lastTrigger) != 0)
+                            {
+                                p.vx = p.vy = p.vz = 0.0f;
+                                p.preSteps = 0;
+                                break;
+                            }
+                            p.x = nx; p.y = ny; p.z = nz;
+                        }
+                        continue;
+                    }
 
                     // Life first. The original decrements +0x1c at the top of
                     // each pass and frees the particle before it moves it, so a

@@ -10,7 +10,7 @@ Details for each item are in the numbered sections below.
 
 | # | Item | Can be done from the binary alone | Status |
 |---|---|---|---|
-| 1 | One logic tick rate (find the game's clock) | yes | open |
+| 1 | One logic tick rate (find the game's clock) | yes | clock found; rates wait on a check in play |
 | 2 | Player movement exactly (`FUN_0003d85c` / `FUN_0003dc44`) | yes | open |
 | 3 | Lifts (trigger commands 5 and 7) | yes | done (tested on 3.5.1: heights and platform position) |
 | 4a | Creature line of fire and visibility before attacking (`FUN_0003231c`, `FUN_00033a1c`) | yes | done (zone test approximated) |
@@ -18,12 +18,12 @@ Details for each item are in the numbered sections below.
 | 4c | Creatures blocking each other (cell occupancy) | yes | done (barrel blasts still find creatures by position) |
 | 4d | Hit, death and leap-end animations | needs the animation scripts | open |
 | 4e | Per-type tasks for types 1, 7, 10, 0x10-0x13 | yes | done (animation events approximated; untested in play) |
-| 5 | Flame pre-steps damaging objects | yes | open |
-| 6 | Player Jumping option | modern | open |
+| 5 | Flame pre-steps damaging objects | yes | done |
+| 6 | Player Jumping option | modern | done (a hop; doesn't reach higher ledges) |
 | 7a | Secrets counter on the assessment screen | yes | open |
 | 7b | Mid-level saves | modern | open |
-| 7c | Death clip choice | yes | open |
-| 7d | Field renames in `LevelLoader.h` | tidy-up | open |
+| 7c | Death clip choice | yes | done |
+| 7d | Field renames in `LevelLoader.h` | tidy-up | done for lifts, pickups, crates and monsters |
 | 7e | Direct-to-window rendering | needs real hardware | open |
 | 7f | Multiplayer | large | open |
 | A | Open question: pistol rounds against a standing hugger | needs a check in the original | open |
@@ -37,10 +37,23 @@ The port runs two clocks:
 - 30 Hz: the player, weapons, enemies and particles. `PlayerCamera::TICK_HZ` is a guess.
 - 60 Hz: doors, lights, HUD timers (including the 0x1e damage cooldown) and the motion tracker.
 
-The original has one. This matters more now: the creature leap is per tick (vertical 0x80, gravity 0xc, horizontal 0x60), so its height and length on screen depend on the rate. Leads:
-- The game never calls the sound library's timer API itself. The only frequency set through it is 100 Hz (`0x64f68`), on the library's own internal callback (`0x54d2a`). The game's clock is somewhere else: the task list run by `FUN_000124f4`'s scheduler, or its own interrupt handler.
-- The timer is a sound-library service. `0x72060` programs the PIT (mode `0x36`) from a divisor. `0x72090` takes a period in µs (divisor = µs × 10000 / 8380). `0x720c3` picks the fastest registered period. `0x72844` registers a slot, called through the wrapper at `0x65aef`.
-- Game tasks are registered with `FUN_000124f4(priority, handler)` (see `FUN_00010694`). Find the event that drives them and its period.
+**How the original does it (found):**
+- **The clock:** the game installs its own INT 8 handler (`0x5a87a`, or `0x5a9e2` in the second set-up path). It programs the PIT with divisor 0x42d5 / 0x42d3 (`0x5ab87`, `0x5b5ed`): 1193182 / 17109 ≈ **69.74 Hz**, the VGA refresh rate. Each interrupt:
+  - increments `DAT_000b0bb8` (the game clock, used for blinking);
+  - increments the frame counter `0x36415f`;
+  - counts down a few real-time timers (`0x1a8178`, `0x362d3c`, `0x1a7f68`, `0xe0a6`, `0x364156`);
+  - chains the BIOS clock.
+- **The frame:** `FUN_00012590` (from the gameplay loop at `0x10b03`) runs the whole task list `n` times in a row, counting `0x6164` down from n to 1. The frame task (`LAB_00010230`, priority 200) only draws on the last pass (`0x6164 == 1`). There it calls `FUN_0004d2c8`, which waits while the frame counter is odd, stores counter + 1 in `0xd5d0` and clears the counter. So a frame lasts an even number of interrupts, unless it takes under one, in which case it doesn't wait at all.
+- **Speed compensation** (on unless the `-so` switch is given, "Speed compensation overridden"): n = (`0xd5d0` + 1) >> 1, at least 1, so a frame of c interrupts runs c/2 + 1 passes. With `-so`, n is always 1.
+- **Which systems run on which passes:**
+  - **Every pass:** the player's state and movement (`0x3ed70` / `0x40040`, no gate), lifts and the other tasks.
+  - **Odd passes only** (`test byte [0x6164], 1`): the common creature task (`0x342c1`), the particle pass (`0x2d929`) and part of the player code (`0x3c265`).
+  - **The last pass only** (`cmp byte [0x6164], 1`): firing (`FUN_0003d5b0`), the HUD, drawing, and most sounds.
+- **So at the design point** (a frame drawn within two interrupts, 35 fps): two passes a frame. The player, doors and lifts tick at ~70 Hz, while creatures, particles and firing tick at ~35 Hz. On slower frames the compensation falls short: c = 4 gives 52 Hz and 35 Hz; c = 6 gives 46 Hz and 23 Hz. On a machine that draws faster than 70 fps nothing waits, so everything speeds up with the frame rate.
+
+**What this means for the port:** the player should tick twice as often as creatures and particles, and doors and lifts at the player's rate. The port has player = creatures = 30 Hz and doors = 60 Hz. Fixing that changes how fast something feels whichever rate is chosen, so it waits on a check against the original (see `PlayerCamera::TICK_HZ` for the footstep measurement). Two choices:
+- **Player and doors at 70, creatures, particles and firing at 35:** the design point.
+- **Keep creatures at 30, player and doors at 60.**
 
 ## 2. Player movement, exactly
 
@@ -95,12 +108,12 @@ Status in the port:
 
 ## 5. Weapons still approximated
 
-- **Flame pre-steps:** they don't damage objects the way the original's cell test (`FUN_00036e9c`) does.
+- **Flame pre-steps:** done. `FUN_0002bcac` runs each of a flame's 1-2 spawn steps through the full collision test (`FUN_0002a448`), so objects, creatures and shot triggers in those cells are hit, and a blocked step leaves the flame burning there. The port now does the same with `Particle::preSteps`.
 - **Shotgun shell model:** model 26 is used for the ejected shell. This is inferred, not traced.
 
 ## 6. Modern options
 
-- **Player Jumping:** in the menu but does nothing. It needs a Jump input action, a default key, a Controls menu entry and strings in all six `LANGUAGE` packs. Look Up / Look Down show how to add an action: append to `InputAction`, list it in `AllActions()`, give it a label and a default key.
+- **Player Jumping:** done. A Jump action (default J, in the Controls list, translated in all six string tables) gives a hop with the original's gravity (0xc a tick, a creature's), lift 0x48: about 216 units high. It's held under the ceiling. Movement's step-up rules are unchanged, so a jump doesn't reach a ledge more than the usual 256 up.
 - **All other options** are now read by gameplay or the menu.
 
 ## 7. Smaller items
@@ -108,8 +121,8 @@ Status in the port:
 - **Assessment screen:** the "secrets" figure is always 0, because nothing tracks secrets.
   - **Found so far:** two level counters that only ever count up. `DAT_000b0b28` counts doors activated for the first time (`FUN_00029560` / `FUN_00029610`, door flag 0x80), and `DAT_000b0b2a` counts lifts run for the first time (lift flag 0x80). Neither has a direct reader, so the assessment screen probably reads them as a block. Its code is the next thing to read.
 - **Saves:** they checkpoint the start of a level only. Mid-level state isn't serialised.
-- **Death clip choice:** causes 0–2 are known to `GameOverSequence`, but their sources aren't identified.
-- **Field names:** `Pickup::unknown1` / `Pickup::z` are the trigger counter / threshold, and `Crate::unknown1` / `Crate::drop` are health ÷ 16 / flags. They're used correctly now but still have their old names in `LevelLoader.h`.
+- **Death clip choice:** done. The causes are the creature attack's, by type (`FUN_00033ff8`, tables `0x33f60` / `0x33fac` by type - 1): huggers and bursters 4 (DEATH1), bambi and dog 1 (DEATH5), warrior drone 0 (DEATH2), queen 2 (DEATH3). Cause 3 is a creature's projectile (particle type 5), and 5 a blast or a vent. The port passed 4 for every creature. Types 8 and up have no arm there at all.
+- **Field names:** renamed. Pickups: `triggerCount` / `triggerThreshold`. Crates: `flags` / `healthDiv16`. Lifts: `width`, `depth`, `low`, `travel`, `flags`, `autoDwell`, `dwell`, `threshold`, `counter`, `model`. Monsters: `coneHalfWidth`, `wakeRange`, `speedHigh`. A monster's byte 6 keeps the name `drop`, with a note that its meaning depends on the type.
 - **Rendering:** each frame is still copied GPU → CPU → GPU (`ModelRenderer::RenderLevelToRgba`). Drawing straight to the window would remove a full-frame stall, and needs testing on real hardware.
 - **Multiplayer:** the menus exist, but there is no networking.
 

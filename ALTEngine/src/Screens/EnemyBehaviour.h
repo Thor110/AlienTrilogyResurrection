@@ -279,19 +279,22 @@ namespace ALTEngine::Screens
             int closeDamage;    // modes 0 and 1
             int middleDamage;   // mode 2
             bool melee;         // false = directed, carrying an angle
+            int cause = 4;      // the damage cause it passes (GameOverSequence::DeathCause)
         };
 
+        // FUN_00033ff8's arms, by type - 1 through the tables at 0x33f60 (near)
+        // and 0x33fac (middle). The cause each passes decides the death clip.
         inline AttackProfile AttackForSubtype(int subtype)
         {
             switch (subtype)
             {
             case 2:
-            case 3:  return { 5, 1, true };
+            case 3:  return { 5, 1, true, 4 };
             case 4:
-            case 5:  return { 10, 5, false };
-            case 6:  return { 15, 10, false };
-            case 7:  return { 25, 15, false };
-            default: return { 0, 0, false };   // no attack arm
+            case 5:  return { 10, 5, false, 1 };
+            case 6:  return { 15, 10, false, 0 };
+            case 7:  return { 25, 15, false, 2 };
+            default: return { 0, 0, false, 4 };   // no attack arm
             }
         }
 

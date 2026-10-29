@@ -66,14 +66,18 @@ namespace ALTEngine::Bootstrap
         // the only way to aim at anything on the floor was Free Look.
         LookUp,
         LookDown,
+
+        // OURS: the Modern "Player Jumping" option's action. The original has
+        // no jump. Bound like any other, and only acts with the option on.
+        Jump,
     };
 
     // Every action, in the order every device's Redefine list shows
     // them - one shared list, not a separate one per device (Edward,
     // 2026).
-    inline const std::array<InputAction, 23>& AllActions()
+    inline const std::array<InputAction, 24>& AllActions()
     {
-        static const std::array<InputAction, 23> actions{
+        static const std::array<InputAction, 24> actions{
             InputAction::MoveForward, InputAction::MoveBackward,
             InputAction::StrafeLeft, InputAction::StrafeRight,
             // Shown here, next to the movement actions they belong with, even
@@ -81,6 +85,7 @@ namespace ALTEngine::Bootstrap
             // the note on the enum.
             InputAction::TurnLeft, InputAction::TurnRight,
             InputAction::LookUp, InputAction::LookDown,
+            InputAction::Jump,
             InputAction::Fire1, InputAction::Fire2, InputAction::Use,
             InputAction::StrafeModifier, InputAction::RunMode, InputAction::RunModifier,
             InputAction::SelectWeapon1, InputAction::SelectWeapon2, InputAction::SelectWeapon3,
@@ -123,6 +128,7 @@ namespace ALTEngine::Bootstrap
         case InputAction::TurnRight: return "Turn Right";
         case InputAction::LookUp: return "Look Up";
         case InputAction::LookDown: return "Look Down";
+        case InputAction::Jump: return "Jump";
         case InputAction::Fire1: return "Fire 1";
         case InputAction::Fire2: return "Fire 2";
         case InputAction::Use: return "Do / Use";
@@ -158,6 +164,7 @@ namespace ALTEngine::Bootstrap
         case InputAction::TurnRight: return Tr(StringId::ActionTurnRight, language);
         case InputAction::LookUp: return Tr(StringId::GsLookUp, language);
         case InputAction::LookDown: return Tr(StringId::GsLookDown, language);
+        case InputAction::Jump: return Tr(StringId::ActionJump, language);
         case InputAction::Fire1: return Tr(StringId::ActionFire1, language);
         case InputAction::Fire2: return Tr(StringId::ActionFire2, language);
         case InputAction::Use: return Tr(StringId::ActionUse, language);
@@ -199,6 +206,8 @@ namespace ALTEngine::Bootstrap
         // the usual choice of the period.
         case InputAction::LookUp: return SDL_SCANCODE_PAGEUP;
         case InputAction::LookDown: return SDL_SCANCODE_PAGEDOWN;
+        // Space is Do / Use in the original's own scheme, so J.
+        case InputAction::Jump: return SDL_SCANCODE_J;
         case InputAction::Fire1: return SDL_SCANCODE_LCTRL;
         case InputAction::Fire2: return SDL_SCANCODE_KP_5;
         case InputAction::Use: return SDL_SCANCODE_SPACE;

@@ -65,15 +65,20 @@ namespace ALTEngine::Screens
     {
         inline constexpr int DEATH_VIDEO_COUNT = 6;
 
-        // Damage cause codes, from what the callers of FUN_0003e5a8 pass.
+        // Damage cause codes, from what the callers of FUN_0003e5a8 /
+        // FUN_0003e5d4 pass. 0-2 and 4 are the creature attack's
+        // (FUN_00033ff8), chosen by the attacker's type through the tables at
+        // 0x33f60 / 0x33fac; 3 is a creature's projectile (particle type 5,
+        // FUN_0002a8f8), the one FUN_0003e4a8 gives its own sound; 5 is a blast
+        // (FUN_000368c8), a vent's jet or the floor.
         enum DeathCause
         {
-            CAUSE_UNKNOWN_0 = 0,
-            CAUSE_UNKNOWN_1 = 1,
-            CAUSE_UNKNOWN_2 = 2,
-            CAUSE_ARMOUR_HIT = 3,   // the one FUN_0003e4a8 gives its own sound
-            CAUSE_ENEMY_ATTACK = 4, // FUN_00033ff8
-            CAUSE_EXPLOSION = 5,    // FUN_000368c8
+            CAUSE_WARRIOR = 0,          // type 6, the warrior drone
+            CAUSE_DOG = 1,              // types 4 and 5, bambi and dog
+            CAUSE_QUEEN = 2,            // type 7
+            CAUSE_ENEMY_PROJECTILE = 3,
+            CAUSE_ENEMY_ATTACK = 4,     // types 2 and 3, hugger and burster
+            CAUSE_EXPLOSION = 5,
         };
 
         // The cause-to-video map, transcribed from FUN_00015a68. Returns the

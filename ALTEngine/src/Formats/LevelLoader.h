@@ -138,7 +138,11 @@ namespace ALTEngine::Formats
         uint8_t z = 0;        // confirmed NOT a height - "only used on L222LEV for the monsters that spawn after first flame vent closed" (Edward, 2026)
         uint8_t rotation = 0; // 8-direction compass: 0=N,1=NE,2=E,3=SE,4=S,5=SW,6=W,7=NW (45 degrees per step)
         uint8_t health = 0;
-        uint8_t drop = 0;     // index of object dropped on death
+        // Byte 6 (+0x72). What it means depends on the type: for most it is
+        // the pickup dropped (FUN_0003bc9c); for an egg, the monster it holds;
+        // for a vent, its height; for the queen, the command chain her death
+        // runs. See Screens/CreatureTasks.h.
+        uint8_t drop = 0;
 
         // TRIGGER COUNTER AND THRESHOLD, not a difficulty setting.
         //
@@ -179,17 +183,20 @@ namespace ALTEngine::Formats
         // Bytes 10/11 are the attack cone half-width: FUN_0002e638 copies them
         // to the creature's +0x40 (clamped 0x100..0x800), which FUN_00033a1c
         // tests the bearing against. Usually exactly 512.
-        // Bytes 12/13 (1879..9061) go to +0x50, still unidentified.
+        // Bytes 12/13 go to +0x50: the range within which the creature
+        // notices the player (CreatureAI::Notices, FUN_00033a70).
         uint8_t unk4 = 0;              // byte 9, constant 0 across L111
-        uint16_t unknownA = 0;         // bytes 10,11 - attack cone
-        uint16_t unknownB = 0;         // bytes 12,13
+        uint16_t coneHalfWidth = 0;    // bytes 10,11 (was unknownA)
+        uint16_t wakeRange = 0;        // bytes 12,13 (was unknownB)
         uint8_t unknown4 = 0;
         uint8_t unknown5 = 0;
         uint8_t unknown6 = 0;
         uint8_t unknown7 = 0;
         uint8_t unknown8 = 0;
+        // Bytes 14/15, a word (+0x5e): the speed - or a colonist's burster,
+        // or a vent's stopped stretch.
         uint8_t speed = 0;
-        uint8_t unknown9 = 0;  // confirmed always 0
+        uint8_t speedHigh = 0;  // was unknown9; 0 on every level so far
         uint8_t unknown10 = 0;
         uint8_t unknown11 = 0;
         uint8_t unknown12 = 0;
@@ -204,8 +211,8 @@ namespace ALTEngine::Formats
         uint8_t type = 0;
         uint8_t amount = 0;
         uint8_t multiplier = 0;
-        uint8_t unknown1 = 0; // confirmed always 0
-        uint8_t z = 0;        // confirmed only ever 0 or 1 - not a real height either
+        uint8_t triggerCount = 0;     // was unknown1: always 0 on disc, counts up to the threshold (FUN_0003bb14)
+        uint8_t triggerThreshold = 0; // was z: 0 = there from the start, else waits on a trigger or a crate
         uint8_t unknown2 = 0; // "always the same as amount for ammunition" (Edward, 2026)
     };
 
@@ -217,8 +224,8 @@ namespace ALTEngine::Formats
         uint8_t x = 0;
         uint8_t y = 0;
         uint8_t type = 0;
-        uint8_t drop = 0;     // 0 = pickup, 2 = enemy
-        uint8_t unknown1 = 0;
+        uint8_t flags = 0;    // was drop: bit 1 indestructible, 2 = holds an enemy rather than pickups
+        uint8_t healthDiv16 = 0; // was unknown1: the object's health / 16 (ProjectileCollision::ObjectHealth)
         uint8_t unknown2 = 0; // confirmed only ever 0 or 10
         uint8_t drop1 = 0;    // index of first pickup dropped
         uint8_t drop2 = 0;    // index of second pickup dropped
@@ -250,19 +257,21 @@ namespace ALTEngine::Formats
     // Door/Crate - no floor-lookup needed.
     struct Lift
     {
+        // FUN_000423e8 / FUN_00041b30 (see Game/Lifts.h). x/y are the first
+        // cell (grid x / z), the area is width x depth cells.
         uint8_t x = 0;
         uint8_t y = 0;
-        uint8_t z = 0;
-        uint8_t unknown1 = 0;
-        uint8_t unknown2 = 0;  // confirmed always 0
-        uint8_t unknown3 = 0;
-        uint8_t unknown4 = 0;  // confirmed always 1
-        uint8_t unknown5 = 0;
-        uint8_t unknown6 = 0;
-        uint8_t unknown7 = 0;
-        uint8_t unknown8 = 0;  // for shootables, number of shots - "must correspond with action byte 3" (Edward, 2026)
-        uint8_t unknown9 = 0;  // confirmed always 0
-        uint8_t unknown10 = 0;
+        uint8_t width = 0;
+        uint8_t depth = 0;
+        uint8_t low = 0;             // always 0 on disc: the load sets it to the first cell's floor
+        uint8_t travel = 0;          // height units above that floor (the runtime's "high")
+        uint8_t unknown6Always1 = 0; // copied to +0x14, never read
+        uint8_t flags = 0;           // 1 top, 4 bottom, 0x10 fast
+        uint8_t autoDwell = 0;       // non-zero: cycles by itself
+        uint8_t dwell = 0;           // ticks it waits at an end
+        uint8_t threshold = 0;       // trigger count it needs to set off
+        uint8_t counter = 0;         // that count, always 0 on disc
+        uint8_t model = 0;           // its platform mesh ("L0" sections)
         uint8_t unknown11 = 0; // confirmed always matches unknown12/unknown13
         uint8_t unknown12 = 0;
         uint8_t unknown13 = 0;

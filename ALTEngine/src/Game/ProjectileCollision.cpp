@@ -123,12 +123,12 @@ namespace ALTEngine::Game::ProjectileCollision
 
     int ObjectHealth(const Formats::Crate& record)
     {
-        return static_cast<int>(record.unknown1) << 4;
+        return static_cast<int>(record.healthDiv16) << 4;
     }
 
     bool ObjectIndestructible(const Formats::Crate& record)
     {
-        if ((record.drop & 1) != 0) { return true; }
+        if ((record.flags & 1) != 0) { return true; }
         switch (record.type)
         {
         case 0x16: case 0x18: case 0x1a: case 0x1b:

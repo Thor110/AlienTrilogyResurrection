@@ -303,9 +303,9 @@ namespace ALTEngine::Screens
                 // speed word (bytes 14/15) with type 2's +0x14 on top, its wake
                 // range (bytes 12/13 -> +0x50), and the per-type turn rate.
                 enemy.ai.type = record.type;
-                enemy.ai.speed = (record.unknown9 << 8 | record.speed)
+                enemy.ai.speed = (record.speedHigh << 8 | record.speed)
                                + (record.type == 2 ? CreatureAI::HUGGER_SPEED_BONUS : 0);
-                enemy.ai.wakeRange = record.unknownB;
+                enemy.ai.wakeRange = record.wakeRange;
                 enemy.ai.facing = enemy.ai.target = FacingFromRotation(record.rotation);
                 enemy.drop = record.drop;
                 enemy.triggerThreshold = record.triggerThreshold;
@@ -324,7 +324,7 @@ namespace ALTEngine::Screens
                 if (EnemyBehaviour::ClampsRecordFields(record.type))
                 {
                     if (enemy.nearThreshold < EnemyBehaviour::NEAR_THRESHOLD_MIN) { enemy.nearThreshold = EnemyBehaviour::NEAR_THRESHOLD_MIN; }
-                    enemy.coneHalfWidth = EnemyBehaviour::ClampCone(record.unknownA);
+                    enemy.coneHalfWidth = EnemyBehaviour::ClampCone(record.coneHalfWidth);
                 }
 
                 // Cell centre, the same convention the crates and pickups use.
@@ -359,7 +359,7 @@ namespace ALTEngine::Screens
                     enemy.lastX = enemy.x;
                     enemy.lastZ = enemy.z;
                     enemy.y += CO::SPAWN_LIFT;
-                    enemy.heldMonster = record.unknown9 << 8 | record.speed;
+                    enemy.heldMonster = record.speedHigh << 8 | record.speed;
                     enemy.animation = CO::SPAWN_ANIMATION;
                 }
 

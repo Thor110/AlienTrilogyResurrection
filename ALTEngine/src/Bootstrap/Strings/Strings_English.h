@@ -153,6 +153,7 @@ namespace ALTEngine::Bootstrap
             "Unlimited ammunition and all weapons",
             "Maximum Health",
             "Health held at its maximum, including derm patch overcharge",
+            "Jump",
         };
         return table;
     }

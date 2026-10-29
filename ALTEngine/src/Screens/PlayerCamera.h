@@ -209,6 +209,14 @@ namespace ALTEngine::Screens
         // on a judgement call about an animation.
         constexpr int TICK_HZ = 30;   // GUESS - see above
 
+        // Modern: Player Jumping - OURS, the original has none. The lift is a
+        // short hop (an apex of about 0x48^2 / 2 / 0xc = 216 units, under the
+        // 256-unit step); the gravity is the original's own, a creature's
+        // 0xc a tick. The head keeps 0x20 below the ceiling.
+        constexpr float JUMP_LIFT = 0x48;
+        constexpr float JUMP_GRAVITY = 0x0c;
+        constexpr float JUMP_HEAD_CLEARANCE = 0x20;
+
         inline double FootstepsPerSecond(int speed)
         {
             return (TICK_HZ * (speed * 3.0 / 2.0)) / 2048.0;

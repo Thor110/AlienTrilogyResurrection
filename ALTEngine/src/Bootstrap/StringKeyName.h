@@ -150,6 +150,7 @@ namespace ALTEngine::Bootstrap
         case StringId::DescFullyLoaded: return "DescFullyLoaded";
         case StringId::MaximumHealth: return "MaximumHealth";
         case StringId::DescMaximumHealth: return "DescMaximumHealth";
+        case StringId::ActionJump: return "ActionJump";
         case StringId::GsOptions: return "GsOptions";
         case StringId::GsRedefineKeyboard: return "GsRedefineKeyboard";
         case StringId::GsRedefineMouse: return "GsRedefineMouse";
@@ -474,6 +475,7 @@ namespace ALTEngine::Bootstrap
         if (name == "DescFullyLoaded") { return StringId::DescFullyLoaded; }
         if (name == "MaximumHealth") { return StringId::MaximumHealth; }
         if (name == "DescMaximumHealth") { return StringId::DescMaximumHealth; }
+        if (name == "ActionJump") { return StringId::ActionJump; }
         if (name == "GsOptions") { return StringId::GsOptions; }
         if (name == "GsRedefineKeyboard") { return StringId::GsRedefineKeyboard; }
         if (name == "GsRedefineMouse") { return StringId::GsRedefineMouse; }

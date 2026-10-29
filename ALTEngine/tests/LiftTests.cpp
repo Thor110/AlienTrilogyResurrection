@@ -16,10 +16,10 @@ namespace
         level.header.mapWidth = 4;
         level.collisionGrid.resize(16);
         Lift record;
-        record.x = 1; record.y = 1; record.z = 2; record.unknown1 = 1;
-        record.unknown2 = 0; record.unknown3 = 8;
-        record.unknown5 = flags; record.unknown6 = autoDwell; record.unknown7 = dwell;
-        record.unknown8 = threshold; record.unknown9 = 0; record.unknown10 = 3;
+        record.x = 1; record.y = 1; record.width = 2; record.depth = 1;
+        record.low = 0; record.travel = 8;
+        record.flags = flags; record.autoDwell = autoDwell; record.dwell = dwell;
+        record.threshold = threshold; record.counter = 0; record.model = 3;
         level.lifts.push_back(record);
         return level;
     }
@@ -92,7 +92,7 @@ TEST_CASE("Lifts: a lift that cycles by itself waits at each end and goes back")
 TEST_CASE("Lifts: a fast lift with an odd travel still stops at its end")
 {
     LevelGeometry level = WithLift(L::FAST, 0, 0, 0);
-    level.lifts[0].unknown3 = 7;
+    level.lifts[0].travel = 7;
     auto lifts = L::Build(level);
     int ticks = 0;
     L::Tick(lifts[0], level);
@@ -135,7 +135,7 @@ TEST_CASE("Lifts: the record's heights are a travel above the map's own floor")
     // As 3.5.1's lift 3: map floor 64, travel 32, landing at 96.
     LevelGeometry level = WithLift(L::AT_BOTTOM, 0, 0, 1);
     for (auto& cell : level.collisionGrid) { cell.floorHeight = 64; }
-    level.lifts[0].unknown3 = 32;
+    level.lifts[0].travel = 32;
     auto lifts = L::Build(level);
     CHECK_EQ(lifts[0].low, 64);
     CHECK_EQ(lifts[0].high, 96);

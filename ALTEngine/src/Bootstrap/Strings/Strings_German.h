@@ -25,6 +25,7 @@ namespace ALTEngine::Bootstrap
     {
         static const std::array<const char*, static_cast<std::size_t>(StringId::Count)> table = [] {
             std::array<const char*, static_cast<std::size_t>(StringId::Count)> t{};
+            t[static_cast<std::size_t>(StringId::ActionJump)] = "Springen";
             t[static_cast<std::size_t>(StringId::LanguageEnglish)] = "English";
             t[static_cast<std::size_t>(StringId::LanguageFrench)] = "Français";
             t[static_cast<std::size_t>(StringId::LanguageItalian)] = "Italiano";

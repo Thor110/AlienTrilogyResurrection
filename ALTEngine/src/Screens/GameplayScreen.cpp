@@ -416,6 +416,12 @@ namespace ALTEngine::Screens
         // once here and refreshed whenever the pause menu closes, so toggling
         // it mid-game takes effect without a restart.
         bool freeLook = false;
+        // Modern: Player Jumping. The height of the jump above the floor and
+        // its vertical speed, per player tick, and the key's last state.
+        bool playerJumping = false;
+        float jumpOffset = 0.0f;
+        float jumpVelocity = 0.0f;
+        bool jumpHeld = false;
         bool liveMinimap = false;
         // Modern "Stunned Enemies": hits land during a creature's hit reaction.
         bool ignoreStun = false;
@@ -470,6 +476,7 @@ namespace ALTEngine::Screens
             ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
             autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
             freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
+            playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
             ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
 
@@ -872,33 +879,6 @@ namespace ALTEngine::Screens
                     // model table (0x1a8354) the original fills from these
                     // sections, taken here to be their order. Not testable on
                     // the demo levels, which have no lifts.
-                    // One line per lift, before its cells are set: the record,
-                    // the floors the map gives its own cells, and the floors
-                    // of the cells around it (the landings it should meet).
-                    for (size_t li = 0; li < level.lifts.size(); ++li)
-                    {
-                        const auto& r = level.lifts[li];
-                        auto floorsIn = [&](int x0, int z0, int x1, int z1, bool ringOnly) {
-                            std::string out;
-                            for (int z = z0; z <= z1; ++z)
-                            {
-                                for (int x = x0; x <= x1; ++x)
-                                {
-                                    const bool inside = x > x0 && x < x1 && z > z0 && z < z1;
-                                    if (ringOnly && inside) { continue; }
-                                    const auto* cell = ALTEngine::Formats::CellAt(level, x, z);
-                                    if (!cell || cell->unknown3 == 255) { continue; }
-                                    out += ' ' + std::to_string(cell->floorHeight);
-                                }
-                            }
-                            return out.empty() ? std::string(" -") : out;
-                        };
-                        const std::string own = floorsIn(r.x, r.y, r.x + r.z - 1, r.y + r.unknown1 - 1, false);
-                        const std::string around = floorsIn(r.x - 1, r.y - 1, r.x + r.z, r.y + r.unknown1, true);
-                        SDL_Log("GameplayScreen: lift %zu at (%d,%d) %dx%d low %d high %d flags 0x%02x autodwell %d dwell %d threshold %d counter %d model %d | own floors:%s | around:%s",
-                                li, r.x, r.y, r.z, r.unknown1, r.unknown2, r.unknown3, r.unknown5, r.unknown6, r.unknown7,
-                                r.unknown8, r.unknown9, r.unknown10, own.c_str(), around.c_str());
-                    }
                     lifts = ALTEngine::Game::Lifts::Build(level);
                     liftPlaced.clear();
                     if (!lifts.empty())
@@ -954,7 +934,7 @@ namespace ALTEngine::Screens
                         std::set<uint8_t> crateHeldPickups;
                         for (const auto& crate : level.crates)
                         {
-                            if (crate.drop == 2) { continue; }   // holds an enemy, not pickups
+                            if (crate.flags == 2) { continue; }   // holds an enemy, not pickups
                             if (crate.drop1 != 0xFF) { crateHeldPickups.insert(crate.drop1); }
                             if (crate.drop2 != 0xFF) { crateHeldPickups.insert(crate.drop2); }
                         }
@@ -978,7 +958,7 @@ namespace ALTEngine::Screens
                             // Crate contents are therefore created here and
                             // hidden; anything else still gated stays skipped.
                             const bool heldByCrate = crateHeldPickups.count(static_cast<uint8_t>(pickupSlot)) != 0;
-                            const bool waitsOnTrigger = (pickup.z != 0 && !heldByCrate);
+                            const bool waitsOnTrigger = (pickup.triggerThreshold != 0 && !heldByCrate);
 
                             // Type 24 is remapped to 21 for both model and
                             // scale lookup.
@@ -1014,8 +994,8 @@ namespace ALTEngine::Screens
                             live.amount = pickup.amount;
                             live.multiplier = pickup.multiplier;
                             live.waitingOnTrigger = waitsOnTrigger;
-                            live.triggerCount = pickup.unknown1;
-                            live.triggerThreshold = pickup.z;
+                            live.triggerCount = pickup.triggerCount;
+                            live.triggerThreshold = pickup.triggerThreshold;
                             livePickups.push_back(live);
 
                             // Hidden until its trigger count is reached.
@@ -1042,7 +1022,7 @@ namespace ALTEngine::Screens
                         int enemyCrates = 0;
                         for (const auto& crate : level.crates)
                         {
-                            if (crate.drop == 2) { enemyCrates++; continue; }
+                            if (crate.flags == 2) { enemyCrates++; continue; }
                             for (uint8_t index : { crate.drop1, crate.drop2 })
                             {
                                 if (index == 0xFF) { continue; }
@@ -1276,6 +1256,7 @@ namespace ALTEngine::Screens
                         ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
                         autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
                         freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
+                        playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
                         liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
                         ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::StunnedEnemies);
 
@@ -1494,6 +1475,26 @@ namespace ALTEngine::Screens
                     // eases back to rest. This is how anything on the floor gets
                     // shot without Free Look.
                     pcInput.lookUp = keys[keyBindings.GetKey(InputAction::LookUp)];
+
+                    // Modern: Player Jumping. OURS - the original has no jump.
+                    // A press on the ground lifts the player, the original's
+                    // own gravity (0xc a tick, a creature's) brings them down,
+                    // and the floor follow below keeps them over the floor and
+                    // under the ceiling.
+                    {
+                        const bool jumpDown = playerJumping && keys[keyBindings.GetKey(InputAction::Jump)];
+                        if (jumpDown && !jumpHeld && jumpOffset <= 0.0f && jumpVelocity == 0.0f)
+                        {
+                            jumpVelocity = PC::JUMP_LIFT;
+                        }
+                        jumpHeld = jumpDown;
+                        if (jumpVelocity != 0.0f || jumpOffset > 0.0f)
+                        {
+                            jumpOffset += jumpVelocity;
+                            jumpVelocity -= PC::JUMP_GRAVITY;
+                            if (jumpOffset <= 0.0f) { jumpOffset = 0.0f; jumpVelocity = 0.0f; }
+                        }
+                    }
                     pcInput.lookDown = keys[keyBindings.GetKey(InputAction::LookDown)];
                     pcInput.look = pcInput.lookUp || pcInput.lookDown;
 
@@ -1705,37 +1706,25 @@ namespace ALTEngine::Screens
                                 playerCam.viewYaw, firingPitch, launchSpeed);
 
                             // Flamethrower particle n (1, 2) lives 0x10 - n ticks
-                            // and starts n steps out (FUN_0002bcac), with a cell
-                            // test after each step: a blocked one stops there with
-                            // its velocity zeroed, to burn against the wall, and
-                            // one that leaves the map is dropped. (The original
-                            // leaves it in the blocked cell; this keeps it on the
-                            // clear side, where it can be seen.)
+                            // and starts n steps out (FUN_0002bcac). The steps go
+                            // through the particle pass's own collision test (see
+                            // Particle::preSteps), as the original's call
+                            // FUN_0002a448 after each one; leaving the map drops it.
                             if (round && projectileType == P::TYPE_FLAME)
                             {
                                 const int n = shot + 1;
                                 round->life = P::FlameLife(shot);
                                 round->strength = round->life;
-                                for (int step = 0; step < n; ++step)
+                                const float ex = round->x + round->vx * static_cast<float>(n);
+                                const float ez = round->z + round->vz * static_cast<float>(n);
+                                if (!ALTEngine::Formats::CellAt(level, ToGridSpaceX(ex, originX) >> 9,
+                                                                ToGridSpaceZ(ez, originZ) >> 9))
                                 {
-                                    const float sx = round->x + round->vx;
-                                    const float sy = round->y + round->vy;
-                                    const float sz = round->z + round->vz;
-                                    const auto cell = ALTEngine::Game::ProjectileCollision::TestCell(
-                                        level, ToGridSpaceX(sx, originX), ToGridSpaceZ(sz, originZ), sy,
-                                        projectileType, round->strength);
-                                    if (!ALTEngine::Formats::CellAt(level, ToGridSpaceX(sx, originX) >> 9,
-                                                                    ToGridSpaceZ(sz, originZ) >> 9))
-                                    {
-                                        round->alive = false;
-                                        break;
-                                    }
-                                    if (cell.blocked)
-                                    {
-                                        round->vx = round->vy = round->vz = 0.0f;
-                                        break;
-                                    }
-                                    round->x = sx; round->y = sy; round->z = sz;
+                                    round->alive = false;
+                                }
+                                else
+                                {
+                                    round->preSteps = n;
                                 }
                             }
                         }
@@ -2224,7 +2213,7 @@ namespace ALTEngine::Screens
                                 // the terrain shield and armour all apply - this
                                 // used to subtract health directly.
                                 hudState.ApplyDamage(enemy.pendingDamage,
-                                                     ALTEngine::Screens::GameOverSequence::CAUSE_ENEMY_ATTACK);
+                                                     ALTEngine::Screens::EnemyBehaviour::AttackForSubtype(enemy.type).cause);
                                 checkPlayerDeath();
                             }
                             if (enemy.spawnDeathEffect)
@@ -2312,7 +2301,7 @@ namespace ALTEngine::Screens
                                                    int dropCell) {
                             if (crateIndex < 0 || crateIndex >= static_cast<int>(level.crates.size())) { return; }
                             const auto& crate = level.crates[static_cast<size_t>(crateIndex)];
-                            if (crate.drop == 2)
+                            if (crate.flags == 2)
                             {
                                 // Holds an enemy - drop1 indexes the MONSTER
                                 // array, and that monster is parked off the edge
@@ -2898,8 +2887,25 @@ namespace ALTEngine::Screens
                     // min(sin p, sin p+180), which is -|sin p| - so the camera
                     // never rises above eye level, only sinks up to 64 units
                     // below it twice per stride. See PlayerCamera.h.
-                    playerFeetY = floorY;
-                    camera.y = floorY + EYE_HEIGHT + static_cast<float>(playerCam.bobOffsetY);
+                    // A jump rides on top, held under the ceiling.
+                    if (jumpOffset > 0.0f)
+                    {
+                        const auto* cell = ALTEngine::Formats::CellAt(
+                            level, ToGridSpaceX(camera.x, originX) >> 9, ToGridSpaceZ(camera.z, originZ) >> 9);
+                        if (cell)
+                        {
+                            const float headroom = static_cast<float>(cell->ceilingHeight) * 32.0f
+                                                 - ALTEngine::Screens::PlayerCamera::JUMP_HEAD_CLEARANCE
+                                                 - EYE_HEIGHT - floorY;
+                            if (jumpOffset > headroom)
+                            {
+                                jumpOffset = std::max(0.0f, headroom);
+                                if (jumpVelocity > 0.0f) { jumpVelocity = 0.0f; }
+                            }
+                        }
+                    }
+                    playerFeetY = floorY + jumpOffset;
+                    camera.y = floorY + jumpOffset + EYE_HEIGHT + static_cast<float>(playerCam.bobOffsetY);
                 }
             }
 

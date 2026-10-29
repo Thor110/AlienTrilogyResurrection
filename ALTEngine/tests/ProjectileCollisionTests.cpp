@@ -176,13 +176,13 @@ TEST_CASE("ProjectileCollision: object health and indestructibility come from th
 {
     Crate crate;
     crate.type = 0x14;
-    crate.unknown1 = 5;
+    crate.healthDiv16 = 5;
     CHECK_EQ(PCol::ObjectHealth(crate), 80);
     CHECK(!PCol::ObjectIndestructible(crate));
     crate.type = 0x16;   // a switch
     CHECK(PCol::ObjectIndestructible(crate));
     crate.type = 0x14;
-    crate.drop = 1;
+    crate.flags = 1;
     CHECK(PCol::ObjectIndestructible(crate));
 }
 
@@ -299,4 +299,28 @@ TEST_CASE("Particles: a flame stops where it is blocked and burns on")
     REQUIRE(round != nullptr);
     pool.Tick([](float, float, float, int, int, float, float, float, int&) { return 2; });
     CHECK(!round->alive);
+}
+
+TEST_CASE("Particles: a flame's spawn steps go through the collision test, and stop where it hits")
+{
+    namespace P = ALTEngine::Screens::Particles;
+    P::Pool pool(4);
+    P::Particle* flame = pool.SpawnProjectile(P::TYPE_FLAME, 0, 0x300, 0, 0, 0, 0);
+    REQUIRE(flame);
+    flame->vx = 100; flame->vy = 0; flame->vz = 0;
+    flame->life = 0x0e;
+    flame->preSteps = 2;
+    const float startX = flame->x;
+    int tests = 0;
+    // Clear for the first step, something there on the second (a crate, say).
+    pool.Tick([&](float x, float, float, int, int, float, float, float, int&) {
+        ++tests;
+        return x > startX + 150.0f ? 1 : 0;
+    });
+    CHECK_EQ(tests, 2);
+    CHECK(flame->alive);
+    CHECK_EQ(flame->x, startX + 100.0f); // stopped after the clear step
+    CHECK_EQ(flame->vx, 0.0f);           // and burns there
+    CHECK_EQ(flame->life, 0x0e);         // the spawn steps take no life
+    CHECK_EQ(flame->preSteps, 0);
 }

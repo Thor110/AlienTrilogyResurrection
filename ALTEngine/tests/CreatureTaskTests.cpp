@@ -244,3 +244,19 @@ TEST_CASE("Colonist: its burster comes out harder than a hugger from an egg")
     CHECK_EQ(b->vy, 0x78);
     CHECK(std::fabs(b->leapZ + 0x60) < 0.5f);   // bearing 0: straight down -Z at 0x60
 }
+
+#include "Screens/EnemyBehaviour.h"
+#include "Screens/GameOverSequence.h"
+
+TEST_CASE("Death clips: each creature's attack passes its own cause")
+{
+    namespace EB = ALTEngine::Screens::EnemyBehaviour;
+    namespace GO = ALTEngine::Screens::GameOverSequence;
+    CHECK_EQ(EB::AttackForSubtype(2).cause, GO::CAUSE_ENEMY_ATTACK);
+    CHECK_EQ(EB::AttackForSubtype(5).cause, GO::CAUSE_DOG);
+    CHECK_EQ(EB::AttackForSubtype(6).cause, GO::CAUSE_WARRIOR);
+    CHECK_EQ(EB::AttackForSubtype(7).cause, GO::CAUSE_QUEEN);
+    // So a warrior drone's kill plays DEATH2 and the queen's DEATH3.
+    CHECK_EQ(GO::DeathVideoForCause(GO::CAUSE_WARRIOR), 2);
+    CHECK_EQ(GO::DeathVideoForCause(GO::CAUSE_QUEEN), 3);
+}
