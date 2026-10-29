@@ -22,6 +22,7 @@
 #include "../Game/CreatureSight.h"
 #include "../Game/FlowField.h"
 #include "../Game/Lifts.h"
+#include "../Game/PlayerMover.h"
 #include "../Game/Triggers.h"
 #include "SaveSlotScreen.h"
 #include "EnemySprites.h"
@@ -188,8 +189,6 @@ namespace ALTEngine::Screens
             return rgba;
         }
 
-        constexpr float COLLISION_RADIUS = 200.0f; // 400-unit footprint, sampled at -r, centre, +r
-        constexpr float MAX_STEP_UP = 256.0f;      // a rise steeper than this blocks movement
         // The player's feet are ON the floor and the eye is 0x300 above them -
         // see PlayerCamera::EYE_HEIGHT_ORIGINAL for how that was settled.
         constexpr float EYE_HEIGHT = static_cast<float>(ALTEngine::Screens::PlayerCamera::EYE_HEIGHT_ORIGINAL);
@@ -198,28 +197,6 @@ namespace ALTEngine::Screens
         // crate placement used above, so player and objects agree.
         int ToGridSpaceX(float worldX, float originX) { return static_cast<int>(std::lround(worldX + originX)); }
         int ToGridSpaceZ(float worldZ, float originZ) { return static_cast<int>(std::lround(worldZ + originZ)); }
-
-        // Can the player's footprint sit at this world position? Samples
-        // the centre and the four corners of the +/-200 box: every point
-        // must be non-blocking, and no point may rise more than the
-        // step-up limit above the floor the player is currently on.
-
-        bool CanOccupy(const ALTEngine::Formats::LevelGeometry& level,
-                       float originX, float originZ,
-                       float worldX, float worldZ, float currentFloorY)
-        {
-            constexpr float R = COLLISION_RADIUS;
-            const float offsets[5][2] = { {0, 0}, {-R, -R}, {R, -R}, {-R, R}, {R, R} };
-            for (const auto& o : offsets)
-            {
-                int gx = ToGridSpaceX(worldX + o[0], originX);
-                int gz = ToGridSpaceZ(worldZ + o[1], originZ);
-                if (ALTEngine::Formats::IsCellBlocking(level, gx, gz)) { return false; }
-                float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
-                if (floorY - currentFloorY > MAX_STEP_UP) { return false; }
-            }
-            return true;
-        }
 
         // Level files live in disc-sector folders (SECT11, SECT12, etc -
         // confirmed from DiscFileManifest.json), NOT the generic "GFX"
@@ -422,6 +399,9 @@ namespace ALTEngine::Screens
         // Modern: Faster Enemies. Off, creatures run on alternate ticks, as
         // the original's do (see logicTick).
         bool fasterEnemies = false;
+        // Knockback (Game::PlayerMover): its strength and heading.
+        int knockbackStrength = 0;
+        int knockbackYaw = 0;
         // Counts logic ticks. The original runs its creatures, its particles
         // and its firing only on alternate passes of the task list
         // (`test byte [0x6164], 1` at 0x342c1 and 0x2d929; firing and the
@@ -1540,21 +1520,64 @@ namespace ALTEngine::Screens
 
                     PC::Tick(playerCam, pcInput, cellAttribute, onHazardCell, cameraSway, freeLook);
 
-                    // Apply the tick's movement through the existing collision
-                    // mover, per axis, so wall sliding keeps working.
+                    // The original's own mover (Game::PlayerMover, FUN_0003dff0):
+                    // the tick's step, plus a slippery ramp's push and any
+                    // knockback, x first and then z.
                     float stepX = 0.0f, stepZ = 0.0f;
                     PC::MovementStep(playerCam, stepX, stepZ);
+                    {
+                        namespace PM = ALTEngine::Game::PlayerMover;
+                        int pushX = 0, pushZ = 0;
+                        if (PM::RampPush(cellAttribute, playerCam.speed, pushX, pushZ))
+                        {
+                            stepX += static_cast<float>(pushX);
+                            stepZ += static_cast<float>(pushZ);
+                        }
+                        if (knockbackStrength > 0)
+                        {
+                            stepX += PC::Sin(knockbackYaw) / 4096.0f * static_cast<float>(knockbackStrength);
+                            stepZ -= PC::Cos(knockbackYaw) / 4096.0f * static_cast<float>(knockbackStrength);
+                            knockbackStrength -= PM::KNOCKBACK_FADE;
+                            if (knockbackStrength < 0) { knockbackStrength = 0; }
+                        }
+                    }
                     if (stepX != 0.0f || stepZ != 0.0f)
                     {
                         if (levelReady)
                         {
-                            float currentFloorY = ALTEngine::Formats::FindFloorHeightGridSpace(
-                                level,
-                                ToGridSpaceX(camera.x, originX),
-                                ToGridSpaceZ(camera.z, originZ));
-
-                            if (CanOccupy(level, originX, originZ, camera.x + stepX, camera.z, currentFloorY)) { camera.x += stepX; }
-                            if (CanOccupy(level, originX, originZ, camera.x, camera.z + stepZ, currentFloorY)) { camera.z += stepZ; }
+                            namespace PM = ALTEngine::Game::PlayerMover;
+                            PM::World mw;
+                            mw.cell = [&](int x, int z) { return ALTEngine::Formats::CellAt(level, x >> 9, z >> 9); };
+                            mw.floor = [&](int x, int z) {
+                                return static_cast<int>(ALTEngine::Formats::FindFloorHeightGridSpace(level, x, z));
+                            };
+                            mw.ceiling = [&](int x, int z) {
+                                const auto* c = ALTEngine::Formats::CellAt(level, x >> 9, z >> 9);
+                                return c ? static_cast<int>(c->ceilingHeight) * 32 : 0;
+                            };
+                            // A creature's cell (+0xc). The player's own mark is
+                            // lifted before it moves (0x3e008).
+                            const int ownCellX = ToGridSpaceX(camera.x, originX) >> 9;
+                            const int ownCellZ = ToGridSpaceZ(camera.z, originZ) >> 9;
+                            mw.occupied = [&](int x, int z) {
+                                // Including a creature that shares it: clearing
+                                // the player's mark clears the cell.
+                                if ((x >> 9) == ownCellX && (z >> 9) == ownCellZ) { return false; }
+                                for (const auto& other : enemies)
+                                {
+                                    if (!other.active || !other.alive || ALTEngine::Screens::IsVent(other.type)) { continue; }
+                                    if ((ToGridSpaceX(other.x, originX) >> 9) == (x >> 9)
+                                        && (ToGridSpaceZ(other.z, originZ) >> 9) == (z >> 9)) { return true; }
+                                }
+                                return false;
+                            };
+                            const int gx = ToGridSpaceX(camera.x, originX);
+                            const int gz = ToGridSpaceZ(camera.z, originZ);
+                            const int gy = static_cast<int>(std::lround(playerFeetY));
+                            const int nx = PM::MoveX(mw, gx, gz, gy, static_cast<int>(std::lround(stepX)));
+                            const int nz = PM::MoveZ(mw, nx, gz, gy, static_cast<int>(std::lround(stepZ)));
+                            camera.x += static_cast<float>(nx - gx);
+                            camera.z += static_cast<float>(nz - gz);
                         }
                         else
                         {
@@ -1752,6 +1775,12 @@ namespace ALTEngine::Screens
                         // Only the pistol and the shotgun eject anything:
                         // FUN_0002bb74 calls FUN_0002b37c(0), a 0x15 casing, and
                         // FUN_0002bbc0 calls it with 1, a 0x14 shell.
+                        // The shotgun kicks the player back (FUN_0002bbc0: 0x40).
+                        if (projectileType == P::TYPE_SHOTGUN)
+                        {
+                            knockbackStrength = ALTEngine::Game::PlayerMover::KNOCKBACK_SHOTGUN;
+                            knockbackYaw = (playerCam.viewYaw + 0x800) & PC::ANGLE_MASK;
+                        }
                         if (projectileType == P::TYPE_PISTOL || projectileType == P::TYPE_SHOTGUN)
                         {
                             particles.SpawnCasing(projectileType == P::TYPE_PISTOL ? P::TYPE_CASING_A : P::TYPE_CASING_B,
@@ -1831,6 +1860,9 @@ namespace ALTEngine::Screens
                         && inventory.pulseRifle.grenades > 0)
                     {
                         inventory.pulseRifle.grenades--;
+                        // And the grenade, less (0x2c52c: 0x20).
+                        knockbackStrength = ALTEngine::Game::PlayerMover::KNOCKBACK_GRENADE;
+                        knockbackYaw = (playerCam.viewYaw + 0x800) & PC::ANGLE_MASK;
                         weaponRuntime.SetState(WS::STATE_GRENADE);
                         weaponRuntime.noise = WS::GRENADE_NOISE;
                     }
@@ -2252,8 +2284,18 @@ namespace ALTEngine::Screens
                                 // Through the one damage routine, so the cooldown,
                                 // the terrain shield and armour all apply - this
                                 // used to subtract health directly.
+                                const int healthBefore = hudState.health;
                                 hudState.ApplyDamage(enemy.pendingDamage,
                                                      ALTEngine::Screens::EnemyBehaviour::AttackForSubtype(enemy.type).cause);
+                                // A directed hit (FUN_0003e5d4 - all but the
+                                // hugger's and burster's) that takes health
+                                // knocks the player along the attacker's facing.
+                                if (hudState.health != healthBefore
+                                    && !ALTEngine::Screens::EnemyBehaviour::AttackForSubtype(enemy.type).melee)
+                                {
+                                    knockbackStrength = ALTEngine::Game::PlayerMover::KNOCKBACK_HIT;
+                                    knockbackYaw = enemy.facing;
+                                }
                                 checkPlayerDeath();
                             }
                             if (enemy.spawnDeathEffect)
@@ -2585,7 +2627,15 @@ namespace ALTEngine::Screens
                                     && std::fabs(px - camera.x) < P::VENT_TOUCH_HALF
                                     && std::fabs(pz - camera.z) < P::VENT_TOUCH_HALF)
                                 {
+                                    const int healthBefore = hudState.health;
                                     hudState.ApplyDamage(1, ALTEngine::Screens::GameOverSequence::CAUSE_ENEMY_PROJECTILE);
+                                    if (hudState.health != healthBefore)
+                                    {
+                                        // Along the round's flight (its +0x12).
+                                        knockbackStrength = ALTEngine::Game::PlayerMover::KNOCKBACK_HIT;
+                                        knockbackYaw = static_cast<int>(std::lround(
+                                            std::atan2(px - clearX, -(pz - clearZ)) * (4096.0 / 6.28318530718))) & 0xfff;
+                                    }
                                     checkPlayerDeath();
                                     return 2;
                                 }

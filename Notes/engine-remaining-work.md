@@ -11,7 +11,7 @@ Details for each item are in the numbered sections below.
 | # | Item | Can be done from the binary alone | Status |
 |---|---|---|---|
 | 1 | One logic tick rate (find the game's clock) | yes | done: one fixed 34.87 Hz tick |
-| 2 | Player movement exactly (`FUN_0003d85c` / `FUN_0003dc44`) | yes | open |
+| 2 | Player movement exactly (`FUN_0003d85c` / `FUN_0003dc44`) | yes | done |
 | 3 | Lifts (trigger commands 5 and 7) | yes | done (tested on 3.5.1: heights and platform position) |
 | 4a | Creature line of fire and visibility before attacking (`FUN_0003231c`, `FUN_00033a1c`) | yes | done (zone test approximated) |
 | 4b | Creature chase via the path network (state 2/3) | yes | done for the common task (see section 4 for what's approximated) |
@@ -60,15 +60,16 @@ The port runs two clocks:
 
 ## 2. Player movement, exactly
 
-`FUN_0003d85c` (X axis) and `FUN_0003dc44` (Z axis), called from `FUN_0003dff0`:
-- Three probes across the leading edge: ±200 along the direction of travel, at z, z−200 and z+200.
-- **Blocked** when cell byte `+7` has bit `0x80` or the occupancy byte `+0xc` is non-zero, unless the noclip cheat flag `DAT_000a4d64 & 1` is set.
-- **Height checks** apply only to attributes `< 0x14` or `0x19–0x2c`:
-  - blocked when the ceiling is below the player's Y + `0x300`;
-  - blocked when the rise is more than `0x100`.
-- **Walls and corners** are clamped by `FUN_0002800c`, with sliding in `FUN_0003d804`.
-
-The port samples five points and treats bytes `+2`/`+3` as walls. The clearance (now 24 units) and step-up (256) already match.
+Done as `Game::PlayerMover`, used for the player in place of the old five-point test:
+- **Order:** X then Z at the new X (`FUN_0003d85c` / `FUN_0003dc44`).
+- **Probes:** each axis probes 200 past the target, on the player's line and 200 either side.
+- **Walls:** cell +7 bit 0x80, set at load for attribute 1 and 0x14-0x18 (`0x282ed`), plus creature cells. The player's own cell is exempt.
+- **Heights,** for attributes below 0x14 or 0x19-0x2c: a ceiling under Y + 0x300 or a rise over 0x100 stops the move. A stopped move slides to 200 short of the blocked cell (`FUN_0003d804`).
+- **Diagonals:** walls 0x19-0x1c clamp to their own side (`FUN_0002800c` / `FUN_000280dc`).
+- **Drops:** a drop over 0x100 puts the player 0xc9 / 0x138 into the low cell, clear of the lip.
+- **Pushes `FUN_0003dff0` adds:** slippery ramps 0x35-0x38 push downhill, by the player's speed (at least 0x20) or 0x80 standing still. Knockback: 0x80 along the attacker's facing from a directed hit that takes health, 0x40 back from a shotgun shot, 0x20 from a grenade, fading 8 a tick.
+- **Checked on L111 and L112:** every cell the old test treated as a wall but the attribute doesn't (5578 and 2446) has its ceiling at its floor, so the height tests still stop the player there.
+- **Not done:** the `0x10ab4` bit 1 variant of the ramp push (speed - 0x20).
 
 ## 3. Lifts
 
