@@ -1808,7 +1808,8 @@ namespace ALTEngine::Screens
                 if (!playerCamSeeded)
                 {
                     playerCam.yaw = static_cast<int>(std::lround(camera.yaw * (PC::ANGLE_UNITS / 6.28318530718f))) & PC::ANGLE_MASK;
-                    playerCam.pitch = 0;
+                    // The original starts at its rest pitch (0x00040512).
+                    playerCam.pitch = PC::PITCH_REST;
                     playerCamSeeded = true;
                 }
 
@@ -2307,11 +2308,18 @@ namespace ALTEngine::Screens
 
                     // Both throws start from the player and fly along the view
                     // (FUN_0002c4e0 / FUN_0002c830): (0, -0x18, speed) turned by
-                    // the pitch, then the yaw, from below the eye - the charge
-                    // 0x100 below it, the grenade 0x80, and both moved along x
-                    // by the walk's dip (DAT_000b0b4e). The -0x18 is a small
-                    // downward push, so a throw only rises when the player is
-                    // looking up; the arc is gravity, one a tick (0x2dcf9).
+                    // the pitch, then by the camera's yaw-and-roll triple, from
+                    // below the eye - the charge 0x100 below it, the grenade
+                    // 0x80, and both moved along x by the walk's dip
+                    // (DAT_000b0b4e).
+                    //
+                    // The camera's roll is 0x800, half a turn (DAT_000b0a54, set
+                    // once at 0x0004050b), so its view space has y pointing down
+                    // the screen: the -0x18 is 0x18 UP the screen. A throw
+                    // leaves below the eye rising at 0x18 on top of the view's
+                    // pitch, and gravity (one a tick, 0x2dcf9) turns it over -
+                    // the arc. This had the 0x18 pointing down, so a level throw
+                    // only fell away from the start.
                     auto throwExplosive = [&](bool charge) {
                         const int pitch = static_cast<int>(std::lround(
                             camera.pitch * (PC::ANGLE_UNITS / 6.28318530718f))) & PC::ANGLE_MASK;
@@ -2323,7 +2331,8 @@ namespace ALTEngine::Screens
                         const float pc = static_cast<float>(PC::Cos(pitch)) / PC::TRIG_ONE;
                         const float ys = static_cast<float>(PC::Sin(playerCam.viewYaw)) / PC::TRIG_ONE;
                         const float yc = static_cast<float>(PC::Cos(playerCam.viewYaw)) / PC::TRIG_ONE;
-                        const float forward = static_cast<float>(speed) * pc + 0x18 * ps;
+                        // Port pitch is positive up, the view's (0, up 0x18, speed).
+                        const float forward = static_cast<float>(speed) * pc - 0x18 * ps;
                         PlayerExplosive e;
                         e.charge = charge;
                         e.x = camera.x + static_cast<float>(playerCam.throwOffsetX);
@@ -2331,7 +2340,7 @@ namespace ALTEngine::Screens
                         e.z = camera.z;
                         e.vx = forward * ys;
                         e.vz = -forward * yc;
-                        e.vy = static_cast<float>(speed) * ps - 0x18 * pc;
+                        e.vy = static_cast<float>(speed) * ps + 0x18 * pc;
                         e.bounce = charge ? 8 : 0x10;
                         e.life = charge ? 0x40 : 0x30;
                         playerExplosives.push_back(e);

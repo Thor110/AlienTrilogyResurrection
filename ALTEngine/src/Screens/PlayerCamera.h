@@ -114,7 +114,13 @@ namespace ALTEngine::Screens
         constexpr int PITCH_RATE_MAX = 0x10;   // DAT_000b0b36
         constexpr int PITCH_MIN = -0x80;       // DAT_000b0b3a
         constexpr int PITCH_MAX = 0x80;        // DAT_000b0b3c
-        constexpr int PITCH_REST = 0x30;       // DAT_000b0b42
+        // The original's 0x30, in the port's direction. Its pitch runs the
+        // other way (see RAMP_PITCH_SIGN): the camera's roll of 0x800
+        // (DAT_000b0a54) puts its view space y down the screen, and the pitch
+        // turns in that space, so its +0x30 tips the view DOWN a little. The
+        // port's pitch is positive up, so the same rest is -0x30. It sat at
+        // +0x30 here, slightly up.
+        constexpr int PITCH_REST = -0x30;      // DAT_000b0b42, negated
 
         // Standing eye height above the player's feet: DAT_000b0b4c.
         //

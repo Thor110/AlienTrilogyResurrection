@@ -1,4 +1,4 @@
-# What remains (after zip 82)
+# What remains (after zip 83)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -14,13 +14,15 @@ Still open:
 - **CD music from a real drive on Linux and macOS:** untested.
 - **Creature scripting** (the egg, queen, colonist and the ceiling creatures letting go) still feels a little
   off. Needs a closer comparison against the original in play to say where.
-- **Thrown seismic charge (zip 82):** traced again end to end (`FUN_0002c830`, the arm at 0x2db80,
-  `FUN_0002a2d8`, `FUN_0002cf14`). The launch already matched: 0x100 below the eye, (0, -0x18, speed + 0x40 up to
-  0x80) turned by the pitch then the yaw, gravity one a tick, bounces of 8, 6, 4. The -0x18 is a downward push, so
-  the original's throw only rises when looking up while moving; the arc is the fall. What differed: the original
-  doesn't draw it until it is 0x200 ahead of the view (drawn from the start it seemed to rise out of the floor),
-  it tumbles 0x20 a tick, it goes off when it passes the ceiling, and the start x carries the walk's dip. All four
-  are in now. Check in play.
+- **Thrown seismic charge (zips 82-83):** traced end to end (`FUN_0002c830`, the arm at 0x2db80, `FUN_0002a2d8`,
+  `FUN_0002cf14`). The camera's roll is 0x800 (DAT_000b0a54, set at 0x0004050b), so its view space has y down
+  the screen and the throw's (0, -0x18, speed) is 0x18 UP: it leaves 0x100 below the eye, rises, and gravity
+  (one a tick) turns it over. The port had the 0x18 pointing down. Also in: hidden until 0x200 ahead, tumbling
+  0x20 a tick, set off at the ceiling, and the walk's dip on the start x. The grenade shares the fix. Check in
+  play.
+- **Rest pitch (zip 83):** the same roll means the original's rest pitch 0x30 looks slightly down; the port
+  rested slightly up. Now -0x30 in the port's direction, and play starts there as the original does. Check that
+  the non-free-look view and the ramps still feel right.
 
 ## 2. Still a guess or not traced
 
