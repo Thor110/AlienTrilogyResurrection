@@ -4,12 +4,14 @@
 #include "Formats/BootSequence.h"
 #include "Formats/BndTextureLoader.h"
 #include "Formats/BxParser.h"
+#include "Formats/ExplosionGraphics.h"
 #include "Formats/LevelLoader.h"
 #include "Formats/LightTable.h"
 #include "Formats/SpriteFrameDecompressor.h"
 #include "Formats/SpriteRle.h"
 #include "Formats/TextureAnimation.h"
 
+#include <cmath>
 #include <fstream>
 #include <iterator>
 
@@ -220,4 +222,26 @@ TEST_CASE("Boot sequence: the intro videos come from BootSequence.json, in its o
     CHECK(LoadVideos("/no/such/BootSequence.json") == DefaultVideos());
     // The shipped file plays the original's four, in the original's order.
     CHECK(LoadVideos(std::filesystem::path(ALT_TEST_DATA_ROOT) / "BootSequence.json") == DefaultVideos());
+}
+
+TEST_CASE("ExplosionGraphics: frames sit on their anchors at the original's size")
+{
+    namespace EG = ALTEngine::Formats::ExplosionGraphics;
+    // The general blast (FUN_0002aaf0): an 84-pixel frame at 0xc00 over the
+    // focal length 0x100 is 1008 units across, anchored at 43,43 - a pixel's
+    // worth off its centre.
+    const EG::FrameQuad blast = EG::QuadFor(EG::EFFECT_CRATE, 0, 84, 84);
+    CHECK(std::fabs(blast.halfWidth - 504.0f) < 0.01f);
+    CHECK(std::fabs(blast.centreRight - (-12.0f)) < 0.01f);
+    CHECK(std::fabs(blast.centreUp - 12.0f) < 0.01f);
+
+    // The barrel's later frames hang from an anchor near their foot, so the
+    // fire stands up from where it goes off.
+    const EG::FrameQuad fire = EG::QuadFor(EG::EFFECT_BARREL, 8, 80, 90);
+    CHECK(fire.centreUp > 0.0f);
+    CHECK(std::fabs(fire.centreUp - (81.0f - 45.0f) * (0x125c / 256.0f)) < 0.01f);
+
+    // A frame past the end reads the last one's anchor.
+    const EG::FrameQuad past = EG::QuadFor(EG::EFFECT_IMPACT, 20, 16, 16);
+    CHECK(std::fabs(past.centreRight - (8.0f - 12.0f) * 8.0f) < 0.01f);
 }

@@ -205,19 +205,24 @@ namespace ALTEngine::Screens
 
                 ALTEngine::Renderer::PlacedSprite sprite;
                 sprite.textureKey = SheetKey(page);
-                sprite.x = live.x;
-                sprite.y = live.y;
-                sprite.z = live.z;
 
-                // The original multiplies the rect's size by the table's scale
-                // and divides by distance. A world-space quad only needs the
-                // first half - perspective does the rest.
-                sprite.halfWidth = 0.5f * rect.width
-                                 * (static_cast<float>(live.table->scaleX) / EG::SCALE_ONE)
-                                 * EG::WORLD_UNITS_PER_SCALED_PIXEL;
-                sprite.halfHeight = 0.5f * rect.height
-                                  * (static_cast<float>(live.table->scaleY) / EG::SCALE_ONE)
-                                  * EG::WORLD_UNITS_PER_SCALED_PIXEL;
+                // The frame's anchor sits on the effect's position, at the
+                // original's size (ExplosionGraphics::QuadFor). The quad faces
+                // the camera about the vertical, so "right" is across the line
+                // from the camera to the effect.
+                const EG::FrameQuad quad = EG::QuadFor(*live.table, frame, rect.width, rect.height);
+                float toX = live.x - cameraX;
+                float toZ = live.z - cameraZ;
+                const float flat = std::sqrt(toX * toX + toZ * toZ);
+                if (flat > 0.001f) { toX /= flat; toZ /= flat; } else { toX = 0.0f; toZ = -1.0f; }
+                const float rightX = -toZ;
+                const float rightZ = toX;
+                const float up = live.flipVertically ? -quad.centreUp : quad.centreUp;
+                sprite.x = live.x + rightX * quad.centreRight;
+                sprite.y = live.y + up;
+                sprite.z = live.z + rightZ * quad.centreRight;
+                sprite.halfWidth = quad.halfWidth;
+                sprite.halfHeight = quad.halfHeight;
 
                 sprite.u0 = static_cast<float>(rect.x) / sheetW;
                 sprite.v0 = static_cast<float>(rect.y) / sheetH;

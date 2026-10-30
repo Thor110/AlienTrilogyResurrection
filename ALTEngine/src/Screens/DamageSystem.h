@@ -249,6 +249,14 @@ namespace ALTEngine::Screens
             int crateIndex = -1;       // its record in level.crates, for its contents
             int facing = 0;            // rotation - picks the debris scatter axis
             int objectType = 0;        // crate type - 0x1d scatters one piece, not six
+            // Ticks until it actually goes (+0x1f). An object that is finished
+            // off is only flagged (+0x19 bit 0) with a short random delay, and
+            // its handler counts that down before it breaks or explodes
+            // (0x37c4e, 0x37d37, 0x38004): shot, (random & 7) + 1
+            // (FUN_00036e9c); caught in a blast, (random & 7) + 4 in the inner
+            // ring and (random & 0xf) + 8 in the outer (FUN_000368c8). So a
+            // chain of barrels goes off one after another, not all at once.
+            int fuse = 0;
 
             // What the object is made of, so it can be torn into its own faces
             // when destroyed (Formats/ObjectShatter.h).

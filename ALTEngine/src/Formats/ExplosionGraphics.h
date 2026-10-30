@@ -62,19 +62,47 @@ namespace ALTEngine::Formats
         // This also corrects the rectangle grouping guessed earlier from the
         // dimensions alone: 9..17 is ONE nine-frame run, not a 2 + 7 split, and
         // the last group is 25..31, not 24..29 plus 30..35.
+        //
+        // Each table also holds every frame's ANCHOR, the pixel of the frame
+        // that sits on the effect's position: x at +0x68 + 2 * frame and y at
+        // +0x88 + 2 * frame (FUN_000429f0 reads +0x66/+0x86 as a dword and
+        // takes the high half). The quad's top-left goes anchor * scale /
+        // depth up and left of the projected point. Read from the tables:
+        //   0xad008 (the general blast)  43,43 every frame - its centre
+        //   0xad0b4 (the barrel)  low in the frame from the third on, so the
+        //                         fireball stands up from its position
+        //   0xad20c/0xad2b8/0xad364 (impacts)  identical in all three
+        //
+        // NOTE ON THE NAMES: "crate" is the table FUN_0002aaf0 plays, and that
+        // is not only a crate breaking - it is the general explosion: a
+        // grenade or seismic charge going off (the particle arm at 0x2db80),
+        // a creature caught in a blast (FUN_000368c8, 0x100 up), a vent
+        // bursting (FUN_000358a4 state 7) and a crate (0x37cc9). Only a barrel
+        // uses the barrel table (FUN_0002ab54, from 0x37d74).
         struct EffectTable
         {
             int firstRecord;
             int frameCount;
             int scaleX;
             int scaleY;
+            int anchorX[9];
+            int anchorY[9];
         };
 
-        inline constexpr EffectTable EFFECT_UNKNOWN_A{  0,  9, 0x0c00, 0x0c00 };
-        inline constexpr EffectTable EFFECT_CRATE     { 36, 9, 0x0c00, 0x0c00 };
-        inline constexpr EffectTable EFFECT_BARREL    {  9, 9, 0x0f3c, 0x125c };
-        inline constexpr EffectTable EFFECT_UNKNOWN_B { 18, 6, 0x0a00, 0x0a00 };
-        inline constexpr EffectTable EFFECT_IMPACT    { 25, 7, 0x0800, 0x0800 };
+        inline constexpr EffectTable EFFECT_UNKNOWN_A{  0,  9, 0x0c00, 0x0c00,
+            { 19, 26, 29, 27, 24, 19, 18, 16, 13 }, { 22, 26, 28, 32, 34, 34, 36, 34, 36 } };
+        inline constexpr EffectTable EFFECT_CRATE     { 36, 9, 0x0c00, 0x0c00,
+            { 43, 43, 43, 43, 43, 43, 43, 43, 43 }, { 43, 43, 43, 43, 43, 43, 43, 43, 43 } };
+        inline constexpr EffectTable EFFECT_BARREL    {  9, 9, 0x0f3c, 0x125c,
+            { 15, 19, 33, 29, 34, 40, 36, 39, 32 }, {  6, 12, 67, 75, 76, 77, 74, 76, 81 } };
+        inline constexpr EffectTable EFFECT_UNKNOWN_B { 18, 6, 0x0a00, 0x0a00,
+            { 4, 4, 4, 4, 4, 4 }, { 4, 4, 4, 4, 4, 4 } };
+        inline constexpr EffectTable EFFECT_IMPACT    { 25, 7, 0x0800, 0x0800,
+            { 7, 11, 10, 11, 11, 12, 12 }, { 5, 7, 8, 7, 10, 10, 6 } };
+
+        // A barrel's fireball goes off 0x30 under the floor it stands on
+        // (0x37d71: its y, which its handler keeps at the floor, less 0x30).
+        inline constexpr int BARREL_EFFECT_DROP = 0x30;
 
         // THE VENT JETS (FUN_0002caa8 steam, FUN_0002ccfc flame, from the
         // particle draw's table at 0x2d6a0). Each jet is a billboard of one of
@@ -176,13 +204,39 @@ namespace ALTEngine::Formats
             }
         }
 
-        // The scale is a 12.12 fixed-point multiplier the original divides by
-        // distance to get screen size. A world-space billboard needs it as a
-        // world size instead, so the rect's pixel size is multiplied by the
-        // scale and then by this. GUESS - tuned so a crate's 84-pixel frame at
-        // scale 0x0c00 comes out about a cell across.
-        inline constexpr float WORLD_UNITS_PER_SCALED_PIXEL = 5.0f;
+        // The size. FUN_000429f0 draws a frame (width + 1) * scale / depth
+        // pixels wide, and the projection puts a world length L at
+        // L * 0x100 / depth pixels (the focal length DAT_00400168 is 0x100).
+        // So a frame pixel is scale / 0x100 world units: the general blast's
+        // 84-pixel frame at 0xc00 is 1008 units across, about two cells. This
+        // was a guess of 5 * scale / 0x1000, under a third of that.
+        inline constexpr float FOCAL = 0x100;
         inline constexpr int SCALE_ONE = 0x1000;
+
+        // One frame as a world quad around the effect's position: its half
+        // size, and how far its centre sits right of and above the position,
+        // from the frame's anchor. `width`/`height` are the frame's pixel size
+        // as the BX rect gives it (already the original's width + 1).
+        struct FrameQuad
+        {
+            float halfWidth = 0, halfHeight = 0;
+            float centreRight = 0, centreUp = 0;
+        };
+
+        inline FrameQuad QuadFor(const EffectTable& table, int frame, int width, int height)
+        {
+            const float kx = static_cast<float>(table.scaleX) / FOCAL;
+            const float ky = static_cast<float>(table.scaleY) / FOCAL;
+            const int f = (frame < 0) ? 0 : (frame >= table.frameCount ? table.frameCount - 1 : frame);
+            FrameQuad q;
+            q.halfWidth = 0.5f * static_cast<float>(width) * kx;
+            q.halfHeight = 0.5f * static_cast<float>(height) * ky;
+            // The anchor is measured from the frame's top-left, x right and y
+            // down the screen; the world's y is up.
+            q.centreRight = (0.5f * static_cast<float>(width) - static_cast<float>(table.anchorX[f])) * kx;
+            q.centreUp = (static_cast<float>(table.anchorY[f]) - 0.5f * static_cast<float>(height)) * ky;
+            return q;
+        }
 
         // FRAME DURATION: 4 TICKS, CONFIRMED.
         //

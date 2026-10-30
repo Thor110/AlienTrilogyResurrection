@@ -94,17 +94,11 @@ namespace ALTEngine::Screens
 
         // Player collision constants, taken from the game's own entity
         // mover (Ghidra: FUN_00031afc / FUN_000315f0).
-        // Ejected casings are drawn with the ammo PICKUP mesh shrunk down - see
-        // the note at the particle draw. GUESS, chosen by eye.
-        constexpr float CASING_MODEL_SCALE = 0.25f;
 
         // Particle sprite sizes. The original works in screen pixels - a
         // fragment is literally 2x2 - and these are the world-space equivalents
         // at a typical engagement range. GUESSES, and the first thing to adjust
         // if tracers look too fat or too thin.
-        // Where the fireball sits relative to the barrel's base. GUESS - the
-        // original's explosion carries its own position which has not been read.
-        constexpr float EXPLOSION_HEIGHT_OFFSET = 256.0f;
         constexpr float FRAGMENT_HALF_SIZE = 6.0f;
         constexpr float TRACER_MIN_HALF_SIZE = 5.0f;
 
@@ -465,6 +459,8 @@ namespace ALTEngine::Screens
         bool cryopodOpenSignKnown = false;
         bool cryopodCoverReady = false;          // the per-level cover mesh is registered
         ALTEngine::Screens::Particles::Rng glassRng;
+        // The objects' destruction delays (Damage::Target::fuse).
+        ALTEngine::Screens::Particles::Rng fuseRng;
         std::vector<ALTEngine::Screens::Enemies::Enemy> enemies;
 
         // The trigger the player last fired, so a trigger runs once on entry
@@ -684,7 +680,7 @@ namespace ALTEngine::Screens
                     {
                         auto& target = damageTargets[i];
                         LS::LoadTarget(target, t[i]);
-                        if (target.destroyed && target.placedObjectIndex >= 0
+                        if (target.destroyed && target.fuse == 0 && target.placedObjectIndex >= 0
                             && target.placedObjectIndex < static_cast<int>(placedObjects.size()))
                         {
                             placedObjects[static_cast<size_t>(target.placedObjectIndex)].visible = false;
@@ -2237,7 +2233,7 @@ namespace ALTEngine::Screens
                         {
                             particles.SpawnCasing(projectileType == P::TYPE_PISTOL ? P::TYPE_CASING_A : P::TYPE_CASING_B,
                                                   camera.x, camera.y, camera.z,
-                                                  playerCam.viewYaw, playerCam.speed);
+                                                  playerCam.viewYaw, playerCam.speed, firingPitch);
                         }
                     }
 
@@ -2847,8 +2843,14 @@ namespace ALTEngine::Screens
                                 }
                                 if (enemy.ventBurst)
                                 {
-                                    explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_BARREL,
+                                    // FUN_000358a4 state 7: FUN_0002aaf0 at the
+                                    // vent - the general blast and sound 0x29,
+                                    // and no blast damage (that function does
+                                    // none).
+                                    explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE,
                                                      enemy.x, enemy.y, enemy.z, false);
+                                    ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                        ALTEngine::Formats::SoundIds::CRATE_BREAK, digits.c_str(), cdDirectory);
                                 }
                                 if (enemy.ventSwitchedOff)
                                 {
@@ -3251,14 +3253,21 @@ namespace ALTEngine::Screens
                             if (target.kind == D::TARGET_BARREL)
                             {
                                 blastQueue.push_back(target.cellIndex);
-                                // The fireball goes off where the barrel stood,
-                                // lifted so it sits around the barrel's middle
-                                // rather than on the floor.
+                                // FUN_0002ab54 from 0x37d74: the barrel's own
+                                // fireball and sound 0x21, 0x30 under the floor
+                                // it stood on; the frames' anchors stand the
+                                // fire up from there.
                                 explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_BARREL,
-                                                 target.x, target.y + EXPLOSION_HEIGHT_OFFSET, target.z);
+                                                 target.x,
+                                                 target.y - ALTEngine::Formats::ExplosionGraphics::BARREL_EFFECT_DROP,
+                                                 target.z);
+                                ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                    ALTEngine::Formats::SoundIds::BARREL_EXPLODE, digits.c_str(), cdDirectory);
                             }
                             else if (!isWindow)
                             {
+                                ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                    ALTEngine::Formats::SoundIds::CRATE_BREAK, digits.c_str(), cdDirectory);
                                 // A crate breaks into six scattered pieces, on
                                 // an axis chosen by which way it faces - see
                                 // ExplosionEffects::SpawnScatter.
@@ -3307,15 +3316,12 @@ namespace ALTEngine::Screens
                             for (int cell : rings.outer) { occupant(cell, false); }
                             checkPlayerDeath();
 
-                            std::vector<int> hit = rings.inner;
-                            hit.insert(hit.end(), rings.outer.begin(), rings.outer.end());
-                            for (int cell : hit)
-                            {
+                            auto catchObjects = [&](int cell, bool inner) {
                                 for (D::Target& other : damageTargets)
                                 {
-                                    // Objects caught in a blast are removed
-                                    // outright - no health check - unless they
-                                    // are flagged indestructible.
+                                    // Objects caught in a blast go - no health
+                                    // check - unless they are flagged
+                                    // indestructible, after their fuse.
                                     // Any cell of its block reaches it.
                                     const int length = level.header.mapLength;
                                     const int dx = (cell % length) - (other.cellIndex % length);
@@ -3326,11 +3332,26 @@ namespace ALTEngine::Screens
                                     {
                                         other.destroyed = true;
                                         other.state = D::STATE_DYING;
-                                        DestroyTarget(other);
+                                        other.fuse = inner ? fuseRng.Bits(7) + 4 : fuseRng.Bits(0xf) + 8;
                                     }
                                 }
-                            }
+                            };
+                            for (int cell : rings.inner) { catchObjects(cell, true); }
+                            for (int cell : rings.outer) { catchObjects(cell, false); }
                         };
+
+                        // Objects counting down to breaking or exploding
+                        // (Damage::Target::fuse), on the objects' pass. A
+                        // barrel's blast can light more fuses.
+                        if (halfPass)
+                        {
+                            for (D::Target& target : damageTargets)
+                            {
+                                if (target.fuse > 0 && --target.fuse == 0) { DestroyTarget(target); }
+                            }
+                            for (size_t q = 0; q < blastQueue.size(); ++q) { RunBlast(blastQueue[q]); }
+                            blastQueue.clear();
+                        }
 
                         // The vents' jets (ParticleSystem.h TickVents): they
                         // scald the player with cause 5, as FUN_0002a8f8 does.
@@ -3444,24 +3465,8 @@ namespace ALTEngine::Screens
 
                                         target.state = D::STATE_DYING;
                                         target.destroyed = true;
-                                        // Barrels explode, crates break apart.
-                                        ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                            target.kind == D::TARGET_BARREL
-                                                ? ALTEngine::Formats::SoundIds::BARREL_EXPLODE
-                                                : ALTEngine::Formats::SoundIds::CRATE_BREAK,
-                                            digits.c_str(), cdDirectory);
-                                        DestroyTarget(target);
-
-                                        // Run every blast this set off, including
-                                        // ones started by the chain itself.
-                                        for (size_t q = 0; q < blastQueue.size(); ++q)
-                                        {
-                                            ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                                ALTEngine::Formats::SoundIds::BARREL_EXPLODE,
-                                                digits.c_str(), cdDirectory);
-                                            RunBlast(blastQueue[q]);
-                                        }
-                                        blastQueue.clear();
+                                        // It goes a few ticks later (FUN_00036e9c).
+                                        target.fuse = fuseRng.Bits(7) + 1;
                                         break;
                                     }
                                 }
@@ -3523,18 +3528,17 @@ namespace ALTEngine::Screens
                         // well), then the floor.
                         if (halfPass && !enemyGrenades.empty())
                         {
+                            // The same as the player's: FUN_0002aaf0's general
+                            // blast at its own position, sound 0x29, then the
+                            // blast (0x2da30 / 0x2dd2f).
                             auto detonate = [&](const EnemyGrenade& g) {
                                 const int cell = ALTEngine::Formats::CellIndex(
                                     level, ToGridSpaceX(g.x, originX) >> 9, ToGridSpaceZ(g.z, originZ) >> 9);
-                                explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_BARREL,
-                                                 g.x, g.y + EXPLOSION_HEIGHT_OFFSET, g.z);
+                                explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE, g.x, g.y, g.z);
+                                ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                    ALTEngine::Formats::SoundIds::CRATE_BREAK, digits.c_str(), cdDirectory);
                                 if (cell >= 0) { blastQueue.push_back(cell); }
-                                for (size_t q = 0; q < blastQueue.size(); ++q)
-                                {
-                                    ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                        ALTEngine::Formats::SoundIds::BARREL_EXPLODE, digits.c_str(), cdDirectory);
-                                    RunBlast(blastQueue[q]);
-                                }
+                                for (size_t q = 0; q < blastQueue.size(); ++q) { RunBlast(blastQueue[q]); }
                                 blastQueue.clear();
                             };
                             for (size_t gi = 0; gi < enemyGrenades.size();)
@@ -3598,18 +3602,18 @@ namespace ALTEngine::Screens
                         // within 0x100 of it.
                         if (halfPass && !playerExplosives.empty())
                         {
-                            auto detonate = [&](float x, float y, float z) {
+                            // FUN_0002aaf0 at the explosive's own position: the
+                            // general blast (table 0xad008, centred on it) and
+                            // sound 0x29; then, unless it only hit the ceiling,
+                            // the blast (FUN_000368c8).
+                            auto detonate = [&](float x, float y, float z, bool blast = true) {
                                 const int cell = ALTEngine::Formats::CellIndex(
                                     level, ToGridSpaceX(x, originX) >> 9, ToGridSpaceZ(z, originZ) >> 9);
-                                explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_BARREL,
-                                                 x, y + EXPLOSION_HEIGHT_OFFSET, z);
-                                if (cell >= 0) { blastQueue.push_back(cell); }
-                                for (size_t q = 0; q < blastQueue.size(); ++q)
-                                {
-                                    ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                        ALTEngine::Formats::SoundIds::BARREL_EXPLODE, digits.c_str(), cdDirectory);
-                                    RunBlast(blastQueue[q]);
-                                }
+                                explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE, x, y, z);
+                                ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                    ALTEngine::Formats::SoundIds::CRATE_BREAK, digits.c_str(), cdDirectory);
+                                if (blast && cell >= 0) { blastQueue.push_back(cell); }
+                                for (size_t q = 0; q < blastQueue.size(); ++q) { RunBlast(blastQueue[q]); }
                                 blastQueue.clear();
                             };
                             for (size_t ei = 0; ei < playerExplosives.size();)
@@ -3632,12 +3636,14 @@ namespace ALTEngine::Screens
                                 {
                                     // Above the ceiling (FUN_0002a2d8 / FUN_00027fb0):
                                     // brought 0x100 under it, unless the cell is
-                                    // open (attribute 6), and set off.
+                                    // open (attribute 6), and set off - the
+                                    // effect only, as that path never reaches
+                                    // FUN_000368c8, so no blast.
                                     if (cell->attribute != 6)
                                     {
                                         e.y = static_cast<float>(cell->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT - 0x100;
                                     }
-                                    detonate(e.x, e.y, e.z); gone = true;
+                                    detonate(e.x, e.y, e.z, false); gone = true;
                                 }
                                 else if ((cell->attribute > 0x13 && cell->attribute < 0x2d)
                                          || (cell->unknown13 >= 0x14 && cell->unknown13 != 0xFF)
@@ -4012,20 +4018,9 @@ namespace ALTEngine::Screens
             {
                 // Live particles ride along as PlacedObjects. Casings ARE
                 // little models in the original - FUN_0002b37c stores a model
-                // pointer from DAT_00248160 or DAT_0024815c into the object -
-                // so going through the existing object path keeps them properly
-                // depth-sorted against the level for free, rather than needing a
-                // separate pass that would draw them through walls.
-                //
-                // WHICH model those two pointers are is not resolved, so the
-                // PickMod shell meshes stand in at a small scale. They are the
-                // ammo PICKUP models, so they are the right shape and the wrong
-                // size; the scale below is chosen by eye and is a GUESS.
-                //
-                // PlacedObject carries a single rotation axis while a real
-                // casing tumbles on two (FUN_0002b37c seeds +0x10 and +0x12).
-                // Only the yaw is applied here - the second axis needs a
-                // renderer change and is not worth one yet.
+                // pointer from the pickup model table into the object - so going
+                // through the object path keeps them depth-sorted against the
+                // level.
                 // Particle sprites. The tracers and impact fragments finally
                 // have somewhere to be drawn.
                 //
@@ -4088,6 +4083,25 @@ namespace ALTEngine::Screens
                             spark.halfWidth = look.halfWidth;
                             spark.halfHeight = look.halfHeight;
                             spark.r = spark.g = spark.b = look.grey;
+                        }
+                        else if (P::IsBlood(particle.type))
+                        {
+                            // FUN_0002d2bc: a square sprite from the effect
+                            // sheet - records 0x20, 0x21 and 0x22 on its first
+                            // three draws, 0x18 after - half the size of its
+                            // remaining life in world units (life << 8 over the
+                            // depth, at the focal length 0x100), in the light's
+                            // colour with blue taken out and red too for type 9
+                            // (an alien's green acid) or green for type 8 (red
+                            // blood); type 10 keeps the light's colour. These
+                            // were drawn as white streaks.
+                            const int age = particle.strength - particle.life;
+                            const int record = (age >= 0 && age < 3) ? 0x20 + age : 0x18;
+                            if (!explosions.UseRecord(record, spark)) { continue; }
+                            spark.halfWidth = spark.halfHeight = static_cast<float>(std::max(particle.life, 1));
+                            spark.r = (particle.type == P::TYPE_BLOOD_ACID) ? 0.0f : 1.0f;
+                            spark.g = (particle.type == P::TYPE_BLOOD_WHITE) ? 0.0f : 1.0f;
+                            spark.b = (particle.type == P::TYPE_BLOOD_ACID_B) ? 1.0f : 0.0f;
                         }
                         else if (particle.type == P::TYPE_FLAME)
                         {
@@ -4156,9 +4170,9 @@ namespace ALTEngine::Screens
                         if (particle.type != P::TYPE_CASING_A && particle.type != P::TYPE_CASING_B) { continue; }
 
                         ALTEngine::Renderer::PlacedObject shell;
-                        // Models 26 and 27 sit past the last pickup type (0x19),
-                        // which is why they read as the two ejected cases: 27 the
-                        // pistol's, 26 the shotgun's. INFERRED from that, not traced.
+                        // Entries 27 (the pistol's) and 26 (the shotgun's) of the
+                        // pickup model table (FUN_0002b37c), turned by both of
+                        // its angles, at the draw's scale (FUN_0002cf14).
                         shell.cacheKey = { ALTEngine::Renderer::ModelCatalog::Pickmod,
                                            particle.type == P::TYPE_CASING_B
                                                ? ALTEngine::Formats::ModelIndices::PickMod::ShotgunAmmunition
@@ -4166,23 +4180,29 @@ namespace ALTEngine::Screens
                         shell.x = particle.x;
                         shell.y = particle.y;
                         shell.z = particle.z;
+                        shell.pitchRadians = ALTEngine::Screens::PlayerCamera::ToRadians(particle.angleX);
                         shell.rotationRadians = ALTEngine::Screens::PlayerCamera::ToRadians(particle.angleY);
-                        shell.scaleX = shell.scaleY = shell.scaleZ = CASING_MODEL_SCALE;
+                        shell.scaleX = shell.scaleY = shell.scaleZ = P::CasingDrawScale(particle.type);
                         placedObjects.push_back(shell);
                     }
 
-                    // A handler's grenades. OURS: the original draws its own
-                    // model, which isn't traced; the pulse rifle's grenade
-                    // pickup stands in, small.
+                    // A handler's grenades: entry 12 of the pickup model table
+                    // (DAT_00248124, FUN_0002b240), the pulse rifle grenade
+                    // the player throws, drawn where it is at full size, from
+                    // 0x200 ahead of the view as the player's are
+                    // (FUN_0002cf14).
                     for (const EnemyGrenade& g : enemyGrenades)
                     {
+                        namespace PCv = ALTEngine::Screens::PlayerCamera;
+                        const float ahead = (g.x - camera.x) * (static_cast<float>(PCv::Sin(playerCam.viewYaw)) / PCv::TRIG_ONE)
+                                          - (g.z - camera.z) * (static_cast<float>(PCv::Cos(playerCam.viewYaw)) / PCv::TRIG_ONE);
+                        if (ahead <= 0x200 || ahead >= 0x1e00) { continue; }
                         ALTEngine::Renderer::PlacedObject shell;
                         shell.cacheKey = { ALTEngine::Renderer::ModelCatalog::Pickmod,
                                            ALTEngine::Formats::ModelIndices::PickMod::PulseRifleGrenade };
                         shell.x = g.x;
-                        shell.y = g.y - 0x20;
+                        shell.y = g.y;
                         shell.z = g.z;
-                        shell.scaleX = shell.scaleY = shell.scaleZ = CASING_MODEL_SCALE * 2.0f;
                         placedObjects.push_back(shell);
                     }
                     // The player's grenades and charges, each with its own

@@ -53,6 +53,9 @@ namespace ALTEngine::Screens
             // Blood a creature sprays when a round hits it (FUN_0002ada4), the
             // type chosen by creature (Game::ProjectileCollision::
             // BloodTypeForCreature). 9 and 10 are acid and burn the player.
+            // NAMES: FUN_0002d2bc draws 8 with green and blue taken out of
+            // the light - red, a person's blood - 9 green and 10 in the light's
+            // own colour. "WHITE" is kept as the name the code already uses.
             TYPE_BLOOD_WHITE = 8,
             TYPE_BLOOD_ACID = 9,
             TYPE_BLOOD_ACID_B = 10,
@@ -201,12 +204,14 @@ namespace ALTEngine::Screens
 
         // Shell casing, from FUN_0002b37c.
         //
-        // Spawned at the view position plus (0, 200, 0x280) rotated by the view
-        // angles with the yaw biased +0x40, which puts it up and forward of the
-        // eye and slightly right - the muzzle. Its velocity is (0, -0x30,
-        // playerSpeed + 8) thrown at a yaw of `random(0..0x7f) + 0x80`, so it
-        // always flies to the RIGHT with a random scatter, which is what an
-        // ejection port does.
+        // Spawned at the view position plus (0, 200, 0x280) turned by the
+        // pitch and then the view's yaw (+0x40) and roll. The roll is 0x800
+        // (DAT_000b0a54), which turns the view's y down the screen, so the 200
+        // is 200 BELOW the eye: the case starts low and ahead, at the weapon.
+        // Its velocity is (0, -0x30, playerSpeed + 8) turned the same way at
+        // a yaw of `random(0..0x7f) + 0x80`: 0x30 UP, flying to the right with
+        // a random scatter. This had both the other way up, so cases fell from
+        // above the eye.
         inline constexpr int CASING_OFFSET_UP = 200;
         inline constexpr int CASING_OFFSET_FORWARD = 0x280;
         inline constexpr int CASING_YAW_BIAS = 0x40;
@@ -228,15 +233,18 @@ namespace ALTEngine::Screens
         // 4096-per-turn units as everything else, so a casing leaves the port
         // already at a random attitude rather than upright. That part is traced.
         //
-        // THE SPIN RATE AND THE FALL ARE NOT. The loop that advances a live
-        // particle's angles and pulls it down has not been read out yet - the
-        // spawners are all traced, the updater is not. The three values below
-        // are therefore GUESSES, chosen to look like a small brass case
-        // tumbling out of a pistol at 30 ticks/second, and they are the first
-        // thing to replace once that loop is found.
-        inline constexpr int CASING_SPIN_X = 0x60;   // GUESS - angle units per tick
-        inline constexpr int CASING_SPIN_Y = 0x38;   // GUESS
-        inline constexpr int CASING_GRAVITY = 12;    // GUESS - world units/tick^2
+        // The fall and spin, traced: the casings' arm of the particle task
+        // (0x2e3df) takes 6 off the vertical speed a tick, and their draw
+        // (FUN_0002cf14) turns the first angle 0x40 and the second 0x60 a
+        // tick, always the same way. Nothing tests the floor: a case falls on
+        // until its 0x20 ticks run out. The pistol's case (0x15) is drawn at
+        // half size (0x800), the shotgun's (0x14) at full size; their models
+        // are entries 27 and 26 of the pickup model table (0x2480f4 + 4n,
+        // read at 0x2b4b9/0x2b4c4).
+        inline constexpr int CASING_SPIN_X = 0x40;
+        inline constexpr int CASING_SPIN_Y = 0x60;
+        inline constexpr int CASING_GRAVITY = 6;
+        inline constexpr float CasingDrawScale(int type) { return type == 0x15 ? 0.5f : 1.0f; }
 
         // Blood falls 4 a tick (the type 8/9/10 arms of the particle task,
         // 0x2e171 and 0x2e1da: `sub word [velocity + 2], 4`).
@@ -481,44 +489,51 @@ namespace ALTEngine::Screens
             }
 
             // FUN_0002b37c. Ejected right, with scatter.
+            // `viewPitch` is the port's (positive up).
             Particle* SpawnCasing(int casingType, float eyeX, float eyeY, float eyeZ,
-                                  int viewYaw, int playerSpeed)
+                                  int viewYaw, int playerSpeed, int viewPitch = 0)
             {
                 Particle* p = Take();
                 if (!p) { return nullptr; }
 
+                const float ps = static_cast<float>(PlayerCamera::Sin(viewPitch & PlayerCamera::ANGLE_MASK)) / PlayerCamera::TRIG_ONE;
+                const float pc = static_cast<float>(PlayerCamera::Cos(viewPitch & PlayerCamera::ANGLE_MASK)) / PlayerCamera::TRIG_ONE;
+
+                // The view's (0, 200 down, 0x280 ahead), pitched, then along
+                // the yaw + 0x40.
                 const int spawnYaw = (viewYaw + CASING_YAW_BIAS) & PlayerCamera::ANGLE_MASK;
                 const float s = static_cast<float>(PlayerCamera::Sin(spawnYaw)) / PlayerCamera::TRIG_ONE;
                 const float c = static_cast<float>(PlayerCamera::Cos(spawnYaw)) / PlayerCamera::TRIG_ONE;
+                const float offsetAhead = CASING_OFFSET_FORWARD * pc + CASING_OFFSET_UP * ps;
+                const float offsetUp = CASING_OFFSET_FORWARD * ps - CASING_OFFSET_UP * pc;
 
                 p->type = static_cast<uint8_t>(casingType);
                 p->life = CASING_LIFETIME;
-                p->x = eyeX + CASING_OFFSET_FORWARD * s;
-                p->y = eyeY + CASING_OFFSET_UP;
-                p->z = eyeZ - CASING_OFFSET_FORWARD * c;
+                p->x = eyeX + offsetAhead * s;
+                p->y = eyeY + offsetUp;
+                p->z = eyeZ - offsetAhead * c;
 
+                // The view's (0, 0x30 up, speed + 8), pitched, then along the
+                // eject yaw.
                 const int ejectYaw = (viewYaw + CASING_EJECT_YAW + rng.Bits(CASING_EJECT_SPREAD))
                                    & PlayerCamera::ANGLE_MASK;
                 const float es = static_cast<float>(PlayerCamera::Sin(ejectYaw)) / PlayerCamera::TRIG_ONE;
                 const float ec = static_cast<float>(PlayerCamera::Cos(ejectYaw)) / PlayerCamera::TRIG_ONE;
                 const float forward = static_cast<float>(playerSpeed + CASING_VELOCITY_FORWARD_BIAS);
+                const float rise = static_cast<float>(-CASING_VELOCITY_UP);
+                const float ahead = forward * pc - rise * ps;
 
-                p->vx = forward * es;
-                p->vy = static_cast<float>(CASING_VELOCITY_UP);
-                p->vz = -forward * ec;
+                p->vx = ahead * es;
+                p->vy = forward * ps + rise * pc;
+                p->vz = -ahead * ec;
 
                 // Random attitude on two axes, third left at zero - traced.
                 p->angleX = rng.Bits(PlayerCamera::ANGLE_MASK);
                 p->angleY = rng.Bits(PlayerCamera::ANGLE_MASK);
                 p->angleZ = 0;
 
-                // Tumble and fall - see the note on CASING_SPIN_X. The sign of
-                // the spin is randomised so consecutive casings do not all
-                // rotate identically.
-                const int sx = (rng.Bits(1) != 0) ? CASING_SPIN_X : -CASING_SPIN_X;
-                const int sy = (rng.Bits(1) != 0) ? CASING_SPIN_Y : -CASING_SPIN_Y;
-                p->spinX = sx;
-                p->spinY = sy;
+                p->spinX = CASING_SPIN_X;
+                p->spinY = CASING_SPIN_Y;
                 p->falls = true;
                 return p;
             }
@@ -796,16 +811,12 @@ namespace ALTEngine::Screens
                         }
                     }
 
-                    // A casing that reaches the floor stops there and rests out
-                    // its remaining life. NOT TRACED - whether the original
-                    // bounces, slides or simply removes them is in the same
-                    // unread update loop.
+                    // The original never tests a casing against anything: it
+                    // falls through the floor, out of sight, until its life
+                    // ends (0x2e3df). Gone at the floor or a wall looks the same.
                     if (p.falls && stopped)
                     {
-                        p.vx = 0; p.vy = 0; p.vz = 0;
-                        p.spinX = 0; p.spinY = 0; p.spinZ = 0;
-                        p.falls = false;
-                        if (p.life > 0 && --p.life == 0) { p.alive = false; }
+                        p.alive = false;
                         continue;
                     }
 

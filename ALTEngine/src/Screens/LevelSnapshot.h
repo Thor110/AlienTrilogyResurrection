@@ -118,7 +118,7 @@ namespace ALTEngine::Screens::LevelSnapshot
 
     inline nlohmann::json SaveTarget(const Damage::Target& t)
     {
-        return { { "health", t.health }, { "destroyed", t.destroyed } };
+        return { { "health", t.health }, { "destroyed", t.destroyed }, { "fuse", t.fuse } };
     }
 
     // Only the record: hiding a broken object's mesh is the caller's.
@@ -126,6 +126,8 @@ namespace ALTEngine::Screens::LevelSnapshot
     {
         t.health = j.value("health", t.health);
         t.destroyed = j.value("destroyed", t.destroyed);
+        // Still counting down when saved: it stands until the fuse runs out.
+        t.fuse = j.value("fuse", 0);
         t.state = t.destroyed ? Damage::STATE_DYING : Damage::STATE_NORMAL;
         t.hitCooldown = 0;
     }
