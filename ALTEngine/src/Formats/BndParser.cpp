@@ -103,10 +103,18 @@ namespace ALTEngine::Formats
             {
                 throw std::runtime_error("BndParser: could not open " + path.string());
             }
-            auto size = static_cast<size_t>(in.tellg());
+            const std::streamoff rawSize = in.tellg();
+            const size_t size = rawSize > 0 ? static_cast<size_t>(rawSize) : 0;
             in.seekg(0);
             std::vector<uint8_t> data(size);
             in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(size));
+            // An empty or cut-short file (an install or patch interrupted
+            // part-way) is named here, rather than failing later as a bad tag.
+            if (!in || size < 12)
+            {
+                throw std::runtime_error(path.string() + " is empty or cut short (" + std::to_string(size)
+                                         + " bytes); copy it from the disc again");
+            }
             return data;
         }
     }

@@ -126,19 +126,48 @@ namespace ALTEngine::Formats
 
         ClearReadOnly(path);
 
-        std::ofstream out;
-        bool opened = RetryOnTransientLock([&]() {
-            out.open(path, std::ios::binary | std::ios::trunc);
-            return out.is_open();
-        });
-        if (!opened)
+        // Written beside the file, checked, and moved over it, as the model
+        // removal does. Writing the file in place truncated it first, so a
+        // write cut short (antivirus, a full disk, the game closed part-way)
+        // left the level empty or short, and the game then could not load it.
+        auto temp = path;
+        temp += ".tmp";
         {
-            throw std::runtime_error(
-                "BinaryUtility::ReplaceBytes: could not reopen " + path.string() +
-                " for writing (" + std::strerror(errno) + ") - already tried clearing the read-only "
-                "attribute and retrying briefly. Check antivirus real-time scanning, or Program Files "
-                "permissions (run elevated).");
+            std::ofstream out;
+            bool opened = RetryOnTransientLock([&]() {
+                out.open(temp, std::ios::binary | std::ios::trunc);
+                return out.is_open();
+            });
+            if (!opened)
+            {
+                throw std::runtime_error(
+                    "BinaryUtility::ReplaceBytes: could not open " + temp.string() +
+                    " for writing (" + std::strerror(errno) + ") - check antivirus real-time scanning, or "
+                    "Program Files permissions (run elevated).");
+            }
+            out.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+            out.close();
+            if (!out)
+            {
+                std::error_code ec;
+                std::filesystem::remove(temp, ec);
+                throw std::runtime_error("BinaryUtility::ReplaceBytes: could not write " + temp.string()
+                                         + "; " + path.string() + " is unchanged.");
+            }
         }
-        out.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+        std::error_code renameError;
+        bool replaced = RetryOnTransientLock([&]() {
+            renameError.clear();
+            std::filesystem::rename(temp, path, renameError);
+            return !renameError;
+        });
+        if (!replaced)
+        {
+            std::error_code ec;
+            std::filesystem::remove(temp, ec);
+            throw std::runtime_error("BinaryUtility::ReplaceBytes: could not replace " + path.string() + " ("
+                                     + renameError.message() + "); it is unchanged. Check antivirus real-time "
+                                     "scanning, or Program Files permissions (run elevated).");
+        }
     }
 }

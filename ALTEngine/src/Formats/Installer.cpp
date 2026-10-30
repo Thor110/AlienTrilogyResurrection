@@ -38,6 +38,15 @@ namespace ALTEngine::Formats
                 return !ec;
             });
             if (copied) { ClearReadOnly(dest); }
+            // A copy cut short (a disc read error, a full disk) must count as
+            // failed, not leave a short file the game later cannot read.
+            if (copied)
+            {
+                std::error_code sourceError, destError;
+                const auto sourceSize = std::filesystem::file_size(source, sourceError);
+                const auto destSize = std::filesystem::file_size(dest, destError);
+                if (sourceError || destError || sourceSize != destSize) { return false; }
+            }
             return copied;
         }
 

@@ -67,3 +67,43 @@ TEST_CASE("PatchRunner: a byte rewritten by a later edit still reads as applied"
     CHECK(PatchRunner::ApplyAll(root, { op })[0].outcome == PatchOutcome::AlreadyApplied);
     std::filesystem::remove_all(root);
 }
+
+#include "Formats/LevelLoader.h"
+#include <string>
+
+TEST_CASE("PatchRunner: a patched file is replaced whole, with no temporary file left behind")
+{
+    const auto root = std::filesystem::temp_directory_path() / "altengine_patchrunner_replace";
+    std::filesystem::create_directories(root / "SECT12");
+    const auto file = root / "SECT12" / "L141LEV.MAP";
+    {
+        std::ofstream out(file, std::ios::binary);
+        const std::vector<uint8_t> bytes(64, 0x11);
+        out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    }
+    PatchOperation op;
+    op.targetFile = "SECT12/L141LEV.MAP";
+    op.edits.push_back(BinaryEdit{ 10, { 0x22, 0x33 } });
+    const auto results = PatchRunner::ApplyAll(root, { op });
+    CHECK(results.size() == 1);
+    CHECK(results[0].outcome == PatchOutcome::Applied);
+    const auto after = ReadAll(file);
+    CHECK_EQ(after.size(), size_t(64));
+    CHECK(after[10] == 0x22 && after[11] == 0x33 && after[12] == 0x11);
+    CHECK(!std::filesystem::exists(root / "SECT12" / "L141LEV.MAP.tmp"));
+    std::filesystem::remove_all(root);
+}
+
+TEST_CASE("LevelLoader: an empty or cut-short level names the file")
+{
+    const auto root = std::filesystem::temp_directory_path() / "altengine_empty_level";
+    std::filesystem::create_directories(root);
+    const auto file = root / "L141LEV.MAP";
+    { std::ofstream out(file, std::ios::binary); out.write("FOR", 3); }
+    std::string message;
+    try { ALTEngine::Formats::LevelLoader::Load(file); }
+    catch (const std::exception& e) { message = e.what(); }
+    CHECK(message.find("L141LEV.MAP") != std::string::npos);
+    CHECK(message.find("cut short") != std::string::npos);
+    std::filesystem::remove_all(root);
+}
