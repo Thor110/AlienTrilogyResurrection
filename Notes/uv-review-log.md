@@ -10,8 +10,8 @@ Status of each part:
 - `Patch/LxxxLEV.txt` and the README: only the zip 51 rows so far (L371LEV Fix 8).
 - ALTViewer's fixer: **none yet**.
 
-Patches.json is applied when the game is installed (InstallPipeline's RunPatches), so a fix only shows up in
-game after a reinstall or after the patch is applied to the installed files.
+Patches.json is applied when the game is installed and again at every launch (zip 71), so a new fix shows up
+the next time the game starts.
 
 ## How the fixes work
 
