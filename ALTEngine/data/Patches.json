@@ -33380,6 +33380,44 @@
           ]
         }
       ]
+    },
+    {
+      "target": "SECT11/L111LEV.MAP",
+      "note": "L111LEV.MAP - face 4150 mirrored the wrong way (draw routine 0 -> 2, flipping its texture horizontally) and face 6528 given texture 194 to match its neighbour - Edward, 2026",
+      "edits": [
+        {
+          "offset": "0x2C296",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x37C5C",
+          "bytes": [
+            "0xC2",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L900LEV.MAP",
+      "note": "L900LEV.MAP - the same two faces as L111LEV.MAP at the identical offsets: face 4150 routine 0 -> 2 (texture flipped horizontally), face 6528 texture 194 - Edward, 2026",
+      "edits": [
+        {
+          "offset": "0x2C296",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x37C5C",
+          "bytes": [
+            "0xC2",
+            "0x00"
+          ]
+        }
+      ]
     }
   ],
   "faceUvRotations": [],

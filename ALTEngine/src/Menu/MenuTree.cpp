@@ -316,19 +316,6 @@ namespace ALTEngine::Menu
                     : "Off");
             enableAll.isSettingsList = true;
 
-            MenuNode autoDoors = List("Automatic Doors", StringId::AutomaticDoors, {
-                Action("Off", StringId::Off),
-                Action("On", StringId::On),
-            });
-            // Show what the feature will actually do, not just its stored
-            // toggle - under On or Off the mode overrides the toggle, and
-            // displaying the stale stored value reads as the setting having
-            // been ignored. The stored value is still what Custom returns to.
-            bool autoDoorsEffective =
-                modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
-            autoDoors.initialSelectedChild = FindChildIndexByLabel(autoDoors.children, autoDoorsEffective ? "On" : "Off");
-            autoDoors.isSettingsList = true;
-
             MenuNode keepItems = List("Keep Items", StringId::KeepItems, {
                 Action("Off", StringId::Off),
                 Action("On", StringId::On),
@@ -356,12 +343,10 @@ namespace ALTEngine::Menu
             };
 
             enableAll.descriptionStringId = static_cast<int>(StringId::DescEnableAll);
-            autoDoors.descriptionStringId = static_cast<int>(StringId::DescAutomaticDoors);
             keepItems.descriptionStringId = static_cast<int>(StringId::DescKeepItems);
 
             std::vector<MenuNode> entries = {
                 std::move(enableAll),
-                std::move(autoDoors),
                 std::move(keepItems),
                 featureNode(ALTEngine::Bootstrap::ModernSettings::MenuLabel(ALTEngine::Bootstrap::ModernFeature::SkipEndLevelScreen),
                             StringId::SkipEndLevelScreen, StringId::DescSkipEndLevel,

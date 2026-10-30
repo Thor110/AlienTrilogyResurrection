@@ -40,9 +40,10 @@ namespace ALTEngine::Game::Doors
             ds.alongZ = alongZ;
             ds.floorUnits = cellFloor;
             ds.travel = travel;
+            ds.counter = startsOpen ? travel : 0;
             ds.progress = startsOpen ? travel : 0;
             ds.threshold = door.lockState == 0 ? 1 : door.lockState;
-            ds.keepsUnlockOnClose = startsOpen;
+            ds.startsOpen = startsOpen;
             ds.holdTicks = static_cast<int>(door.time) * 4;
             ds.phase = startsOpen ? DoorState::Phase::Open : DoorState::Phase::Idle;
             ds.worldX = gameX - originX;
@@ -67,31 +68,49 @@ namespace ALTEngine::Game::Doors
         return doors;
     }
 
-    void MarkSingleUseDoors(const Formats::LevelGeometry& level, std::vector<DoorState>& doors)
-    {
-        std::vector<bool> reusable(doors.size(), false);
-        for (const auto& trigger : level.actions)
-        {
-            if (trigger.enable != 0xFF) { continue; }
-            int step = trigger.commandStart;
-            for (int guard = 0; guard < 64 && step != 0xFF && static_cast<size_t>(step) < level.logics.size(); ++guard)
-            {
-                const auto& c = level.logics[static_cast<size_t>(step)];
-                if ((c.action == 1 || c.action == 6) && c.objectIndex < doors.size()) { reusable[c.objectIndex] = true; }
-                step = c.nextStep;
-            }
-        }
-        for (size_t i = 0; i < doors.size(); ++i) { doors[i].staysOpen = !reusable[i]; }
-    }
-
     bool ApplyCommand(DoorState& door, bool isOpenCommand, int amount, bool viaSwitch)
     {
-        if (door.phase != DoorState::Phase::Idle || door.unlockProgress >= door.threshold) { return false; }
+        // Flags 0x08/0x10 (opening, closing) refuse; a door that is shut, open
+        // or holding takes the count.
+        if (door.phase == DoorState::Phase::Opening || door.phase == DoorState::Phase::Closing) { return false; }
+        if (door.unlockProgress >= door.threshold) { return false; }
         if (isOpenCommand && door.unlockProgress < door.threshold - 1) { return false; }
 
-        if (viaSwitch) { door.switchOperated = true; }
+        door.switchOperated = viaSwitch;
         door.unlockProgress = static_cast<uint8_t>(door.unlockProgress + amount);
         return true;
+    }
+
+    namespace
+    {
+        // FUN_00028d90: anything standing in one of the door's cells.
+        bool Occupied(const DoorState& door, const Formats::LevelGeometry& level)
+        {
+            for (int i = 0; i < door.cellCount; ++i)
+            {
+                if (level.collisionGrid[door.cells[static_cast<size_t>(i)]].unknown13 != 0) { return true; }
+            }
+            return false;
+        }
+
+        // The end of a close (0x2932a) or of an open (0x294a6): a door with no
+        // open time, and a door that does not start open, is re-locked and
+        // shut; any other waits out its hold first.
+        void FinishClose(DoorState& door)
+        {
+            door.isOpen = false;
+            door.holdCounter = door.holdTicks;
+            if (door.holdTicks == 0 || !door.startsOpen) { door.unlockProgress = 0; door.phase = DoorState::Phase::Idle; }
+            else { door.phase = DoorState::Phase::Hold; }
+        }
+
+        void FinishOpen(DoorState& door)
+        {
+            door.isOpen = true;
+            door.holdCounter = door.holdTicks;
+            if (door.holdTicks == 0 || door.startsOpen) { door.unlockProgress = 0; door.phase = DoorState::Phase::Open; }
+            else { door.phase = DoorState::Phase::Hold; }
+        }
     }
 
     DoorNotice Tick(DoorState& door, Formats::LevelGeometry& level, float playerX, float playerZ)
@@ -101,10 +120,8 @@ namespace ALTEngine::Game::Doors
         switch (door.phase)
         {
         case DoorState::Phase::Idle:
-            // Re-checked every tick against the counter alone - closing resets
-            // the counter, so no fresh trigger is needed here.
-            if (door.cooldown > 0) { door.cooldown--; }
-            else if (door.unlockProgress >= door.threshold)
+            // Re-checked every tick against the count alone.
+            if (door.unlockProgress >= door.threshold)
             {
                 door.phase = DoorState::Phase::Opening;
                 notice = door.isLift ? DoorNotice::LiftActivated
@@ -114,35 +131,36 @@ namespace ALTEngine::Game::Doors
             break;
 
         case DoorState::Phase::Opening:
-            door.progress++;
-            if (door.progress >= door.travel) { door.progress = door.travel; door.phase = DoorState::Phase::Open; }
+            // The step that reaches the full count does not raise the door, so
+            // a door opened from shut stops one unit short of its travel.
+            if (++door.counter >= door.travel) { door.counter = door.travel; FinishOpen(door); }
+            else { door.progress++; }
+            break;
+
+        case DoorState::Phase::Hold:
+            if (--door.holdCounter <= 0)
+            {
+                door.holdCounter = 0;
+                door.phase = door.isOpen ? DoorState::Phase::Open : DoorState::Phase::Idle;
+            }
             break;
 
         case DoorState::Phase::Open:
         {
-            if (door.switchOperated || door.staysOpen) { break; }
+            if (door.unlockProgress < door.threshold) { break; }
             // Measured across the doorway: a door running along Z is walked
             // through in X, so that is the axis that matters.
             float d = door.alongZ ? (door.worldX - playerX) : (door.worldZ - playerZ);
             if (d < 0) { d = -d; }
-            bool occupied = false;
-            for (int i = 0; i < door.cellCount; ++i)
-            {
-                if (level.collisionGrid[door.cells[static_cast<size_t>(i)]].unknown13 != 0) { occupied = true; break; }
-            }
-            if (d > 1024.0f && !occupied) { door.phase = DoorState::Phase::Closing; }
+            if (d > 1024.0f && !Occupied(door, level)) { door.phase = DoorState::Phase::Closing; }
             break;
         }
 
         case DoorState::Phase::Closing:
-            door.progress--;
-            if (door.progress <= 0)
-            {
-                door.progress = 0;
-                door.phase = DoorState::Phase::Idle;
-                if (door.keepsUnlockOnClose) { door.cooldown = door.holdTicks; }
-                else { door.unlockProgress = 0; }
-            }
+            --door.counter;
+            if (Occupied(door, level)) { door.phase = DoorState::Phase::Opening; }
+            else if (door.counter <= 0) { door.counter = 0; FinishClose(door); }
+            else if (door.progress > 0) { door.progress--; }
             break;
         }
 

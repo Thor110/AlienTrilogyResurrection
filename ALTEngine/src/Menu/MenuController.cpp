@@ -480,7 +480,7 @@ namespace ALTEngine::Menu
                     }
                     else
                     {
-                        ModernFeature feature = ModernFeature::AutoOpenDoors;
+                        ModernFeature feature = ModernFeature::KeepItems;
                         bool known = ModernFeatureForLabel(node.label, feature);
 
                         if (known)
@@ -591,8 +591,8 @@ namespace ALTEngine::Menu
                 }
                 else
                 {
-                    auto feature = ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors;
-                    if (!ModernFeatureForLabel(parentLabel, feature)) { feature = ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors; }
+                    auto feature = ALTEngine::Bootstrap::ModernFeature::KeepItems;
+                    ModernFeatureForLabel(parentLabel, feature);
                     // SetFeature switches to Custom itself, and preserves
                     // every other feature's effective state while doing so.
                     modern.SetFeature(feature, leafLabel == "On");

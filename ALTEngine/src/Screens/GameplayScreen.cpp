@@ -449,9 +449,6 @@ namespace ALTEngine::Screens
         std::vector<SwitchVisual> switchVisuals;
         int switchBlinkTicks = 0;
         bool switchBlinkPhase = false;
-        // Read once here rather than threaded through Run's already long
-        // settings chain - worth tidying if more of these appear.
-        bool autoOpenDoors = false;
         // Free Look defaults OFF, i.e. the original's automatic pitch. Read
         // once here and refreshed whenever the pause menu closes, so toggling
         // it mid-game takes effect without a restart.
@@ -577,7 +574,6 @@ namespace ALTEngine::Screens
         {
             ALTEngine::Bootstrap::Config modernConfig;
             ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
-            autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
             freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
             playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
             fasterXenomorphs = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterXenomorphs);
@@ -1163,7 +1159,6 @@ namespace ALTEngine::Screens
 
                         doorStates = ALTEngine::Game::Doors::Build(
                             level, ALTEngine::Game::Doors::TravelForLevel(digits), originX, originZ);
-                        ALTEngine::Game::Doors::MarkSingleUseDoors(level, doorStates);
 
                         for (size_t d = 0; d < doorStates.size(); ++d)
                         {
@@ -1291,28 +1286,19 @@ namespace ALTEngine::Screens
                             placed.x = static_cast<float>(pickup.x) * GRID_CELL_TO_WORLD_UNITS + 256.0f - originX;
                             placed.z = static_cast<float>(pickup.y) * GRID_CELL_TO_WORLD_UNITS + 256.0f - originZ;
 
-                            // Height offset table: 96 for type 20, 64 for
-                            // everything else in the range we spawn.
-                            float heightOffset = (type == 20) ? 96.0f : 64.0f;
-                            placed.y = ALTEngine::Formats::FindFloorHeight(level, pickup.x, pickup.y) + heightOffset;
-
-                            // Scale table, 12.12 fixed point, indexed by type.
-                            // Only 16 rows exist, so higher types are clamped
-                            // rather than read past the end.
-                            static const float PICKUP_SCALE[16] = {
-                                1.0f, 1.0f, 1.0f, 1.0f, 1.25f, 0.25f,
-                                1.75f, 1.75f, 1.75f, 1.75f, 1.75f, 1.75f, 1.75f, 1.75f, 1.75f, 1.75f
-                            };
-                            float scale = PICKUP_SCALE[type < 16 ? type : 15];
-                            placed.scaleX = scale;
-                            placed.scaleY = scale;
-                            placed.scaleZ = scale;
+                            // The floor at the cell's centre, where the item
+                            // stands, plus DAT_000acde8's offset for its type.
+                            placed.y = ALTEngine::Formats::FindFloorHeightGridSpace(
+                                           level, pickup.x * 512 + 256, pickup.y * 512 + 256)
+                                     + static_cast<float>(ALTEngine::Screens::DroppedPickups::DropHeight(type));
+                            placed.scaleX = placed.scaleY = placed.scaleZ = ALTEngine::Screens::DroppedPickups::DrawScale(type);
 
                             LivePickup live;
                             live.pickupIndex = static_cast<uint8_t>(pickupSlot);
                             live.placedIndex = placedObjects.size();
                             live.cellIndex = static_cast<int>(pickup.y) * level.header.mapLength + static_cast<int>(pickup.x);
-                            live.type = pickup.type;
+                            // 0x18 becomes 0x15 as the record is read (FUN_0003b93c).
+                            live.type = static_cast<uint8_t>(type);
                             live.amount = pickup.amount;
                             live.multiplier = pickup.multiplier;
                             live.waitingOnTrigger = waitsOnTrigger;
@@ -1507,11 +1493,10 @@ namespace ALTEngine::Screens
         triggerHandlers.door = [&](int doorIndex, bool isOpen, int amount, bool viaSwitch,
                                    ALTEngine::Game::Triggers::Source source) {
             if (doorIndex < 0 || static_cast<size_t>(doorIndex) >= doorStates.size()) { return false; }
-            // Walking up to a door opens it only with the Modern Automatic
-            // Doors option; otherwise it takes the use key, as in the original.
-            // A failed door command aborts the rest of that chain, which is
-            // what the old walk-on path did too.
-            if (source == ALTEngine::Game::Triggers::Source::WalkOn && !autoOpenDoors) { return false; }
+            // Walking up to a door never opens it: it takes the use key, as in
+            // the original. A failed door command aborts the rest of that
+            // chain, which is what the old walk-on path did too.
+            if (source == ALTEngine::Game::Triggers::Source::WalkOn) { return false; }
             return ALTEngine::Game::Doors::ApplyCommand(doorStates[static_cast<size_t>(doorIndex)], isOpen, amount, viaSwitch);
         };
         triggerHandlers.toggleLight = [&](int light, int delta) {
@@ -1646,8 +1631,7 @@ namespace ALTEngine::Screens
                     {
                         ALTEngine::Bootstrap::Config modernConfig;
                         ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
-                        autoOpenDoors = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::AutoOpenDoors);
-                        freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
+                                    freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
                         playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
                         fasterXenomorphs = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterXenomorphs);
                         speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
@@ -3002,11 +2986,14 @@ namespace ALTEngine::Screens
 
                             const float floor = ALTEngine::Formats::FindFloorHeightGridSpace(
                                 level, ToGridSpaceX(placed.x, originX), ToGridSpaceZ(placed.z, originZ));
-                            if (placed.y <= floor)
+                            const float rest = floor + static_cast<float>(
+                                ALTEngine::Screens::DroppedPickups::DropHeight(live.type));
+                            if (placed.y <= rest)
                             {
-                                // Landed. Its cell is wherever it came to rest,
-                                // not where the crate was.
-                                placed.y = floor;
+                                // Landed, at its type's height above the floor
+                                // like any other item (FUN_0003c258). Its cell is
+                                // wherever it came to rest, not where the crate was.
+                                placed.y = rest;
                                 live.falling = false;
                                 const int gx = ToGridSpaceX(placed.x, originX) >> 9;
                                 const int gz = ToGridSpaceZ(placed.z, originZ) >> 9;
@@ -3678,20 +3665,27 @@ namespace ALTEngine::Screens
                         lastCellIndex = cellIndex;
                     }
 
-                    // Walking onto a trigger cell runs its chain once on entry,
-                    // whatever the Automatic Doors setting - that setting only
-                    // decides whether the door commands in it may succeed (see
-                    // the door handler). Lights, spawns and the level exit fire
-                    // either way, as they do in the original's mover.
+                    // Walking onto a trigger cell runs its chain once on entry.
+                    // Door commands in it fail (doors take the use key - see
+                    // the door handler); lights, spawns and the level exit
+                    // fire, as they do in the original's mover.
                     triggers.OnEnterCell(playerLastTrigger, cellIndex, triggerHandlers);
 
-                    // Walk-over collection. Applied on whichever cell the
-                    // player is standing in, checked every frame rather than
-                    // only on cell change so a pickup spawned underfoot by a
-                    // script is still picked up.
+                    // Collection, as the pickup task does it (0x3c8d0): an item
+                    // within 0x300 of the player on both ground axes and 0x400
+                    // vertically (FUN_0003c5d0) - so one on a table in the next
+                    // cell is in reach - and only if the player has room for it
+                    // (Pickups::Wanted); otherwise it stays where it is.
                     for (auto& live : livePickups)
                     {
-                        if (live.collected || live.contained || live.waitingOnTrigger || live.cellIndex != cellIndex) { continue; }
+                        if (live.collected || live.contained || live.waitingOnTrigger || live.falling) { continue; }
+                        if (live.placedIndex >= placedObjects.size()) { continue; }
+                        {
+                            const auto& item = placedObjects[live.placedIndex];
+                            if (std::fabs(item.x - camera.x) >= 768.0f || std::fabs(item.z - camera.z) >= 768.0f
+                                || std::fabs(item.y - playerFeetY) >= 1024.0f) { continue; }
+                        }
+                        if (!ALTEngine::Screens::Pickups::Wanted(live.type, static_cast<int>(live.amount), inventory, hudState)) { continue; }
                         live.collected = true;
                         if (live.placedIndex < placedObjects.size()) { placedObjects[live.placedIndex].visible = false; }
 
@@ -3717,44 +3711,17 @@ namespace ALTEngine::Screens
                     }
 
                     // Interact key - the original's way of opening a door.
-                    // Fires on the press edge for whatever trigger cell the
-                    // player is standing on, independent of the automatic
-                    // path's latch, so it works whether or not Automatic
-                    // Doors is enabled and can be pressed repeatedly.
+                    // Fires on the press edge for the trigger cell the player
+                    // is standing on - the only cell the original tests; there
+                    // is no neighbourhood or facing test anywhere in its
+                    // trigger paths. So a door whose trigger cells are all on
+                    // one side can only be opened from that side.
                     bool useHeld = keys[keyBindings.GetKey(InputAction::Use)];
-                    if (useHeld && !prevUseHeld)
+                    if (useHeld && !prevUseHeld && cellIndex >= 0
+                        && static_cast<size_t>(cellIndex) < level.collisionGrid.size())
                     {
-                        // The original tests only the cell the player stands
-                        // in - confirmed, there is no neighbourhood or facing
-                        // test anywhere in the trigger paths. We additionally
-                        // test the cell directly ahead, so a door can be used
-                        // from the side its trigger cells are not on. That is
-                        // a deliberate departure, limited to the interact key:
-                        // one cell cannot reach through a wall.
-                        // Two cells ahead, not one: a door occupies a cell of
-                        // its own, so from the far side the first cell ahead
-                        // is the door itself and its trigger sits beyond that.
-                        int probes[3] = { cellIndex, -1, -1 };
-                        // Facing, for the ahead-probe only. Ground plane, so
-                        // pitch is deliberately ignored.
-                        const float probeForwardX = std::sin(camera.yaw);
-                        const float probeForwardZ = -std::cos(camera.yaw);
-                        for (int step = 1; step <= 2; ++step)
-                        {
-                            int ax = (pgx + static_cast<int>(probeForwardX * 512.0f * step)) >> 9;
-                            int az = (pgz + static_cast<int>(probeForwardZ * 512.0f * step)) >> 9;
-                            if (ax >= 0 && az >= 0 && ax < level.header.mapLength && az < level.header.mapWidth)
-                            {
-                                probes[step] = az * level.header.mapLength + ax;
-                            }
-                        }
-
-                        for (int probe : probes)
-                        {
-                            if (probe < 0 || static_cast<size_t>(probe) >= level.collisionGrid.size()) { continue; }
-                            int useAction = level.collisionGrid[static_cast<size_t>(probe)].scriptAction;
-                            if (useAction != 0) { triggers.Run(useAction, ALTEngine::Game::Triggers::Source::Interact, triggerHandlers); break; }
-                        }
+                        int useAction = level.collisionGrid[static_cast<size_t>(cellIndex)].scriptAction;
+                        if (useAction != 0) { triggers.Run(useAction, ALTEngine::Game::Triggers::Source::Interact, triggerHandlers); }
                     }
                     prevUseHeld = useHeld;
 
@@ -4111,7 +4078,11 @@ namespace ALTEngine::Screens
                         placedObjects.push_back(shell);
                     }
                     // The player's grenades and charges, each with its own
-                    // pickup model (FUN_0002cf14 draws a model for both).
+                    // pickup model (FUN_0002cf14 draws a model for both). It
+                    // draws them where they are, at full size: only particle
+                    // type 0x15 gets a scale (0x800, half). They were drawn
+                    // here at half size and 0x20 low, which left a charge
+                    // resting on the floor almost entirely under it.
                     for (const PlayerExplosive& e : playerExplosives)
                     {
                         ALTEngine::Renderer::PlacedObject shell;
@@ -4119,9 +4090,8 @@ namespace ALTEngine::Screens
                                            e.charge ? ALTEngine::Formats::ModelIndices::PickMod::SeismicCharge
                                                     : ALTEngine::Formats::ModelIndices::PickMod::PulseRifleGrenade };
                         shell.x = e.x;
-                        shell.y = e.y - 0x20;
+                        shell.y = e.y;
                         shell.z = e.z;
-                        shell.scaleX = shell.scaleY = shell.scaleZ = CASING_MODEL_SCALE * 2.0f;
                         placedObjects.push_back(shell);
                     }
                 }

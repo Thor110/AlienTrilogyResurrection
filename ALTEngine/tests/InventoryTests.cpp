@@ -1,5 +1,6 @@
 #include "TestFramework.h"
 
+#include "Screens/DroppedPickups.h"
 #include "Screens/PickupSystem.h"
 #include "Screens/PlayerInventoryState.h"
 #include "Screens/WeaponSystem.h"
@@ -160,4 +161,42 @@ TEST_CASE("WeaponSystem: the switch lowers and raises 0x10 a tick")
     CHECK_EQ(anim.Offset(), 0x80);
     anim.Tick();
     CHECK_EQ(anim.Offset(), 0x70);
+}
+
+TEST_CASE("Pickups: an item the player has no room for is left where it is")
+{
+    PlayerInventoryState inv;
+    PlayerHudState hud;
+    hud.health = 100;
+    CHECK(!Pickups::Wanted(Pickups::HEALTH_CAPPED, 20, inv, hud));
+    CHECK(Pickups::Wanted(Pickups::HEALTH_SET_200, 0, inv, hud));
+    hud.health = 60;
+    CHECK(Pickups::Wanted(Pickups::HEALTH_CAPPED, 20, inv, hud));
+
+    CHECK(Pickups::Wanted(Pickups::PISTOL_AMMO, 15, inv, hud));
+    for (int i = 0; i < 20; ++i) { Pickups::Apply(Pickups::PISTOL_AMMO, 15, 1, inv, hud); }
+    CHECK(!Pickups::Wanted(Pickups::PISTOL_AMMO, 15, inv, hud));
+    // A weapon itself is always taken.
+    CHECK(Pickups::Wanted(Pickups::PISTOL_AND_AMMO, 15, inv, hud));
+
+    CHECK(Pickups::Wanted(Pickups::ARMOUR_SET_A, 50, inv, hud));
+    hud.armourItem = 50;
+    CHECK(!Pickups::Wanted(Pickups::ARMOUR_SET_A, 50, inv, hud));
+
+    CHECK(Pickups::Wanted(Pickups::FLAG_80, 0, inv, hud));
+    inv.hasAutoMapper = true;
+    CHECK(!Pickups::Wanted(Pickups::FLAG_80, 0, inv, hud));
+    CHECK(!Pickups::Wanted(5, 1, inv, hud));
+}
+
+TEST_CASE("Pickups: each type's size and height, from DAT_000acbb8 and DAT_000acde8")
+{
+    CHECK_EQ(DroppedPickups::DrawScale(0), 1.0f);
+    CHECK_EQ(DroppedPickups::DrawScale(5), 0.25f);
+    CHECK_EQ(DroppedPickups::DrawScale(17), 0.75f);
+    CHECK_EQ(DroppedPickups::DrawScale(18), 2.75f);
+    CHECK_EQ(DroppedPickups::DrawScale(20), 2.5f);
+    CHECK_EQ(DroppedPickups::DrawScale(21), 2.0f);
+    CHECK_EQ(DroppedPickups::DropHeight(20), 96);
+    CHECK_EQ(DroppedPickups::DropHeight(9), 64);
 }

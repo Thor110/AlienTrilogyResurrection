@@ -85,6 +85,40 @@ namespace ALTEngine::Screens
 
         inline int Clamp(int value, int cap) { return value > cap ? cap : value; }
 
+        // Whether the player takes a pickup they are in reach of - the test in
+        // the pickup task (0x3c964, the same switch as FUN_0003ccb4). An item
+        // the player has no room for stays where it is. Types with no case of
+        // their own (5, and anything past 0x19) are never taken.
+        inline bool Wanted(int type, int amount, const PlayerInventoryState& inventory, const PlayerHudState& hud)
+        {
+            // The original tests the loaded and spare counters separately
+            // (either below its cap); the port keeps the same two counters but
+            // packs a total, so "either below" is "the total below both caps".
+            const auto below = [&](int weaponIndex, int magCap, int unitCap) {
+                return inventory.AmmoTotal(weaponIndex) < magCap * (unitCap + 1);
+            };
+            switch (type)
+            {
+            case PISTOL_AND_AMMO: case SHOTGUN_AND_AMMO: case PULSE_AND_AMMO:
+            case FLAMETHROWER_AND_AMMO: case SMARTGUN_AND_AMMO:
+            case SEISMIC_CHARGES: case COUNTER_AD2: case COUNTER_AD8: case COUNTER_AE2:
+            case HEALTH_AND_SHIELD: case HEALTH_UNCAPPED: case TERRAIN_SPEED: case COUNTER_AD4:
+                return true;
+            case PISTOL_AMMO:       return below(0, PISTOL_MAG_CAP, PISTOL_UNIT_CAP);
+            case SHOTGUN_AMMO:      return below(1, SHOTGUN_CAP, 0);
+            case PULSE_AMMO:        return below(2, MAG_CAP, UNIT_CAP);
+            case GRENADES:          return inventory.pulseRifle.grenades < GRENADE_CAP;
+            case FLAMETHROWER_AMMO: return below(4, FLAMETHROWER_CAP, 0);
+            case SMARTGUN_AMMO:     return below(3, MAG_CAP, UNIT_CAP);
+            case FLAG_80:           return !inventory.hasAutoMapper;
+            case ARMOUR_SET_A:
+            case ARMOUR_SET_B:      return hud.armourItem < amount;
+            case HEALTH_CAPPED:     return hud.health < HEALTH_CAP;
+            case HEALTH_SET_200:    return hud.health < HEALTH_BOOST;
+            default:                return false;
+            }
+        }
+
         // Applies a pickup. `amount` is the record's own amount times its
         // multiplier; `units` is the second value the original takes in BX,
         // which for weapon pickups is the number of spare magazines.

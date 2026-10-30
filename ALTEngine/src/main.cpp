@@ -201,9 +201,14 @@ int main(int, char**)
 
     std::cout << "Installation directory: " << result.gameDirectory.string() << "\n";
 
-    // Patching happens as part of installation itself (InstallFromDisc)
-    // - no separate re-check needed here every boot.
     std::filesystem::path cdDirectory = result.gameDirectory / "CD";
+
+    // Patching happens as part of installation (InstallFromDisc), and again
+    // here on every launch: a fix added to Patches.json after the game was
+    // installed never reached the files otherwise. Every patch checks its own
+    // bytes first, so one already in place is left alone ("already applied")
+    // and the pass costs a few file reads.
+    RunPatches(cdDirectory);
 
     // The player's loadout, owned here so it can persist across levels.
     ALTEngine::Screens::PlayerInventoryState playerInventory;

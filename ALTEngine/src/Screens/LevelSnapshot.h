@@ -82,20 +82,21 @@ namespace ALTEngine::Screens::LevelSnapshot
     // the level's own records, rebuilt on load.
     inline nlohmann::json SaveDoor(const Game::DoorState& d)
     {
-        return { { "progress", d.progress }, { "phase", static_cast<int>(d.phase) },
+        return { { "progress", d.progress }, { "counter", d.counter }, { "phase", static_cast<int>(d.phase) },
                  { "unlockProgress", d.unlockProgress }, { "switchOperated", d.switchOperated },
-                 { "staysOpen", d.staysOpen }, { "holdTicks", d.holdTicks }, { "cooldown", d.cooldown } };
+                 { "isOpen", d.isOpen }, { "holdCounter", d.holdCounter } };
     }
 
     inline void LoadDoor(Game::DoorState& d, const nlohmann::json& j)
     {
         d.progress = std::clamp(j.value("progress", d.progress), 0, d.travel);
-        d.phase = static_cast<Game::DoorState::Phase>(std::clamp(j.value("phase", 0), 0, 3));
+        // Saves from before the counter was kept used progress for both.
+        d.counter = std::clamp(j.value("counter", d.progress), 0, d.travel);
+        d.phase = static_cast<Game::DoorState::Phase>(std::clamp(j.value("phase", 0), 0, 4));
         d.unlockProgress = j.value("unlockProgress", d.unlockProgress);
         d.switchOperated = j.value("switchOperated", d.switchOperated);
-        d.staysOpen = j.value("staysOpen", d.staysOpen);
-        d.holdTicks = j.value("holdTicks", d.holdTicks);
-        d.cooldown = j.value("cooldown", d.cooldown);
+        d.isOpen = j.value("isOpen", d.phase == Game::DoorState::Phase::Open);
+        d.holdCounter = j.value("holdCounter", j.value("cooldown", d.holdCounter));
     }
 
     inline nlohmann::json SaveLift(const Game::Lifts::Lift& l)

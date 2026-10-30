@@ -48,6 +48,20 @@ namespace ALTEngine::Screens
             return (pickupType == 20) ? DROP_HEIGHT_TYPE_20 : DROP_HEIGHT_DEFAULT;
         }
 
+        // How large each type is drawn: the uniform scale on the diagonal of
+        // its 3x3 matrix in DAT_000acbb8 (12.12 fixed point, 0x10 bytes a type).
+        // 28 types; the table runs on into other data after that.
+        inline float DrawScale(int pickupType)
+        {
+            static constexpr int SCALE[28] = {
+                4096, 4096, 4096, 4096, 5120, 1024, 7168, 7168, 7168, 7168,
+                7168, 7168, 7168, 7168, 7168, 7168, 7168, 3072, 11264, 11264,
+                10240, 8192, 7168, 7168, 7168, 7168, 7168, 7168,
+            };
+            if (pickupType < 0 || pickupType >= 28) { return 1.75f; }
+            return static_cast<float>(SCALE[pickupType]) / 4096.0f;
+        }
+
         // Type 0x18 is rewritten to 0x15 as it drops - the uncapped health type.
         // Whatever 0x18 means elsewhere, a crate never yields one.
         inline int RemapDroppedType(int pickupType)
