@@ -132,12 +132,10 @@ namespace ALTEngine::Renderer
     // has been there and the cell is drawn; zero leaves it blank. Pass nullptr
     // to reveal the whole level, which is what owning an Auto Mapper does.
     //
-    // WHOSE FOG THIS IS. The original's own visited tracking has NOT been
-    // located: there is no map renderer in the decompilation to consume one, and
-    // the only runtime flag written into a collision cell is bit 0x80 of byte
-    // +0x07, which the door code sets - not visitation. So the behaviour here
-    // (reveal the player's cell and its immediate neighbours) is this port's,
-    // matching how the game plays rather than transcribed from it.
+    // WHOSE FOG THIS IS. The original's: the cells its view walk has taken in,
+    // in the areas the player has stood in (Game::CreatureSight::MarkSeen and
+    // MapReveal, from 0x2745b and FUN_00043078). The caller passes MapReveal's
+    // result, which already allows for the Auto Mapper.
     // Returns the rect it actually drew into, in pixels. That is NOT `dest`:
     // the map is letterboxed to preserve the level's aspect, so a tall level in
     // a wide box fills only part of it. Callers that frame the map need the real
@@ -148,14 +146,4 @@ namespace ALTEngine::Renderer
                      float playerGridX, float playerGridZ, float playerYaw,
                      const MinimapStyle& style,
                      const std::vector<uint8_t>* visited = nullptr);
-
-    // Marks the player's cell and its eight neighbours as seen. Sizes `visited`
-    // to the level on first use, so the caller only has to keep the vector.
-    //
-    // Neighbours as well as the cell itself because revealing a single cell per
-    // step leaves a one-cell trail that reads as a thin line rather than a
-    // corridor - you cannot tell a passage from a room.
-    void MarkMinimapVisited(const ALTEngine::Formats::LevelGeometry& level,
-                            std::vector<uint8_t>& visited,
-                            int playerCellX, int playerCellZ);
 }

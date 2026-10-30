@@ -458,6 +458,17 @@ namespace ALTEngine::Screens
             // menu, left escapes one, and terminal selection lists like
             // Exit Game's Yes/No move the cursor with left/right too).
             auto doEnter = [&]() {
+                // The lamp / goggles entry is used, not opened: it lights
+                // one when one is carried and none is lit (FUN_00044b48).
+                if (path.size() == 1 && root.children[static_cast<size_t>(path[0])].label == "Shoulder Lamp")
+                {
+                    if (inventory.hasShoulderLamp && inventory.lampTicks == 0 && inventory.gogglesTicks == 0)
+                    {
+                        result.useLight = true;
+                        SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                    }
+                    return;
+                }
                 const MenuNode& deepest = WalkPath(root, path);
                 std::vector<int> parentPath(path.begin(), path.end() - 1);
                 std::string parentLabel = WalkPath(root, parentPath).label;
@@ -868,11 +879,11 @@ namespace ALTEngine::Screens
                     style.drawTriggers = true; // room to be informative here
                     SDL_FRect mapRect{ static_cast<float>(mapX), static_cast<float>(panelY),
                                        static_cast<float>(mapW), static_cast<float>(mapH) };
-                    // `owned` here means the player has the Auto Mapper, which
-                    // reveals the level; otherwise only visited cells show.
+                    // The cells to show come already worked out, with the Auto
+                    // Mapper taken into account (CreatureSight::MapReveal).
                     ALTEngine::Renderer::DrawMinimap(renderer, *level, mapRect,
                                                      playerGridX, playerGridZ, playerYaw, style,
-                                                     owned ? nullptr : minimapVisited);
+                                                     minimapVisited);
 
                     // Centred under the MAP, since that is what this panel shows.
                     int modelW = fitWidth(260);

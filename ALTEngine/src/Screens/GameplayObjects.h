@@ -96,6 +96,11 @@ namespace ALTEngine::Screens::GameplayObjects
     // FUN_0003d794's FUN_00040ba0(9, -1): the sound a seismic charge's
     // throw plays.
     constexpr int SEISMIC_THROW_SOUND = 9;
+
+    // The shoulder lamp or goggles coming on (FUN_00029d94, 0x29dd7) and
+    // running out (FUN_0003e698).
+    constexpr int LIGHT_ON_SOUND = 0x17;
+    constexpr int LIGHT_OFF_SOUND = 0x19;
     // A window: the object type with its own arm in the modelless objects'
     // handler (0x38097), and the sound that arm plays (FUN_00040c38(0x6c)).
     constexpr int WINDOW_OBJECT_TYPE = 0x1c;

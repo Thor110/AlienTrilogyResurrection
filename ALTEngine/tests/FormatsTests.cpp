@@ -245,3 +245,29 @@ TEST_CASE("ExplosionGraphics: frames sit on their anchors at the original's size
     const EG::FrameQuad past = EG::QuadFor(EG::EFFECT_IMPACT, 20, 16, 16);
     CHECK(std::fabs(past.centreRight - (8.0f - 12.0f) * 8.0f) < 0.01f);
 }
+
+TEST_CASE("LightTable: the shoulder lamp and goggles ramp the global light (FUN_00029d94)")
+{
+    LightTable table;
+    const int normal = table.GlobalTriple()[0];
+    CHECK_EQ(normal, LIGHT_GLOBAL_NORMAL);
+    table.StartEquipment(LightTable::Equipment::Lamp);
+    for (int i = 0; i < 0x20; ++i) { table.Tick(0); }
+    auto lamp = table.GlobalTriple();
+    CHECK_EQ(lamp[0], 0x2400);
+    CHECK_EQ(lamp[1], 0x2400);
+    CHECK_EQ(lamp[2], 0x1000);
+    // Fading out takes 0x40 a tick, so 0x40 ticks, then the normal light.
+    table.StopEquipment();
+    for (int i = 0; i < 0x40; ++i) { table.Tick(0); }
+    CHECK(table.ActiveEquipment() == LightTable::Equipment::None);
+    const int after = table.GlobalTriple()[2];
+    CHECK_EQ(after, LIGHT_GLOBAL_NORMAL);
+
+    table.StartEquipment(LightTable::Equipment::Goggles);
+    for (int i = 0; i < 0x20; ++i) { table.Tick(0); }
+    auto goggles = table.GlobalTriple();
+    CHECK_EQ(goggles[0], 0x1000);
+    CHECK_EQ(goggles[1], 0x2200);
+    CHECK_EQ(goggles[2], 0x2c00);
+}

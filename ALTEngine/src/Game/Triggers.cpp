@@ -26,7 +26,8 @@ namespace ALTEngine::Game::Triggers
         if (!level_ || triggerId <= 0 || static_cast<size_t>(triggerId) >= level_->actions.size()) { return false; }
         const auto& trigger = level_->actions[static_cast<size_t>(triggerId)];
         uint8_t& uses = uses_[static_cast<size_t>(triggerId)];
-        const uint8_t needed = (source == Source::Shot) ? FLAG_SHOT : FLAG_PLAYER;
+        const uint8_t needed = (source == Source::Shot) ? FLAG_SHOT
+                             : (source == Source::EnemyThrow) ? FLAG_ENEMY_THROW : FLAG_PLAYER;
         if ((trigger.activationMask & needed) == 0 || uses == 0) { return false; }
         if (!RunChain(trigger.commandStart, source, handlers)) { return false; }
         if (uses != USES_UNLIMITED) { uses--; }
@@ -76,7 +77,7 @@ namespace ALTEngine::Game::Triggers
             case ACTIVATE_OBJECT:
                 // A round cannot throw a switch: FUN_000414f0 has no arm for
                 // this command and simply moves on to the next.
-                if (source == Source::Shot) { break; }
+                if (source == Source::Shot || source == Source::EnemyThrow) { break; }
                 ok = source == Source::Interact && handlers.activateObject && handlers.activateObject(target);
                 if (ok) { sawActivateObject = true; }
                 break;
@@ -111,13 +112,13 @@ namespace ALTEngine::Game::Triggers
         return true;
     }
 
-    bool System::OnShotEnterCell(int& roundLatch, int cellIndex, const Handlers& handlers)
+    bool System::OnShotEnterCell(int& roundLatch, int cellIndex, const Handlers& handlers, Source source)
     {
         if (!level_) { return false; }
         const int id = CellTriggerId(*level_, cellIndex);
         if (id == 0) { roundLatch = 0; return false; }
         if (id == roundLatch) { return false; }
-        if (Run(id, Source::Shot, handlers)) { roundLatch = id; return true; }
+        if (Run(id, source, handlers)) { roundLatch = id; return true; }
         roundLatch = 0;
         return false;
     }

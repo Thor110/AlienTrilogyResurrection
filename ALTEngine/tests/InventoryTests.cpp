@@ -200,3 +200,19 @@ TEST_CASE("Pickups: each type's size and height, from DAT_000acbb8 and DAT_000ac
     CHECK_EQ(DroppedPickups::DropHeight(20), 96);
     CHECK_EQ(DroppedPickups::DropHeight(9), 64);
 }
+
+TEST_CASE("Inventory: a lamp is used before goggles, one at a time (FUN_00044b48)")
+{
+    ALTEngine::Screens::PlayerInventoryState inv;
+    inv.shoulderLamps = 1;
+    inv.nightVisionGoggles = 1;
+    inv.hasShoulderLamp = true;
+    CHECK_EQ(inv.UseLight(), 1);
+    CHECK_EQ(inv.lampTicks, 0x708);
+    CHECK_EQ(inv.UseLight(), 0);   // not while one is lit
+    for (int i = 0; i < 0x707; ++i) { CHECK(!inv.TickLight()); }
+    CHECK(inv.TickLight());
+    CHECK_EQ(inv.UseLight(), 2);
+    CHECK_EQ(inv.gogglesTicks, 0xa8c);
+    CHECK(!inv.hasShoulderLamp);
+}

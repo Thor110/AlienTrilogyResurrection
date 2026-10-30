@@ -215,3 +215,41 @@ TEST_CASE("CreatureSight: the gunners' ray is blocked by a creature, a low ceili
     CS::Query3D distant = Ray(); distant.distance = 0x1556;
     CHECK(!CS::LineOfFire3D(Room(), distant));
 }
+
+TEST_CASE("CreatureSight: the map shows what the view walk has seen, in discovered areas")
+{
+    namespace CS = ALTEngine::Game::CreatureSight;
+    ALTEngine::Formats::LevelGeometry level = ALTEngine::Formats::LevelLoader::Load(
+        AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
+    // A cell the player can stand in.
+    int px = -1, pz = -1;
+    for (int z = 0; z < level.header.mapWidth && px < 0; ++z)
+    {
+        for (int x = 0; x < level.header.mapLength; ++x)
+        {
+            if (!ALTEngine::Formats::IsCellBlocking(level, x << 9, z << 9)) { px = x; pz = z; break; }
+        }
+    }
+    REQUIRE(px >= 0);
+
+    std::vector<uint8_t> seen, areas;
+    CS::MarkSeen(level, seen, areas, px, pz, 0);
+    const size_t playerIndex = static_cast<size_t>(pz) * level.header.mapLength + static_cast<size_t>(px);
+    CHECK_EQ(seen.size(), level.collisionGrid.size());
+    CHECK_EQ(areas.size(), size_t(256));
+    CHECK(seen[playerIndex] != 0);
+    CHECK(areas[0] != 0);
+    size_t seenCount = 0;
+    for (uint8_t s : seen) { seenCount += s ? 1 : 0; }
+    CHECK(seenCount > 1);
+    CHECK(seenCount < seen.size());
+
+    // Without the Auto Mapper only what was seen shows; with it, the whole of
+    // every discovered area does.
+    const auto plain = CS::MapReveal(level, seen, areas, false);
+    const auto mapped = CS::MapReveal(level, seen, areas, true);
+    size_t plainCount = 0, mappedCount = 0;
+    for (size_t i = 0; i < plain.size(); ++i) { plainCount += plain[i] ? 1 : 0; mappedCount += mapped[i] ? 1 : 0; }
+    CHECK_EQ(plainCount, seenCount);
+    CHECK(mappedCount > plainCount);
+}

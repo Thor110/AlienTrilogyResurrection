@@ -76,6 +76,9 @@ namespace ALTEngine::Renderer
         // three angles, applied before the yaw. Only a thrown seismic charge
         // uses it, to tumble (FUN_0002cf14).
         float pitchRadians = 0.0f;
+        // The light id of the cell it stands in (the cell's byte 0x0e), or -1
+        // to draw it unlit at full brightness.
+        int lightId = -1;
         // Non-uniform, and applied to the model matrix rather than the
         // vertices. Objects (crates, switches) are drawn at 0.875 uniform in
         // the original (Ghidra: FUN_0003765c); doors are drawn 1:1. The
@@ -306,6 +309,15 @@ namespace ALTEngine::Renderer
         // Raises the one-shot global brightness flash (weapon fire,
         // explosions). Cleared on the next tick.
         static void FlashLevelLights(const std::string& cacheKey);
+
+        // The shoulder lamp (1) or night-vision goggles (2) coming on, or
+        // whichever is on fading out (0). See LightTable::StartEquipment.
+        static void SetLevelLightEquipment(const std::string& cacheKey, int kind);
+
+        // A light id's colour as a multiplier (1 = neutral, 0x80), its four
+        // corners averaged - what a model or creature in a cell with that
+        // light is drawn in. False if the level or id isn't there.
+        static bool LevelLightColour(const std::string& cacheKey, int lightId, float rgb[3]);
 
         // Applies script command 9 (ChangeTexture) to one texture animator.
         // This is what arms an animated face that only changes when something

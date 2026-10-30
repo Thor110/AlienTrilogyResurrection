@@ -246,19 +246,9 @@ namespace ALTEngine::Screens
             // animation's last frame.
             bool bodyRemoved = false;
 
-            // The two per-creature distance thresholds the mode banding uses.
-            // GUESSES - the original reads them from entity fields +0x48 and
-            // +0x46, populated from the entity template, which has not been read.
-            //
-            // MELEE CREATURES GET MUCH SHORTER ONES. The attack table lets
-            // subtypes 2 and 3 hit at mode 2 as well as 0 and 1, and with these
-            // set generously that meant a face hugger clawing at the player from
-            // 4096 units away (Edward, 2026: "they seem to shoot me or damage me
-            // from a distance"). The table is traced and right; the thresholds
-            // feeding it were mine and far too wide.
-            //
-            // Set from the subtype in Build(), so a hugger has to be nearly
-            // touching before even its mode-2 nibble lands.
+            // The two per-creature distance thresholds the mode banding uses
+            // (+0x4a and +0x48), from the monster record's bytes 18/19 and 16/17
+            // (FUN_0002e638) - see Build(). These are only the defaults.
             int nearThreshold = 0x800;
             int middleThreshold = 0x1000;
 
@@ -596,9 +586,9 @@ namespace ALTEngine::Screens
         // traced. No longer a guess.
         inline constexpr int ATTACK_INTERVAL_TICKS = EnemyBehaviour::ATTACK_TIMER_RELOAD;
 
-        // How long a frame is held. OURS - the real duration is entry 0 of the
-        // animation's own sequence, which the VM reads; this stands in until the
-        // sequences are wired through it.
+        // How long a frame is held for a creature without a script. Every
+        // creature type (1-14) has one (EnemyAnimSequences.h, entry 0 is the
+        // hold), so nothing reaches this; it is a fallback only.
         inline constexpr int ANIMATION_TICKS_PER_FRAME = 6;
 
         // `ignoreStun` is the Modern "No Hit Immunity" option: hits land during
@@ -647,10 +637,8 @@ namespace ALTEngine::Screens
         // One entity tick, following FUN_000358a4's order: perception first, then
         // the distance cull, then the state machine.
         //
-        // `playerX/Y/Z` are the player's world position. The thresholds come from
-        // the entity's own fields in the original (+0x46 and +0x48); those are not
-        // read from the level file and are not in the image as constants, so the
-        // defaults below are OURS and marked.
+        // `playerX/Y/Z` are the player's world position. The thresholds are the
+        // entity's own (+0x4a, +0x48), from its level record.
         // The global pounce lock - DAT_000b0ab4's bit in the original. One
         // creature at a time, everywhere on the level.
         inline bool pounceLockHeld = false;
@@ -986,9 +974,9 @@ namespace ALTEngine::Screens
             return 0;
         }
 
-        // How long a swipe or spit plays before its hit lands. The original
-        // waits for the attack animation's script to set +0xb6 bit 2; those
-        // scripts are not read yet, so this stands in. GUESS.
+        // How long a swipe or spit plays for a creature without a script. With
+        // one (all of 1-14), the act ends on the script's own end flag; this is
+        // a fallback only.
         inline constexpr int NON_LEAP_ACT_TICKS = 0x18;
 
         // FUN_0002f1b0: a ceiling creature drops. The ceiling warrior becomes
@@ -1239,8 +1227,7 @@ namespace ALTEngine::Screens
             enemy.ticks++;
 
             // Pick the animation for whatever the creature is doing, then advance
-            // it. The frame duration comes from the sequence in the original; a
-            // fixed rate stands in until the sequences are fed through the VM.
+            // it on its script (entry 0 is the frame hold).
             UpdateAnimation(enemy);
             if (Scripted(enemy))
             {

@@ -9,9 +9,11 @@
 layout(set = 2, binding = 0) uniform sampler2D ModelTexture;
 
 // x = fade enable (0 or 1), y = where the fade starts, z = its length.
+// tint.rgb scales the whole draw: a model's light (1,1,1 for the rest).
 layout(set = 3, binding = 0) uniform FogParams
 {
     vec4 fogParams;
+    vec4 tint;
 };
 
 layout(location = 0) in vec2 inUV;
@@ -29,6 +31,7 @@ void main()
 
     // The level light's colour scales the texel.
     color.rgb *= inColour;
+    color.rgb *= tint.rgb;
 
     // The original's draw-distance fade toward black (FUN_0004ecdc).
     if (fogParams.x > 0.5)

@@ -43,7 +43,41 @@ namespace ALTEngine::Screens
     struct PlayerInventoryState
     {
         bool hasAutoMapper = false;
+        // The pause menu's second entry is owned while either of these is
+        // carried (FUN_000432fc case 1).
         bool hasShoulderLamp = false;
+        // Counts, as the original keeps them: shoulder lamps (DAT_000b0ad4,
+        // pickup 0x19) and night-vision goggles (DAT_000b0ad8, pickup 8). Each
+        // use spends one (FUN_00044b48 case 1).
+        int shoulderLamps = 0;
+        int nightVisionGoggles = 0;
+        // Ticks left on the one that is lit: the lamp's DAT_000b0ad6 (0x708)
+        // or the goggles' DAT_000b0ada (0xa8c), counted down by FUN_0003e698.
+        int lampTicks = 0;
+        int gogglesTicks = 0;
+        static constexpr int LAMP_TICKS = 0x708;
+        static constexpr int GOGGLES_TICKS = 0xa8c;
+
+        // Using the entry (FUN_00044b48 case 1): nothing while one is still
+        // lit; otherwise a lamp if there is one, else goggles. Returns 1 for
+        // the lamp, 2 for the goggles, 0 for nothing.
+        int UseLight()
+        {
+            if (lampTicks != 0 || gogglesTicks != 0) { return 0; }
+            int lit = 0;
+            if (shoulderLamps > 0) { --shoulderLamps; lampTicks = LAMP_TICKS; lit = 1; }
+            else if (nightVisionGoggles > 0) { --nightVisionGoggles; gogglesTicks = GOGGLES_TICKS; lit = 2; }
+            hasShoulderLamp = shoulderLamps > 0 || nightVisionGoggles > 0;
+            return lit;
+        }
+
+        // One tick of FUN_0003e698. Returns true on the tick a light runs out.
+        bool TickLight()
+        {
+            if (lampTicks > 0 && --lampTicks == 0) { return true; }
+            if (gogglesTicks > 0 && --gogglesTicks == 0) { return true; }
+            return false;
+        }
         // A count, not a flag: battery-operated switches consume one each,
         // so more than one can be carried and running out matters.
         int batteries = 0;
@@ -69,6 +103,7 @@ namespace ALTEngine::Screens
             }
             hasAutoMapper = true;
             hasShoulderLamp = true;
+            if (shoulderLamps < 1) { shoulderLamps = 1; }
             batteries = 9;
             seismicCharges = 99;
             // Equipped weapon deliberately left alone - the cheat gives things,

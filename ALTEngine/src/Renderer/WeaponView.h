@@ -39,11 +39,8 @@ namespace ALTEngine::Renderer
     // 8-byte entries of {frame table base, sequence pointer}, and the sequence
     // opens with the frame duration.
     //
-    // WHAT IS NOT TRACED IS THE SEQUENCE DATA ITSELF. The tables live in the
-    // game files and are not parsed yet, so the idle and fire sequences below
-    // are SYNTHESISED from the frames each weapon's section actually contains.
-    // They run on the real VM, so replacing them with the original's own
-    // sequence bytes later is a data change, not a code change.
+    // THE SEQUENCES AND FRAME OFFSETS ARE THE ORIGINAL'S, transcribed in
+    // WeaponData.h from the tables FUN_000401d0 points at.
     //
     // A .B16 SECTION IS A WEAPON STATE. Section 0 is idle, section 1 is firing,
     // section 2 is reloading, and the section's sub-frame count is the length of
@@ -60,9 +57,9 @@ namespace ALTEngine::Renderer
     // frame of the FIRING animation, which is why the weapon appeared to rest
     // in a recoiled position.
     //
-    // PLACEMENT IS STILL OURS. The sprite is anchored bottom-centre in the
-    // 320x240 HUD space. The original's own position comes from that sprite
-    // instance and has not been read out yet.
+    // PLACEMENT IS TRACED: the anchor is (0xa0, 0xf0) plus each weapon's x
+    // correction and the walk's bob (FUN_0003e93c; WeaponSystem.h), and each
+    // frame's top-left sits at the anchor plus its record's offset.
 
     class WeaponView
     {

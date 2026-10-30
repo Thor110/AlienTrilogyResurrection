@@ -281,8 +281,11 @@ namespace ALTEngine::Screens
             return anim == it->second.animations.end() ? 0 : static_cast<int>(anim->second.frames.size());
         }
 
+        // `cameraX/Z` place each frame across the view by its own x offset;
+        // without them a frame is centred on the creature.
         void Collect(const std::vector<Enemies::Enemy>& enemies,
-                     std::vector<ALTEngine::Renderer::PlacedSprite>& out) const
+                     std::vector<ALTEngine::Renderer::PlacedSprite>& out,
+                     float cameraX = 0.0f, float cameraZ = 0.0f, bool useCamera = false) const
         {
             for (const auto& enemy : enemies)
             {
@@ -331,10 +334,31 @@ namespace ALTEngine::Screens
                 sprite.textureKey = frame.key;
                 // Walk views 5-7 are 3-1 flipped (FUN_000314b8, +0xb6 bit 5).
                 if (enemy.mirrored) { std::swap(sprite.u0, sprite.u1); }
+                // The creature type's own scale (+0xb4, set per type by its
+                // setup at 0x2e924 on): a frame pixel is scale / 0x100 world
+                // units at the focal length 0x100 (FUN_0002fb84).
+                const float k = WorldUnitsPerPixel(enemy.type);
                 sprite.x = enemy.x;
                 sprite.z = enemy.z;
-                sprite.halfWidth = frame.width * 0.5f * WORLD_UNITS_PER_PIXEL;
-                sprite.halfHeight = frame.height * 0.5f * WORLD_UNITS_PER_PIXEL;
+                sprite.halfWidth = frame.width * 0.5f * k;
+                sprite.halfHeight = frame.height * 0.5f * k;
+                // Across: the frame's left edge is offsetX from the anchor
+                // (mirrored, its right edge is -offsetX), so its centre sits
+                // offsetX + width / 2 to the right - or as far to the left.
+                if (useCamera)
+                {
+                    float toX = enemy.x - cameraX;
+                    float toZ = enemy.z - cameraZ;
+                    const float flat = std::sqrt(toX * toX + toZ * toZ);
+                    if (flat > 0.001f)
+                    {
+                        toX /= flat; toZ /= flat;
+                        float across = (static_cast<float>(frame.offsetX) + frame.width * 0.5f) * k;
+                        if (enemy.mirrored) { across = -across; }
+                        sprite.x += -toZ * across;
+                        sprite.z += toX * across;
+                    }
+                }
 
                 // The frame hangs from the creature's anchor by its own offset,
                 // as the original draws it: offsetY is where the frame's top sits
@@ -348,7 +372,7 @@ namespace ALTEngine::Screens
                 // test would hide what goes below it, so on the ground a frame's
                 // bottom stops at the floor. In the air (a leap, a fall) it keeps
                 // its offset.
-                float bottom = enemy.y - static_cast<float>(frame.offsetY + frame.height) * WORLD_UNITS_PER_PIXEL;
+                float bottom = enemy.y - static_cast<float>(frame.offsetY + frame.height) * k;
                 if (enemy.vy == 0.0f) { bottom = std::max(bottom, enemy.y - EnemyBehaviour::STAND_CLEARANCE); }
                 sprite.y = bottom + sprite.halfHeight;
                 // Hanging from the ceiling: the frame's top at the ceiling.
@@ -376,9 +400,19 @@ namespace ALTEngine::Screens
             std::map<int, Animation> animations;
         };
 
-        // Sprite pixels to world units. GUESS - the original scales by distance in
-        // screen space, so there is no world size to read.
-        static constexpr float WORLD_UNITS_PER_PIXEL = 8.0f;
+        // Each creature type's sprite scale (+0xb4), from its setup in the
+        // creature spawner (0x2e924 to 0x2ef93, one per type); over the focal
+        // length 0x100 it is world units a frame pixel. Types past 0x0e (the
+        // vents) have no sprites.
+        static float WorldUnitsPerPixel(int type)
+        {
+            static constexpr int SCALE[15] = {
+                0x800,                                      // (none)
+                0xa00, 0x858, 0x790, 0x900, 0xa00, 0xa00, 0xb00,
+                0xa00, 0xa00, 0x834, 0x800, 0x880, 0x900, 0x900 };
+            const int s = (type >= 1 && type <= 14) ? SCALE[type] : 0x800;
+            return static_cast<float>(s) / 256.0f;
+        }
 
         static std::string SheetKey(int type, int animation, int frame)
         {

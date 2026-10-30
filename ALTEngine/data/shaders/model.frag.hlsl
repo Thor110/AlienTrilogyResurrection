@@ -15,13 +15,17 @@ struct Input
     float Distance : TEXCOORD2;
 };
 
-// x = fade enable (0 or 1)
-// y = distance at which the fade starts, in world units
-// z = distance over which it reaches full black
-// w = reserved
+// fogParams:
+//   x = fade enable (0 or 1)
+//   y = distance at which the fade starts, in world units
+//   z = distance over which it reaches full black
+//   w = reserved
+// tint: rgb scales the whole draw - a model's light, the colour of the cell it
+// stands in (FUN_000269b8 and its siblings). 1,1,1 for everything else.
 cbuffer FogParams : register(b0, space3)
 {
     float4 fogParams;
+    float4 tint;
 };
 
 float4 main(Input input) : SV_Target0
@@ -44,6 +48,7 @@ float4 main(Input input) : SV_Target0
     // Model and door geometry emits 1,1,1 and so passes through
     // unchanged.
     color.rgb *= input.Colour;
+    color.rgb *= tint.rgb;
 
     // Original draw-distance fade, transcribed from FUN_0004ecdc:
     //

@@ -138,48 +138,94 @@ namespace ALTEngine::Game::CreatureSight
         return true;
     }
 
-    uint16_t DrawnZoneMask(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ, int viewYaw)
+    namespace
     {
-        const int length = level.header.mapLength;
-        const int width = level.header.mapWidth;
-        if (playerCellX < 0 || playerCellZ < 0 || playerCellX >= length || playerCellZ >= width) { return 0; }
-        if (level.collisionGrid.size() < static_cast<size_t>(length) * static_cast<size_t>(width)) { return 0; }
-        auto at = [&](int x, int z) -> const Formats::CollisionNode& {
-            return level.collisionGrid[static_cast<size_t>(z) * static_cast<size_t>(length) + static_cast<size_t>(x)];
-        };
-        auto zones = [](const Formats::CollisionNode& c) { return static_cast<uint16_t>(c.ceilingFog | (c.floorFog << 8)); };
-        // Bytes 0-3 are the cell's first face, 0xffffffff for none (the
-        // runtime turns it into the list the renderer draws).
-        auto hasFaces = [](const Formats::CollisionNode& c) {
-            return (c.unknown1 & c.unknown2 & c.unknown3 & c.unknown4) != 0xff;
-        };
-
-        uint16_t mask = zones(at(playerCellX, playerCellZ));
-        struct Pass { int firstRing, lastRing, halfWidth; };
-        static constexpr Pass PASSES[] = { { 0, 0, 0x600 }, { 1, 1, 0x384 }, { 2, 7, 0x280 }, { 8, 14, 0x1b8 } };
-        const int yaw = viewYaw & 0xfff;
-        for (const Pass& pass : PASSES)
+        // The view walk (0x2745b): calls `take(cellIndex)` for every cell it
+        // takes in and returns the zone mask it builds.
+        template <typename Take>
+        uint16_t WalkView(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ, int viewYaw, Take&& take)
         {
-            int lo = yaw - pass.halfWidth;
-            int hi = yaw + pass.halfWidth;
-            if (lo < 0) { lo += 0x1000; hi += 0x1000; }
-            for (int ring = pass.firstRing; ring <= pass.lastRing; ++ring)
+            const int length = level.header.mapLength;
+            const int width = level.header.mapWidth;
+            if (playerCellX < 0 || playerCellZ < 0 || playerCellX >= length || playerCellZ >= width) { return 0; }
+            if (level.collisionGrid.size() < static_cast<size_t>(length) * static_cast<size_t>(width)) { return 0; }
+            auto index = [&](int x, int z) { return z * length + x; };
+            auto at = [&](int x, int z) -> const Formats::CollisionNode& {
+                return level.collisionGrid[static_cast<size_t>(index(x, z))];
+            };
+            auto zones = [](const Formats::CollisionNode& c) { return static_cast<uint16_t>(c.ceilingFog | (c.floorFog << 8)); };
+            // Bytes 0-3 are the cell's first face, 0xffffffff for none (the
+            // runtime turns it into the list the renderer draws).
+            auto hasFaces = [](const Formats::CollisionNode& c) {
+                return (c.unknown1 & c.unknown2 & c.unknown3 & c.unknown4) != 0xff;
+            };
+
+            uint16_t mask = zones(at(playerCellX, playerCellZ));
+            take(index(playerCellX, playerCellZ));
+            struct Pass { int firstRing, lastRing, halfWidth; };
+            static constexpr Pass PASSES[] = { { 0, 0, 0x600 }, { 1, 1, 0x384 }, { 2, 7, 0x280 }, { 8, 14, 0x1b8 } };
+            const int yaw = viewYaw & 0xfff;
+            for (const Pass& pass : PASSES)
             {
-                int i = ViewRings::RING_BUCKETS[ring][lo >> 7];
-                while (ViewRings::RING_CELLS[i].angle < lo) { ++i; }
-                for (; i < ViewRings::CELL_COUNT && ViewRings::RING_CELLS[i].angle <= hi; ++i)
+                int lo = yaw - pass.halfWidth;
+                int hi = yaw + pass.halfWidth;
+                if (lo < 0) { lo += 0x1000; hi += 0x1000; }
+                for (int ring = pass.firstRing; ring <= pass.lastRing; ++ring)
                 {
-                    const int x = playerCellX - ViewRings::RING_CELLS[i].dx;
-                    const int z = playerCellZ + ViewRings::RING_CELLS[i].dz;
-                    if (x < 0 || z < 0 || x >= length || z >= width) { continue; }
-                    const auto& cell = at(x, z);
-                    const uint16_t cellZones = zones(cell);
-                    if ((cellZones & mask) == 0) { continue; }
-                    if (hasFaces(cell)) { mask = static_cast<uint16_t>(mask | cellZones); }
+                    int i = ViewRings::RING_BUCKETS[ring][lo >> 7];
+                    while (ViewRings::RING_CELLS[i].angle < lo) { ++i; }
+                    for (; i < ViewRings::CELL_COUNT && ViewRings::RING_CELLS[i].angle <= hi; ++i)
+                    {
+                        const int x = playerCellX - ViewRings::RING_CELLS[i].dx;
+                        const int z = playerCellZ + ViewRings::RING_CELLS[i].dz;
+                        if (x < 0 || z < 0 || x >= length || z >= width) { continue; }
+                        const auto& cell = at(x, z);
+                        const uint16_t cellZones = zones(cell);
+                        if ((cellZones & mask) == 0) { continue; }
+                        take(index(x, z));
+                        if (hasFaces(cell)) { mask = static_cast<uint16_t>(mask | cellZones); }
+                    }
                 }
             }
+            return mask;
         }
-        return mask;
+    }
+
+    uint16_t DrawnZoneMask(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ, int viewYaw)
+    {
+        return WalkView(level, playerCellX, playerCellZ, viewYaw, [](int) {});
+    }
+
+    void MarkSeen(const Formats::LevelGeometry& level, std::vector<uint8_t>& seen, std::vector<uint8_t>& areas,
+                  int playerCellX, int playerCellZ, int viewYaw)
+    {
+        const size_t cells = static_cast<size_t>(level.header.mapLength) * static_cast<size_t>(level.header.mapWidth);
+        if (seen.size() != cells) { seen.assign(cells, 0); }
+        if (areas.size() != 256) { areas.assign(256, 0); areas[0] = 1; }
+        WalkView(level, playerCellX, playerCellZ, viewYaw, [&](int i) {
+            if (i >= 0 && static_cast<size_t>(i) < cells) { seen[static_cast<size_t>(i)] = 1; }
+        });
+        const int playerIndex = playerCellZ * level.header.mapLength + playerCellX;
+        if (playerCellX >= 0 && playerCellZ >= 0 && playerCellX < level.header.mapLength
+            && playerCellZ < level.header.mapWidth && static_cast<size_t>(playerIndex) < level.collisionGrid.size())
+        {
+            areas[level.collisionGrid[static_cast<size_t>(playerIndex)].unknown6] = 1;
+        }
+    }
+
+    std::vector<uint8_t> MapReveal(const Formats::LevelGeometry& level, const std::vector<uint8_t>& seen,
+                                   const std::vector<uint8_t>& areas, bool autoMapper)
+    {
+        const size_t cells = static_cast<size_t>(level.header.mapLength) * static_cast<size_t>(level.header.mapWidth);
+        std::vector<uint8_t> reveal(cells, 0);
+        for (size_t i = 0; i < cells && i < level.collisionGrid.size(); ++i)
+        {
+            const uint8_t area = level.collisionGrid[i].unknown6;
+            const bool discovered = area == 0 || (area < areas.size() && areas[area] != 0);
+            const bool wasSeen = i < seen.size() && seen[i] != 0;
+            reveal[i] = (discovered && (autoMapper || wasSeen)) ? 1 : 0;
+        }
+        return reveal;
     }
 
     bool ZoneVisible(const Formats::LevelGeometry& level, int creatureCell, uint16_t drawnZones)

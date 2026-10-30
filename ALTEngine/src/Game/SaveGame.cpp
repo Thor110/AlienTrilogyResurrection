@@ -44,6 +44,10 @@ namespace ALTEngine::Game::SaveGame
                 { "weapons", weapons },
                 { "autoMapper", data.inventory.hasAutoMapper },
                 { "shoulderLamp", data.inventory.hasShoulderLamp },
+                { "shoulderLamps", data.inventory.shoulderLamps },
+                { "nightVisionGoggles", data.inventory.nightVisionGoggles },
+                { "lampTicks", data.inventory.lampTicks },
+                { "gogglesTicks", data.inventory.gogglesTicks },
                 { "batteries", data.inventory.batteries },
                 { "seismicCharges", data.inventory.seismicCharges },
             } },
@@ -120,6 +124,10 @@ namespace ALTEngine::Game::SaveGame
             }
             data.inventory.hasAutoMapper = inv.value("autoMapper", false);
             data.inventory.hasShoulderLamp = inv.value("shoulderLamp", false);
+            data.inventory.shoulderLamps = inv.value("shoulderLamps", data.inventory.hasShoulderLamp ? 1 : 0);
+            data.inventory.nightVisionGoggles = inv.value("nightVisionGoggles", 0);
+            data.inventory.lampTicks = inv.value("lampTicks", 0);
+            data.inventory.gogglesTicks = inv.value("gogglesTicks", 0);
             data.inventory.batteries = inv.value("batteries", 0);
             data.inventory.seismicCharges = inv.value("seismicCharges", 0);
             if (root.contains("snapshot") && root["snapshot"].is_object())

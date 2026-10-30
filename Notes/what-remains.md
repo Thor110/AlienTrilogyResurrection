@@ -1,4 +1,4 @@
-# What remains (after zip 84)
+# What remains (after zip 85)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -6,111 +6,76 @@ textures, done once everything else is in.
 
 ## 1. Check in play
 
-Checked by Edward after zip 79: doors, pickups, the window glass and the cryopods are right; so is everything on
-the older list - 3.5.1's walk-through walls, see-through fill and fog, the resupply countdown, the levels that
-lost duplicate models, Save Anywhere, the assessment screen, music per level and the vent jets. The thrown
-seismic charge was confirmed after zip 83.
+Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
+countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
+and its explosion (zip 84).
 
-Changed in zips 83-84, to check:
-- **Rest pitch (zip 83):** the camera's roll of 0x800 (DAT_000b0a54) means the original's rest pitch 0x30 looks
-  slightly down; the port rested slightly up. Now -0x30 in the port's direction, and play starts there. Check
-  the view with Free Look off, and that the ramps still tilt it the right way.
-- **Explosions (zip 84):** every explosion now uses the effect, position, sound and size the original's code
-  gives it (details in section 2's audit). They are about three times the size they were, as the original
-  draws them; this is the one most worth looking at against the DOS version.
-- **Objects caught in a blast or shot to pieces (zip 84)** now go a few ticks later, each on its own random
-  delay, so a row of barrels goes off one after another.
-- **Blood (zip 84):** small tinted sprites from the effect sheet - red for people, green for aliens, the light's
-  colour for type 10 - in place of white streaks.
-- **Shell casings (zip 84):** start below the eye and pop up and out, tumble on two axes, fall at 6 a tick; the
-  shotgun's at full size, the pistol's at half.
-- **A handler's grenade (zip 84):** the pulse rifle grenade model at full size and its true height.
+Changed in zip 85, to check:
+- **Models lit by their cell.** Crates, switches, pickups, doors, lifts and anything thrown take the light of
+  the cell they stand in (its byte 0x0e; FUN_000269b8 and its siblings), as do the creatures' sprites
+  (FUN_0002fb84). They were all at full brightness. The model shader has a new tint uniform: the Vulkan and
+  Metal shaders are rebuilt here; the Direct3D one is compiled from the HLSL by dxc when building on Windows.
+- **The map** shows what the view walk has seen (every cell it takes in, not a 3x3 patch round the player), in
+  the areas the player has stood in; the Auto Mapper shows the whole of each discovered area rather than the
+  whole level (0x2745b, FUN_00043078).
+- **The shoulder lamp and night-vision goggles** can be used: Enter on the pause menu's Shoulder Lamp entry
+  lights a lamp, or goggles if there is no lamp (FUN_00044b48). The lamp is a warm light, the goggles a
+  green-blue one; they come up over 32 ticks, last 0x708 and 0xa8c ticks, and fade over 64 (FUN_00029d94).
+  Each pickup adds one.
+- **Explosives** follow the original's rules for what they hit (FUN_0002a2d8, FUN_0002a628): any creature but
+  the queen is killed outright and sprays 0x40 big drops of blood; an object they strike loses 0x140; walls
+  and windows (0x15, 0x1c, 0x1d) and objects within 0x200 of the floor set them off; they set off the cell
+  triggers a bullet would, and a handler's grenade its own (flag 8). Ordinary wall cells don't stop them, in
+  the original either.
+- **Creature sprites** are drawn at each type's own scale (+0xb4, 7.6 to 11 world units a pixel; 8 before)
+  and placed across the view by each frame's own x offset.
+- **Sparks and tracers** keep the original's on-screen size (a 2x2 pixel spark, a one-pixel line).
+- **A creature's dropped item** starts 0x200 above the floor.
+- **Run Mode** is a toggle, as Caps Lock is in the original.
 
 Still open:
 - **CD music from a real drive on Linux and macOS:** untested.
-- **Creature scripting** (the egg, queen, colonist and the ceiling creatures letting go) still feels a little
-  off. The likely places are in the audit below (frame durations and the script stand-ins in `Enemies.h`).
+- **Creature scripting** still feels a little off to Edward. The timing is the original's own: every creature
+  type runs its own animation scripts (EnemyAnimSequences.h) and its thresholds come from its level record,
+  so a note of what looks wrong, and where, is what's needed to go further.
 
-## 2. Audit against the original (zip 84)
+## 2. Audit against the original (zips 84-85)
 
 Method: every routine the port cites was compared with the decompile where it touches what is seen or played,
 and every game-side routine the port never cites (about 240 of the 1,242 Ghidra found; the rest are the C
-library, the sound and video drivers and the DOS extender) was looked at to see what it does. The explosion,
-blood, casing and grenade work above came out of this.
+library, the sound and video drivers and the DOS extender) was looked at to see what it does.
 
-### Fixed in this pass
-- The grenade, the seismic charge and a handler's grenade went off as the **barrel** fireball, 0x100 up, with
-  the barrel's sound. The original plays its general blast (FUN_0002aaf0: table 0xad008, sound 0x29) at the
-  explosive's own position. A vent bursting is the same call, and it does no blast damage.
-- A barrel's fireball goes off 0x30 under its floor (0x37d71), not 0x100 above it, and its frames hang from
-  their own anchors.
-- **Every effect frame** is placed by its anchor (each table's per-frame x and y at +0x68/+0x88) instead of
-  centred, and sized at scale / 0x100 world units a pixel (the focal length), not the guessed 5 / 0x1000.
-- An explosive hitting the ceiling only shows the effect; that path never reaches the blast (FUN_000368c8).
-- The blast's per-cell barrel sound is gone: the sound belongs to whatever goes off.
-- **Object fuses**: shot to pieces, (random & 7) + 1 ticks (FUN_00036e9c); in a blast, (random & 7) + 4 in the
-  inner ring and (random & 0xf) + 8 in the outer (FUN_000368c8); counted down by the objects' handlers
-  (0x37c4e, 0x37d37, 0x38004). A save keeps the count.
-- **Blood** (types 8-10, FUN_0002d2bc), **casings** (FUN_0002b37c, the arm at 0x2e3df, FUN_0002cf14) and the
-  **handler's grenade** (FUN_0002b240): as in section 1. The casing models (26 and 27) and the grenade's (12)
-  are confirmed from the pickup model table at 0x2480f4.
+### Known to be missing
+1. **Multiplayer.** FUN_00054a60 and everything behind `DAT_000ae0a4`.
+2. **The draw limit.** The original draws only the cells its view walk reaches; the port draws the whole level
+   (with depth testing, so only what's in sight shows). The walk is in the port (`CreatureSight`), and the
+   seen cells now come from it; limiting the draw to them needs the level mesh split by cell.
+3. **Effects past 0x1000.** FUN_000429f0 draws a near effect in colour 0x80 and a far one in the table's own
+   colour (+0xa8) faded by distance; those table colours don't read as plain colours (ff,ff,ff and 00,ff,00), so
+   the far case isn't copied. Near ones, the usual case, are right.
+4. **The lamp's hum** (sound 0x18 while lit) - the mixer can't hold a loop, as with the vent jets.
+5. **The pause menu's zoomed map** (entry 0 used: a 28-cell window round the player, FUN_00044b48).
 
-### Known to be missing (the original's code does it; the port doesn't)
-1. **Multiplayer.** FUN_00054a60 and everything behind `DAT_000ae0a4`: the other players' shots and throws
-   (FUN_0002b858, FUN_0002beb4, FUN_0002c630, FUN_0002c734), random pickup placement in a network game
-   (FUN_0003b5a0), and the network branches inside the blast, the doors, the lifts and the pickups.
-2. **Blood from explosives.** A grenade or charge that hits a creature sprays 0x40 drops at four times the size
-   (FUN_0002ada4 with an explosive as the source; the +0x1d flag). The port sprays none.
-3. **What an explosive does to the object it hits.** FUN_0002a2d8 takes 0x140 off that object (FUN_00036e9c)
-   and has separate rules for cell attribute 0x14, the switch-like types 0x15/0x1c/0x1d and objects within
-   0x200 (0x400 for type 0x19) above the floor. The port sets any object or blocking cell off the same way.
-4. **Explosives riding lifts.** The arm calls FUN_000414f0 each tick, which moves a particle with the lift
-   under it. The port's explosives ignore lifts.
-5. **Effect blending and fog.** Effects are drawn through the fill at 0x4b5cc, at full brightness under 0x1000
-   away and faded by FUN_0004ecdc past it. The port draws them as plain cut-outs with no fade. The same fill is
-   unsettled for the vent jets.
-6. **Model and door lighting.** The entity light path isn't traced; models are drawn at full brightness.
-7. **The motion tracker and the map.** The HUD routines FUN_000432fc and FUN_00043604-FUN_0004462c (called
-   from the frame's HUD pass, FUN_00045090) are never cited; the port's tracker and map are its own
-   (`Minimap.h` says as much). These are the most likely place for the original's.
-8. **The draw limit.** The original draws only the cells its ring walk reaches (`Game/ViewRings.h` already has
-   the walk); the port draws the whole level.
-
-### Inferred to be different (marked in the code as a guess or as the port's own)
-1. **Creature animation timing and scripts:** frame hold times (`Enemies.h`: "the real duration is entry 0 of
-   the..."), the fields read from +0x48 on, and a script stand-in marked GUESS. The likeliest cause of the
-   creature scripting feeling off.
-2. **Enemy sprite scale** (`EnemySprites.h`): a guess. The explosion work gives the rule - a pixel is
-   scale / 0x100 world units at the focal length 0x100 - so the creature draw's scale can be read the same way.
-3. **Tracers and fragments:** the original draws a tracer as a screen line and a fragment as a 2x2 pixel quad
-   (FUN_0002d3e4, FUN_0002d1b4), sizes that don't change with distance; the port's world sizes are guesses.
-4. **Weapon view:** placement is the port's, and some weapons have no frame table (`WeaponView`).
-5. **HUD:** some icon artwork and the message presentation are the port's; which action prints which message
+### Inferred, or the port's own on purpose
+1. **HUD:** some icon artwork and the message presentation are the port's; which action prints which message
    is inferred from the text; a one-shot gate's reset isn't traced.
-6. **Neutral light value** 128 versus 255 (`LightTable.h`).
-7. **A creature's dropped item** starts at the creature's height plus the type's offset; the original starts it
-   0x200 above the floor (`FUN_0003bc9c`).
-8. **Creature sound cues** are cut past 0x1400 or out of sight; the original only attenuates them.
-9. **A creature let out of a sealed wall vent** comes out alerted (the port's rule, so L111's huggers leave the
-   duct).
-10. **Run mode** is a second hold key; the original's is probably a toggle.
-11. **Casings** vanish when they reach the floor; the original's fall through it out of sight. The same to look
-    at.
-12. **Vent jets'** sound plays once instead of looping (the mixer can't hold a loop).
-13. **The assessment bars'** colours (palette bit depth), **routine 14** on level faces, **L371's lifts 6-9**
-    (lift model 5 doesn't exist), the pickup counters 0x07/0x08/0x0f/0x19, the weapon noise value, the
-    shatter launch speed, mouse sensitivity and two settings defaults.
-14. **Open question A:** pistol rounds against a standing hugger.
+2. **Creature sound cues** are cut past 0x1400 or out of sight (the original only quietens them), and a
+   creature let out of a sealed wall vent comes out alerted - both asked for in play.
+3. **Casings** vanish at the floor; the original's fall through it out of sight.
+4. **Vent jets'** sound plays once instead of looping.
+5. The assessment bars' colours, routine 14 on level faces, L371's lifts 6-9, the weapon noise value, the
+   shatter launch speed, mouse sensitivity and two settings defaults; open question A (pistol rounds against a
+   standing hugger).
 
-### Looked at and matching
-Compared line by line: the throw and its arc, the blast rings and their damage, the projectile spawn and its
-side offset under the camera's roll, the flame stream's spawn, the vent jets, and the shatter pieces (types 6
-and 0x0f, FUN_0002d054).
-
-Present in the port under its own names, not compared line by line this pass: the cell actions the player
-steps on (FUN_00040ff0, `Triggers::OnEnterCell`), the texture animation programs (FUN_00042ed0 and
-FUN_00042d7c, `TextureAnimator`), and weapon cycling (FUN_00038d24, Next Weapon). Doors, pickups, windows
-and cryopods were compared in earlier zips and confirmed in play.
+### Settled in this pass
+- The neutral light value is 0x80 (an effect near the player is drawn in 0x80; every level's light 0 is
+  128,128,128) - the port already used it.
+- Pickup 0x0f (ID badges, 0xae2) is counted and copied once into a value nothing reads (0x14c78): it does
+  nothing in the original either. Pickup 7 is the batteries, already in.
+- The weapon view's frame offsets, scripts and anchor are all the original's (`WeaponData.h`); its comments
+  were out of date.
+- Creature animation timing and attack timing come from the scripts for every creature type; the fixed values
+  in `Enemies.h` are fallbacks nothing reaches.
 
 ## 3. Code health
 

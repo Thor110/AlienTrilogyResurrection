@@ -299,29 +299,3 @@ namespace ALTEngine::Renderer
         return drawn;
     }
 }
-
-namespace ALTEngine::Renderer
-{
-    void MarkMinimapVisited(const ALTEngine::Formats::LevelGeometry& level,
-                            std::vector<uint8_t>& visited,
-                            int playerCellX, int playerCellZ)
-    {
-        int gridW = static_cast<int>(level.header.mapLength);
-        int gridH = static_cast<int>(level.header.mapWidth);
-        if (gridW <= 0 || gridH <= 0) { return; }
-
-        size_t needed = static_cast<size_t>(gridW) * gridH;
-        if (visited.size() != needed) { visited.assign(needed, 0); }
-
-        for (int dz = -1; dz <= 1; ++dz)
-        {
-            for (int dx = -1; dx <= 1; ++dx)
-            {
-                int x = playerCellX + dx;
-                int z = playerCellZ + dz;
-                if (x < 0 || z < 0 || x >= gridW || z >= gridH) { continue; }
-                visited[static_cast<size_t>(z) * gridW + x] = 1;
-            }
-        }
-    }
-}

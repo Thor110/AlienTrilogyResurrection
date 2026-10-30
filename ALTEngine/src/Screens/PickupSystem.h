@@ -42,7 +42,7 @@ namespace ALTEngine::Screens
             SEISMIC_CHARGES = 6,    // DAT_000b0ad0 (the high half of 0x10ace): the HUD's
                                     // item with any weapon but the pulse rifle (0x3ac97)
             COUNTER_AD2 = 7,        // +1, untraced meaning
-            COUNTER_AD8 = 8,        // +1, untraced meaning
+            COUNTER_AD8 = 8,        // +1: night-vision goggles (used from the pause menu)
 
             PISTOL_AMMO = 9,
             SHOTGUN_AMMO = 0x0a,
@@ -66,7 +66,7 @@ namespace ALTEngine::Screens
             TERRAIN_SPEED = 0x16,   // DAT_000b0abc += amount * 0x1e (30 ticks each)
             HEALTH_SET_200 = 0x17,  // health = 200 outright
 
-            COUNTER_AD4 = 0x19,     // +1, untraced
+            COUNTER_AD4 = 0x19,     // +1: a shoulder lamp (used from the pause menu)
         };
 
         // Caps, all from the handler.
@@ -203,7 +203,9 @@ namespace ALTEngine::Screens
                 inventory.hasAutoMapper = true;   // best reading of DAT_000b0ab4 bit 0x80
                 return true;
             case COUNTER_AD4:
-                inventory.hasShoulderLamp = true; // best reading of DAT_000b0ad4
+                // A shoulder lamp, one more (0x38167).
+                inventory.shoulderLamps++;
+                inventory.hasShoulderLamp = true;
                 return true;
             case COUNTER_AD2:
                 inventory.batteries += (amount > 0 ? amount : 1);
@@ -211,6 +213,10 @@ namespace ALTEngine::Screens
 
             // Counters whose meaning is not traced. Counted so nothing is lost.
             case COUNTER_AD8:
+                // Night-vision goggles, one more (0x38016).
+                inventory.nightVisionGoggles++;
+                inventory.hasShoulderLamp = true;
+                return true;
             case COUNTER_AE2:
                 return true;
 

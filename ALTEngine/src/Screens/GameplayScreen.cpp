@@ -95,12 +95,9 @@ namespace ALTEngine::Screens
         // Player collision constants, taken from the game's own entity
         // mover (Ghidra: FUN_00031afc / FUN_000315f0).
 
-        // Particle sprite sizes. The original works in screen pixels - a
-        // fragment is literally 2x2 - and these are the world-space equivalents
-        // at a typical engagement range. GUESSES, and the first thing to adjust
-        // if tracers look too fat or too thin.
-        constexpr float FRAGMENT_HALF_SIZE = 6.0f;
-        constexpr float TRACER_MIN_HALF_SIZE = 5.0f;
+        // A thrown grenade's or charge's +0x1a (FUN_0002c4e0, FUN_0002c830):
+        // what it takes off an object it strikes, and, doubled, off the queen.
+        constexpr int EXPLOSIVE_HIT_DAMAGE = 0x140;
 
         // A small round dot, generated rather than loaded - the original's
         // tracers and fragments are untextured coloured primitives, so there is
@@ -336,6 +333,7 @@ namespace ALTEngine::Screens
             float vx = 0, vy = 0, vz = 0;
             int bounce = 0x10;   // +0x18: the next bounce's lift, 2 less each time
             int life = 0x40;     // +0x1c: goes off when it runs out
+            int triggerLatch = 0;  // +0x1f (FUN_00041784)
         };
         std::vector<EnemyGrenade> enemyGrenades;
         // The player's thrown explosives: the pulse rifle's grenade (particle
@@ -351,6 +349,7 @@ namespace ALTEngine::Screens
             int life = 0x40;     // +0x1c
             bool charge = true;  // a seismic charge, or else a grenade
             int spin = 0;        // +0x10: a charge's first angle, +0x20 each tick it is drawn
+            int triggerLatch = 0;  // +0x1f: the cell trigger it last set off (FUN_000414f0)
         };
         std::vector<PlayerExplosive> playerExplosives;
         // Switch/object state, indexed by object record. Non-zero means
@@ -429,7 +428,11 @@ namespace ALTEngine::Screens
         bool cheatMaximumHealth = false;
         // Cells the player has seen, for the map's fog of war. One byte per
         // cell, sized on first use. Owning an Auto Mapper bypasses it entirely.
-        std::vector<uint8_t> minimapVisited;
+        // Run Mode's latch (DAT_000ad584 bit 1) and its key's last state.
+        bool runModeToggled = false;
+        bool runModeWasDown = false;
+        std::vector<uint8_t> minimapVisited;   // each cell's seen bit (byte 7, bit 0)
+        std::vector<uint8_t> minimapAreas;     // the discovered areas (DAT_00245bb4)
 
         // HUD. The panel sheet is per-chapter, chosen from the level id (see
         // Renderer/HudPanel.h), and the state is the original's own health /
@@ -616,6 +619,7 @@ namespace ALTEngine::Screens
             j["enemies"] = nlohmann::json::array();
             for (const auto& e : enemies) { j["enemies"].push_back(LS::SaveEnemy(e)); }
             j["minimap"] = hexBytes(minimapVisited);
+            j["minimapAreas"] = hexBytes(minimapAreas);
             // The assessment's tally so far: what's been killed, destroyed or
             // thrown, and the secret areas found. The totals are the level's own.
             j["killed"] = tally.killed;
@@ -696,6 +700,7 @@ namespace ALTEngine::Screens
                     for (size_t i = 0; i < e.size(); ++i) { LS::LoadEnemy(enemies[i], e[i]); }
                 }
                 minimapVisited = bytesFromHex(j.value("minimap", std::string{}));
+                minimapAreas = bytesFromHex(j.value("minimapAreas", std::string{}));
                 if (j.contains("killed") && j["killed"].is_array() && j["killed"].size() == tally.killed.size())
                 {
                     for (size_t i = 0; i < tally.killed.size(); ++i) { tally.killed[i] = j["killed"][i]; }
@@ -748,6 +753,11 @@ namespace ALTEngine::Screens
                     renderSettings.Get() == Bootstrap::RenderFidelity::Smoothed);
 
                 levelReady = ModelRenderer::LoadLevel(cacheKey, *mapPath, *gfxPath);
+                // A lamp or goggles still lit when the level was left stays lit.
+                if (levelReady && (inventory.lampTicks > 0 || inventory.gogglesTicks > 0))
+                {
+                    ModelRenderer::SetLevelLightEquipment(cacheKey, inventory.lampTicks > 0 ? 1 : 2);
+                }
             }
 
             if (levelReady)
@@ -1360,6 +1370,8 @@ namespace ALTEngine::Screens
                         // of play.
                         enemyGrenades.clear();
                         playerExplosives.clear();
+                        minimapVisited.clear();
+                        minimapAreas.clear();
                         enemies = ALTEngine::Screens::Enemies::Build(
                             level, static_cast<int>(difficultySettings.Get()), originX, originZ);
                         // Testing: Disable Enemy Spawn. An empty roster leaves
@@ -1616,13 +1628,16 @@ namespace ALTEngine::Screens
                         checkpoint.snapshot = captureSnapshot();
                         SetCheckpoint(checkpoint);
                     }
+                    const std::vector<uint8_t> pauseMapReveal = levelReady
+                        ? ALTEngine::Game::CreatureSight::MapReveal(level, minimapVisited, minimapAreas, inventory.hasAutoMapper)
+                        : std::vector<uint8_t>{};
                     PauseMenuResult pauseResult = PauseMenuScreen::Run(cdDirectory, language, missionLevelCode, inventory, audioSettings,
                                                                         renderSettings, resolutionSettings, difficultySettings, cameraSwaySettings, languageSettings, keyBindings,
                                                                       levelReady ? &level : nullptr,
                                                                       ToGridSpaceX(camera.x, originX) / 512.0f,
                                                                       ToGridSpaceZ(camera.z, originZ) / 512.0f,
                                                                       camera.yaw,
-                                                                      inventory.hasAutoMapper ? nullptr : &minimapVisited);
+                                                                      &pauseMapReveal);
                     // Re-read on return: the pause menu can reach the same
                     // Options screen the boot menu does, so this can have
                     // changed while paused. Reading it once at level load
@@ -1655,6 +1670,17 @@ namespace ALTEngine::Screens
                     // the loadout is topped up every tick, so "unlimited
                     // ammunition" actually stays unlimited as it is spent.
                     cheatFullyLoaded = pauseResult.cheatFullyLoaded;
+                    // The lamp or goggles lit from the pause menu: sound 0x17
+                    // as it starts to come up (0x29dd7).
+                    if (pauseResult.useLight && levelReady)
+                    {
+                        const int lit = inventory.UseLight();
+                        if (lit != 0)
+                        {
+                            ModelRenderer::SetLevelLightEquipment(cacheKey, lit);
+                            ALTEngine::Audio::SfxPlayer::PlaySlot(LIGHT_ON_SOUND, digits.c_str(), cdDirectory);
+                        }
+                    }
                     cheatMaximumHealth = pauseResult.cheatMaximumHealth;
                     if (cheatFullyLoaded)
                     {
@@ -1873,12 +1899,16 @@ namespace ALTEngine::Screens
                     pcInput.turnLeft = !strafeMod && turnLeftKey;
                     pcInput.turnRight = !strafeMod && turnRightKey;
 
-                    // RunModifier is a hold. RunMode is very likely a toggle in
-                    // the original, but nothing traced confirms that, so it is
-                    // OR'd in as a second hold key rather than inventing toggle
-                    // state - MARKED AS A GUESS.
-                    pcInput.run = keys[keyBindings.GetKey(InputAction::RunModifier)]
-                               || keys[keyBindings.GetKey(InputAction::RunMode)];
+                    // RunModifier is a hold; RunMode is a toggle. The original
+                    // flips a latched bit (DAT_000ad584 ^= 2) on each press of
+                    // Caps Lock, once per press, and ORs it with either Shift
+                    // held into the run bit (FUN_0004d438).
+                    {
+                        const bool runModeDown = keys[keyBindings.GetKey(InputAction::RunMode)];
+                        if (runModeDown && !runModeWasDown) { runModeToggled = !runModeToggled; }
+                        runModeWasDown = runModeDown;
+                    }
+                    pcInput.run = keys[keyBindings.GetKey(InputAction::RunModifier)] || runModeToggled;
 
                     pcInput.turn180 = keys[keyBindings.GetKey(InputAction::Turnaround)];
                     pcInput.terrainSpeedTicks = hudState.terrainSpeed;
@@ -2748,8 +2778,13 @@ namespace ALTEngine::Screens
                                     if (live.placedIndex < placedObjects.size())
                                     {
                                         auto& placed = placedObjects[live.placedIndex];
+                                        // 0x200 above the floor where the creature
+                                        // stands (FUN_0003bc9c: FUN_00027e28 + 0x200),
+                                        // not the crate drop's per-type offset.
                                         placed.x = enemy.x;
-                                        placed.y = enemy.y + ALTEngine::Screens::DroppedPickups::DropHeight(live.type);
+                                        placed.y = ALTEngine::Formats::FindFloorHeightGridSpace(
+                                                       level, ToGridSpaceX(enemy.x, originX), ToGridSpaceZ(enemy.z, originZ))
+                                                 + 0x200;
                                         placed.z = enemy.z;
                                         placed.visible = true;
                                     }
@@ -3033,6 +3068,13 @@ namespace ALTEngine::Screens
                         if (halfPass)
                         {
                             hudState.TickCarriedItems();
+                            // The lamp's or goggles' time (FUN_0003e698): when it
+                            // runs out the light fades and sound 0x19 plays.
+                            if (inventory.TickLight())
+                            {
+                                ModelRenderer::SetLevelLightEquipment(cacheKey, 0);
+                                ALTEngine::Audio::SfxPlayer::PlaySlot(LIGHT_OFF_SOUND, digits.c_str(), cdDirectory);
+                            }
                             hudMessages.Tick();
                             faceHug.Tick();
                         }
@@ -3526,18 +3568,85 @@ namespace ALTEngine::Screens
                         // (0x2da19), the cell and object test (FUN_0002a2d8),
                         // the player (FUN_0002a8f8: 0x19, then the blast as
                         // well), then the floor.
+                        // FUN_0002a2d8: an explosive against its cell, in the
+                        // original's order. Returns 0 if it flies on, 1 if it
+                        // goes off with the effect alone, 2 if the blast
+                        // (FUN_000368c8) goes with it. `damage` is its +0x1a,
+                        // taken off an object it strikes (FUN_00036e9c).
+                        //   - attribute 0x14: the blast.
+                        //   - an object of type 0x15, 0x1c or 0x1d (the
+                        //     breakable walls and windows): the damage; the
+                        //     blast for 0x15 only.
+                        //   - any other object, when the explosive is between
+                        //     the floor and 0x200 above it (0x400 for type
+                        //     0x19): the damage and the blast. Higher, it
+                        //     flies over.
+                        //   - above the ceiling: brought 0x100 under it (not in
+                        //     an open cell, attribute 6), the effect alone.
+                        // Nothing here stops it at an ordinary wall cell, and
+                        // nothing does in the original either.
+                        auto explosiveCellRules = [&](float x, float& y, float z, int damage) -> int {
+                            const int gx = ToGridSpaceX(x, originX);
+                            const int gz = ToGridSpaceZ(z, originZ);
+                            const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
+                            if (!cell) { return 0; }
+                            auto damageObject = [&]() {
+                                const int at = ALTEngine::Formats::CellIndex(level, gx >> 9, gz >> 9);
+                                const int length = level.header.mapLength;
+                                for (D::Target& other : damageTargets)
+                                {
+                                    const int dx = (at % length) - (other.cellIndex % length);
+                                    const int dz = (at / length) - (other.cellIndex / length);
+                                    const bool covers = other.cellIndex >= 0 && dx >= 0 && dz >= 0
+                                        && dx < other.cellsWide && dz < other.cellsDeep;
+                                    if (!covers || other.destroyed || other.indestructible) { continue; }
+                                    other.health -= damage;
+                                    if (other.health < 1)
+                                    {
+                                        other.destroyed = true;
+                                        other.state = D::STATE_DYING;
+                                        other.fuse = fuseRng.Bits(7) + 1;
+                                    }
+                                    break;
+                                }
+                            };
+                            if (cell->attribute == 0x14) { return 2; }
+                            const uint8_t object = cell->unknown13;
+                            if (object == 0x15 || object == 0x1c || object == 0x1d)
+                            {
+                                damageObject();
+                                return object == 0x15 ? 2 : 1;
+                            }
+                            if (object > 0x13 && object != 0xff)
+                            {
+                                const float floor = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
+                                const float reach = (object == 0x19) ? 0x400 : 0x200;
+                                if (y >= floor && y <= floor + reach) { damageObject(); return 2; }
+                            }
+                            const float ceiling = static_cast<float>(cell->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT;
+                            if (y > ceiling)
+                            {
+                                if (cell->attribute != 6) { y = ceiling - 0x100; }
+                                return 1;
+                            }
+                            return 0;
+                        };
+
                         if (halfPass && !enemyGrenades.empty())
                         {
                             // The same as the player's: FUN_0002aaf0's general
                             // blast at its own position, sound 0x29, then the
                             // blast (0x2da30 / 0x2dd2f).
-                            auto detonate = [&](const EnemyGrenade& g) {
+                            auto detonate = [&](float x, float y, float z, bool effect, bool blast) {
                                 const int cell = ALTEngine::Formats::CellIndex(
-                                    level, ToGridSpaceX(g.x, originX) >> 9, ToGridSpaceZ(g.z, originZ) >> 9);
-                                explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE, g.x, g.y, g.z);
-                                ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                    ALTEngine::Formats::SoundIds::CRATE_BREAK, digits.c_str(), cdDirectory);
-                                if (cell >= 0) { blastQueue.push_back(cell); }
+                                    level, ToGridSpaceX(x, originX) >> 9, ToGridSpaceZ(z, originZ) >> 9);
+                                if (effect)
+                                {
+                                    explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE, x, y, z);
+                                    ALTEngine::Audio::SfxPlayer::PlaySlot(
+                                        ALTEngine::Formats::SoundIds::CRATE_BREAK, digits.c_str(), cdDirectory);
+                                }
+                                if (blast && cell >= 0) { blastQueue.push_back(cell); }
                                 for (size_t q = 0; q < blastQueue.size(); ++q) { RunBlast(blastQueue[q]); }
                                 blastQueue.clear();
                             };
@@ -3548,30 +3657,35 @@ namespace ALTEngine::Screens
                                 const int gx = ToGridSpaceX(g.x, originX);
                                 const int gz = ToGridSpaceZ(g.z, originZ);
                                 const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
+                                int ruled = 0;
                                 if (!cell) { gone = true; }
-                                else if (--g.life <= 0) { detonate(g); gone = true; }
-                                // OURS, simplified: FUN_0002a2d8 blasts on an
-                                // attribute 0x14 cell and on a barrel, and also
-                                // tests the height of other objects; here any
-                                // object in the cell sets it off.
-                                else if (cell->attribute == 0x14
-                                         || (cell->unknown13 >= 0x14 && cell->unknown13 != 0xFF))
+                                else if (--g.life <= 0) { detonate(g.x, g.y, g.z, true, true); gone = true; }
+                                // The cell and its object (0x2dd0e).
+                                else if ((ruled = explosiveCellRules(g.x, g.y, g.z, 0x19)) != 0)
                                 {
-                                    detonate(g); gone = true;
+                                    detonate(g.x, g.y, g.z, true, ruled == 2); gone = true;
                                 }
+                                // The player (FUN_0002a8f8): 0x19 with cause 5,
+                                // then the blast - and no effect (0x2dd5c).
                                 else if (g.y - playerFeetY >= 0.0f && g.y - playerFeetY <= 0x400
                                          && std::fabs(g.x - camera.x) < 0x100 && std::fabs(g.z - camera.z) < 0x100)
                                 {
                                     hudState.ApplyDamage(0x19, ALTEngine::Screens::GameOverSequence::CAUSE_EXPLOSION);
                                     checkPlayerDeath();
-                                    detonate(g); gone = true;
+                                    detonate(g.x, g.y, g.z, false, true); gone = true;
                                 }
                                 else
                                 {
+                                    // Its cell's triggers, flag 8 (FUN_00041784).
+                                    triggers.OnShotEnterCell(g.triggerLatch,
+                                        ALTEngine::Formats::CellIndex(level, gx >> 9, gz >> 9), triggerHandlers,
+                                        ALTEngine::Game::Triggers::Source::EnemyThrow);
                                     const float floor = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
                                     if (g.y < floor + 0x20)
                                     {
-                                        if (floor - g.y > 0x40) { detonate(g); gone = true; }
+                                        // Into a hole: the blast, and the effect
+                                        // 0x200 up (0x2ddc4).
+                                        if (floor - g.y > 0x40) { detonate(g.x, g.y + 0x200, g.z, true, true); gone = true; }
                                         else
                                         {
                                             // A bounce, lower each time; then it
@@ -3595,11 +3709,9 @@ namespace ALTEngine::Screens
 
                         // The player's grenades and seismic charges, on the same
                         // pass (the arm at 0x2db80). In its order: time running
-                        // out (0x2da19), an object (FUN_0002a2d8), a creature
-                        // (FUN_0002a628), then the floor. OURS, simplified as the
-                        // handler's grenade is: any object or blocking cell in
-                        // its cell sets it off, and so does a live creature
-                        // within 0x100 of it.
+                        // out (0x2da19), the cell and its object (FUN_0002a2d8),
+                        // a creature (FUN_0002a628), the cell's triggers
+                        // (FUN_000414f0), then the floor.
                         if (halfPass && !playerExplosives.empty())
                         {
                             // FUN_0002aaf0 at the explosive's own position: the
@@ -3623,36 +3735,46 @@ namespace ALTEngine::Screens
                                 const int gx = ToGridSpaceX(e.x, originX);
                                 const int gz = ToGridSpaceZ(e.z, originZ);
                                 const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
-                                bool nearCreature = false;
-                                for (const auto& enemy : enemies)
-                                {
-                                    if (!enemy.active || !enemy.alive || ALTEngine::Screens::IsVent(enemy.type)) { continue; }
-                                    if (std::fabs(enemy.x - e.x) < 0x100 && std::fabs(enemy.z - e.z) < 0x100
-                                        && std::fabs(enemy.y - e.y) < 0x200) { nearCreature = true; break; }
-                                }
+                                // A creature it strikes (FUN_0002a628): inside the
+                                // creature's box, and the creature can still be
+                                // hit. Everything but the queen takes its whole
+                                // health; the queen takes twice the explosive's
+                                // 0x140. It bleeds 0x40 big drops from where the
+                                // explosive is (FUN_0002af24, FUN_0002ada4).
+                                auto strikeCreature = [&]() -> bool {
+                                    namespace PCol = ALTEngine::Game::ProjectileCollision;
+                                    for (auto& enemy : enemies)
+                                    {
+                                        if (!enemy.active || !enemy.alive || ALTEngine::Screens::IsVent(enemy.type)) { continue; }
+                                        if (!PCol::CreatureTargetable(enemy.state)) { continue; }
+                                        if (!PCol::OverlapsCreature(e.x, e.y, e.z, enemy.x, enemy.y, enemy.z,
+                                                                    enemy.type, ALTEngine::Screens::Particles::TYPE_PULSE)) { continue; }
+                                        const int damage = (enemy.type == ALTEngine::Game::Blast::IMMUNE_CREATURE_TYPE)
+                                            ? EXPLOSIVE_HIT_DAMAGE * 2 : enemy.health;
+                                        ALTEngine::Screens::Enemies::ApplyHit(enemy, damage, ignoreStun);
+                                        const int blood = PCol::BloodTypeForCreature(enemy.type);
+                                        if (blood >= 0) { particles.SpawnBlood(blood, e.x, e.y, e.z, true); }
+                                        return true;
+                                    }
+                                    return false;
+                                };
+                                int ruled = 0;
                                 if (!cell) { gone = true; }
                                 else if (--e.life <= 0) { detonate(e.x, e.y, e.z); gone = true; }
-                                else if (e.y > static_cast<float>(cell->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT)
+                                else if ((ruled = explosiveCellRules(e.x, e.y, e.z, EXPLOSIVE_HIT_DAMAGE)) != 0)
                                 {
-                                    // Above the ceiling (FUN_0002a2d8 / FUN_00027fb0):
-                                    // brought 0x100 under it, unless the cell is
-                                    // open (attribute 6), and set off - the
-                                    // effect only, as that path never reaches
-                                    // FUN_000368c8, so no blast.
-                                    if (cell->attribute != 6)
-                                    {
-                                        e.y = static_cast<float>(cell->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT - 0x100;
-                                    }
-                                    detonate(e.x, e.y, e.z, false); gone = true;
+                                    detonate(e.x, e.y, e.z, ruled == 2); gone = true;
                                 }
-                                else if ((cell->attribute > 0x13 && cell->attribute < 0x2d)
-                                         || (cell->unknown13 >= 0x14 && cell->unknown13 != 0xFF)
-                                         || nearCreature)
+                                else if (strikeCreature())
                                 {
                                     detonate(e.x, e.y, e.z); gone = true;
                                 }
                                 else
                                 {
+                                    // Its cell's triggers, as a round's
+                                    // (FUN_000414f0, 0x2dc17).
+                                    triggers.OnShotEnterCell(e.triggerLatch,
+                                        ALTEngine::Formats::CellIndex(level, gx >> 9, gz >> 9), triggerHandlers);
                                     const float floor = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
                                     if (e.y < floor + 0x20)
                                     {
@@ -3846,15 +3968,16 @@ namespace ALTEngine::Screens
                             }
                             hud.TickTracker();
 
-                            // Remember where the player has been, for the map's fog
-                            // of war. Without this the visited array stays empty and
-                            // the map draws nothing but the player marker.
+                            // What the player has seen, for the map: every cell the
+                            // view walk takes in, and the area they stand in
+                            // (CreatureSight::MarkSeen).
                             if (levelReady)
                             {
-                                ALTEngine::Renderer::MarkMinimapVisited(
-                                    level, minimapVisited,
+                                ALTEngine::Game::CreatureSight::MarkSeen(
+                                    level, minimapVisited, minimapAreas,
                                     ToGridSpaceX(camera.x, originX) >> 9,
-                                    ToGridSpaceZ(camera.z, originZ) >> 9);
+                                    ToGridSpaceZ(camera.z, originZ) >> 9,
+                                    playerCam.viewYaw);
                             }
 
                             // Switch objects. A switch that has not been thrown
@@ -4063,10 +4186,16 @@ namespace ALTEngine::Screens
                         spark.y = particle.y;
                         spark.z = particle.z;
 
+                        // One pixel of the original's 320x240 view at this
+                        // distance: the projection puts a world length L at
+                        // L * 0x100 / depth pixels.
+                        const float originalPixel = distance / 256.0f;
                         if (particle.type == P::TYPE_FRAGMENT)
                         {
-                            spark.halfWidth = FRAGMENT_HALF_SIZE;
-                            spark.halfHeight = FRAGMENT_HALF_SIZE;
+                            // A 2x2 pixel square (FUN_0002d1b4), whatever the
+                            // distance.
+                            spark.halfWidth = originalPixel;
+                            spark.halfHeight = originalPixel;
                         }
                         else if (P::IsVentParticle(particle.type))
                         {
@@ -4098,7 +4227,7 @@ namespace ALTEngine::Screens
                             const int age = particle.strength - particle.life;
                             const int record = (age >= 0 && age < 3) ? 0x20 + age : 0x18;
                             if (!explosions.UseRecord(record, spark)) { continue; }
-                            spark.halfWidth = spark.halfHeight = static_cast<float>(std::max(particle.life, 1));
+                            spark.halfWidth = spark.halfHeight = static_cast<float>(std::max(particle.life, 1) * (particle.bigBlood ? 4 : 1));
                             spark.r = (particle.type == P::TYPE_BLOOD_ACID) ? 0.0f : 1.0f;
                             spark.g = (particle.type == P::TYPE_BLOOD_WHITE) ? 0.0f : 1.0f;
                             spark.b = (particle.type == P::TYPE_BLOOD_ACID_B) ? 1.0f : 0.0f;
@@ -4135,8 +4264,9 @@ namespace ALTEngine::Screens
                                                         + particle.vy * particle.vy
                                                         + particle.vz * particle.vz);
                             const float streak = speed * P::TracerVelocityFraction(particle.type) * 0.5f;
-                            spark.halfWidth = (streak > TRACER_MIN_HALF_SIZE) ? streak : TRACER_MIN_HALF_SIZE;
-                            spark.halfHeight = TRACER_MIN_HALF_SIZE;
+                            // A one-pixel line (FUN_0002d3e4).
+                            spark.halfWidth = std::max(streak, originalPixel * 0.5f);
+                            spark.halfHeight = originalPixel * 0.5f;
 
                             // Along the direction of travel. This was briefly a
                             // Modern option, on the reading that the original's
@@ -4156,7 +4286,21 @@ namespace ALTEngine::Screens
                         placedSprites.push_back(spark);
                     }
                     explosions.Collect(placedSprites, camera.x, camera.y, camera.z, true);
-                    enemySprites.Collect(enemies, placedSprites);
+                    // Each creature in the light of its cell (FUN_0002fb84 reads
+                    // the cell's byte 0x0e entry, as the models do).
+                    const size_t firstCreatureSprite = placedSprites.size();
+                    enemySprites.Collect(enemies, placedSprites, camera.x, camera.z, true);
+                    for (size_t si = firstCreatureSprite; si < placedSprites.size(); ++si)
+                    {
+                        auto& sprite = placedSprites[si];
+                        const auto* cell = ALTEngine::Formats::CellAt(
+                            level, ToGridSpaceX(sprite.x, originX) >> 9, ToGridSpaceZ(sprite.z, originZ) >> 9);
+                        float rgb[3];
+                        if (cell && ModelRenderer::LevelLightColour(cacheKey, cell->lighting, rgb))
+                        {
+                            sprite.r = rgb[0]; sprite.g = rgb[1]; sprite.b = rgb[2];
+                        }
+                    }
                     shatter.Collect(placedSprites, camera.x, camera.z);
                 }
 
@@ -4259,6 +4403,18 @@ namespace ALTEngine::Screens
                              + pendingMouseYaw * (TWO_PI / static_cast<float>(PC::ANGLE_UNITS));
                 }
 
+                // Every model takes the light of the cell it is in (its byte
+                // 0x0e; FUN_000269b8 and its siblings), looked up where it is
+                // now so lifts, doors and anything thrown or dropped follow.
+                // The level-face objects (window glass, a cryopod's cover)
+                // carry their faces' own lights and are left alone.
+                for (auto& object : placedObjects)
+                {
+                    if (object.cacheKey.catalog == ALTEngine::Renderer::ModelCatalog::LevelObject) { continue; }
+                    const auto* cell = ALTEngine::Formats::CellAt(
+                        level, ToGridSpaceX(object.x, originX) >> 9, ToGridSpaceZ(object.z, originZ) >> 9);
+                    object.lightId = cell ? cell->lighting : -1;
+                }
                 std::vector<uint8_t> pixels = ModelRenderer::RenderLevelToRgba(cacheKey, view, windowW, windowH,
                                                                                placedObjects, placedSprites);
                 placedObjects.resize(staticObjectCount); // drop this frame's particles again
@@ -4533,10 +4689,11 @@ namespace ALTEngine::Screens
                             style.drawBorder = false;   // the edge strips frame it instead
                             style.alignTopLeft = true;  // pin to HUD_MINIMAP_X/Y, do not centre
 
-                            // The Auto Mapper reveals everything; without it the
-                            // player only sees where they have been.
-                            const std::vector<uint8_t>* fog =
-                                inventory.hasAutoMapper ? nullptr : &minimapVisited;
+                            // What has been seen in the discovered areas; with the
+                            // Auto Mapper, every cell of a discovered area.
+                            const std::vector<uint8_t> hudMapReveal = ALTEngine::Game::CreatureSight::MapReveal(
+                                level, minimapVisited, minimapAreas, inventory.hasAutoMapper);
+                            const std::vector<uint8_t>* fog = &hudMapReveal;
                             SDL_FRect drawn = ALTEngine::Renderer::DrawMinimap(
                                 renderer, level, mapRect,
                                 ToGridSpaceX(camera.x, originX) / 512.0f,

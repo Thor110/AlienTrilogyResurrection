@@ -317,3 +317,23 @@ TEST_CASE("Triggers: a command chain can be run straight from its first command"
     CHECK_EQ(ended, 2);
     CHECK(!system.RunCommands(5, h));     // out of range
 }
+
+TEST_CASE("Triggers: a handler's grenade sets off flag-0x08 triggers only")
+{
+    // FUN_00041784 tests bit 0x08 where a round's FUN_000414f0 tests 0x02.
+    LevelGeometry level = SyntheticLevel({ { Triggers::END_LEVEL, 0, 1, 0 } });
+    level.actions[1].activationMask = Triggers::FLAG_SHOT;
+    Triggers::System shotOnly(level);
+    Recorder rec;
+    int latch = 0;
+    CHECK(!shotOnly.OnShotEnterCell(latch, 1, rec.Handlers(), Source::EnemyThrow));
+    CHECK(rec.log.empty());
+
+    level.actions[1].activationMask = Triggers::FLAG_ENEMY_THROW;
+    Triggers::System thrown(level);
+    CHECK(thrown.OnShotEnterCell(latch, 1, rec.Handlers(), Source::EnemyThrow));
+    CHECK_EQ(rec.log.size(), size_t(1));
+    int roundLatch = 0;
+    Triggers::System thrownAgain(level);
+    CHECK(!thrownAgain.OnShotEnterCell(roundLatch, 1, rec.Handlers()));
+}

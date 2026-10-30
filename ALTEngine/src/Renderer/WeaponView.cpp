@@ -272,8 +272,8 @@ namespace ALTEngine::Renderer
                           + WS::WEAPON_OFFSET_Y[w];
 
         // Per-frame offset from the weapon's frame table, where one is known.
-        // Anything without real data keeps the old bottom-centre placement,
-        // which is a guess and is marked as one.
+        // Every weapon has its table; a frame past its end falls back to
+        // bottom-centre on the anchor.
         const WeaponData::WeaponTables& tables = WeaponData::For(loadedWeapon);
         const WeaponData::FrameOffset* offsets =
             (section < 4) ? tables.offsets[section] : nullptr;
@@ -288,7 +288,8 @@ namespace ALTEngine::Renderer
         }
         else
         {
-            // GUESS - no frame table for this weapon yet.
+            // Out of the table's range (not reached by the original's data):
+            // bottom-centre on the anchor.
             x = anchorX - frameWidth * 0.5f;
             y = static_cast<float>(anchorY - frameHeight);
         }

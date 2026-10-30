@@ -1372,7 +1372,7 @@ namespace ALTEngine::Renderer
         SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
         SDL_PushGPUVertexUniformData(cmd, 0, mvp.m.data(), sizeof(float) * 16);
             {
-                float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
+                float fog[8] = { fogEnabled, fogStart, fogRange, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
             }
         SDL_DrawGPUIndexedPrimitives(renderPass, model.indexCount, 1, 0, 0, 0);
@@ -1796,6 +1796,27 @@ namespace ALTEngine::Renderer
         it->second.lights.RequestFlash();
     }
 
+    bool ModelRenderer::LevelLightColour(const std::string& cacheKey, int lightId, float rgb[3])
+    {
+        auto it = loadedLevels.find(cacheKey);
+        if (it == loadedLevels.end() || lightId < 0) { return false; }
+        const auto& entry = it->second.lights.ColourFor(lightId);
+        float sum[3] = { 0.0f, 0.0f, 0.0f };
+        for (const auto& c : entry.corner) { sum[0] += c.r; sum[1] += c.g; sum[2] += c.b; }
+        for (int k = 0; k < 3; ++k) { rgb[k] = sum[k] / (4.0f * ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL); }
+        return true;
+    }
+
+    void ModelRenderer::SetLevelLightEquipment(const std::string& cacheKey, int kind)
+    {
+        auto it = loadedLevels.find(cacheKey);
+        if (it == loadedLevels.end()) { return; }
+        using E = ALTEngine::Formats::LightTable::Equipment;
+        if (kind == 1) { it->second.lights.StartEquipment(E::Lamp); }
+        else if (kind == 2) { it->second.lights.StartEquipment(E::Goggles); }
+        else { it->second.lights.StopEquipment(); }
+    }
+
     void ModelRenderer::ChangeLevelTexture(const std::string& cacheKey, int animatorIndex, int delta)
     {
         auto it = loadedLevels.find(cacheKey);
@@ -2002,7 +2023,7 @@ namespace ALTEngine::Renderer
             SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
             SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
             {
-                float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
+                float fog[8] = { fogEnabled, fogStart, fogRange, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
             }
             SDL_DrawGPUIndexedPrimitives(renderPass, group.indexCount, 1, 0, 0, 0);
@@ -2024,7 +2045,7 @@ namespace ALTEngine::Renderer
             SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
             SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
             {
-                float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
+                float fog[8] = { fogEnabled, fogStart, fogRange, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
             }
             SDL_DrawGPUIndexedPrimitives(renderPass, group.indexCount, 1, 0, 0, 0);
@@ -2065,7 +2086,20 @@ namespace ALTEngine::Renderer
             SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
             SDL_PushGPUVertexUniformData(cmd, 0, mvp.m.data(), sizeof(float) * 16);
             {
-                float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
+                // The light of the cell it stands in: its byte 0x0e picks an
+                // entry of the same table the level's faces use, and every
+                // face of the model takes it (FUN_000269b8, FUN_000256ac,
+                // FUN_000260cc - the objects', creatures', doors', lifts' and
+                // thrown models' draws). Flat: the four corners averaged.
+                float tint[3] = { 1.0f, 1.0f, 1.0f };
+                if (object.lightId >= 0)
+                {
+                    const auto& entry = level.lights.ColourFor(object.lightId);
+                    float sum[3] = { 0.0f, 0.0f, 0.0f };
+                    for (const auto& c : entry.corner) { sum[0] += c.r; sum[1] += c.g; sum[2] += c.b; }
+                    for (int k = 0; k < 3; ++k) { tint[k] = sum[k] / (4.0f * ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL); }
+                }
+                float fog[8] = { fogEnabled, fogStart, fogRange, 0.0f, tint[0], tint[1], tint[2], 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
             }
             const uint32_t opaqueCount = std::min(model.translucentFirst, model.indexCount);
@@ -2269,7 +2303,7 @@ namespace ALTEngine::Renderer
                                 SDL_GPUBufferBinding ibBinding{ spriteIndexBuffer, 0 };
                                 SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
                                 SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
-                                float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
+                                float fog[8] = { fogEnabled, fogStart, fogRange, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f };
                                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
 
                                 for (const SpriteBatch& batch : batches)
@@ -2313,7 +2347,7 @@ namespace ALTEngine::Renderer
                 // No distance fade: the original applies it to the light
                 // colour (FUN_0004ecdc), which this fill never reads - span
                 // 0x5db67 takes the texel's own colour (table 0x2273c8).
-                float fog[4] = { 0.0f, fogStart, fogRange, 0.0f };
+                float fog[8] = { 0.0f, fogStart, fogRange, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
                 SDL_DrawGPUIndexedPrimitives(renderPass, group.indexCount, 1, 0, 0, 0);
             }
@@ -2334,7 +2368,7 @@ namespace ALTEngine::Renderer
                 SDL_GPUTextureSamplerBinding texBinding{ model.texture, sampler };
                 SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
                 SDL_PushGPUVertexUniformData(cmd, 0, draw.mvp.m.data(), sizeof(float) * 16);
-                float fog[4] = { 0.0f, fogStart, fogRange, 0.0f };
+                float fog[8] = { 0.0f, fogStart, fogRange, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
                 SDL_DrawGPUIndexedPrimitives(renderPass, model.indexCount - model.translucentFirst, 1, model.translucentFirst, 0, 0);
             }

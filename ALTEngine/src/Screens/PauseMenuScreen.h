@@ -35,6 +35,9 @@ namespace ALTEngine::Screens
 
         // 1-10 when outcome is LoadGame.
         int loadSlot = 0;
+
+        // The Shoulder Lamp entry was used (FUN_00044b48 case 1).
+        bool useLight = false;
     };
 
     // The in-game pause menu, opened with Escape. Auto Mapper / Shoulder

@@ -6,6 +6,7 @@ using namespace metal;
 struct FogParams
 {
     float4 fogParams;
+    float4 tint;
 };
 
 struct main0_out
@@ -33,15 +34,20 @@ fragment main0_out main0(main0_in in [[stage_in]], constant FogParams& _49 [[buf
     color.x = _37.x;
     color.y = _37.y;
     color.z = _37.z;
+    float4 _56 = color;
+    float3 _58 = _56.xyz * _49.tint.xyz;
+    color.x = _58.x;
+    color.y = _58.y;
+    color.z = _58.z;
     if (_49.fogParams.x > 0.5)
     {
         float d = abs(in.inDistance);
         float t = fast::clamp((d - _49.fogParams.y) / fast::max(_49.fogParams.z, 1.0), 0.0, 1.0);
-        float4 _77 = color;
-        float3 _79 = _77.xyz * (1.0 - t);
-        color.x = _79.x;
-        color.y = _79.y;
-        color.z = _79.z;
+        float4 _91 = color;
+        float3 _93 = _91.xyz * (1.0 - t);
+        color.x = _93.x;
+        color.y = _93.y;
+        color.z = _93.z;
     }
     out.outColour = color;
     return out;

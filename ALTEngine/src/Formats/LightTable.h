@@ -10,7 +10,9 @@ namespace ALTEngine::Formats
 {
     // The value at which a light colour means "leave the texel alone".
     //
-    // *** THIS IS THE ONE REMAINING GUESS IN THE LIGHTING PATH. ***
+    // SETTLED AT 128 (0x80). FUN_000429f0 draws an effect frame near the player
+    // in colour 0x80 - the art as it is - and every level's light record 0 is
+    // 128,128,128. The notes below are the earlier reasoning.
     //
     // 255 says the light table only ever darkens; 128 says a record can
     // brighten a texel up to 2x. Measured over all 11264 quads of L111
@@ -121,6 +123,7 @@ namespace ALTEngine::Formats
         // timing, which is useful when comparing against a recording.
         void Tick(int randomBits)
         {
+            StepEquipment();
             int jitter = (randomBits & 3) + 1;
 
             for (size_t i = 0; i < lights.size(); ++i)
@@ -178,6 +181,59 @@ namespace ALTEngine::Formats
         // tick, matching the updater.
         void RequestFlash() { flash = true; }
 
+        // THE SHOULDER LAMP AND THE NIGHT-VISION GOGGLES (FUN_00029d94).
+        // While one is on, the level's global light multiplier is its own
+        // triple instead of the normal 0xf00 (or the flash's 0x2000), with a
+        // ramp that rises 0x80 a tick to 0x1000 as it comes on and falls 0x40
+        // a tick to nothing when it runs out:
+        //   lamp     r = g = 0x1400 + ramp, b = 0x1000 - a warm light
+        //   goggles  r = 0x1000, g = 0x1200 + ramp, b = 0x1400 + ramp * 3 / 2
+        // The lamp wins if both bits are up; either one shuts out the flash.
+        enum class Equipment { None, Lamp, Goggles };
+        void StartEquipment(Equipment kind)
+        {
+            equipment = kind;
+            equipmentRamp = 0;
+            equipmentFadingIn = true;
+            equipmentFadingOut = false;
+        }
+        void StopEquipment() { if (equipment != Equipment::None) { equipmentFadingOut = true; equipmentFadingIn = false; } }
+        Equipment ActiveEquipment() const { return equipment; }
+        int EquipmentRamp() const { return equipmentRamp; }
+
+        // The global multiplier triple for this tick (FUN_00029d94).
+        std::array<int, 3> GlobalTriple() const
+        {
+            if (equipment == Equipment::Lamp)
+            {
+                return { 0x1400 + equipmentRamp, 0x1400 + equipmentRamp, 0x1000 };
+            }
+            if (equipment == Equipment::Goggles)
+            {
+                return { 0x1000, 0x1200 + equipmentRamp, 0x1400 + equipmentRamp * 3 / 2 };
+            }
+            const int g = flash ? LIGHT_GLOBAL_FLASH : LIGHT_GLOBAL_NORMAL;
+            return { g, g, g };
+        }
+
+        // One tick of the ramp. Returns true on the tick it reaches full
+        // strength (where the original starts sound 0x18).
+        bool StepEquipment()
+        {
+            if (equipment == Equipment::None) { return false; }
+            if (equipmentFadingIn && equipmentRamp < 0x1000)
+            {
+                equipmentRamp += 0x80;
+                if (equipmentRamp >= 0x1000) { equipmentRamp = 0x1000; equipmentFadingIn = false; return true; }
+            }
+            else if (equipmentFadingOut && equipmentRamp > 0)
+            {
+                equipmentRamp -= 0x40;
+                if (equipmentRamp <= 0) { equipmentRamp = 0; equipment = Equipment::None; equipmentFadingOut = false; }
+            }
+            return false;
+        }
+
         // One resolved light-table entry: four corner colours, mirroring
         // the 16-byte entries the original builds at DAT_002458dc
         // (Ghidra: FUN_00029be0). Only mode 4 (gouraud) uses all four;
@@ -220,9 +276,9 @@ namespace ALTEngine::Formats
             return static_cast<uint8_t>(value > 255 ? 255 : value);
         }
 
-        Rgb ScaleTriple(const uint8_t* rgb, int global) const
+        Rgb ScaleTriple(const uint8_t* rgb, const std::array<int, 3>& global) const
         {
-            return Rgb{ Scale(rgb[0], global), Scale(rgb[1], global), Scale(rgb[2], global) };
+            return Rgb{ Scale(rgb[0], global[0]), Scale(rgb[1], global[1]), Scale(rgb[2], global[2]) };
         }
 
         // Rebuilds the resolved entry table. This is FUN_00029be0's
@@ -240,7 +296,7 @@ namespace ALTEngine::Formats
         // record per tick is equivalent and much cheaper.
         void Restamp()
         {
-            int global = flash ? LIGHT_GLOBAL_FLASH : LIGHT_GLOBAL_NORMAL;
+            const std::array<int, 3> global = GlobalTriple();
             flash = false;
 
             for (size_t i = 0; i < lights.size(); ++i)
@@ -276,5 +332,9 @@ namespace ALTEngine::Formats
         std::vector<LightRecord> lights;
         std::vector<Entry> entries;
         bool flash = false;
+        Equipment equipment = Equipment::None;
+        int equipmentRamp = 0;
+        bool equipmentFadingIn = false;
+        bool equipmentFadingOut = false;
     };
 }

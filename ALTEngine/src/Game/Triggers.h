@@ -53,6 +53,9 @@ namespace ALTEngine::Game
         // Set off by a ROUND entering the cell (FUN_000414f0, run by the particle
         // task for every live projectile). L111's trigger 12 has both bits.
         inline constexpr uint8_t FLAG_SHOT = 0x02;
+        // Set off by a handler's grenade entering the cell (FUN_00041784, from
+        // its arm at 0x2dd8c). The same commands as a round's.
+        inline constexpr uint8_t FLAG_ENEMY_THROW = 0x08;
         inline constexpr uint8_t USES_UNLIMITED = 0xFF;
         inline constexpr uint8_t CHAIN_END = 0xFF;
         inline constexpr int MAX_CHAIN_LENGTH = 64;
@@ -60,7 +63,9 @@ namespace ALTEngine::Game
         // How the player set the trigger off. Walking onto the cell is what the
         // original's mover does; Interact is the use key, which is the only way
         // a switch object (ACTIVATE_OBJECT) can be thrown.
-        enum class Source { WalkOn, Interact, Shot };
+        // A player's grenade or charge counts as a Shot (FUN_000414f0 is called
+        // from its arm too, 0x2dc17); a handler's grenade is EnemyThrow.
+        enum class Source { WalkOn, Interact, Shot, EnemyThrow };
 
         // The world side of each command. A handler returning false is a failed
         // command and aborts the chain. Unset handlers are treated as success
@@ -103,7 +108,8 @@ namespace ALTEngine::Game
             // (particle +0x1f). FUN_000414f0 differs from the walk-on path in
             // one way: a chain that fails clears the latch, so the round tries
             // again next tick while it is still in the cell.
-            bool OnShotEnterCell(int& roundLatch, int cellIndex, const Handlers& handlers);
+            bool OnShotEnterCell(int& roundLatch, int cellIndex, const Handlers& handlers,
+                                 Source source = Source::Shot);
 
             int UsesRemaining(int triggerId) const;
 

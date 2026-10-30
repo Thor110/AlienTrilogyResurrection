@@ -249,7 +249,8 @@ namespace ALTEngine::Screens
         // Blood falls 4 a tick (the type 8/9/10 arms of the particle task,
         // 0x2e171 and 0x2e1da: `sub word [velocity + 2], 4`).
         inline constexpr int BLOOD_GRAVITY = 4;
-        inline constexpr int BLOOD_DROPS = 0x10;       // 0x40 for the 0x0b/0x0c/0x13 sources
+        inline constexpr int BLOOD_DROPS = 0x10;
+        inline constexpr int BLOOD_DROPS_EXPLOSIVE = 0x40;  // from a 0x0b/0x0c/0x13 source
 
         inline constexpr bool IsVentParticle(int type)
         {
@@ -342,6 +343,7 @@ namespace ALTEngine::Screens
             int spinX = 0, spinY = 0, spinZ = 0;
             bool falls = false;          // gravity applies - casings only
             bool isBlood = false;        // falls at BLOOD_GRAVITY and is gone when it lands
+            bool bigBlood = false;       // +0x1d set: from an explosive, drawn four times the size
             int lastTrigger = 0;         // +0x1f, the shot-trigger latch (FUN_000414f0)
             // Steps a flame still owes from its spawn (FUN_0002bcac takes them
             // at once, each through the full collision test, FUN_0002a448).
@@ -543,14 +545,19 @@ namespace ALTEngine::Screens
             // FUN_0002ada4: sixteen drops from where the round struck, each on a
             // random heading, thrown 0x10-0x1f up and 0x10-0x2f outward, living
             // 0x20-0x2f ticks. Strength 1 - the damage an acid drop does.
-            void SpawnBlood(int bloodType, float x, float y, float z)
+            // `fromExplosive`: a grenade or charge hit the creature, and the
+            // original sprays 0x40 drops at four times the size (FUN_0002ada4
+            // with a 0x0b/0x0c/0x13 source, +0x1d = 1).
+            void SpawnBlood(int bloodType, float x, float y, float z, bool fromExplosive = false)
             {
-                for (int i = 0; i < BLOOD_DROPS; ++i)
+                const int drops = fromExplosive ? BLOOD_DROPS_EXPLOSIVE : BLOOD_DROPS;
+                for (int i = 0; i < drops; ++i)
                 {
                     Particle* p = Take();
                     if (!p) { return; }
                     p->type = static_cast<uint8_t>(bloodType);
                     p->isBlood = true;
+                    p->bigBlood = fromExplosive;
                     p->speed = 1;
                     p->life = rng.Bits(0x0f) + 0x20;
                     p->strength = p->life;

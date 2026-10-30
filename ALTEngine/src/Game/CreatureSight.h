@@ -96,6 +96,22 @@ namespace ALTEngine::Game::CreatureSight
     // `viewYaw` is the camera's (DAT_000b0ba2).
     uint16_t DrawnZoneMask(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ, int viewYaw);
 
+    // What the same walk leaves behind for the map. Every cell it takes in -
+    // the player's own and each ring cell sharing a zone with the mask - gets
+    // its seen bit (byte 7, bit 0: 0x274d8, 0x275b8 and the other passes),
+    // and the area of the player's cell (byte 5) is marked discovered
+    // (DAT_00245bb4, 0x274e1). Area 0 is discovered from the start (0x28339).
+    // `seen` is one byte a cell (mapLength stride), `areas` 256 bytes; both are
+    // sized here if they need it.
+    void MarkSeen(const Formats::LevelGeometry& level, std::vector<uint8_t>& seen, std::vector<uint8_t>& areas,
+                  int playerCellX, int playerCellZ, int viewYaw);
+
+    // Which cells the map shows (FUN_00043078): a cell of a discovered area
+    // that has been seen, or with the Auto Mapper any cell of a discovered
+    // area. One byte a cell, non-zero to show.
+    std::vector<uint8_t> MapReveal(const Formats::LevelGeometry& level, const std::vector<uint8_t>& seen,
+                                   const std::vector<uint8_t>& areas, bool autoMapper);
+
     // FUN_00033a1c's first test: the creature's cell shares a zone with that
     // mask.
     bool ZoneVisible(const Formats::LevelGeometry& level, int creatureCell, uint16_t drawnZones);
