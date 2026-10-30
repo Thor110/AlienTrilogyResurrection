@@ -33383,12 +33383,54 @@
     },
     {
       "target": "SECT11/L111LEV.MAP",
-      "note": "L111LEV.MAP - face 4150 mirrored the wrong way (draw routine 0 -> 2, flipping its texture horizontally) and face 6528 given texture 194 to match its neighbour - Edward, 2026",
+      "note": "L111LEV.MAP - face 4150's texture flipped vertically (vertices turned half way round, (c, d, a, b), with draw routine 0 -> 2) and face 6528 given texture 194 and turned a quarter-turn counter-clockwise, (b, c, d, a) - Edward, 2026",
       "edits": [
+        {
+          "offset": "0x2C284",
+          "bytes": [
+            "0xFD",
+            "0x15",
+            "0x00",
+            "0x00",
+            "0xFC",
+            "0x15",
+            "0x00",
+            "0x00",
+            "0x6A",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x93",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
         {
           "offset": "0x2C296",
           "bytes": [
             "0x02"
+          ]
+        },
+        {
+          "offset": "0x37C4C",
+          "bytes": [
+            "0x84",
+            "0x2D",
+            "0x00",
+            "0x00",
+            "0x85",
+            "0x2D",
+            "0x00",
+            "0x00",
+            "0x95",
+            "0x2D",
+            "0x00",
+            "0x00",
+            "0x88",
+            "0x2D",
+            "0x00",
+            "0x00"
           ]
         },
         {
@@ -33402,12 +33444,54 @@
     },
     {
       "target": "SECT90/L900LEV.MAP",
-      "note": "L900LEV.MAP - the same two faces as L111LEV.MAP at the identical offsets: face 4150 routine 0 -> 2 (texture flipped horizontally), face 6528 texture 194 - Edward, 2026",
+      "note": "L900LEV.MAP - the same two faces as L111LEV.MAP at the identical offsets: face 4150 flipped vertically ((c, d, a, b), routine 0 -> 2), face 6528 texture 194 turned a quarter-turn counter-clockwise - Edward, 2026",
       "edits": [
+        {
+          "offset": "0x2C284",
+          "bytes": [
+            "0xFD",
+            "0x15",
+            "0x00",
+            "0x00",
+            "0xFC",
+            "0x15",
+            "0x00",
+            "0x00",
+            "0x6A",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x93",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
         {
           "offset": "0x2C296",
           "bytes": [
             "0x02"
+          ]
+        },
+        {
+          "offset": "0x37C4C",
+          "bytes": [
+            "0x84",
+            "0x2D",
+            "0x00",
+            "0x00",
+            "0x85",
+            "0x2D",
+            "0x00",
+            "0x00",
+            "0x95",
+            "0x2D",
+            "0x00",
+            "0x00",
+            "0x88",
+            "0x2D",
+            "0x00",
+            "0x00"
           ]
         },
         {

@@ -83,12 +83,22 @@ namespace ALTEngine::Game::Doors
 
     namespace
     {
-        // FUN_00028d90: anything standing in one of the door's cells.
+        // FUN_00028d90: the doorway is blocked if anything stands in the
+        // door's two middle cells, or in the cell either side of each across
+        // the doorway (x +/- 1 for a door along Z, a row either way for one
+        // along X). Byte 0x0c of a cell is its occupier.
         bool Occupied(const DoorState& door, const Formats::LevelGeometry& level)
         {
-            for (int i = 0; i < door.cellCount; ++i)
+            if (door.cellCount < 3) { return false; }
+            const long long across = door.alongZ ? 1 : static_cast<long long>(level.header.mapLength);
+            const long long size = static_cast<long long>(level.collisionGrid.size());
+            for (int middle = 1; middle <= 2; ++middle)
             {
-                if (level.collisionGrid[door.cells[static_cast<size_t>(i)]].unknown13 != 0) { return true; }
+                const long long c = static_cast<long long>(door.cells[static_cast<size_t>(middle)]);
+                for (long long cell : { c, c - across, c + across })
+                {
+                    if (cell >= 0 && cell < size && level.collisionGrid[static_cast<size_t>(cell)].unknown13 != 0) { return true; }
+                }
             }
             return false;
         }

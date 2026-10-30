@@ -41,8 +41,8 @@ both are updated in place (they already wrote it); 4150 and 6528 have an entry e
 | Face | Offset | Added | Change | Was | Routine | Now | Routine |
 |---|---|---|---|---|---|---|---|
 | 9618 | 0x46DB4 | round 4 | turned once more counter-clockwise; also texture 0x38 at +0x10 (earlier fix) | 8049, 8113, 8052, -1 (original 8052, 8049, 8113) | 1 | 8113, 8052, 8049, -1 | 1 |
-| 4150 | 0x2C284 | round 7 | texture flipped horizontally (routine 0 -> 2) | 5738, 5779, 5629, 5628 | 0 | 5738, 5779, 5629, 5628 | 2 |
-| 6528 | 0x37C4C | round 7 | texture 198 -> 194 (byte at +0x10) | 11656, 11652, 11653, 11669 | 0 | 11656, 11652, 11653, 11669 | 0 |
+| 4150 | 0x2C284 | round 7 | texture flipped vertically: turned half way round, (c, d, a, b), and mirrored with routine 0 -> 2 (round 7 first flipped it horizontally, which was the wrong way) | 5738, 5779, 5629, 5628 | 0 | 5629, 5628, 5738, 5779 | 2 |
+| 6528 | 0x37C4C | round 7 | texture 198 -> 194 (byte at +0x10), then turned a quarter-turn counter-clockwise, (b, c, d, a) | 11656, 11652, 11653, 11669 | 0 | 11652, 11653, 11669, 11656 | 0 |
 
 L111LEV: Edward reported the level complete after the 9618 fix; 4150 and 6528 came from a later playthrough.
 

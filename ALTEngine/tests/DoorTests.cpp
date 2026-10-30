@@ -118,3 +118,22 @@ TEST_CASE("Doors: a two-step door cannot be opened by its own trigger first")
     CHECK(door.switchOperated);
     CHECK(Doors::ApplyCommand(door, true, 1, false));
 }
+
+TEST_CASE("Doors: something standing just in front of the doorway keeps it from closing")
+{
+    // FUN_00028d90 checks the two middle cells and the cell either side of
+    // each across the doorway.
+    LevelGeometry level = LevelLoader::Load(AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
+    auto doors = Doors::Build(level, 30, 0.0f, 0.0f);
+    DoorState& door = doors[0];
+    CHECK(Doors::ApplyCommand(door, true, 1, false));
+    CHECK(TickUntil(door, level, DoorState::Phase::Open, door.worldX, door.worldZ, 2000) >= 0);
+    CHECK(Doors::ApplyCommand(door, false, 0, false) == false);   // still unlocked from opening
+    const size_t across = door.alongZ ? 1 : static_cast<size_t>(level.header.mapLength);
+    const size_t front = door.cells[1] + across;
+    level.collisionGrid[front].unknown13 = 5;
+    for (int t = 0; t < 100; ++t) { Doors::Tick(door, level, 1e6f, 1e6f); }
+    CHECK(door.phase == DoorState::Phase::Open);
+    level.collisionGrid[front].unknown13 = 0;
+    CHECK(TickUntil(door, level, DoorState::Phase::Idle, 1e6f, 1e6f) >= 0);
+}
