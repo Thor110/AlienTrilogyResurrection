@@ -54,6 +54,9 @@ namespace ALTEngine::Renderer
             SDL_GPUBuffer* vertexBuffer = nullptr;
             SDL_GPUBuffer* indexBuffer = nullptr;
             uint32_t indexCount = 0;
+            // Indices from here on are the see-through faces (RenderMesh::
+            // translucentStart); equal to indexCount when there are none.
+            uint32_t translucentFirst = 0;
             SDL_GPUTexture* texture = nullptr;
             float centerX = 0, centerY = 0, centerZ = 0; // AABB center, for auto-framing the camera
             float radius = 1.0f;
@@ -986,7 +989,8 @@ namespace ALTEngine::Renderer
             return false;
         }
 
-        RenderMesh renderMesh = BuildRenderMesh(*mesh, *uvRects);
+        RenderMesh renderMesh = BuildRenderMesh(*mesh, *uvRects,
+            cacheKey.catalog == ModelCatalog::Obj3d && ALTEngine::Formats::Obj3DIsFlatSeeThrough(meshNumber));
         if (renderMesh.vertices.empty() || renderMesh.indices.empty())
         {
             SDL_Log("ModelRenderer::LoadModel(%s): model has no geometry", DescribeCacheKey(cacheKey).c_str());
@@ -1020,6 +1024,13 @@ namespace ALTEngine::Renderer
         model.vertexBuffer = uploaded.vertexBuffer;
         model.indexBuffer = uploaded.indexBuffer;
         model.indexCount = uploaded.indexCount;
+        model.translucentFirst = renderMesh.translucentStart < renderMesh.indices.size()
+            ? static_cast<uint32_t>(renderMesh.translucentStart) : model.indexCount;
+        if (model.translucentFirst < model.indexCount)
+        {
+            SDL_Log("ModelRenderer: %s has %u see-through triangles", DescribeCacheKey(cacheKey).c_str(),
+                    (model.indexCount - model.translucentFirst) / 3);
+        }
         model.texture = uploaded.texture;
         model.centerX = cx; model.centerY = cy; model.centerZ = cz;
         model.radius = radius;
@@ -1058,6 +1069,8 @@ namespace ALTEngine::Renderer
         model.vertexBuffer = group.vertexBuffer;
         model.indexBuffer = group.indexBuffer;
         model.indexCount = group.indexCount;
+        model.translucentFirst = renderMesh.translucentStart < renderMesh.indices.size()
+            ? static_cast<uint32_t>(renderMesh.translucentStart) : group.indexCount;
         model.texture = group.texture;
         loadedModels[cacheKey] = model;
         return true;
@@ -1137,7 +1150,8 @@ namespace ALTEngine::Renderer
             const std::vector<ALTEngine::Formats::BxRectangle>* uvRects = &filteredUvRects;
             if (!tex || filteredUvRects.empty()) { continue; }
 
-            RenderMesh renderMesh = BuildRenderMesh(*mesh, *uvRects);
+            RenderMesh renderMesh = BuildRenderMesh(*mesh, *uvRects,
+                req.cacheKey.catalog == ModelCatalog::Obj3d && ALTEngine::Formats::Obj3DIsFlatSeeThrough(req.meshNumber));
             if (renderMesh.vertices.empty() || renderMesh.indices.empty()) { continue; }
 
             float minX = std::numeric_limits<float>::max(), maxX = std::numeric_limits<float>::lowest();
@@ -1296,6 +1310,13 @@ namespace ALTEngine::Renderer
             model.vertexBuffer = created[i].vb;
             model.indexBuffer = created[i].ib;
             model.indexCount = static_cast<uint32_t>(up.renderMesh.indices.size());
+            model.translucentFirst = up.renderMesh.translucentStart < up.renderMesh.indices.size()
+                ? static_cast<uint32_t>(up.renderMesh.translucentStart) : model.indexCount;
+            if (model.translucentFirst < model.indexCount)
+            {
+                SDL_Log("ModelRenderer: %s has %u see-through triangles", DescribeCacheKey(up.cacheKey).c_str(),
+                        (model.indexCount - model.translucentFirst) / 3);
+            }
             model.texture = created[i].tex;
             model.centerX = up.centerX; model.centerY = up.centerY; model.centerZ = up.centerZ;
             model.radius = up.radius;
@@ -2016,6 +2037,9 @@ namespace ALTEngine::Renderer
         // model was never actually loaded - matches this function's own
         // existing "level must already be loaded" convention, rather
         // than failing the whole level render over one missing model.
+        // Models' see-through faces, drawn after everything else (below).
+        struct SeeThroughDraw { const LoadedModel* model; Mat4 mvp; };
+        std::vector<SeeThroughDraw> seeThroughDraws;
         for (const auto& object : objects)
         {
             if (!object.visible) { continue; }
@@ -2043,7 +2067,9 @@ namespace ALTEngine::Renderer
                 float fog[4] = { fogEnabled, fogStart, fogRange, 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
             }
-            SDL_DrawGPUIndexedPrimitives(renderPass, model.indexCount, 1, 0, 0, 0);
+            const uint32_t opaqueCount = std::min(model.translucentFirst, model.indexCount);
+            if (opaqueCount > 0) { SDL_DrawGPUIndexedPrimitives(renderPass, opaqueCount, 1, 0, 0, 0); }
+            if (opaqueCount < model.indexCount) { seeThroughDraws.push_back({ &model, mvp }); }
         }
 
         // ---- world-space sprites -------------------------------------
@@ -2289,6 +2315,27 @@ namespace ALTEngine::Renderer
                 float fog[4] = { 0.0f, fogStart, fogRange, 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
                 SDL_DrawGPUIndexedPrimitives(renderPass, group.indexCount, 1, 0, 0, 0);
+            }
+            for (const auto& draw : seeThroughDraws)
+            {
+                if (!bound)
+                {
+                    SDL_BindGPUGraphicsPipeline(renderPass, translucentPipeline ? translucentPipeline : pipeline);
+                    const SDL_FColor half{ 0.5f, 0.5f, 0.5f, 0.5f };
+                    SDL_SetGPUBlendConstants(renderPass, half);
+                    bound = true;
+                }
+                const LoadedModel& model = *draw.model;
+                SDL_GPUBufferBinding vbBinding{ model.vertexBuffer, 0 };
+                SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
+                SDL_GPUBufferBinding ibBinding{ model.indexBuffer, 0 };
+                SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+                SDL_GPUTextureSamplerBinding texBinding{ model.texture, sampler };
+                SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
+                SDL_PushGPUVertexUniformData(cmd, 0, draw.mvp.m.data(), sizeof(float) * 16);
+                float fog[4] = { 0.0f, fogStart, fogRange, 0.0f };
+                SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
+                SDL_DrawGPUIndexedPrimitives(renderPass, model.indexCount - model.translucentFirst, 1, model.translucentFirst, 0, 0);
             }
         }
 

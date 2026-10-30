@@ -178,7 +178,7 @@ namespace ALTEngine::Formats
         // flag-1 rotation is untouched - model and door geometry renders
         // correctly today and this change is not about it.
         void EmitQuad(RenderMesh& result, const std::vector<ModelVertex>& vertices, const ModelQuad& q, const std::array<Uv, 4>& uvs,
-                      const QuadColours& colours, bool uvsAlreadyOrdered = false)
+                      const QuadColours& colours, bool uvsAlreadyOrdered = false, bool forceDoubleSided = false)
         {
             auto inBounds = [&](int32_t vertexIndex) {
                 return vertexIndex >= 0 && static_cast<size_t>(vertexIndex) < vertices.size();
@@ -247,7 +247,7 @@ namespace ALTEngine::Formats
             //
             // Level faces only: `uvsAlreadyOrdered` marks the level path, and
             // model flag values mean something different (see ModelQuad).
-            bool doubleSided = uvsAlreadyOrdered && !ClassifyDrawRoutine(q.flags).culled;
+            bool doubleSided = forceDoubleSided || (uvsAlreadyOrdered && !ClassifyDrawRoutine(q.flags).culled);
 
             if (isTriangle)
             {
@@ -327,11 +327,28 @@ namespace ALTEngine::Formats
         return r;
     }
 
-    RenderMesh BuildRenderMesh(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects)
+    RenderMesh BuildRenderMesh(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects, bool flatSeeThrough,
+                               std::array<float, 3> flatColour)
     {
         RenderMesh result;
         result.vertices.reserve(mesh.quads.size() * 4);
         result.indices.reserve(mesh.quads.size() * 6);
+
+        // A model loaded as flat see-through (see the declaration) is all
+        // routine 14: drawn black, half over what is behind, from both sides -
+        // the shader multiplies the texel by the vertex colour, so the
+        // texture never shows.
+        if (flatSeeThrough)
+        {
+            QuadColours fill;
+            for (int c = 0; c < 4; ++c) { fill.r[c] = flatColour[0]; fill.g[c] = flatColour[1]; fill.b[c] = flatColour[2]; }
+            for (const auto& q : mesh.quads)
+            {
+                EmitQuad(result, mesh.vertices, q, ComputeQuadUvs(q, uvRects), fill, false, true);
+            }
+            result.translucentStart = result.indices.empty() ? SIZE_MAX : 0;
+            return result;
+        }
 
         for (const auto& q : mesh.quads)
         {

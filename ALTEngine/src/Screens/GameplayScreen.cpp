@@ -565,10 +565,11 @@ namespace ALTEngine::Screens
         bool glassSheetReady = false;            // the "glass" sheet is uploaded for this level
         // Cryopod covers: their placed objects (one per level texture page)
         // and how far each has tipped open, in 4096ths of a turn.
-        struct Cryopod { size_t crateIndex = 0; size_t placedFirst = 0; int angle = 0; };
+        struct Cryopod { size_t crateIndex = 0; size_t placedIndex = 0; int angle = 0; };
         std::vector<Cryopod> cryopods;
-        bool cryopodMeshReady = false;
         float cryopodOpenSign = -1.0f;
+        bool cryopodOpenSignKnown = false;
+        bool cryopodCoverReady = false;          // the per-level cover mesh is registered
         ALTEngine::Screens::Particles::Rng glassRng;
         std::vector<ALTEngine::Screens::Enemies::Enemy> enemies;
 
@@ -936,7 +937,11 @@ namespace ALTEngine::Screens
                     }
                     for (int meshNumber : meshesToLoad)
                     {
-                        auto obj3dPath = FindInSectFolders(cdDirectory, "OBJ3D.BND");
+                        // OBJ3D.BND is in GFX; looking in the SECT folders
+                        // found nothing, and the objects only showed because
+                        // the menu's own preload had already loaded them.
+                        std::optional<std::filesystem::path> obj3dPath = cdDirectory / "GFX" / "OBJ3D.BND";
+                        { std::error_code ec; if (!std::filesystem::exists(*obj3dPath, ec)) { obj3dPath.reset(); } }
                         auto texPath = ALTEngine::Formats::ResolveObj3DTextureFile(cdDirectory, meshNumber, language);
                         if (!obj3dPath.has_value() || !texPath.has_value()) { continue; }
 
@@ -989,51 +994,59 @@ namespace ALTEngine::Screens
                     // that was a heuristic guessing at something the real
                     // game reads from one byte plus a known scale; this is
                     // the actual formula. See LevelLoader::FindFloorHeight.
-                    // The cryopod cover, OBJ3D model 40, textured from this
-                    // level's own pages (FUN_00037930 draws it with the level
-                    // table bound, not the object set). Which way it pivots
-                    // open is taken from the model: the original turns it
-                    // -0x100 about its own Z, which lifts the cover, so the
-                    // port turns it whichever way lifts the side most of the
-                    // cover lies on.
+                    // The last level's own meshes - doors, lifts, the cryopod
+                    // cover - go before this level builds any (see
+                    // UnloadLevelModels). This ran at the doors, after the
+                    // cover was built, and took the cover with it.
+                    ModelRenderer::UnloadLevelModels();
+
                     cryopods.clear();
-                    cryopodMeshReady = false;
+                    cryopodOpenSignKnown = false;
+                    cryopodCoverReady = false;
+                    // The cryopod cover, OBJ3D model 0x28: every face is
+                    // routine 14 (FUN_000367b4 loads it with the flag
+                    // FUN_00036700 turns into routine 14), a flat colour half
+                    // over what is behind - entry 2 of CLUT slot 0, the level's
+                    // first palette (span mode 6, 0x5eceb). Rebuilt per level
+                    // with that colour over a white texel, so the colour shows
+                    // as it is.
                     if (std::any_of(level.crates.begin(), level.crates.end(),
                                     [](const auto& c) { return c.type == CRYOPOD_OBJECT_TYPE; }))
                     {
                         try
                         {
-                            auto obj3dPath = FindInSectFolders(cdDirectory, "OBJ3D.BND");
-                            if (obj3dPath.has_value())
+                            const std::filesystem::path obj3dPath = cdDirectory / "GFX" / "OBJ3D.BND";
+                            const auto meshes = ALTEngine::Formats::ModelLoader::Load(obj3dPath);
+                            const int podMesh = ALTEngine::Formats::ModelIndices::Obj3D::StasisPodCover;
+                            const auto* mesh = ALTEngine::Formats::ModelLoader::FindByNumber(meshes, podMesh);
+                            const auto levelSet = ALTEngine::Formats::BndTextureLoader::Load(*gfxPath);
+                            if (mesh && levelSet.firstPaletteRgb.size() >= 9)
                             {
-                                const auto meshes = ALTEngine::Formats::ModelLoader::Load(*obj3dPath);
-                                const int podMesh = ALTEngine::Formats::ModelIndices::Obj3D::StasisPodCover;
-                                const auto* mesh = ALTEngine::Formats::ModelLoader::FindByNumber(meshes, podMesh);
-                                if (mesh)
-                                {
-                                    const auto podTextures = ALTEngine::Formats::BndTextureLoader::Load(*gfxPath);
-                                    const auto groups = ALTEngine::Formats::BuildRenderMeshPerGroup(*mesh, podTextures.uvRects);
-                                    for (size_t page = 0; page < groups.size() && page < podTextures.textures.size(); ++page)
-                                    {
-                                        if (groups[page].indices.empty()) { continue; }
-                                        ModelRenderer::RegisterMesh(
-                                            { ALTEngine::Renderer::ModelCatalog::LevelObject, podMesh * 8 + static_cast<int>(page) },
-                                            groups[page], podTextures.textures[page]);
-                                    }
-                                    float sumX = 0.0f;
-                                    for (const auto& v : mesh->vertices) { sumX += static_cast<float>(v.x); }
-                                    cryopodOpenSign = (sumX < 0.0f) ? -1.0f : 1.0f;
-                                    cryopodMeshReady = true;
-                                }
-                                else
-                                {
-                                    SDL_Log("GameplayScreen: OBJ3D.BND has no M0%d for the cryopod cover", podMesh);
-                                }
+                                // The palette is in the 0-63 range; the pages
+                                // are drawn from it times 4 (RawImageRenderer).
+                                const std::array<float, 3> colour = {
+                                    static_cast<float>(levelSet.firstPaletteRgb[6] * 4) / 255.0f,
+                                    static_cast<float>(levelSet.firstPaletteRgb[7] * 4) / 255.0f,
+                                    static_cast<float>(levelSet.firstPaletteRgb[8] * 4) / 255.0f };
+                                const std::vector<ALTEngine::Formats::BxRectangle> whiteRect = { { 0, 0, 1, 1, 0, 0 } };
+                                const auto built = ALTEngine::Formats::BuildRenderMesh(*mesh, whiteRect, true, colour);
+                                ALTEngine::Formats::BndTexture white;
+                                white.width = 1;
+                                white.height = 1;
+                                white.rgba = { 255, 255, 255, 255 };
+                                cryopodCoverReady = ModelRenderer::RegisterMesh(
+                                    { ALTEngine::Renderer::ModelCatalog::LevelObject, podMesh }, built, white);
+                                float sumX = 0.0f;
+                                for (const auto& v : mesh->vertices) { sumX += static_cast<float>(v.x); }
+                                cryopodOpenSign = (sumX < 0.0f) ? -1.0f : 1.0f;
+                                cryopodOpenSignKnown = true;
+                                SDL_Log("GameplayScreen: cryopod cover colour %d,%d,%d at half",
+                                        levelSet.firstPaletteRgb[6] * 4, levelSet.firstPaletteRgb[7] * 4, levelSet.firstPaletteRgb[8] * 4);
                             }
                         }
                         catch (const std::exception& e)
                         {
-                            SDL_Log("GameplayScreen: cryopod cover not built (%s)", e.what());
+                            SDL_Log("GameplayScreen: cryopod cover not rebuilt for this level (%s)", e.what());
                         }
                     }
 
@@ -1171,30 +1184,21 @@ namespace ALTEngine::Screens
                             damageTargets.push_back(target);
                         }
 
-                        // A cryopod's cover is drawn through the level's
-                        // texture table (FUN_00037930), one object per page.
-                        if (crate.type == CRYOPOD_OBJECT_TYPE && cryopodMeshReady)
+                        if (crate.type == CRYOPOD_OBJECT_TYPE && cryopodCoverReady)
                         {
-                            Cryopod pod;
-                            pod.crateIndex = ci;
-                            pod.placedFirst = placedObjects.size();
-                            for (int page = 0; page < 5; ++page)
-                            {
-                                ALTEngine::Renderer::PlacedObject part = placed;
-                                part.cacheKey = { ALTEngine::Renderer::ModelCatalog::LevelObject,
-                                                  ALTEngine::Formats::ModelIndices::Obj3D::StasisPodCover * 8 + page };
-                                placedObjects.push_back(part);
-                            }
-                            cryopods.push_back(pod);
+                            placed.cacheKey = { ALTEngine::Renderer::ModelCatalog::LevelObject,
+                                                ALTEngine::Formats::ModelIndices::Obj3D::StasisPodCover };
+                        }
+                        placedObjects.push_back(placed);
+                        // A cryopod's cover tips open once activated (0x37bb0).
+                        if (crate.type == CRYOPOD_OBJECT_TYPE)
+                        {
+                            cryopods.push_back({ ci, placedObjects.size() - 1, 0 });
                             if (!damageTargets.empty() && damageTargets.back().crateIndex == static_cast<int>(ci))
                             {
-                                // Its task (0x37bb0) never looks at damage.
+                                // Its task never looks at damage.
                                 damageTargets.back().indestructible = true;
                             }
-                        }
-                        else
-                        {
-                            placedObjects.push_back(placed);
                         }
 
                         // Occupancy, as the original's object spawn does:
@@ -1238,9 +1242,6 @@ namespace ALTEngine::Screens
                     // state machine is not implemented yet.
                     try
                     {
-                        // This level's own doors and lifts only - see
-                        // UnloadLevelModels.
-                        ModelRenderer::UnloadLevelModels();
                         auto doorMeshes = ALTEngine::Formats::ModelLoader::Load(*mapPath, "D");
                         auto levelTextures = ALTEngine::Formats::BndTextureLoader::Load(*gfxPath);
 
@@ -4033,16 +4034,30 @@ namespace ALTEngine::Screens
                             }
                         }
 
-                        // Cryopod covers tipping open once activated (0x37bb0).
+                        // Cryopod covers tipping open once activated (0x37bb0):
+                        // the third angle falls 8 a tick to -0x100. The model
+                        // file is not to hand to check which way that turns
+                        // it in the port's frame, so it turns whichever way
+                        // lifts the side most of the model lies on.
+                        if (!cryopodOpenSignKnown && !cryopods.empty())
+                        {
+                            if (const auto* faces = ALTEngine::Renderer::ModelRenderer::ModelFaces(
+                                    { ALTEngine::Renderer::ModelCatalog::Obj3d, ALTEngine::Formats::ModelIndices::Obj3D::StasisPodCover }))
+                            {
+                                float sumX = 0.0f;
+                                for (const auto& face : *faces) { for (int c = 0; c < 4; ++c) { sumX += face.px[c]; } }
+                                cryopodOpenSign = (sumX < 0.0f) ? -1.0f : 1.0f;
+                                cryopodOpenSignKnown = true;
+                            }
+                        }
                         for (auto& pod : cryopods)
                         {
                             if (pod.crateIndex >= objectState.size() || objectState[pod.crateIndex] == 0) { continue; }
                             if (pod.angle > -CRYOPOD_OPEN_LIMIT) { pod.angle -= CRYOPOD_OPEN_STEP; }
-                            const float roll = cryopodOpenSign * static_cast<float>(-pod.angle) * (6.28318531f / 4096.0f);
-                            for (size_t k = 0; k < 5; ++k)
+                            if (pod.placedIndex < placedObjects.size())
                             {
-                                const size_t pi = pod.placedFirst + k;
-                                if (pi < placedObjects.size()) { placedObjects[pi].rollRadians = roll; }
+                                placedObjects[pod.placedIndex].rollRadians =
+                                    cryopodOpenSign * static_cast<float>(-pod.angle) * (6.28318531f / 4096.0f);
                             }
                         }
                     }

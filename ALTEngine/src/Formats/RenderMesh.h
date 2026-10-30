@@ -3,6 +3,7 @@
 #include <utility>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -38,6 +39,9 @@ namespace ALTEngine::Formats
     {
         std::vector<RenderVertex> vertices;
         std::vector<uint32_t> indices; // triangle list (3 per triangle)
+        // Models only: where the see-through faces start in `indices`, or
+        // SIZE_MAX if there are none - see BuildRenderMesh's flatSeeThrough.
+        size_t translucentStart = SIZE_MAX;
     };
 
     // Converts a parsed ModelMesh + its paired BX UV rects (same section
@@ -72,7 +76,25 @@ namespace ALTEngine::Formats
     // against gross errors (huge offsets, wrong scale) but isn't
     // sufficient on its own to confirm per-face UV correctness - worth
     // remembering next time something "passes" that kind of test.
-    RenderMesh BuildRenderMesh(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects);
+    //
+    // HOW THE ORIGINAL TURNS A MODEL FACE INTO A ROUTINE. OBJ3D's loader
+    // (FUN_000367b4) runs every model's faces through FUN_00036700, which
+    // rewrites the routine byte: 0 for a file byte (low 7 bits) under 2, 2 for
+    // 0x0b, 1 for anything else - so a model face is only ever routine 0, 1 or
+    // 2. Except model 0x28 (40), the cryopod's cover: it is loaded with the
+    // flag set, and EVERY face becomes routine 14, whose fill (0x49dd0) is
+    // span mode 6 - a flat colour, no texture, averaged with what is behind.
+    // `flatSeeThrough` is that flag; the colour is drawn black (Edward, 2026:
+    // the cover is black transparency, like the blue glass).
+    //
+    // `flatColour` is the fill's colour, 0-1. The original takes it from entry
+    // 2 of CLUT slot 0 - the level's first palette - which is near black on
+    // L131 and a pale grey on L211; drawn over a white texel it shows as it is.
+    RenderMesh BuildRenderMesh(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects,
+                               bool flatSeeThrough = false, std::array<float, 3> flatColour = { 0.0f, 0.0f, 0.0f });
+
+    // FUN_000367b4's test: the one OBJ3D model loaded flat see-through.
+    inline bool Obj3DIsFlatSeeThrough(int meshNumber) { return meshNumber == 0x28; }
 
     // One entry per face of a model mesh BuildRenderMesh made, for the shatter
     // (Screens/ShatterEffects.h): the face's centre, the larger two sides of its
@@ -213,7 +235,7 @@ namespace ALTEngine::Formats
         bool culled = true;
         bool mirrored = false;
         bool animated = false;
-        bool flat = false;   // routine 14: no texture (drawn textured here)
+        bool flat = false;   // routine 14: no texture - a flat colour half over the background (span mode 6, fill 0x49dd0); drawn so on models, textured on the levels, which do not use it
     };
 
     DrawRoutine ClassifyDrawRoutine(uint8_t routine);

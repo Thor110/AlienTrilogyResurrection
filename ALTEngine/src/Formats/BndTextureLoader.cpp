@@ -106,6 +106,7 @@ namespace ALTEngine::Formats
 
                 std::vector<uint8_t> raw16BitPalette(clIt->data.begin() + CL_SUBHEADER_SIZE, clIt->data.end());
                 std::vector<uint8_t> palette = RawImageRenderer::Convert16BitPaletteToRGB(raw16BitPalette);
+                if (result.firstPaletteRgb.empty()) { result.firstPaletteRgb = palette; }
 
                 BndTexture texture;
                 texture.index = suffix;
