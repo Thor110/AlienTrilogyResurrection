@@ -27,6 +27,16 @@ namespace ALTEngine::Renderer
             return r;
         }
 
+        // About X: y turns toward z for a positive angle.
+        static Mat4 RotationX(float radians)
+        {
+            Mat4 r = Identity();
+            float c = std::cos(radians), s = std::sin(radians);
+            r.m[5] = c;  r.m[9] = -s;
+            r.m[6] = s;  r.m[10] = c;
+            return r;
+        }
+
         // About Z: x turns toward y for a positive angle.
         static Mat4 RotationZ(float radians)
         {

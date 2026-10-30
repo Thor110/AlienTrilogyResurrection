@@ -270,6 +270,7 @@ namespace ALTEngine::Screens
             int viewPitch = 0;       // DAT_000b0ba8
             int viewRoll = 0;        // DAT_000b0bac
             int bobOffsetY = 0;      // 0 to -64 world units, added to eye height
+            int throwOffsetX = 0;    // DAT_000b0b4e: 0 to -8 world units, added to a throw's x
             bool footstep = false;   // fired this tick
             bool running = false;    // DAT_000b0ab4 bit 1
         };
@@ -560,6 +561,10 @@ namespace ALTEngine::Screens
             const int dip = (s <= Sin(state.bobPhase + ANGLE_HALF)) ? s : Sin(state.bobPhase + ANGLE_HALF);
 
             state.viewRoll = s >> 9;                       // +/- 8 units, ~0.70 degrees
+            // The same dip >> 9, kept whether sway is on or not, and used only
+            // by the two throws, which add it to their start x (FUN_0002c4e0,
+            // FUN_0002c830).
+            state.throwOffsetX = dip >> 9;
             state.bobPhase = static_cast<uint16_t>(state.bobPhase + ((state.speed * 3) >> 1));
 
             if (!swayEnabled)

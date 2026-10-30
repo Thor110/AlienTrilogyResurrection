@@ -72,6 +72,10 @@ namespace ALTEngine::Renderer
         // third angle turns the model in its own frame. Only a cryopod's cover
         // uses it, to pivot open.
         float rollRadians = 0.0f;
+        // A turn about the model's own X axis, the first of the original's
+        // three angles, applied before the yaw. Only a thrown seismic charge
+        // uses it, to tumble (FUN_0002cf14).
+        float pitchRadians = 0.0f;
         // Non-uniform, and applied to the model matrix rather than the
         // vertices. Objects (crates, switches) are drawn at 0.875 uniform in
         // the original (Ghidra: FUN_0003765c); doors are drawn 1:1. The

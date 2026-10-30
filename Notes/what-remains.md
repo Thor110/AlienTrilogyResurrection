@@ -1,4 +1,4 @@
-# What remains (after zip 81)
+# What remains (after zip 82)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -14,8 +14,13 @@ Still open:
 - **CD music from a real drive on Linux and macOS:** untested.
 - **Creature scripting** (the egg, queen, colonist and the ceiling creatures letting go) still feels a little
   off. Needs a closer comparison against the original in play to say where.
-- **Thrown seismic charge:** drawn and thrown, but it flies flat where the original throws it in an arc, and it
-  sits too low. Trace the throw (`FUN_0002c830`) and the particle arm (0x2db80) again.
+- **Thrown seismic charge (zip 82):** traced again end to end (`FUN_0002c830`, the arm at 0x2db80,
+  `FUN_0002a2d8`, `FUN_0002cf14`). The launch already matched: 0x100 below the eye, (0, -0x18, speed + 0x40 up to
+  0x80) turned by the pitch then the yaw, gravity one a tick, bounces of 8, 6, 4. The -0x18 is a downward push, so
+  the original's throw only rises when looking up while moving; the arc is the fall. What differed: the original
+  doesn't draw it until it is 0x200 ahead of the view (drawn from the start it seemed to rise out of the floor),
+  it tumbles 0x20 a tick, it goes off when it passes the ceiling, and the start x carries the walk's dip. All four
+  are in now. Check in play.
 
 ## 2. Still a guess or not traced
 
@@ -32,8 +37,6 @@ Still open:
 - **Vent jets:** look right in play. Whether a burst pipe does blast damage is unchecked, and the sound plays once
   instead of looping.
 - **The assessment screen's bar colours** (palette bit depth).
-- **Thrown seismic charge:** the original spins it (+0x20 a frame on its first angle); the port doesn't. See also
-  section 1: no arc, too low.
 - **A creature's dropped item** starts at the creature's height plus the type's offset; the original starts it
   0x200 above the floor (`FUN_0003bc9c`).
 - **Routine 14's colour** is taken from the level's first palette (entry 2). That is traced for model faces;

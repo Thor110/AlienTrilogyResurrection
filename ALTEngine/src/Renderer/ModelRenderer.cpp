@@ -2050,9 +2050,10 @@ namespace ALTEngine::Renderer
 
             Mat4 modelMatrix = Mat4::Multiply(
                 Mat4::Translation(object.x, object.y, object.z),
+                Mat4::Multiply(Mat4::RotationX(object.pitchRadians),
                 Mat4::Multiply(Mat4::RotationY(object.rotationRadians + model.baseRotationRadians),
                                Mat4::Multiply(Mat4::RotationZ(object.rollRadians),
-                                              Mat4::Scale(object.scaleX, object.scaleY, object.scaleZ))));
+                                              Mat4::Scale(object.scaleX, object.scaleY, object.scaleZ)))));
             Mat4 mvp = Mat4::Multiply(vp, modelMatrix);
 
             SDL_BindGPUGraphicsPipeline(renderPass, model.useDoubleSided ? doubleSidedPipeline : pipeline);

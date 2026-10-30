@@ -356,6 +356,7 @@ namespace ALTEngine::Screens
             int bounce = 8;      // +0x18: the next bounce's lift, 2 less each time
             int life = 0x40;     // +0x1c
             bool charge = true;  // a seismic charge, or else a grenade
+            int spin = 0;        // +0x10: a charge's first angle, +0x20 each tick it is drawn
         };
         std::vector<PlayerExplosive> playerExplosives;
         // Switch/object state, indexed by object record. Non-zero means
@@ -2306,7 +2307,11 @@ namespace ALTEngine::Screens
 
                     // Both throws start from the player and fly along the view
                     // (FUN_0002c4e0 / FUN_0002c830): (0, -0x18, speed) turned by
-                    // the pitch, then the yaw, from below the eye.
+                    // the pitch, then the yaw, from below the eye - the charge
+                    // 0x100 below it, the grenade 0x80, and both moved along x
+                    // by the walk's dip (DAT_000b0b4e). The -0x18 is a small
+                    // downward push, so a throw only rises when the player is
+                    // looking up; the arc is gravity, one a tick (0x2dcf9).
                     auto throwExplosive = [&](bool charge) {
                         const int pitch = static_cast<int>(std::lround(
                             camera.pitch * (PC::ANGLE_UNITS / 6.28318530718f))) & PC::ANGLE_MASK;
@@ -2321,7 +2326,7 @@ namespace ALTEngine::Screens
                         const float forward = static_cast<float>(speed) * pc + 0x18 * ps;
                         PlayerExplosive e;
                         e.charge = charge;
-                        e.x = camera.x;
+                        e.x = camera.x + static_cast<float>(playerCam.throwOffsetX);
                         e.y = camera.y - (charge ? 0x100 : 0x80);
                         e.z = camera.z;
                         e.vx = forward * ys;
@@ -3614,6 +3619,17 @@ namespace ALTEngine::Screens
                                 }
                                 if (!cell) { gone = true; }
                                 else if (--e.life <= 0) { detonate(e.x, e.y, e.z); gone = true; }
+                                else if (e.y > static_cast<float>(cell->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT)
+                                {
+                                    // Above the ceiling (FUN_0002a2d8 / FUN_00027fb0):
+                                    // brought 0x100 under it, unless the cell is
+                                    // open (attribute 6), and set off.
+                                    if (cell->attribute != 6)
+                                    {
+                                        e.y = static_cast<float>(cell->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT - 0x100;
+                                    }
+                                    detonate(e.x, e.y, e.z); gone = true;
+                                }
                                 else if ((cell->attribute > 0x13 && cell->attribute < 0x2d)
                                          || (cell->unknown13 >= 0x14 && cell->unknown13 != 0xFF)
                                          || nearCreature)
@@ -3640,6 +3656,8 @@ namespace ALTEngine::Screens
                                         e.vy -= 1.0f;   // 0x2dcf9: one a tick
                                     }
                                     if (!gone) { e.x += e.vx; e.y += e.vy; e.z += e.vz; }
+                                    // FUN_0002cf14 turns a charge every tick it runs.
+                                    if (!gone && e.charge) { e.spin = (e.spin + 0x20) & 0xfff; }
                                 }
                                 if (gone) { playerExplosives.erase(playerExplosives.begin() + static_cast<std::ptrdiff_t>(ei)); }
                                 else { ++ei; }
@@ -4164,8 +4182,19 @@ namespace ALTEngine::Screens
                     // type 0x15 gets a scale (0x800, half). They were drawn
                     // here at half size and 0x20 low, which left a charge
                     // resting on the floor almost entirely under it.
-                    for (const PlayerExplosive& e : playerExplosives)
+                    //
+                    // Only from 0x200 to 0x1e00 ahead of the view, measured
+                    // along its yaw (FUN_0002cf14), so a throw is not seen until
+                    // it is 0x200 out; drawn earlier it seemed to come up from
+                    // the floor under the player. A drawn charge turns 0x20 on
+                    // its first angle each tick, which the grenade does not.
+                    namespace PC = ALTEngine::Screens::PlayerCamera;
+                    const float viewForwardX = static_cast<float>(PC::Sin(playerCam.viewYaw)) / PC::TRIG_ONE;
+                    const float viewForwardZ = -static_cast<float>(PC::Cos(playerCam.viewYaw)) / PC::TRIG_ONE;
+                    for (PlayerExplosive& e : playerExplosives)
                     {
+                        const float ahead = (e.x - camera.x) * viewForwardX + (e.z - camera.z) * viewForwardZ;
+                        if (ahead <= 0x200 || ahead >= 0x1e00) { continue; }
                         ALTEngine::Renderer::PlacedObject shell;
                         shell.cacheKey = { ALTEngine::Renderer::ModelCatalog::Pickmod,
                                            e.charge ? ALTEngine::Formats::ModelIndices::PickMod::SeismicCharge
@@ -4173,6 +4202,7 @@ namespace ALTEngine::Screens
                         shell.x = e.x;
                         shell.y = e.y;
                         shell.z = e.z;
+                        shell.pitchRadians = PC::ToRadians(e.spin);
                         placedObjects.push_back(shell);
                     }
                 }
