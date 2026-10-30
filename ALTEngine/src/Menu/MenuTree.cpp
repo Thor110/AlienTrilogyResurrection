@@ -414,10 +414,21 @@ namespace ALTEngine::Menu
                     node.descriptionStringId = static_cast<int>(description);
                     return node;
                 };
+                // First, the row that sets them all; it reads On only when
+                // every one of them is.
+                MenuNode all = List(TestingSettings::ALL_LABEL, StringId::AllTestingOptions, {
+                    Action("Off", StringId::Off),
+                    Action("On", StringId::On),
+                });
+                all.initialSelectedChild = FindChildIndexByLabel(all.children, testing.AllOn() ? "On" : "Off");
+                all.isSettingsList = true;
+                all.descriptionStringId = static_cast<int>(StringId::DescAllTestingOptions);
                 MenuNode testingList = List("Testing", StringId::Testing, {
+                    std::move(all),
                     testingNode(TestingOption::DisableEnemySpawn, StringId::DisableEnemySpawn, StringId::DescDisableEnemySpawn),
                     testingNode(TestingOption::FaceIndexDisplay, StringId::FaceIndexDisplay, StringId::DescFaceIndexDisplay),
                     testingNode(TestingOption::GhostMode, StringId::GhostMode, StringId::DescGhostMode),
+                    testingNode(TestingOption::DisableResupplyTimer, StringId::DisableResupplyTimer, StringId::DescDisableResupplyTimer),
                 });
                 testingList.descriptionStringId = static_cast<int>(StringId::DescTesting);
                 entries.push_back(std::move(testingList));

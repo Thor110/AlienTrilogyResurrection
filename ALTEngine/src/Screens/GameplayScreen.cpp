@@ -508,6 +508,7 @@ namespace ALTEngine::Screens
         bool testingNoEnemies = false;
         bool testingFaceIndex = false;
         bool testingGhost = false;
+        bool testingNoResupply = false;
         // Ghost Mode's own height for the player's feet, taken from where they
         // stood when it came on; `ghostActive` marks that it has been taken.
         float ghostFeetY = 0.0f;
@@ -588,6 +589,7 @@ namespace ALTEngine::Screens
                 testingNoEnemies = testing.IsOn(ALTEngine::Bootstrap::TestingOption::DisableEnemySpawn);
                 testingFaceIndex = testing.IsOn(ALTEngine::Bootstrap::TestingOption::FaceIndexDisplay);
                 testingGhost = testing.IsOn(ALTEngine::Bootstrap::TestingOption::GhostMode);
+                testingNoResupply = testing.IsOn(ALTEngine::Bootstrap::TestingOption::DisableResupplyTimer);
             }
             ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
             weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings(modernConfig).Get()
@@ -1656,6 +1658,7 @@ namespace ALTEngine::Screens
                             testingNoEnemies = testing.IsOn(ALTEngine::Bootstrap::TestingOption::DisableEnemySpawn);
                             testingFaceIndex = testing.IsOn(ALTEngine::Bootstrap::TestingOption::FaceIndexDisplay);
                             testingGhost = testing.IsOn(ALTEngine::Bootstrap::TestingOption::GhostMode);
+                            testingNoResupply = testing.IsOn(ALTEngine::Bootstrap::TestingOption::DisableResupplyTimer);
                         }
                         ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
                         weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings(modernConfig).Get()
@@ -1840,7 +1843,8 @@ namespace ALTEngine::Screens
                     const bool creaturePass = halfPass || fasterXenoPass;
                     // The resupply countdown's task runs every pass, the timer
                     // interrupt counting its seconds (one or two a tick).
-                    if (resupply.active && !resupply.expired && !playerDead)
+                    // Testing: Disable Resupply Timer holds it where it is.
+                    if (resupply.active && !resupply.expired && !playerDead && !testingNoResupply)
                     {
                         const int cue = ALTEngine::Game::ResupplyTimer::Pass(resupply, speedCompensationOff ? 2 : 1);
                         if (cue >= 0) { ALTEngine::Audio::SfxPlayer::PlaySlot(cue, digits.c_str(), cdDirectory); }
@@ -4264,7 +4268,7 @@ namespace ALTEngine::Screens
                                 // The resupply countdown, two digits in the HUD
                                 // font at (16, 19) (FUN_00043720): steady above
                                 // 17 seconds, blinking from 17 down.
-                                if (resupply.active)
+                                if (resupply.active && !testingNoResupply)
                                 {
                                     namespace RT = ALTEngine::Game::ResupplyTimer;
                                     const SDL_Color colour = !RT::Blinking(resupply) ? SDL_Color{ 0, 255, 0, 255 }

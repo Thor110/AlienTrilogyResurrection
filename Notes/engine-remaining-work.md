@@ -416,3 +416,9 @@ All three came down to the level faces' draw routines, which the port mostly ign
 - **Door and lift meshes leaked between levels.** They are cached under ModelCatalog::LevelDoor / LevelLift by slot (mesh * 8 + page), every level reuses the slots, RegisterMesh keeps whatever a slot already holds, and UnloadLevels freed only level geometry. So from the second level played on, a door or lift whose slot an earlier level had filled drew that level's mesh and textures. Edward's "door outside the level" on L371 is this: L371 has one door record, at cell (60, 4) inside solid wall, and no "D" sections at all, so it drew whichever door an earlier level left in slot 0. ModelRenderer::UnloadLevelModels now releases both catalogs; UnloadLevels calls it, and so does the level load before registering its own. The stray door now draws nothing.
 - **L371's lifts 6-9 use lift model 5, and the file has only L000-L004.** With the fix above they draw nothing; before it, they may have drawn a stale mesh. What the original does with a model index past its table is not traced.
 
+## Zip 57: two more testing options
+
+- **Disable Resupply Timer** (Options > Modern > Testing): the resupply levels' countdown stops where it is and its HUD digits are hidden, so the level does not end on it. Turned back off mid-level, it carries on from where it stopped.
+- **All Testing Options**, first in the Testing list, sets every testing option on or off at once. It reads On only when they all are, and the whole list is refreshed whenever any row in it changes.
+- **L371 round 4 needs revisiting**: Edward reports a number of its fixes are wrong. He is going over the other levels first and will come back to L371.
+

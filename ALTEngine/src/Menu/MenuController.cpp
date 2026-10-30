@@ -495,6 +495,43 @@ namespace ALTEngine::Menu
             }
         }
 
+        // Modern > Testing: every row's selection from the stored options. The
+        // rows depend on each other through "All Testing Options", so the
+        // whole list is refreshed whenever one of them changes.
+        bool IsTestingMenuLabel(const std::string& label)
+        {
+            ALTEngine::Bootstrap::TestingOption ignored{};
+            return label == ALTEngine::Bootstrap::TestingSettings::ALL_LABEL
+                || ALTEngine::Bootstrap::TestingSettings::ForMenuLabel(label, ignored);
+        }
+
+        void RefreshTestingSelections(MenuNode& optionsRoot)
+        {
+            using ALTEngine::Bootstrap::TestingSettings;
+            ALTEngine::Bootstrap::Config config;
+            TestingSettings testing(config);
+            auto selectByLabel = [](MenuNode& list, const std::string& label) {
+                for (size_t i = 0; i < list.children.size(); ++i)
+                {
+                    if (list.children[i].label == label) { list.initialSelectedChild = static_cast<int>(i); return; }
+                }
+            };
+            for (auto& group : optionsRoot.children)
+            {
+                if (group.label != "Modern") { continue; }
+                for (auto& list : group.children)
+                {
+                    if (list.label != "Testing") { continue; }
+                    for (auto& node : list.children)
+                    {
+                        ALTEngine::Bootstrap::TestingOption option{};
+                        if (node.label == TestingSettings::ALL_LABEL) { selectByLabel(node, testing.AllOn() ? "On" : "Off"); }
+                        else if (TestingSettings::ForMenuLabel(node.label, option)) { selectByLabel(node, testing.IsOn(option) ? "On" : "Off"); }
+                    }
+                }
+            }
+        }
+
         void ApplyLeafAction(const std::string& parentLabel, const std::string& leafLabel,
                               RenderSettings& renderSettings, ResolutionSettings& resolutionSettings,
                               DifficultySettings& difficultySettings, CameraSwaySettings& cameraSwaySettings,
@@ -560,6 +597,11 @@ namespace ALTEngine::Menu
                     // every other feature's effective state while doing so.
                     modern.SetFeature(feature, leafLabel == "On");
                 }
+            }
+            else if (parentLabel == ALTEngine::Bootstrap::TestingSettings::ALL_LABEL)
+            {
+                ALTEngine::Bootstrap::Config testingConfig;
+                ALTEngine::Bootstrap::TestingSettings(testingConfig).SetAll(leafLabel == "On");
             }
             else if (ALTEngine::Bootstrap::TestingOption option{};
                      ALTEngine::Bootstrap::TestingSettings::ForMenuLabel(parentLabel, option))
@@ -1022,6 +1064,10 @@ namespace ALTEngine::Menu
                         if (IsModernMenuLabel(parentLabel))
                         {
                             RefreshModernSelections((*optionsRootPtr));
+                        }
+                        if (IsTestingMenuLabel(parentLabel))
+                        {
+                            RefreshTestingSelections((*optionsRootPtr));
                         }
 
                         // Graphics settings had no live refresh at all. The

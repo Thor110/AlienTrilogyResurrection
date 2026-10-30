@@ -168,6 +168,10 @@ namespace ALTEngine::Bootstrap
             "Outlines the face under the crosshair and shows its number",
             "Ghost Mode",
             "Fly through walls; move forward while looking up or down to climb or dive",
+            "Disable Resupply Timer",
+            "The resupply countdown stops and is hidden, so the level does not end",
+            "All Testing Options",
+            "Turns every testing option on or off at once",
         };
         return table;
     }

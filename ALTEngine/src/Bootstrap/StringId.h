@@ -182,6 +182,10 @@ namespace ALTEngine::Bootstrap
         DescFaceIndexDisplay,
         GhostMode,
         DescGhostMode,
+        DisableResupplyTimer,
+        DescDisableResupplyTimer,
+        AllTestingOptions,
+        DescAllTestingOptions,
 
 
         // The original game's own text, extracted from LANGUAGE/*.BIN. The

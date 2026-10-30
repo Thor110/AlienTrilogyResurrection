@@ -165,6 +165,10 @@ namespace ALTEngine::Bootstrap
         case StringId::DescFaceIndexDisplay: return "DescFaceIndexDisplay";
         case StringId::GhostMode: return "GhostMode";
         case StringId::DescGhostMode: return "DescGhostMode";
+        case StringId::DisableResupplyTimer: return "DisableResupplyTimer";
+        case StringId::DescDisableResupplyTimer: return "DescDisableResupplyTimer";
+        case StringId::AllTestingOptions: return "AllTestingOptions";
+        case StringId::DescAllTestingOptions: return "DescAllTestingOptions";
         case StringId::GsOptions: return "GsOptions";
         case StringId::GsRedefineKeyboard: return "GsRedefineKeyboard";
         case StringId::GsRedefineMouse: return "GsRedefineMouse";
@@ -504,6 +508,10 @@ namespace ALTEngine::Bootstrap
         if (name == "DescFaceIndexDisplay") { return StringId::DescFaceIndexDisplay; }
         if (name == "GhostMode") { return StringId::GhostMode; }
         if (name == "DescGhostMode") { return StringId::DescGhostMode; }
+        if (name == "DisableResupplyTimer") { return StringId::DisableResupplyTimer; }
+        if (name == "DescDisableResupplyTimer") { return StringId::DescDisableResupplyTimer; }
+        if (name == "AllTestingOptions") { return StringId::AllTestingOptions; }
+        if (name == "DescAllTestingOptions") { return StringId::DescAllTestingOptions; }
         if (name == "GsOptions") { return StringId::GsOptions; }
         if (name == "GsRedefineKeyboard") { return StringId::GsRedefineKeyboard; }
         if (name == "GsRedefineMouse") { return StringId::GsRedefineMouse; }

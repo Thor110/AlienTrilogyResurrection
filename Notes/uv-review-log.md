@@ -44,6 +44,8 @@ L111LEV: Edward reports the level complete after this fix.
 
 ## L371LEV
 
+**Round 4 needs revisiting** - Edward reports a number of its fixes are wrong; he will come back to L371 after the other levels.
+
 Recesses: each wall recess frames a band (texture 35) with four corner triangles (texture 35, or 27 in some
 recesses). The target is a symmetric frame: every corner shows the band mirrored across the seam it shares with
 the band.
@@ -135,3 +137,7 @@ the band.
 | 9906 | 0x43B4C | round 2 | TR/BL corner, mirrored (quad, last corner repeated) | 4913, 4914, 4924, -1 | 1 | 4914, 4924, 4913, 4913 | 2 |
 | 9911 | 0x43BB0 | round 2 | TR/BL corner, mirrored (quad, last corner repeated) | 4440, 4906, 4919, -1 | 1 | 4906, 4919, 4440, 4440 | 2 |
 | 9915 | 0x43C00 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 4923, 4915, 4916, -1 | 1 | 4916, 4915, 4923, -1 | 5 |
+
+## Left as they are
+
+- **L113 and L114, the strip above the breakable walls** (type 0x15 objects; on L113 faces such as 3127, 3132 and 3137, texture 255). It is the same art as L112's strip, texture 259, but each level's palette colours it: flat dark red on L112, flat dark teal on L113 and L114, which reads as black. Neither level has a dark red version of the strip to swap to; L113's nearest flat brown (texture 42, 40 24 16) is lighter and browner than L112's (8 0 0). Left as shipped (Edward, 2026).

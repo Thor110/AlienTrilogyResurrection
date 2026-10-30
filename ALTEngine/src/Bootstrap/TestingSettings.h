@@ -17,11 +17,17 @@ namespace ALTEngine::Bootstrap
     // Ghost Mode          - fly through walls: no wall, object or creature
     //   blocks the player, the floor no longer holds them, and moving forward
     //   climbs or dives along the view's pitch (the look keys or free look).
+    // Disable Resupply Timer - the resupply levels' countdown stops and is
+    //   hidden, so the level does not end when it would have run out.
+    //
+    // The menu's "All Testing Options" row sets every one of them at once
+    // (SetAll); it shows On only when they all are (AllOn).
     enum class TestingOption
     {
         DisableEnemySpawn,
         FaceIndexDisplay,
         GhostMode,
+        DisableResupplyTimer,
     };
 
     class TestingSettings
@@ -33,7 +39,11 @@ namespace ALTEngine::Bootstrap
             TestingOption::DisableEnemySpawn,
             TestingOption::FaceIndexDisplay,
             TestingOption::GhostMode,
+            TestingOption::DisableResupplyTimer,
         };
+
+        // The menu row that sets every option above at once.
+        static constexpr const char* ALL_LABEL = "All Testing Options";
 
         bool IsOn(TestingOption option) const
         {
@@ -43,6 +53,17 @@ namespace ALTEngine::Bootstrap
 
         void Set(TestingOption option, bool enabled) { config.Set(KeyFor(option), enabled ? "On" : "Off"); }
 
+        void SetAll(bool enabled)
+        {
+            for (TestingOption option : AllOptions) { Set(option, enabled); }
+        }
+
+        bool AllOn() const
+        {
+            for (TestingOption option : AllOptions) { if (!IsOn(option)) { return false; } }
+            return true;
+        }
+
         // The menu row's internal label - what MenuController matches on.
         static const char* MenuLabel(TestingOption option)
         {
@@ -51,6 +72,7 @@ namespace ALTEngine::Bootstrap
             case TestingOption::DisableEnemySpawn: return "Disable Enemy Spawn";
             case TestingOption::FaceIndexDisplay: return "Face Index Display";
             case TestingOption::GhostMode: return "Ghost Mode";
+            case TestingOption::DisableResupplyTimer: return "Disable Resupply Timer";
             }
             return "";
         }
@@ -72,6 +94,7 @@ namespace ALTEngine::Bootstrap
             case TestingOption::DisableEnemySpawn: return "TestingDisableEnemySpawn";
             case TestingOption::FaceIndexDisplay: return "TestingFaceIndexDisplay";
             case TestingOption::GhostMode: return "TestingGhostMode";
+            case TestingOption::DisableResupplyTimer: return "TestingDisableResupplyTimer";
             }
             return "";
         }
