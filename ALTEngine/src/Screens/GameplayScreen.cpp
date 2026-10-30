@@ -184,6 +184,28 @@ namespace ALTEngine::Screens
         // FUN_0003d794's FUN_00040ba0(9, -1): the sound a seismic charge's
         // throw plays.
         constexpr int SEISMIC_THROW_SOUND = 9;
+        // A window: the object type with its own arm in the modelless objects'
+        // handler (0x38097), and the sound that arm plays (FUN_00040c38(0x6c)).
+        constexpr int WINDOW_OBJECT_TYPE = 0x1c;
+        // The cryopod: object type 0x20, its task at 0x37bb0. Once activated
+        // (+0x1a set), its third angle falls by 8 a tick until it passes
+        // -0x100 - the cover tipping open about its own Z.
+        constexpr uint8_t CRYOPOD_OBJECT_TYPE = 0x20;
+        constexpr int OBJECT_ACTIVATE_SOUND = 0x5c;
+        constexpr int CRYOPOD_OPEN_STEP = 8;
+        constexpr int CRYOPOD_OPEN_LIMIT = 0x100;
+        constexpr int WINDOW_BREAK_SOUND = 0x6c;
+
+        // The level texture a window's flying glass wears (FUN_00045808): entry
+        // 0x118 of the level's texture table on campaign level 4 (L131), 0x158
+        // on level 0xc (L211) and 0x14f on every other.
+        int GlassTextureIndex(const std::string& digits)
+        {
+            const int index = ALTEngine::Game::Progression::CampaignIndex(digits);
+            if (index == 4) { return 0x118; }
+            if (index == 0xc) { return 0x158; }
+            return 0x14f;
+        }
 
 
         constexpr float FRAGMENT_HALF_SIZE = 6.0f;
@@ -540,6 +562,14 @@ namespace ALTEngine::Screens
         ALTEngine::Screens::FaceHugOverlay faceHug;
         std::vector<std::string> faceHugSheets;
         ALTEngine::Screens::ShatterEffects shatter;
+        bool glassSheetReady = false;            // the "glass" sheet is uploaded for this level
+        // Cryopod covers: their placed objects (one per level texture page)
+        // and how far each has tipped open, in 4096ths of a turn.
+        struct Cryopod { size_t crateIndex = 0; size_t placedFirst = 0; int angle = 0; };
+        std::vector<Cryopod> cryopods;
+        bool cryopodMeshReady = false;
+        float cryopodOpenSign = -1.0f;
+        ALTEngine::Screens::Particles::Rng glassRng;
         std::vector<ALTEngine::Screens::Enemies::Enemy> enemies;
 
         // The trigger the player last fired, so a trigger runs once on entry
@@ -959,6 +989,54 @@ namespace ALTEngine::Screens
                     // that was a heuristic guessing at something the real
                     // game reads from one byte plus a known scale; this is
                     // the actual formula. See LevelLoader::FindFloorHeight.
+                    // The cryopod cover, OBJ3D model 40, textured from this
+                    // level's own pages (FUN_00037930 draws it with the level
+                    // table bound, not the object set). Which way it pivots
+                    // open is taken from the model: the original turns it
+                    // -0x100 about its own Z, which lifts the cover, so the
+                    // port turns it whichever way lifts the side most of the
+                    // cover lies on.
+                    cryopods.clear();
+                    cryopodMeshReady = false;
+                    if (std::any_of(level.crates.begin(), level.crates.end(),
+                                    [](const auto& c) { return c.type == CRYOPOD_OBJECT_TYPE; }))
+                    {
+                        try
+                        {
+                            auto obj3dPath = FindInSectFolders(cdDirectory, "OBJ3D.BND");
+                            if (obj3dPath.has_value())
+                            {
+                                const auto meshes = ALTEngine::Formats::ModelLoader::Load(*obj3dPath);
+                                const int podMesh = ALTEngine::Formats::ModelIndices::Obj3D::StasisPodCover;
+                                const auto* mesh = ALTEngine::Formats::ModelLoader::FindByNumber(meshes, podMesh);
+                                if (mesh)
+                                {
+                                    const auto podTextures = ALTEngine::Formats::BndTextureLoader::Load(*gfxPath);
+                                    const auto groups = ALTEngine::Formats::BuildRenderMeshPerGroup(*mesh, podTextures.uvRects);
+                                    for (size_t page = 0; page < groups.size() && page < podTextures.textures.size(); ++page)
+                                    {
+                                        if (groups[page].indices.empty()) { continue; }
+                                        ModelRenderer::RegisterMesh(
+                                            { ALTEngine::Renderer::ModelCatalog::LevelObject, podMesh * 8 + static_cast<int>(page) },
+                                            groups[page], podTextures.textures[page]);
+                                    }
+                                    float sumX = 0.0f;
+                                    for (const auto& v : mesh->vertices) { sumX += static_cast<float>(v.x); }
+                                    cryopodOpenSign = (sumX < 0.0f) ? -1.0f : 1.0f;
+                                    cryopodMeshReady = true;
+                                }
+                                else
+                                {
+                                    SDL_Log("GameplayScreen: OBJ3D.BND has no M0%d for the cryopod cover", podMesh);
+                                }
+                            }
+                        }
+                        catch (const std::exception& e)
+                        {
+                            SDL_Log("GameplayScreen: cryopod cover not built (%s)", e.what());
+                        }
+                    }
+
                     for (size_t ci = 0; ci < level.crates.size(); ++ci)
                     {
                         const auto& crate = level.crates[ci];
@@ -1037,14 +1115,13 @@ namespace ALTEngine::Screens
                         // non-uniform triple is the ENEMY scale, and objects
                         // take 0.875 uniform.
                         //
-                        // NOT YET HANDLED: type 0x17 gets no scale at all in
-                        // FUN_0003765c. Which crate type that maps to has not
-                        // been established, so it is not special-cased here -
-                        // if one crate looks 14% too small next to the others,
-                        // that is the one.
-                        placed.scaleX = 0.875f;
-                        placed.scaleY = 0.875f;
-                        placed.scaleZ = 0.875f;
+                        // Type 0x17 - the explosive barrel - gets no scale at
+                        // all in FUN_0003765c, and the cryopod (0x20) is drawn
+                        // by FUN_00037930, which has no scale call: both 1:1.
+                        const float objectScale = (crate.type == 0x17 || crate.type == CRYOPOD_OBJECT_TYPE) ? 1.0f : 0.875f;
+                        placed.scaleX = objectScale;
+                        placed.scaleY = objectScale;
+                        placed.scaleZ = objectScale;
 
                         // Types 0x15, 0x1c and 0x1d have no model (FUN_00037184
                         // gives them none): they stand in a window, a
@@ -1094,7 +1171,31 @@ namespace ALTEngine::Screens
                             damageTargets.push_back(target);
                         }
 
-                        placedObjects.push_back(placed);
+                        // A cryopod's cover is drawn through the level's
+                        // texture table (FUN_00037930), one object per page.
+                        if (crate.type == CRYOPOD_OBJECT_TYPE && cryopodMeshReady)
+                        {
+                            Cryopod pod;
+                            pod.crateIndex = ci;
+                            pod.placedFirst = placedObjects.size();
+                            for (int page = 0; page < 5; ++page)
+                            {
+                                ALTEngine::Renderer::PlacedObject part = placed;
+                                part.cacheKey = { ALTEngine::Renderer::ModelCatalog::LevelObject,
+                                                  ALTEngine::Formats::ModelIndices::Obj3D::StasisPodCover * 8 + page };
+                                placedObjects.push_back(part);
+                            }
+                            cryopods.push_back(pod);
+                            if (!damageTargets.empty() && damageTargets.back().crateIndex == static_cast<int>(ci))
+                            {
+                                // Its task (0x37bb0) never looks at damage.
+                                damageTargets.back().indestructible = true;
+                            }
+                        }
+                        else
+                        {
+                            placedObjects.push_back(placed);
+                        }
 
                         // Occupancy, as the original's object spawn does:
                         // byte 12 takes the type, byte 4 the record index.
@@ -1353,6 +1454,41 @@ namespace ALTEngine::Screens
                         ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
                             "particle", BuildParticleSprite(8), 8, 8);
 
+                        // A window's glass, cut out of the level's own texture
+                        // page as its own sheet, for the panes it breaks into.
+                        glassSheetReady = false;
+                        try
+                        {
+                            const auto glassSet = ALTEngine::Formats::BndTextureLoader::Load(*gfxPath);
+                            const size_t gi = static_cast<size_t>(GlassTextureIndex(digits));
+                            if (gi < glassSet.uvRects.size()
+                                && static_cast<size_t>(glassSet.uvRects[gi].page) < glassSet.textures.size())
+                            {
+                                const auto& r = glassSet.uvRects[gi];
+                                const auto& page = glassSet.textures[static_cast<size_t>(r.page)];
+                                std::vector<uint8_t> rgba(static_cast<size_t>(r.width) * r.height * 4, 0);
+                                for (int y = 0; y < r.height; ++y)
+                                {
+                                    for (int x = 0; x < r.width; ++x)
+                                    {
+                                        const int sx = std::min(r.x + x, page.width - 1);
+                                        const int sy = std::min(r.y + y, page.height - 1);
+                                        for (int c = 0; c < 4; ++c)
+                                        {
+                                            rgba[(static_cast<size_t>(y) * r.width + x) * 4 + c] =
+                                                page.rgba[(static_cast<size_t>(sy) * page.width + sx) * 4 + c];
+                                        }
+                                    }
+                                }
+                                glassSheetReady = ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
+                                    "glass", rgba, r.width, r.height);
+                            }
+                        }
+                        catch (const std::exception& e)
+                        {
+                            SDL_Log("GameplayScreen: no glass texture (%s)", e.what());
+                        }
+
                         // EXPLGFX's barrel page - nine 84x84 frames.
                         if (!explosions.Load(cdDirectory))
                         {
@@ -1575,6 +1711,9 @@ namespace ALTEngine::Screens
                 inventory.batteries--;
             }
             objectState[oi] = 1;
+            // FUN_00036f4c's FUN_00040ba0(0x5c, -1): the sound of anything
+            // being switched on - a switch, a cryopod.
+            ALTEngine::Audio::SfxPlayer::PlaySlot(OBJECT_ACTIVATE_SOUND, digits.c_str(), cdDirectory);
             // Throwing a switch counts toward the mission (FUN_00036f4c).
             if (type < ALTEngine::Game::Progression::TALLY_SIZE) { tally.killed[type]++; }
             return true;
@@ -3119,9 +3258,49 @@ namespace ALTEngine::Screens
                         // recurse without bound; the original has no such limit
                         // because its blast is iterative.
                         std::vector<int> blastQueue;
+                        // FUN_00045fe4: a broken window's glass. A window facing
+                        // z (rotation 0 or 4) throws a column of panes from each
+                        // cell along x, starting at the object and 0x200 apart,
+                        // at the middle of its depth; one facing x (2 or 6) the
+                        // same along z, at the middle of its width. Each column
+                        // is two panes, 0x100 and 0x300 up (three on campaign
+                        // level 0xd, L212, the third 0x500 up), flying away from
+                        // the side the player is on at (random & 0xf) + 0x10,
+                        // and up at the same. The original's third pane on a
+                        // window facing x uses the z-facing grid - kept.
+                        auto BreakWindow = [&](const D::Target& target) {
+                            if (!glassSheetReady) { return; }
+                            const bool facesZ = (target.facing & 2) == 0;
+                            const int columns = facesZ ? target.cellsWide : target.cellsDeep;
+                            float x = target.x, z = target.z;
+                            if (facesZ) { z += static_cast<float>((target.cellsDeep - 1) * 0x100); }
+                            else { x += static_cast<float>((target.cellsWide - 1) * 0x100); }
+                            const bool playerBeyond = facesZ ? (camera.z > z) : (camera.x > x);
+                            const int rows = (digits == "212") ? 3 : 2;
+                            for (int col = 0; col < columns; ++col)
+                            {
+                                for (int row = 0; row < rows; ++row)
+                                {
+                                    const float up = static_cast<float>(glassRng.Bits(0x0f) + 0x10);
+                                    float away = static_cast<float>(glassRng.Bits(0x0f) + 0x10);
+                                    if (playerBeyond) { away = -away; }
+                                    shatter.Glass("glass", x, target.y + static_cast<float>(0x100 + row * 0x200), z,
+                                                  facesZ ? 0.0f : away, up, facesZ ? away : 0.0f,
+                                                  facesZ || row == 2);
+                                }
+                                if (facesZ) { x += 0x200; } else { z += 0x200; }
+                            }
+                        };
+
                         auto DestroyTarget = [&](D::Target& target) {
+                            // A window (object type 0x1c) has its own arm in the
+                            // modelless objects' handler (0x38097): its glass
+                            // flies out (FUN_00045fe4), sound 0x6c, its cells
+                            // reopen and its texture animators step on - and
+                            // that is all. No tally, no contents, no scatter.
+                            const bool isWindow = target.objectType == WINDOW_OBJECT_TYPE;
                             // Destroying an object counts toward the mission (FUN_00037dd0).
-                            if (target.objectType >= 0 && target.objectType < ALTEngine::Game::Progression::TALLY_SIZE)
+                            if (!isWindow && target.objectType >= 0 && target.objectType < ALTEngine::Game::Progression::TALLY_SIZE)
                             {
                                 tally.killed[target.objectType]++;
                             }
@@ -3143,7 +3322,15 @@ namespace ALTEngine::Screens
                                     }
                                 }
                             }
-                            ReleaseContents(target.crateIndex, target.x, target.y, target.z, target.cellIndex);
+                            if (isWindow)
+                            {
+                                BreakWindow(target);
+                                ALTEngine::Audio::SfxPlayer::PlaySlot(WINDOW_BREAK_SOUND, digits.c_str(), cdDirectory);
+                            }
+                            else
+                            {
+                                ReleaseContents(target.crateIndex, target.x, target.y, target.z, target.cellIndex);
+                            }
 
                             // The faces that show it broken: each of its texture
                             // animators steps on by one - a window's glass, a
@@ -3189,7 +3376,7 @@ namespace ALTEngine::Screens
                                 explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_BARREL,
                                                  target.x, target.y + EXPLOSION_HEIGHT_OFFSET, target.z);
                             }
-                            else
+                            else if (!isWindow)
                             {
                                 // A crate breaks into six scattered pieces, on
                                 // an axis chosen by which way it faces - see
@@ -3843,6 +4030,19 @@ namespace ALTEngine::Screens
                             {
                                 size_t pi = ds.placedFirst + static_cast<size_t>(i);
                                 if (pi < placedObjects.size()) { placedObjects[pi].y = y; }
+                            }
+                        }
+
+                        // Cryopod covers tipping open once activated (0x37bb0).
+                        for (auto& pod : cryopods)
+                        {
+                            if (pod.crateIndex >= objectState.size() || objectState[pod.crateIndex] == 0) { continue; }
+                            if (pod.angle > -CRYOPOD_OPEN_LIMIT) { pod.angle -= CRYOPOD_OPEN_STEP; }
+                            const float roll = cryopodOpenSign * static_cast<float>(-pod.angle) * (6.28318531f / 4096.0f);
+                            for (size_t k = 0; k < 5; ++k)
+                            {
+                                const size_t pi = pod.placedFirst + k;
+                                if (pi < placedObjects.size()) { placedObjects[pi].rollRadians = roll; }
                             }
                         }
                     }

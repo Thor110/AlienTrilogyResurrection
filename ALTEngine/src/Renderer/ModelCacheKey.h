@@ -29,6 +29,10 @@ namespace ALTEngine::Renderer
         // page needs its own draw call.
         LevelDoor,
         LevelLift,
+        // An OBJ3D model drawn with the LEVEL's texture table rather than the
+        // object set: the cryopod cover (FUN_00037930 leaves the level table
+        // bound). modelIndex packs it the same way, mesh * 8 + page.
+        LevelObject,
     };
 
     // A cheap-to-copy/hash/compare model cache key - replaces what used

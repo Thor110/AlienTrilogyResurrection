@@ -814,7 +814,8 @@ namespace ALTEngine::Renderer
         if (!device) { return; }
         for (auto it = loadedModels.begin(); it != loadedModels.end();)
         {
-            if (it->first.catalog != ModelCatalog::LevelDoor && it->first.catalog != ModelCatalog::LevelLift) { ++it; continue; }
+            if (it->first.catalog != ModelCatalog::LevelDoor && it->first.catalog != ModelCatalog::LevelLift
+                && it->first.catalog != ModelCatalog::LevelObject) { ++it; continue; }
             if (it->second.vertexBuffer) { SDL_ReleaseGPUBuffer(device, it->second.vertexBuffer); }
             if (it->second.indexBuffer) { SDL_ReleaseGPUBuffer(device, it->second.indexBuffer); }
             if (it->second.texture) { SDL_ReleaseGPUTexture(device, it->second.texture); }
@@ -2026,7 +2027,8 @@ namespace ALTEngine::Renderer
             Mat4 modelMatrix = Mat4::Multiply(
                 Mat4::Translation(object.x, object.y, object.z),
                 Mat4::Multiply(Mat4::RotationY(object.rotationRadians + model.baseRotationRadians),
-                               Mat4::Scale(object.scaleX, object.scaleY, object.scaleZ)));
+                               Mat4::Multiply(Mat4::RotationZ(object.rollRadians),
+                                              Mat4::Scale(object.scaleX, object.scaleY, object.scaleZ))));
             Mat4 mvp = Mat4::Multiply(vp, modelMatrix);
 
             SDL_BindGPUGraphicsPipeline(renderPass, model.useDoubleSided ? doubleSidedPipeline : pipeline);

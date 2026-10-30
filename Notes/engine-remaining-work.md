@@ -28,8 +28,8 @@ Details for each item are in the numbered sections below.
 | 7f | Multiplayer | large | open |
 | A | Open question: pistol rounds against a standing hugger | needs a check in the original | open |
 | 8a | Walk-through walls and floors: texture mapping (e.g. 3.5.1) | yes | done from the draw-routine table (untested on 3.5.1) |
-| 8b | Breakable windows | yes | done (the break checked on the demo's L112; glass untested in play) |
-| 8c | Cryopod cover (textured like the windows, not breakable) | yes | done as the see-through fill (untested in play) |
+| 8b | Breakable windows | yes | done, with the flying glass traced (zip 74; untested in play) |
+| 8c | Cryopod cover (textured like the windows, not breakable) | yes | see-through fill done; the cover model, its pivot, scale and textures traced (zip 74; untested in play) |
 
 ## 1. One logic tick rate
 
@@ -446,3 +446,13 @@ All three came down to the level faces' draw routines, which the port mostly ign
 
 - L232: seven pillar faces given the solid pillar textures (164, 165, 168) in place of ones with see-through gaps.
 - L321 and L322: worked through, then scratched (Edward) - versions of one map whose closed-off parts are used by the other versions; the details are on the review log's "To look at again" list.
+
+## Zip 71-74: doors, pickups, glass and cryopods against the original
+
+- **Doors** (the door task's states at 0x29218 shut, 0x29438 opening, 0x29078 hold, 0x29114 open, 0x292ac closing). The Automatic Doors option is gone: doors take the use key, and the use key tests only the cell the player stands in (the port also tested two cells ahead, which let L112's one-sided door open from the wrong side). A door with no open time stays open, with its unlock count cleared, until something unlocks it again. A door with an open time holds for time x 4 ticks, then closes once the player is more than 0x400 away across the doorway and the doorway is clear. Clear means the two middle cells and the cell either side of each across the doorway (`FUN_00028d90`); anything there while it closes sends it back up. The step that completes an opening does not raise it, so a door opened from shut stops a unit short of its travel. A door that starts open (flag 0x40) waits out its time after closing, then opens again.
+- **Pickups** (the pickup task at 0x3c8d0). Taken within 0x300 on each ground axis and 0x400 vertically (`FUN_0003c5d0`), so an item on a table in the next cell is in reach, and only when the player has room for it (the switch at 0x3c964; `Pickups::Wanted`). They rest at their type's height above the floor (`DAT_000acde8`: 0x40, 0x60 for type 20), dropped ones included, and are drawn at their type's scale (`DAT_000acbb8`, 28 entries). Type 0x18 is read as 0x15.
+- **Thrown grenades and charges** are drawn at full size where they are (`FUN_0002cf14`).
+- **Patches** run at every launch as well as at install.
+- **Windows** (object type 0x1c, the arm at 0x38097): sound 0x6c, the cells reopen, the texture animators step on, and the glass flies (`FUN_00045fe4`). No tally, no contents, no scatter. Per cell of the window's width (facing z) or depth (facing x), panes go out at 0x100 and 0x300 up (and 0x500 on campaign level 0xd, L212), flying away from the player's side at (random & 0xf) + 0x10 and up the same. Each pane (`FUN_00045808`) is a 3x3 grid 0x200 apart (`DAT_000ad4b8` / `DAT_000ad500`) cut into four quads around a centre moved by (random & 0x1ff) - 0x100 on every axis, wearing quarters of the level texture 0x118 (L131), 0x158 (L211) or 0x14f (every other level). They are particle type 0xf: the shard arm's motion (0x2e21e), drawn at life/0x40 of their size, never spinning.
+- **Cryopods** (object type 0x20, task 0x37bb0): drawn by `FUN_00037930`, which applies no scale and leaves the LEVEL texture table bound, so model 40's faces take the level's textures. Activating one (`FUN_00036f4c`, sound 0x5c, which every activated object plays) sets +0x1a, and from then the cover's third angle falls 8 a tick to -0x100, about its own Z axis (`FUN_00047f3c` builds Rx * Ry * Rz). The port turns it whichever way lifts the side most of the model lies on, since the model file is not to hand to check the sign. The task never looks at damage, so a pod cannot be destroyed. The explosive barrel (0x17) is also drawn 1:1 (`FUN_0003765c` skips its 0xe00 scale).
+

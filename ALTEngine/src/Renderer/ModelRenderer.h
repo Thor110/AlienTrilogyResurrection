@@ -67,6 +67,11 @@ namespace ALTEngine::Renderer
         ModelCacheKey cacheKey;
         float x = 0, y = 0, z = 0;
         float rotationRadians = 0.0f;
+        // A turn about the model's own Z axis, applied before the yaw - the
+        // original's rotation matrix is Rx * Ry * Rz (FUN_00047f3c), so its
+        // third angle turns the model in its own frame. Only a cryopod's cover
+        // uses it, to pivot open.
+        float rollRadians = 0.0f;
         // Non-uniform, and applied to the model matrix rather than the
         // vertices. Objects (crates, switches) are drawn at 0.875 uniform in
         // the original (Ghidra: FUN_0003765c); doors are drawn 1:1. The

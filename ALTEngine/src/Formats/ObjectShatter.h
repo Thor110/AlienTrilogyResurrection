@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 
 namespace ALTEngine::Formats
@@ -100,10 +101,54 @@ namespace ALTEngine::Formats
     inline constexpr int SHARD_NEAR_CUTOFF = 0x200;
     inline constexpr int SHARD_FAR_CUTOFF = 0x2000;
 
-    // Type 0xf is the same idea one level up: a WHOLE MODEL thrown as a single
-    // particle rather than a face. FUN_00045808 spawns those, from FUN_00045fe4,
-    // and FUN_0002d054 draws them through a different routine table entry
-    // (0xa7154 rather than 0xa7134). Not used by crates or barrels.
+    // Type 0xf is the same idea one level up: a small MESH thrown as a single
+    // particle rather than a face. FUN_00045808 spawns those, from FUN_00045fe4
+    // - a broken window's glass - and FUN_0002d054 draws them through a
+    // different routine table entry (0xa7154 rather than 0xa7134). Not used by
+    // crates or barrels.
     inline constexpr uint8_t PARTICLE_TYPE_FACE_SHARD = 6;
     inline constexpr uint8_t PARTICLE_TYPE_WHOLE_MODEL = 0xf;
+
+    // A window pane's four pieces (FUN_00045808). The pane is a 3x3 grid of
+    // points 0x200 apart - DAT_000ad4b8 for a window facing z, the grid in x/y,
+    // DAT_000ad500 for one facing x, in z/y - cut into four quads that share
+    // its centre point, which is moved off the grid on every axis (out of the
+    // pane too). Each piece wears its quarter of the glass texture: an outer
+    // corner keeps the texture's corner and the shared centre takes its middle.
+    struct GlassPiece
+    {
+        float x[4], y[4], z[4], u[4], v[4];   // corners around the pane's centre
+    };
+
+    // `jitter*` is the centre's offset: (random & 0x1ff) - 0x100 each.
+    inline std::array<GlassPiece, 4> GlassPieces(float jitterAcross, float jitterUp, float jitterOut, bool facesZ)
+    {
+        // The pieces in FUN_00045808's own order; -1 is the centre.
+        static constexpr int QUADS[4][4] = {
+            { 0, 1, -1, 3 }, { 1, 2, 5, -1 }, { 3, -1, 7, 6 }, { -1, 5, 8, 7 },
+        };
+        std::array<GlassPiece, 4> pieces{};
+        for (int q = 0; q < 4; ++q)
+        {
+            for (int c = 0; c < 4; ++c)
+            {
+                const int g = QUADS[q][c];
+                // Grid point g as (across, up), row 0 at the top of the texture.
+                const float across = g < 0 ? jitterAcross : static_cast<float>((g % 3) - 1) * 512.0f;
+                const float up = g < 0 ? jitterUp : static_cast<float>(1 - (g / 3)) * 512.0f;
+                const float out = g < 0 ? jitterOut : 0.0f;
+                pieces[q].x[c] = facesZ ? across : out;
+                pieces[q].z[c] = facesZ ? out : across;
+                pieces[q].y[c] = up;
+                pieces[q].u[c] = g < 0 ? 0.5f : static_cast<float>(g % 3) * 0.5f;
+                pieces[q].v[c] = g < 0 ? 0.5f : static_cast<float>(g / 3) * 0.5f;
+            }
+        }
+        return pieces;
+    }
+
+    // The life and first bounce of each piece (+0x1c, +0x18): (random & 0xf)
+    // plus these.
+    inline constexpr int GLASS_LIFE_BASE = 0x20;
+    inline constexpr int GLASS_BOUNCE_BASE = 0x10;
 }

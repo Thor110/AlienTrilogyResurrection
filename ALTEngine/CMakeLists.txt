@@ -119,6 +119,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/TriggerTests.cpp
         tests/DoorTests.cpp
         tests/StringTableTests.cpp
+        tests/GlassTests.cpp
         tests/InventoryTests.cpp
         tests/EnemyTests.cpp
         tests/SaveGameTests.cpp

@@ -140,6 +140,44 @@ namespace ALTEngine::Screens
             }
         }
 
+        // A window pane breaking (FUN_00045808): the pane is a 3x3 grid of
+        // points 0x200 apart (DAT_000ad4b8 for a window facing z, the grid in
+        // x/y; DAT_000ad500 for one facing x, in z/y), cut into four quads
+        // around its centre point, which is moved by (random & 0x1ff) - 0x100
+        // on every axis - out of the pane too. Each quad is its own particle
+        // (type 0xf), all four starting at the pane's centre with the given
+        // velocity, the up speed each getting (random & 0xf) - 8 more. Each
+        // wears its quarter of the glass texture, the inner corner taking the
+        // texture's middle. They never spin (0x2d1a0 skips type 0xf), and move,
+        // bounce and shrink exactly as a shard does - the same arm, 0x2e21e.
+        void Glass(const std::string& sheetKey, float x, float y, float z,
+                   float vx, float vy, float vz, bool facesZ)
+        {
+            namespace OS = ALTEngine::Formats;
+            if (shards.size() + 4 > MAX_SHARDS) { return; }
+            const float jAcross = static_cast<float>(rng.Bits(0x1ff) - 0x100);
+            const float jUp = static_cast<float>(rng.Bits(0x1ff) - 0x100);
+            const float jOut = static_cast<float>(rng.Bits(0x1ff) - 0x100);
+            for (const auto& piece : OS::GlassPieces(jAcross, jUp, jOut, facesZ))
+            {
+                Shard shard;
+                shard.alive = true;
+                shard.sheetKey = sheetKey;
+                for (int c = 0; c < 4; ++c)
+                {
+                    shard.cx[c] = piece.x[c]; shard.cy[c] = piece.y[c]; shard.cz[c] = piece.z[c];
+                    shard.cu[c] = piece.u[c]; shard.cv[c] = piece.v[c];
+                }
+                shard.x = x; shard.y = y; shard.z = z;
+                shard.vx = vx;
+                shard.vy = vy + static_cast<float>(rng.Bits(0x0f) - 8);
+                shard.vz = vz;
+                shard.life = rng.Bits(0x0f) + OS::GLASS_LIFE_BASE;
+                shard.bounce = rng.Bits(0x0f) + OS::GLASS_BOUNCE_BASE;
+                shards.push_back(shard);
+            }
+        }
+
         // One of the original's particle passes, the type 6 arm at 0x2e21e:
         // the life runs down first (0x2da0e) and the shard is gone at zero;
         // every particle then moves by its velocity (FUN_00047524), and a
