@@ -2,6 +2,8 @@
 #include "PauseMenuScreen.h"
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
+#include "../Bootstrap/TestingSettings.h"
+#include "../Formats/FacePick.h"
 #include "../Formats/LevelLoader.h"
 #include "PlayerHudState.h"
 #include "PickupSystem.h"
@@ -53,6 +55,7 @@
 #include <cmath>
 #include <limits>
 #include <optional>
+#include <vector>
 
 namespace ALTEngine::Screens
 {
@@ -216,6 +219,37 @@ namespace ALTEngine::Screens
 
         // World space -> grid space, where cell = coord >> 9. Inverts the
         // crate placement used above, so player and objects agree.
+        // Testing: Face Index Display (Modern > Testing). Picks the level face
+        // along the centre of the view and outlines it (Formats/FacePick.h),
+        // with a dot where the pick is taken.
+        void DrawFacePick(SDL_Renderer* renderer, const ALTEngine::Formats::LevelGeometry& level,
+                          const ALTEngine::Renderer::FpsCamera& view, int windowW, int windowH, int& pickedFace)
+        {
+            namespace F = ALTEngine::Formats;
+            const F::FaceView fv{ view.x, view.y, view.z, view.yaw, view.pitch, view.roll, view.fovYRadians };
+            float fx, fy, fz;
+            F::ViewForward(fv, fx, fy, fz);
+            pickedFace = F::PickLevelFace(level, view.x, view.y, view.z, fx, fy, fz).face;
+
+            SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+            const SDL_FRect dot{ static_cast<float>(windowW) * 0.5f - 2.0f, static_cast<float>(windowH) * 0.5f - 2.0f, 4.0f, 4.0f };
+            SDL_RenderFillRect(renderer, &dot);
+            if (pickedFace < 0) { return; }
+
+            std::vector<SDL_FPoint> points;
+            for (const auto& [x, y] : F::ProjectFaceOutline(level, pickedFace, fv, windowW, windowH))
+            {
+                points.push_back({ x, y });
+            }
+            if (points.size() < 2) { return; }
+            points.push_back(points.front());
+
+            // Twice, a pixel apart, so the outline shows at high resolutions.
+            SDL_RenderLines(renderer, points.data(), static_cast<int>(points.size()));
+            for (auto& p : points) { p.x += 1.0f; p.y += 1.0f; }
+            SDL_RenderLines(renderer, points.data(), static_cast<int>(points.size()));
+        }
+
         int ToGridSpaceX(float worldX, float originX) { return static_cast<int>(std::lround(worldX + originX)); }
         int ToGridSpaceZ(float worldZ, float originZ) { return static_cast<int>(std::lround(worldZ + originZ)); }
 
@@ -470,6 +504,11 @@ namespace ALTEngine::Screens
         float jumpVelocity = 0.0f;
         bool jumpHeld = false;
         bool liveMinimap = false;
+        // Modern > Testing (TestingSettings.h).
+        bool testingNoEnemies = false;
+        bool testingFaceIndex = false;
+        // The face under the crosshair this frame, -1 for none.
+        int pickedFace = -1;
         // Modern "No Hit Immunity": every hit lands, during a creature's hit
         // reaction and the immunity after it.
         bool ignoreStun = false;
@@ -539,6 +578,11 @@ namespace ALTEngine::Screens
             speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
             saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
+            {
+                ALTEngine::Bootstrap::TestingSettings testing(modernConfig);
+                testingNoEnemies = testing.IsOn(ALTEngine::Bootstrap::TestingOption::DisableEnemySpawn);
+                testingFaceIndex = testing.IsOn(ALTEngine::Bootstrap::TestingOption::FaceIndexDisplay);
+            }
             ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
             weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings(modernConfig).Get()
                 / ALTEngine::Screens::PlayerCamera::ORIGINAL_TIMER_HZ;
@@ -1325,6 +1369,11 @@ namespace ALTEngine::Screens
                         playerExplosives.clear();
                         enemies = ALTEngine::Screens::Enemies::Build(
                             level, static_cast<int>(difficultySettings.Get()), originX, originZ);
+                        // Testing: Disable Enemy Spawn. An empty roster leaves
+                        // the triggers, eggs, crates and vents nothing to let
+                        // out - every one of them looks its monster up by
+                        // index and does nothing when it is not there.
+                        if (testingNoEnemies) { enemies.clear(); }
                         {
                             size_t waiting = 0;
                             for (const auto& e : enemies) { if (!e.active) { waiting++; } }
@@ -1593,6 +1642,11 @@ namespace ALTEngine::Screens
                         speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
                         saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
                         liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
+                        {
+                            ALTEngine::Bootstrap::TestingSettings testing(modernConfig);
+                            testingNoEnemies = testing.IsOn(ALTEngine::Bootstrap::TestingOption::DisableEnemySpawn);
+                            testingFaceIndex = testing.IsOn(ALTEngine::Bootstrap::TestingOption::FaceIndexDisplay);
+                        }
                         ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
                         weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings(modernConfig).Get()
                             / ALTEngine::Screens::PlayerCamera::ORIGINAL_TIMER_HZ;
@@ -4077,6 +4131,16 @@ namespace ALTEngine::Screens
                         SDL_UpdateTexture(frameTexture, nullptr, pixels.data(), windowW * 4);
                         SDL_RenderTexture(renderer, frameTexture, nullptr, nullptr);
 
+                        // Testing: Face Index Display. The face under the
+                        // crosshair, outlined, with a dot at the centre of the
+                        // view where the pick is taken; its numbers go on the
+                        // HUD below.
+                        pickedFace = -1;
+                        if (testingFaceIndex)
+                        {
+                            DrawFacePick(renderer, level, view, windowW, windowH, pickedFace);
+                        }
+
                         // HUD. Loaded lazily on the first frame that has a
                         // renderer to make a texture with; the sheet is picked
                         // by chapter from the level id.
@@ -4169,6 +4233,45 @@ namespace ALTEngine::Screens
                                         : RT::BlinkPhase(resupply) ? SDL_Color{ 255, 255, 0, 255 } : SDL_Color{ 255, 0, 0, 255 };
                                     hud.DrawHudText(renderer, RT::Text(resupply), RT::HUD_X, RT::HUD_Y,
                                                     ALTEngine::Renderer::HUD_FONT_FIRST_DESCRIPTOR, 1.0f, 1.0f, 0, colour);
+                                }
+
+                                // Testing: Face Index Display - the picked face's
+                                // number, texture, draw routine and file offset,
+                                // and its vertex list, centred at the top.
+                                if (testingFaceIndex)
+                                {
+                                    namespace R = ALTEngine::Renderer;
+                                    std::string lines[2];
+                                    if (pickedFace >= 0)
+                                    {
+                                        const auto& q = level.quads[static_cast<size_t>(pickedFace)];
+                                        char buf[160];
+                                        std::snprintf(buf, sizeof(buf), "FACE %d  TEX %u  ROUTINE %u  LIGHT %u",
+                                                      pickedFace, static_cast<unsigned>(q.texIndex),
+                                                      static_cast<unsigned>(q.flags), static_cast<unsigned>(q.reserved));
+                                        lines[0] = buf;
+                                        std::snprintf(buf, sizeof(buf), "OFFSET 0x%zX  V %d %d %d %d",
+                                                      ALTEngine::Formats::LevelFaceFileOffset(level, pickedFace),
+                                                      q.a, q.b, q.c, q.d);
+                                        lines[1] = buf;
+                                    }
+                                    else
+                                    {
+                                        lines[0] = "NO FACE";
+                                    }
+                                    int y = 3;
+                                    for (const std::string& line : lines)
+                                    {
+                                        if (line.empty()) { continue; }
+                                        // Font C's letters are about 5 pixels wide;
+                                        // close enough to centre the line.
+                                        const int width = static_cast<int>(line.size())
+                                            * (5 + R::HUD_FONT_C_LETTER_SPACING);
+                                        hud.DrawHudText(renderer, line, std::max(0, (R::HUD_VIRTUAL_WIDTH - width) / 2), y,
+                                                        R::HUD_FONT_C_FIRST_DESCRIPTOR, 1.0f, 1.0f,
+                                                        R::HUD_FONT_C_LETTER_SPACING, SDL_Color{ 255, 255, 0, 255 });
+                                        y += R::HUD_MESSAGE_LINE_HEIGHT;
+                                    }
                                 }
 
                                 const auto visible = hudMessages.Visible();

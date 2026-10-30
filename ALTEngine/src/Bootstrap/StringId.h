@@ -173,6 +173,13 @@ namespace ALTEngine::Bootstrap
         DescSpeedCompensation,
         SaveAnywhere,
         DescSaveAnywhere,
+        // Modern > Testing (TestingSettings.h). OURS.
+        Testing,
+        DescTesting,
+        DisableEnemySpawn,
+        DescDisableEnemySpawn,
+        FaceIndexDisplay,
+        DescFaceIndexDisplay,
 
 
         // The original game's own text, extracted from LANGUAGE/*.BIN. The

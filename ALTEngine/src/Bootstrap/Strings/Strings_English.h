@@ -160,6 +160,12 @@ namespace ALTEngine::Bootstrap
             "The original's default timing: you, doors and lifts at twice the creatures' rate",
             "Save Anywhere",
             "Save Game keeps the level as it stands, not just its start",
+            "Testing",
+            "Aids for checking the levels, not part of the game",
+            "Disable Enemy Spawn",
+            "Levels start with no creatures, for looking around in peace",
+            "Face Index Display",
+            "Outlines the face under the crosshair and shows its number",
         };
         return table;
     }

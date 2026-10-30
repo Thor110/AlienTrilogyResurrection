@@ -1,6 +1,7 @@
 #include "MenuTree.h"
 #include "../Bootstrap/ModernPresets.h"
 #include "../Bootstrap/ModernSettings.h"
+#include "../Bootstrap/TestingSettings.h"
 
 #include <string>
 #include <utility>
@@ -396,6 +397,30 @@ namespace ALTEngine::Menu
                             StringId::EnableCheats, StringId::DescEnableCheats,
                             ALTEngine::Bootstrap::ModernFeature::EnableCheats),
             };
+
+            // Testing aids, last. Kept apart from the features above: Enable
+            // All and the presets never reach them (TestingSettings.h).
+            {
+                using ALTEngine::Bootstrap::TestingOption;
+                using ALTEngine::Bootstrap::TestingSettings;
+                TestingSettings testing(config);
+                auto testingNode = [&](TestingOption option, StringId title, StringId description) {
+                    MenuNode node = List(TestingSettings::MenuLabel(option), title, {
+                        Action("Off", StringId::Off),
+                        Action("On", StringId::On),
+                    });
+                    node.initialSelectedChild = FindChildIndexByLabel(node.children, testing.IsOn(option) ? "On" : "Off");
+                    node.isSettingsList = true;
+                    node.descriptionStringId = static_cast<int>(description);
+                    return node;
+                };
+                MenuNode testingList = List("Testing", StringId::Testing, {
+                    testingNode(TestingOption::DisableEnemySpawn, StringId::DisableEnemySpawn, StringId::DescDisableEnemySpawn),
+                    testingNode(TestingOption::FaceIndexDisplay, StringId::FaceIndexDisplay, StringId::DescFaceIndexDisplay),
+                });
+                testingList.descriptionStringId = static_cast<int>(StringId::DescTesting);
+                entries.push_back(std::move(testingList));
+            }
 
             return List("Modern", StringId::Modern, std::move(entries));
         }

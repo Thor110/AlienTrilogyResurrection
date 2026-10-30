@@ -99,6 +99,7 @@ namespace ALTEngine::Formats
         // Its 20 bytes still need to be skipped over even though it's not
         // read as a real quad.
         pos += 20;
+        result.faceRecordsPos = pos;
         result.quads.reserve(h.quadCount > 0 ? h.quadCount - 1 : 0);
         for (uint16_t i = 1; i < h.quadCount; ++i)
         {

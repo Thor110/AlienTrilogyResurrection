@@ -1,5 +1,6 @@
 #include "MenuController.h"
 #include "../Bootstrap/ModernSettings.h"
+#include "../Bootstrap/TestingSettings.h"
 #include "MenuTree.h"
 #include "../Formats/LevelList.h"
 #include "../Bootstrap/ModernPresets.h"
@@ -559,6 +560,12 @@ namespace ALTEngine::Menu
                     // every other feature's effective state while doing so.
                     modern.SetFeature(feature, leafLabel == "On");
                 }
+            }
+            else if (ALTEngine::Bootstrap::TestingOption option{};
+                     ALTEngine::Bootstrap::TestingSettings::ForMenuLabel(parentLabel, option))
+            {
+                ALTEngine::Bootstrap::Config testingConfig;
+                ALTEngine::Bootstrap::TestingSettings(testingConfig).Set(option, leafLabel == "On");
             }
             else if (parentLabel == "VSync")
             {

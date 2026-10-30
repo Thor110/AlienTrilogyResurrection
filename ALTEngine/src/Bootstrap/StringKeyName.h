@@ -157,6 +157,12 @@ namespace ALTEngine::Bootstrap
         case StringId::DescSpeedCompensation: return "DescSpeedCompensation";
         case StringId::SaveAnywhere: return "SaveAnywhere";
         case StringId::DescSaveAnywhere: return "DescSaveAnywhere";
+        case StringId::Testing: return "Testing";
+        case StringId::DescTesting: return "DescTesting";
+        case StringId::DisableEnemySpawn: return "DisableEnemySpawn";
+        case StringId::DescDisableEnemySpawn: return "DescDisableEnemySpawn";
+        case StringId::FaceIndexDisplay: return "FaceIndexDisplay";
+        case StringId::DescFaceIndexDisplay: return "DescFaceIndexDisplay";
         case StringId::GsOptions: return "GsOptions";
         case StringId::GsRedefineKeyboard: return "GsRedefineKeyboard";
         case StringId::GsRedefineMouse: return "GsRedefineMouse";
@@ -488,6 +494,12 @@ namespace ALTEngine::Bootstrap
         if (name == "DescSpeedCompensation") { return StringId::DescSpeedCompensation; }
         if (name == "SaveAnywhere") { return StringId::SaveAnywhere; }
         if (name == "DescSaveAnywhere") { return StringId::DescSaveAnywhere; }
+        if (name == "Testing") { return StringId::Testing; }
+        if (name == "DescTesting") { return StringId::DescTesting; }
+        if (name == "DisableEnemySpawn") { return StringId::DisableEnemySpawn; }
+        if (name == "DescDisableEnemySpawn") { return StringId::DescDisableEnemySpawn; }
+        if (name == "FaceIndexDisplay") { return StringId::FaceIndexDisplay; }
+        if (name == "DescFaceIndexDisplay") { return StringId::DescFaceIndexDisplay; }
         if (name == "GsOptions") { return StringId::GsOptions; }
         if (name == "GsRedefineKeyboard") { return StringId::GsRedefineKeyboard; }
         if (name == "GsRedefineMouse") { return StringId::GsRedefineMouse; }

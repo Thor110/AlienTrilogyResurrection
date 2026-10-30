@@ -83,6 +83,10 @@ namespace ALTEngine::Formats
         // these to patch a record's bytes.
         size_t doorRecordsPos = 0;
         size_t liftRecordsPos = 0;
+        // Where face (quad) 0's record starts, on the same count - the
+        // record after the leading FF FF FF FF sentinel. Face n is 20 bytes
+        // on from it.
+        size_t faceRecordsPos = 0;
         std::vector<struct ActionGroup> actions;  // always exactly 64, unfiltered - a cell's action byte indexes this directly
         std::vector<struct LogicGroup> logics;    // always exactly 64 entries
         std::vector<LightRecord> lights;          // 128 entries of 28 bytes
