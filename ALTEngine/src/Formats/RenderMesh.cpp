@@ -510,7 +510,12 @@ namespace ALTEngine::Formats
 
         for (size_t r = 0; r < runs.size(); ++r)
         {
-            if (gate && source.quads[r].flags != 0 && source.quads[r].flags != 2) { continue; }
+            if (gate)
+            {
+                // FUN_00046ffc: every other face, never the last.
+                if ((r & 1) != 0 || r + 1 == runs.size()) { continue; }
+                if (source.quads[r].flags != 0 && source.quads[r].flags != 2) { continue; }
+            }
             float minX = 1e30f, maxX = -1e30f, minY = 1e30f, maxY = -1e30f, minZ = 1e30f, maxZ = -1e30f;
             float minU = 1e30f, maxU = -1e30f, minV = 1e30f, maxV = -1e30f;
             bool ok = true;
@@ -537,6 +542,20 @@ namespace ALTEngine::Formats
             face.halfWidth = std::max(e[2], 1.0f) * 0.5f;
             face.halfHeight = std::max(e[1], 1.0f) * 0.5f;
             face.u0 = minU; face.v0 = minV; face.u1 = maxU; face.v1 = maxV;
+            // The face's own corners: its run of vertices, in emitted order.
+            uint32_t first = mesh.indices[runs[r].first], last = first;
+            for (size_t k = runs[r].first; k < runs[r].second; ++k)
+            {
+                first = std::min(first, mesh.indices[k]);
+                last = std::max(last, mesh.indices[k]);
+            }
+            for (int c = 0; c < 4; ++c)
+            {
+                const uint32_t vi = std::min(first + static_cast<uint32_t>(c), last);
+                const auto& v = mesh.vertices[vi];
+                face.px[c] = v.x; face.py[c] = v.y; face.pz[c] = v.z;
+                face.pu[c] = v.u; face.pv[c] = v.v;
+            }
             faces.push_back(face);
         }
         return faces;

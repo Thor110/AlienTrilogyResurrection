@@ -87,14 +87,23 @@ namespace ALTEngine::Formats
     // double-sided face put the rest of the list out of step and glued parts
     // of neighbouring faces into huge, wrong shards.)
     //
-    // FUN_000464ec only shatters faces whose draw routine (the file's +0x12,
-    // ModelQuad::flags) is 0 or 2. When the runs line up one to one with the
-    // source's faces, that gate is applied too.
+    // WHICH FACES. FUN_00046ffc walks the object's faces but, after each one,
+    // steps two faces on unless the next is the model's last, and stops on the
+    // last without shattering it: so it takes faces 0, 2, 4 ... and never the
+    // final one. FUN_000464ec then only shatters a face whose draw routine (the
+    // file's +0x12, ModelQuad::flags) is 0 or 2. Both are applied when the runs
+    // line up one to one with the source's faces (they always do for a model
+    // BuildRenderMesh made).
+    //
+    // `corners` are the face's own corners in order, in the model's space, with
+    // their UVs - a triangle repeats its last - so a shard can be cut from the
+    // real face rather than drawn as a square.
     struct MeshFaceExtent
     {
         float cx = 0, cy = 0, cz = 0;
         float halfWidth = 0, halfHeight = 0;
         float u0 = 0, v0 = 0, u1 = 0, v1 = 0;
+        float px[4] = {}, py[4] = {}, pz[4] = {}, pu[4] = {}, pv[4] = {};
     };
     std::vector<MeshFaceExtent> ExtractMeshFaces(const RenderMesh& mesh, const ModelMesh& source);
 

@@ -880,7 +880,15 @@ namespace ALTEngine::Renderer
             std::vector<ModelRenderer::ModelFace> faces;
             for (const auto& e : ALTEngine::Formats::ExtractMeshFaces(mesh, source))
             {
-                faces.push_back({ e.cx, e.cy, e.cz, e.halfWidth, e.halfHeight, e.u0, e.v0, e.u1, e.v1 });
+                ModelRenderer::ModelFace f{};
+                f.cx = e.cx; f.cy = e.cy; f.cz = e.cz;
+                f.halfWidth = e.halfWidth; f.halfHeight = e.halfHeight;
+                f.u0 = e.u0; f.v0 = e.v0; f.u1 = e.u1; f.v1 = e.v1;
+                for (int c = 0; c < 4; ++c)
+                {
+                    f.px[c] = e.px[c]; f.py[c] = e.py[c]; f.pz[c] = e.pz[c]; f.pu[c] = e.pu[c]; f.pv[c] = e.pv[c];
+                }
+                faces.push_back(f);
             }
             return faces;
         }
@@ -1760,6 +1768,12 @@ namespace ALTEngine::Renderer
         it->second.animator.ChangeTexture(static_cast<size_t>(animatorIndex), delta);
     }
 
+    float ModelRenderer::ModelBaseRotation(const ModelCacheKey& cacheKey)
+    {
+        auto it = loadedModels.find(cacheKey);
+        return it == loadedModels.end() ? 0.0f : it->second.baseRotationRadians;
+    }
+
     const std::vector<ModelRenderer::ModelFace>* ModelRenderer::ModelFaces(const ModelCacheKey& cacheKey)
     {
         auto it = loadedModels.find(cacheKey);
@@ -2106,17 +2120,27 @@ namespace ALTEngine::Renderer
                                 const float cyr = std::cos(sprite.rotY), syr = std::sin(sprite.rotY);
                                 const float czr = std::cos(sprite.rotZ), szr = std::sin(sprite.rotZ);
 
-                                const float lx[4] = { -sprite.halfWidth,  sprite.halfWidth,
-                                                       sprite.halfWidth, -sprite.halfWidth };
-                                const float ly[4] = {  sprite.halfHeight, sprite.halfHeight,
-                                                      -sprite.halfHeight, -sprite.halfHeight };
+                                float lx[4] = { -sprite.halfWidth,  sprite.halfWidth,
+                                                 sprite.halfWidth, -sprite.halfWidth };
+                                float ly[4] = {  sprite.halfHeight, sprite.halfHeight,
+                                                -sprite.halfHeight, -sprite.halfHeight };
+                                float lz[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                                if (sprite.corners)
+                                {
+                                    for (int corner = 0; corner < 4; ++corner)
+                                    {
+                                        lx[corner] = sprite.cornerX[corner];
+                                        ly[corner] = sprite.cornerY[corner];
+                                        lz[corner] = sprite.cornerZ[corner];
+                                    }
+                                }
 
                                 for (int corner = 0; corner < 4; ++corner)
                                 {
                                     // Z, then Y, then X.
                                     float ax = lx[corner] * czr - ly[corner] * szr;
                                     float ay = lx[corner] * szr + ly[corner] * czr;
-                                    float az = 0.0f;
+                                    float az = lz[corner];
 
                                     float bx = ax * cyr + az * syr;
                                     float bz = -ax * syr + az * cyr;
@@ -2129,8 +2153,12 @@ namespace ALTEngine::Renderer
                                     pz[corner] = sprite.z + cz2;
                                 }
                             }
-                            const float u[4] = { sprite.u0, sprite.u1, sprite.u1, sprite.u0 };
-                            const float v[4] = { sprite.v0, sprite.v0, sprite.v1, sprite.v1 };
+                            float u[4] = { sprite.u0, sprite.u1, sprite.u1, sprite.u0 };
+                            float v[4] = { sprite.v0, sprite.v0, sprite.v1, sprite.v1 };
+                            if (sprite.corners && !sprite.billboard)
+                            {
+                                for (int corner = 0; corner < 4; ++corner) { u[corner] = sprite.cornerU[corner]; v[corner] = sprite.cornerV[corner]; }
+                            }
 
                             for (int corner = 0; corner < 4; ++corner)
                             {

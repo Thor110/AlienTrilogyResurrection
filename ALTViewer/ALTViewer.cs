@@ -923,7 +923,8 @@ namespace ALTViewer
             };
             BinaryUtility.ReplaceBytes(replacements, patchDirectory);
             // L909LEV.MAP - the start room was sealed by four attribute-1 (wall) cells past its doorway with nothing drawn there;
-            //   they are set to 0, open floor, as on L391 (see Patch/L909LEV.txt)
+            //   they are set to 0, open floor, as on L391 (see Patch/L909LEV.txt). TEMPORARY, for testing: the room is most
+            //   likely the multiplayer holding room, sealed on purpose; undo this once multiplayer spawns are in.
             patchDirectory = gameDirectory + "SECT90\\L909LEV.MAP";
             replacements = new List<Tuple<long, byte[]>>()
             {

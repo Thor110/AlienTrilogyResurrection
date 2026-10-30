@@ -30,4 +30,11 @@ Cell		Offset		Was	Now
 (5,39)		0x513FE		01	00
 (5,40)		0x519DE		01	00
 
+TEMPORARY. This is most likely meant to be sealed: on a multiplayer map the players do not start at
+the header's start, and the room looks like a holding area - its lift carries developer graffiti
+("RIPLEY WOZ ERE" and the like) in colourful textures that match nothing else in the level (Edward,
+2026). It is kept for now so the level can be looked round quickly when testing, and should be undone
+once multiplayer spawns are in: remove this entry from data/Patches.json and ALTViewer's fixer, and set
+the four bytes back to 01.
+
 Applied by ALTEngine (data/Patches.json) and by ALTViewer's patch button.

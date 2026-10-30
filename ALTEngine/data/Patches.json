@@ -29147,7 +29147,7 @@
     },
     {
       "target": "SECT90/L909LEV.MAP",
-      "note": "L909LEV.MAP - the start room was sealed: the four cells past its doorway, (5,37)-(5,40), have attribute 1, a solid wall at load (0x282f5), with nothing drawn there, so a player starting at the header's start could never leave. Attribute 0, open floor, as the same doorway is on L391 - see Patch/L909LEV.txt (Claude, 2026)",
+      "note": "L909LEV.MAP - the start room was sealed: the four cells past its doorway, (5,37)-(5,40), have attribute 1, a solid wall at load (0x282f5), with nothing drawn there, so a player starting at the header's start could never leave. Attribute 0, open floor, as the same doorway is on L391. TEMPORARY, for testing: the room is most likely the multiplayer players' holding room (its lift carries developer graffiti, \"RIPLEY WOZ ERE\" and the like, in textures that do not match the level), sealed on purpose, and this should be undone once multiplayer spawns are in - see Patch/L909LEV.txt (Claude, 2026)",
       "edits": [
         {
           "offset": "0x5083E",

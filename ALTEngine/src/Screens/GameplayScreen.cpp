@@ -3101,11 +3101,15 @@ namespace ALTEngine::Screens
                                 || !IsInvisibleObjectType(level.crates[static_cast<size_t>(target.crateIndex)].type);
                             if (const auto* faces = hasModel ? ALTEngine::Renderer::ModelRenderer::ModelFaces(target.modelKey) : nullptr)
                             {
+                                // Turned as the object was drawn: its rotation
+                                // (from the record's compass) and the model's own.
+                                const float yaw = 3.14159265f - static_cast<float>(target.facing) * (3.14159265f / 4.0f)
+                                    + ALTEngine::Renderer::ModelRenderer::ModelBaseRotation(target.modelKey);
                                 shatter.Shatter(*faces,
                                                 ALTEngine::Renderer::ModelRenderer::ModelSheetKey(target.modelKey),
                                                 target.x, target.y, target.z,
                                                 target.scaleX, target.scaleY, target.scaleZ,
-                                                target.objectType, target.facing);
+                                                target.objectType, yaw);
                             }
                             if (target.kind == D::TARGET_BARREL)
                             {
@@ -3524,9 +3528,11 @@ namespace ALTEngine::Screens
                     // slot id - FUN_0003e93c passes it straight through - so an
                     // animation carries its own audio and the weapon report
                     // lands on the frame the artist put it on.
+                    // On the player's channel, each cue cutting off the last
+                    // (FUN_0003e93c -> FUN_00040b2c with EBX -1 -> FUN_0005b21b).
                     if (weaponView.SoundCued())
                     {
-                        ALTEngine::Audio::SfxPlayer::PlaySlot(
+                        ALTEngine::Audio::SfxPlayer::PlayPlayerSlot(
                             weaponView.CuedSoundId(), digits.c_str(), cdDirectory);
                     }
 

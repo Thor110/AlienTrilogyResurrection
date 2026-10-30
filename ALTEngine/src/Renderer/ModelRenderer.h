@@ -117,6 +117,12 @@ namespace ALTEngine::Renderer
         bool billboard = true;
         float rotX = 0.0f, rotY = 0.0f, rotZ = 0.0f;
 
+        // An oriented quad can instead give its own four corners, around its
+        // centre and before the turn, with a UV for each (a shard's piece of
+        // a model face). Used when `corners` is true and `billboard` false.
+        bool corners = false;
+        float cornerX[4] = {}, cornerY[4] = {}, cornerZ[4] = {}, cornerU[4] = {}, cornerV[4] = {};
+
         bool visible = true;
     };
 
@@ -317,7 +323,12 @@ namespace ALTEngine::Renderer
             float halfWidth;
             float halfHeight;
             float u0, v0, u1, v1;   // the face's own UV rect
+            // Its corners in order, model space, with their UVs.
+            float px[4], py[4], pz[4], pu[4], pv[4];
         };
+
+        // The fixed turn a model is drawn with on top of its object's own.
+        static float ModelBaseRotation(const ModelCacheKey& cacheKey);
 
         // The faces of a loaded model, or nullptr if it was never loaded.
         // Derived at load from the render mesh's own triangles.

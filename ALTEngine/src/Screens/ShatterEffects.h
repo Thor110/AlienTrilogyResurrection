@@ -30,12 +30,12 @@ namespace ALTEngine::Screens
         {
             float x = 0, y = 0, z = 0;
             float vx = 0, vy = 0, vz = 0;
-            // The quarter's full size; it is drawn at life / 64 of this.
-            float halfWidth = 16.0f;
-            float halfHeight = 16.0f;
             // +0x18: the speed of the next bounce, 8 less each time.
             int bounce = 0;
-            float u0 = 0, v0 = 0, u1 = 1, v1 = 1;
+            // The piece's own four corners around its centre, in the model's
+            // space and scale, with their UVs (FUN_000464ec's cut).
+            float cx[4] = {}, cy[4] = {}, cz[4] = {}, cu[4] = {}, cv[4] = {};
+            float yaw = 0.0f;   // the object's turn, radians, as it was drawn
             int angleX = 0, angleY = 0, angleZ = 0;
             int spinX = 0, spinY = 0, spinZ = 0;
             int life = 0;
@@ -45,64 +45,76 @@ namespace ALTEngine::Screens
 
         // Tears an object apart. `faces` is the model's own face list and
         // `sheetKey` the sprite sheet its texture was uploaded under - both from
-        // ModelRenderer.
+        // ModelRenderer. `yawRadians` and the scales are the object's own, as it
+        // was drawn (its rotation plus the model's base turn).
         //
-        // `scale` is the original's per-object shard size: 0x28 for a barrel,
-        // 0x20 for everything else (Formats::ShardScale). The original applies
-        // it as (value << 6) on all three axes of the face; here it scales the
-        // face's own half-extents, so a shard stays proportional to the piece it
-        // came from.
+        // FUN_000464ec, per face: the edge midpoints and the centre, the centre
+        // moved by (random byte - 0x80) on each axis, and four pieces each of
+        // { a corner, an edge midpoint, the centre, the other edge midpoint },
+        // taken relative to that centre and all starting there. Each wears its
+        // quarter of the face's texture and turns with the object (+0x12) while
+        // spinning about the model's Z axis (+0x14), which FUN_0002d054 draws
+        // through the full transform - so a piece keeps its face's plane: one
+        // from a front face spins like a plate, one from a top face tumbles.
         void Shatter(const std::vector<ALTEngine::Renderer::ModelRenderer::ModelFace>& faces,
                      const std::string& sheetKey,
                      float originX, float originY, float originZ,
                      float objectScaleX, float objectScaleY, float objectScaleZ,
-                     int objectType, int objectFacing)
+                     int objectType, float yawRadians)
         {
             namespace OS = ALTEngine::Formats;
             const float launchSpeed = static_cast<float>(OS::LaunchSpeed(objectType));
+            const float cy = std::cos(yawRadians), sy = std::sin(yawRadians);
 
             for (const auto& face : faces)
             {
                 if (shards.size() + OS::SHARDS_PER_FACE > MAX_SHARDS) { return; }
 
-                // The face's own position on the object, so pieces start where
-                // that part of the crate actually was.
-                const float fx = originX + face.cx * objectScaleX;
-                const float fy = originY + face.cy * objectScaleY;
-                const float fz = originZ + face.cz * objectScaleZ;
-
-                // The original jitters the face centre before cutting, so the
-                // four quarters are not identical.
-                const float jx = static_cast<float>(rng.Bits(0xff) - OS::FACE_CENTRE_JITTER);
-                const float jy = static_cast<float>(rng.Bits(0xff) - OS::FACE_CENTRE_JITTER);
-                const float jz = static_cast<float>(rng.Bits(0xff) - OS::FACE_CENTRE_JITTER);
-
-                for (int i = 0; i < OS::SHARDS_PER_FACE; ++i)
+                // Corners in the object's scale, in the model's space.
+                float px[4], py[4], pz[4];
+                for (int c = 0; c < 4; ++c)
                 {
+                    px[c] = face.px[c] * objectScaleX;
+                    py[c] = face.py[c] * objectScaleY;
+                    pz[c] = face.pz[c] * objectScaleZ;
+                }
+                auto mid = [](float a, float b) { return (a + b) * 0.5f; };
+                // The centre: halfway between the 0-3 and 1-2 edges' midpoints,
+                // then jittered.
+                float ccx = mid(mid(px[0], px[3]), mid(px[1], px[2])) + static_cast<float>(rng.Bits(0xff) - OS::FACE_CENTRE_JITTER);
+                float ccy = mid(mid(py[0], py[3]), mid(py[1], py[2])) + static_cast<float>(rng.Bits(0xff) - OS::FACE_CENTRE_JITTER);
+                float ccz = mid(mid(pz[0], pz[3]), mid(pz[1], pz[2])) + static_cast<float>(rng.Bits(0xff) - OS::FACE_CENTRE_JITTER);
+                const float cu = (face.pu[0] + face.pu[1] + face.pu[2] + face.pu[3]) * 0.25f;
+                const float cv = (face.pv[0] + face.pv[1] + face.pv[2] + face.pv[3]) * 0.25f;
+
+                // Where the centre is in the world: the object's own transform.
+                const float wx = originX + ccx * cy + ccz * sy;
+                const float wy = originY + ccy;
+                const float wz = originZ - ccx * sy + ccz * cy;
+
+                for (int k = 0; k < OS::SHARDS_PER_FACE; ++k)
+                {
+                    const int n = (k + 1) & 3, p = (k + 3) & 3;
                     Shard shard;
                     shard.alive = true;
                     shard.sheetKey = sheetKey;
+                    shard.yaw = yawRadians;
 
-                    // A quarter of the face: from a corner to the centre
-                    // (FUN_000464ec cuts at the edge midpoints and the
-                    // centre). It is drawn at (life << 6) / 0x1000 of that
-                    // (FUN_0002d054), so it shrinks away as it flies.
-                    shard.halfWidth = face.halfWidth * 0.5f * std::max(objectScaleX, objectScaleZ);
-                    shard.halfHeight = face.halfHeight * 0.5f * objectScaleY;
+                    // { corner, midpoint to the next, centre, midpoint to the last }
+                    const float qx[4] = { px[k], mid(px[k], px[n]), ccx, mid(px[k], px[p]) };
+                    const float qy[4] = { py[k], mid(py[k], py[n]), ccy, mid(py[k], py[p]) };
+                    const float qz[4] = { pz[k], mid(pz[k], pz[n]), ccz, mid(pz[k], pz[p]) };
+                    const float qu[4] = { face.pu[k], mid(face.pu[k], face.pu[n]), cu, mid(face.pu[k], face.pu[p]) };
+                    const float qv[4] = { face.pv[k], mid(face.pv[k], face.pv[n]), cv, mid(face.pv[k], face.pv[p]) };
+                    for (int c = 0; c < 4; ++c)
+                    {
+                        shard.cx[c] = qx[c] - ccx; shard.cy[c] = qy[c] - ccy; shard.cz[c] = qz[c] - ccz;
+                        shard.cu[c] = qu[c]; shard.cv[c] = qv[c];
+                    }
 
-                    // Each quarter takes its own corner of the face's UV rect,
-                    // matching the corner/midpoint/centre cut.
-                    const float um = (face.u0 + face.u1) * 0.5f;
-                    const float vm = (face.v0 + face.v1) * 0.5f;
-                    shard.u0 = (i & 1) ? um : face.u0;
-                    shard.u1 = (i & 1) ? face.u1 : um;
-                    shard.v0 = (i & 2) ? vm : face.v0;
-                    shard.v1 = (i & 2) ? face.v1 : vm;
-
-                    // All four start from the jittered centre.
-                    shard.x = fx + jx;
-                    shard.y = fy + jy;
-                    shard.z = fz + jz;
+                    shard.x = wx;
+                    shard.y = wy;
+                    shard.z = wz;
 
                     // UP, with a small sideways spread. Not radially outward -
                     // see LaunchSpeed.
@@ -110,10 +122,10 @@ namespace ALTEngine::Screens
                     shard.vy = launchSpeed + static_cast<float>(rng.Bits(OS::LAUNCH_SPREAD));
                     shard.vz = static_cast<float>(rng.Bits(OS::LAUNCH_SPREAD) - OS::LAUNCH_SPREAD_CENTRE);
 
-                    // ONE axis spins. The first angle is always zero, the second
-                    // is fixed from the object, and only the third turns.
+                    // ONE axis spins: +0x10 is 0, +0x12 the object's turn, and
+                    // only +0x14 moves.
                     shard.angleX = 0;
-                    shard.angleY = objectFacing;
+                    shard.angleY = 0;
                     shard.angleZ = rng.Bits(PlayerCamera::ANGLE_MASK);
                     shard.spinX = 0;
                     shard.spinY = 0;
@@ -190,16 +202,23 @@ namespace ALTEngine::Screens
                 ALTEngine::Renderer::PlacedSprite sprite;
                 sprite.textureKey = shard.sheetKey;
                 sprite.x = shard.x; sprite.y = shard.y; sprite.z = shard.z;
+                // Drawn at (life << 6) / 0x1000 of its size (FUN_0002d054).
                 const float scale = static_cast<float>(shard.life << OS::SHARD_SCALE_SHIFT) / 0x1000;
-                sprite.halfWidth = shard.halfWidth * scale;
-                sprite.halfHeight = shard.halfHeight * scale;
-                sprite.u0 = shard.u0; sprite.v0 = shard.v0;
-                sprite.u1 = shard.u1; sprite.v1 = shard.v1;
+                sprite.corners = true;
+                for (int c = 0; c < 4; ++c)
+                {
+                    sprite.cornerX[c] = shard.cx[c] * scale;
+                    sprite.cornerY[c] = shard.cy[c] * scale;
+                    sprite.cornerZ[c] = shard.cz[c] * scale;
+                    sprite.cornerU[c] = shard.cu[c];
+                    sprite.cornerV[c] = shard.cv[c];
+                }
 
                 // Oriented, not billboarded - a shard has to show its back.
+                // Spun about the model's Z, then turned with the object.
                 sprite.billboard = false;
-                sprite.rotX = PlayerCamera::ToRadians(shard.angleX);
-                sprite.rotY = PlayerCamera::ToRadians(shard.angleY);
+                sprite.rotX = 0.0f;
+                sprite.rotY = shard.yaw;
                 sprite.rotZ = PlayerCamera::ToRadians(shard.angleZ);
                 out.push_back(sprite);
             }

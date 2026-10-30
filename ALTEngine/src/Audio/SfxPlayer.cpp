@@ -39,11 +39,8 @@ namespace ALTEngine::Audio
         };
     }
 
-    void SfxPlayer::PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory, float volume,
-                              bool once)
+    const std::vector<uint8_t>& SfxPlayer::Sample(const std::string& stem, const std::filesystem::path& cdDirectory)
     {
-        if (stem.empty()) { return; }
-
         auto& cache = Cache();
         auto it = cache.find(stem);
         if (it == cache.end())
@@ -69,8 +66,15 @@ namespace ALTEngine::Audio
 
             it = cache.emplace(stem, std::move(data)).first;
         }
+        return it->second;
+    }
 
-        if (it->second.empty()) { return; }
+    void SfxPlayer::PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory, float volume,
+                              bool once)
+    {
+        if (stem.empty()) { return; }
+        const std::vector<uint8_t>& sample = Sample(stem, cdDirectory);
+        if (sample.empty()) { return; }
 
         // Each sound gets a voice of its own and the device mixes them, so
         // gunfire, footsteps and impacts overlap the way the original's
@@ -79,16 +83,16 @@ namespace ALTEngine::Audio
         // ticks aren't the game's sound driver and repeat as fast as keys go.
         auto& app = ALTEngine::Bootstrap::AppWindow::Instance();
         auto& playing = VoiceSamples();
-        for (const auto& [stream, sample] : playing)
+        for (const auto& [stream, held] : playing)
         {
-            if (once && sample == &it->second && SDL_GetAudioStreamQueued(stream) > 0) { return; }
+            if (once && held == &sample && SDL_GetAudioStreamQueued(stream) > 0) { return; }
         }
         SDL_AudioStream* voice = app.AcquireSfxVoice();
         if (!voice) { return; }
-        playing[voice] = &it->second;
+        playing[voice] = &sample;
         // Voices are shared, so every sound sets its own gain.
         SDL_SetAudioStreamGain(voice, app.SfxGain() * volume);
-        SDL_PutAudioStreamData(voice, it->second.data(), static_cast<int>(it->second.size()));
+        SDL_PutAudioStreamData(voice, sample.data(), static_cast<int>(sample.size()));
     }
 
     void SfxPlayer::Play(SfxId id, const std::filesystem::path& cdDirectory)
@@ -108,6 +112,28 @@ namespace ALTEngine::Audio
         // fired once. Nothing drives a continuous sound yet, so they are played
         // as one-shots for now - noted so it is not mistaken for correct.
         PlayFile(name, cdDirectory, 1.0f, true);
+    }
+
+    void SfxPlayer::PlayPlayerSlot(int slotId, const char* levelCode, const std::filesystem::path& cdDirectory)
+    {
+        const char* name = SfxBank::SlotName(levelCode, slotId);
+        if (!name || name[0] == '\0') { return; }
+        const std::string stem = name;
+        const std::vector<uint8_t>& sample = Sample(stem, cdDirectory);
+        if (sample.empty()) { return; }
+
+        auto& app = ALTEngine::Bootstrap::AppWindow::Instance();
+        SDL_AudioStream* voice = app.PlayerSfxVoice();
+        if (!voice) { return; }
+        auto& playing = VoiceSamples();
+        // FUN_0005b21b's one exception: sample 0xc (slot 0x0b, the
+        // flamethrower's loop) already on the channel and not finished.
+        const bool looping = SfxBank::Loops(name);
+        if (looping && playing[voice] == &sample && SDL_GetAudioStreamQueued(voice) > 0) { return; }
+        SDL_ClearAudioStream(voice);
+        playing[voice] = &sample;
+        SDL_SetAudioStreamGain(voice, app.SfxGain());
+        SDL_PutAudioStreamData(voice, sample.data(), static_cast<int>(sample.size()));
     }
 
     void SfxPlayer::PlaySlotAtVolume(int slotId, float volume, const char* levelCode,

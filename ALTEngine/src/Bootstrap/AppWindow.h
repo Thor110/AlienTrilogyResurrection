@@ -49,6 +49,12 @@ namespace ALTEngine::Bootstrap
         // device couldn't open.
         SDL_AudioStream* AcquireSfxVoice();
 
+        // The player's own channel: voice 0, kept out of AcquireSfxVoice's
+        // pool. The original plays the sounds it starts with no position
+        // (FUN_00040b2c with EBX -1 -> FUN_0005b21b), the weapons' among them,
+        // on one channel of their own, cutting off what was there.
+        SDL_AudioStream* PlayerSfxVoice();
+
         // Applies to every voice, now and for later sounds. 0..1.
         void SetSfxGain(float gain);
         float SfxGain() const { return sfxGain; }

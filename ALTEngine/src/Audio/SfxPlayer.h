@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <vector>
 #include <string>
 
 namespace ALTEngine::Audio
@@ -40,6 +41,13 @@ namespace ALTEngine::Audio
         // 0x2fff, out of 0x3fff. So 3/4 volume close to, falling to 0.44.
         static float CreatureVolume(float dx, float dz);
 
+        // The weapons' animation cues (FUN_0003e93c) on the player's channel, as the
+        // original's FUN_0005b21b plays them: each one cuts off the last, so a
+        // held smartgun or pulse rifle is heard on every shot. Only the
+        // flamethrower's loop (slot 0x0b) is left running if it already is.
+        static void PlayPlayerSlot(int slotId, const char* levelCode,
+                                   const std::filesystem::path& cdDirectory);
+
         // Samples are read once and kept. Call between levels to release them.
         static void ClearCache();
 
@@ -47,6 +55,9 @@ namespace ALTEngine::Audio
         static void SetVolume(int volume0to10);
 
     private:
+        // The sample for a stem, loaded on first use; empty if missing.
+        static const std::vector<uint8_t>& Sample(const std::string& stem, const std::filesystem::path& cdDirectory);
+
         // `once`: not while the same sample is still playing (the game's rule).
         static void PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory,
                              float volume = 1.0f, bool once = false);
