@@ -2662,7 +2662,16 @@ namespace ALTEngine::Screens
                                 const int pgz = ToGridSpaceZ(camera.z, originZ);
                                 enemy.zoneVisible = CS::ZoneVisible(level,
                                     ALTEngine::Formats::CellIndex(level, egx >> 9, egz >> 9), drawnZones);
-                                if (enemy.distance <= CS::MAX_DISTANCE)
+                                // The gunners and the egg look along a ray
+                                // (FUN_00032aec, to 0x1555); everything else
+                                // along the ground (FUN_0003231c, to 0x2000).
+                                // The ray's else used to sit after the ground
+                                // test and clear it for every other creature,
+                                // so no hugger or other close attacker ever
+                                // had a line to the player and none attacked.
+                                const bool rayLooker = enemy.type == 1 || (enemy.type >= 0x0b && enemy.type <= 0x0e);
+                                enemy.lineOfFire = false;
+                                if (!rayLooker && enemy.distance <= CS::MAX_DISTANCE)
                                 {
                                     CS::Query q;
                                     q.x = static_cast<float>(egx);
@@ -2677,9 +2686,7 @@ namespace ALTEngine::Screens
                                     q.occupancy = &occupancy;
                                     enemy.lineOfFire = CS::LineOfFire(level, q);
                                 }
-                                // The gunners and the egg look along a ray
-                                // instead (FUN_00032aec), and only to 0x1555.
-                                if (enemy.type == 1 || (enemy.type >= 0x0b && enemy.type <= 0x0e))
+                                if (rayLooker)
                                 {
                                     CS::Query3D q;
                                     q.x = static_cast<float>(egx);
@@ -2693,10 +2700,6 @@ namespace ALTEngine::Screens
                                     q.distance = enemy.distance;
                                     q.occupancy = &occupancy;
                                     enemy.lineOfFire = CS::LineOfFire3D(level, q);
-                                }
-                                else
-                                {
-                                    enemy.lineOfFire = false;
                                 }
                             }
                             aiCreature = &enemy;
