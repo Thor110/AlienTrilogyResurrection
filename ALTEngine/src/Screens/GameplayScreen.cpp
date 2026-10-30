@@ -3530,7 +3530,11 @@ namespace ALTEngine::Screens
                     // lands on the frame the artist put it on.
                     // On the player's channel, each cue cutting off the last
                     // (FUN_0003e93c -> FUN_00040b2c with EBX -1 -> FUN_0005b21b).
-                    if (weaponView.SoundCued())
+                    // Only on the weapon's own pass, as FUN_0003e93c reads the
+                    // cue as it steps the animation: the cue stays up until the
+                    // next step, so reading it every player tick played it two
+                    // or three times over, each one now cutting off the last.
+                    if (weaponPass && weaponView.SoundCued())
                     {
                         ALTEngine::Audio::SfxPlayer::PlayPlayerSlot(
                             weaponView.CuedSoundId(), digits.c_str(), cdDirectory);

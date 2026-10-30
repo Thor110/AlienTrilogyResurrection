@@ -22004,20 +22004,20 @@
     },
     {
       "target": "SECT11/L111LEV.MAP",
-      "note": "L111LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38). The face's vertex list is written back to its original order (8052, 8049, 8113): a quarter-turn applied here before only made up for the port's old triangle mapping, and files that already carry it are put right - see Patch/another-fix.txt",
+      "note": "L111LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38), and the face's texture turned a quarter-turn counter-clockwise by rotating its vertex list (8052, 8049, 8113 -> 8049, 8113, 8052) - see Patch/another-fix.txt",
       "edits": [
         {
           "offset": "0x46DB4",
           "bytes": [
-            "0x74",
-            "0x1F",
-            "0x00",
-            "0x00",
             "0x71",
             "0x1F",
             "0x00",
             "0x00",
             "0xB1",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0x74",
             "0x1F",
             "0x00",
             "0x00",
@@ -22037,20 +22037,20 @@
     },
     {
       "target": "SECT90/L900LEV.MAP",
-      "note": "L900LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38), same bug as L111LEV.MAP at the identical offset. The face's vertex list is written back to its original order (8052, 8049, 8113): a quarter-turn applied here before only made up for the port's old triangle mapping, and files that already carry it are put right - see Patch/another-fix.txt",
+      "note": "L900LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38), and the face's texture turned a quarter-turn counter-clockwise by rotating its vertex list (8052, 8049, 8113 -> 8049, 8113, 8052), same bug as L111LEV.MAP at the identical offset - see Patch/another-fix.txt",
       "edits": [
         {
           "offset": "0x46DB4",
           "bytes": [
-            "0x74",
-            "0x1F",
-            "0x00",
-            "0x00",
             "0x71",
             "0x1F",
             "0x00",
             "0x00",
             "0xB1",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0x74",
             "0x1F",
             "0x00",
             "0x00",

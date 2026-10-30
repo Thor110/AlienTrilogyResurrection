@@ -123,3 +123,21 @@ TEST_CASE("Shatter faces: every other face, never the last, routines 0 and 2 onl
     CHECK(std::fabs(faces[1].pz[3] - 1300.0f) < 0.01f);
     CHECK(std::fabs(faces[1].py[1] - 200.0f) < 0.01f);
 }
+
+TEST_CASE("Level triangles: a, b, c take the texture's x0y1, x1y0, x0y0")
+{
+    // Draw routine 1 (0x1b5c8) and the quad routine (0x19af0), traced: the
+    // descriptor's corners run x0y0, x1y0, x0y1, x1y1, and a triangle puts the
+    // first three on c, b and a.
+    LevelGeometry level;
+    level.vertices = { { 0, 0, 0, 0 }, { 512, 0, 0, 0 }, { 0, 512, 0, 0 } };
+    ModelQuad q{}; q.a = 0; q.b = 1; q.c = 2; q.d = -1; q.texIndex = 0; q.flags = 1;
+    level.quads = { q };
+    const std::vector<BxRectangle> rects = { BxRectangle{ 64, 32, 64, 32, 0, 0 } };
+    const RenderMesh mesh = BuildLevelRenderMesh(level, rects);
+    REQUIRE(mesh.vertices.size() >= size_t(3));
+    const float x0 = 64 / 256.0f, x1 = 128 / 256.0f, y0 = 32 / 256.0f, y1 = 64 / 256.0f;
+    CHECK(std::fabs(mesh.vertices[0].u - x0) < 1e-5f); CHECK(std::fabs(mesh.vertices[0].v - y1) < 1e-5f);
+    CHECK(std::fabs(mesh.vertices[1].u - x1) < 1e-5f); CHECK(std::fabs(mesh.vertices[1].v - y0) < 1e-5f);
+    CHECK(std::fabs(mesh.vertices[2].u - x0) < 1e-5f); CHECK(std::fabs(mesh.vertices[2].v - y0) < 1e-5f);
+}

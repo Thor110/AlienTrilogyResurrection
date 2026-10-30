@@ -11,7 +11,7 @@ it is now in the file.
 0x49BCA		00	->	02
 
 Also in this level, at the same offsets as on L111LEV: the lift vertex fix (Patch/new-fix.txt) and the
-texture index fix (Patch/another-fix.txt).
+texture index fix with its quarter-turn (Patch/another-fix.txt).
 
 Fixes moved from ALTViewer's model export into the file (Claude, 2026)
 
