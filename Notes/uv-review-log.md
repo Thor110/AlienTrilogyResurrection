@@ -166,6 +166,20 @@ the band.
 | 9911 | 0x43BB0 | round 2 | TR/BL corner, mirrored (quad, last corner repeated) | 4440, 4906, 4919, -1 | 1 | 4906, 4919, 4440, 4440 | 2 |
 | 9915 | 0x43C00 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 4923, 4915, 4916, -1 | 1 | 4916, 4915, 4923, -1 | 5 |
 
+## L232LEV
+
+Pillar faces drawn with textures that have see-through gaps, given the solid pillar ones beside them.
+
+| Face | Offset | Added | Change | Was | Routine | Now | Routine |
+|---|---|---|---|---|---|---|---|
+| 2521 | 0x26278 | round 6 | texture 161 -> 164 | 11137, 11623, 11626, 11627 | 2 | 11137, 11623, 11626, 11627 | 2 |
+| 2522 | 0x2628C | round 6 | texture 172 -> 164 | 11626, 11623, 11630, 11633 | 0 | 11626, 11623, 11630, 11633 | 0 |
+| 2505 | 0x26138 | round 6 | texture 161 -> 164 | 11628, 11140, 11627, 11626 | 0 | 11628, 11140, 11627, 11626 | 0 |
+| 2508 | 0x26174 | round 6 | texture 169 -> 164 | 11631, 11624, 11628, 11634 | 2 | 11631, 11624, 11628, 11634 | 2 |
+| 2183 | 0x24810 | round 6 | texture 170 -> 165 | 11697, 11704, 11701, 11692 | 0 | 11697, 11704, 11701, 11692 | 0 |
+| 2534 | 0x2637C | round 6 | texture 169 -> 168 | 11703, 11704, 11697, 11695 | 0 | 11703, 11704, 11697, 11695 | 0 |
+| 2207 | 0x249F0 | round 6 | texture 169 -> 168 | 11700, 11703, 11695, 11689 | 2 | 11700, 11703, 11695, 11689 | 2 |
+
 ## Missing faces - to add in the final pass
 
 Holes in the levels where a face is missing. They are added once every other fix is in, because inserting a face renumbers every later face in its level (see engine-remaining-work.md, "How the original finds a cell's faces"). Each new record goes into the face run of the cell it sits in, so the original draws it with that cell; then the level's face count, the cells' run starts past it, and the MAP0 and FORM sizes all move up. None of this is patched yet, except L161's interim.
@@ -186,6 +200,10 @@ Holes in the levels where a face is missing. They are added once every other fix
 ## To look at again
 
 - **L262, face 11915** (0x56E10): a cabinet face drawn with routine 8, animator 9, which loops frames 295-298 (a dark turning mechanism) on its own - no switch or object drives it, and no other face uses it. The two identical cabinets in the same room have no animation, so it looks out of place (Edward). The fix would be texture 45 with routine 8 -> 0 (as texture 45, under routine 8 it would mean an animator that does not exist). Rendered on a scratch copy, not patched.
+
+- **L321-L325, scratched for now (Edward).** These are versions of one map with different lighting (normal, red, blue, and so on). Parts of each version are probably closed off and only used in another, so a face that looks wrong in one may never be seen there. Look at how the doors work across the versions first, then pick these up again during a proper playthrough if they show:
+  - L321: 13 faces facing out of the level (4251, 5690, 5775, 5776, 5777, 5778, 5779, 5781, 5783, 5784, 5785, 5786, 5787) - the fix would be (b, a, d, c) with routine 0 -> 2 each, texture unchanged; and 4251, a ceiling light, texture 1 -> 103.
+  - L322 (and L323, L324): the ceiling light at faces 4251 and 4253 - two faces in one place with the same winding (texture 0, a green placeholder, and texture 1), so they fight over the same pixels. L325 has it as both texture 103, facing opposite ways; matching that would be 4251 texture 103, and 4253 texture 103 with vertices (4975, 4437, 4438, 4976).
 
 ## Left as they are
 

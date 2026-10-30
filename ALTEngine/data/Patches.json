@@ -33325,6 +33325,61 @@
           ]
         }
       ]
+    },
+    {
+      "target": "SECT21/L232LEV.MAP",
+      "note": "L232LEV.MAP - UV review (TESTING, Edward with the Face Index Display, 2026): pillar faces drawn with see-through textures given the solid pillar ones - 2521, 2522, 2505 and 2508 -> texture 164; 2183 -> 165; 2534 and 2207 -> 168. Tracked in Notes/uv-review-log.md",
+      "edits": [
+        {
+          "offset": "0x26288",
+          "bytes": [
+            "0xA4",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2629C",
+          "bytes": [
+            "0xA4",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x26148",
+          "bytes": [
+            "0xA4",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x26184",
+          "bytes": [
+            "0xA4",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x24820",
+          "bytes": [
+            "0xA5",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2638C",
+          "bytes": [
+            "0xA8",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x24A00",
+          "bytes": [
+            "0xA8",
+            "0x00"
+          ]
+        }
+      ]
     }
   ],
   "faceUvRotations": [],

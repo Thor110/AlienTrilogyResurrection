@@ -441,3 +441,8 @@ All three came down to the level faces' draw routines, which the port mostly ign
   - add 20 to the MAP0 chunk size (big-endian, file offset 0x10) and to the FORM size (file offset 4).
   Everything after the insertion moves 20 bytes, so it has to run after the byte patches (as the model removals already do). It also renumbers every later face in that level, which the Face Index Display and the review lists go by. For L161 the hole belongs to cell (8, 1), whose run is faces 34-37 (it holds neighbour 36). A new vertex, when one is needed, would go at the end of the vertex table: the vertex count (MAP0 + 0) goes up and everything after moves 8 bytes.
 - **Face 0 is in no cell's run**, so the original may never draw it. Unverified in DOS.
+
+## Zip 66: UV review round 6 (L232)
+
+- L232: seven pillar faces given the solid pillar textures (164, 165, 168) in place of ones with see-through gaps.
+- L321 and L322: worked through, then scratched (Edward) - versions of one map whose closed-off parts are used by the other versions; the details are on the review log's "To look at again" list.
