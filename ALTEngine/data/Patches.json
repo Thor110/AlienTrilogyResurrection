@@ -31839,6 +31839,282 @@
           ]
         }
       ]
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "L371LEV.MAP - UV review, round 1 (TESTING, Edward with the Face Index Display, 2026): recess corners at faces 5631/5636 (the recess at z 9984, texture 27) reversed to routine 5 like the other top left and bottom right corners; the top right and bottom left corners of four recesses (5640, 5628, 6820, 6815, 7609, 7603, 5014, 5002) mirrored to match them. A triangle can only show the half of its tile cut along x0y1-x1y0, and these need the other half, so each becomes a quad with its last corner repeated, routine 2 (mirrored): the real triangle is (a, b, c) and (a, c, d) has no area. Tracked in Notes/uv-review-log.md",
+      "edits": [
+        {
+          "offset": "0x2ED50",
+          "bytes": [
+            "0xB1",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x3C",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x45",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x2ED62",
+          "bytes": [
+            "0x05"
+          ]
+        },
+        {
+          "offset": "0x2EDB4",
+          "bytes": [
+            "0x36",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x37",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x41",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x2EDC6",
+          "bytes": [
+            "0x05"
+          ]
+        },
+        {
+          "offset": "0x2EE04",
+          "bytes": [
+            "0x3D",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x44",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x3E",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x3E",
+            "0x11",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2EE16",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x2ED14",
+          "bytes": [
+            "0x38",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x42",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0xAF",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0xAF",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2ED26",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x34A34",
+          "bytes": [
+            "0x4A",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x51",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x49",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x49",
+            "0x11",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x34A46",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x349D0",
+          "bytes": [
+            "0xBA",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0xBD",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0xB9",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0xB9",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x349E2",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x387D8",
+          "bytes": [
+            "0xFB",
+            "0x10",
+            "0x00",
+            "0x00",
+            "0x0C",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0xFC",
+            "0x10",
+            "0x00",
+            "0x00",
+            "0xFC",
+            "0x10",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x387EA",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x38760",
+          "bytes": [
+            "0x06",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x0F",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x07",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x07",
+            "0x11",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x38772",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x2BD1C",
+          "bytes": [
+            "0x87",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x8F",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x88",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x88",
+            "0x11",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2BD2E",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x2BC2C",
+          "bytes": [
+            "0x7F",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x8C",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x80",
+            "0x11",
+            "0x00",
+            "0x00",
+            "0x80",
+            "0x11",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2BC3E",
+          "bytes": [
+            "0x02"
+          ]
+        }
+      ]
     }
   ],
   "faceUvRotations": [],
