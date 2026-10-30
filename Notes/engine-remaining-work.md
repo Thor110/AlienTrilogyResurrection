@@ -422,3 +422,10 @@ All three came down to the level faces' draw routines, which the port mostly ign
 - **All Testing Options**, first in the Testing list, sets every testing option on or off at once. It reads On only when they all are, and the whole list is refreshed whenever any row in it changes.
 - **L371 round 4 needs revisiting**: Edward reports a number of its fixes are wrong. He is going over the other levels first and will come back to L371.
 
+## Zip 59: UV review round 5 (L131, L141/L903, L161)
+
+- L131: 6754 texture 154 -> 183; 6752 turned to match 7497 (they face the same way, so matching on screen is matching in the world).
+- L141, and L903 (the same geometry at the same offsets): 2735 texture 223 -> 217; 2736 flipped horizontally - its texture lies on its side, so that is a v flip, (c, d, a, b) with routine 2; 2196 texture 0 -> 225 (it sits behind a crate side, so it shows up close).
+- L161: a missing face, the quad between faces 0, 29, 36 and 40. A face cannot be added without moving everything after it, so face 3758, an exact duplicate of 3757, is given over to it (texture 109, routine 0, light 13 like its neighbours). Exact in the port; in DOS its face run belongs elsewhere, so it may only show when that part of the level is drawn (untraced).
+- New scratch tools for these rounds: faceedit (apply edits by face letter or vertex number, with a record of each), spare (a level's reusable face records), tilematch, tilecol and flat (compare texture tiles between levels' graphics).
+

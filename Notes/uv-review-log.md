@@ -25,6 +25,7 @@ the draw routine at +0x12, and the light id at +0x13.
   without the back-face test (0x1ef20), so the reversed face still shows.
 - **Unpinched:** a triangle whose right angle is not on c shears its texture; turning it so the right angle is on c.
 - **Facing turned:** a quad reversed to (b, a, d, c) with routine 0 <-> 2 shows from the other side with every corner keeping its texture corner.
+- **Spare record reused:** a missing face takes over a record that drew nothing new (an exact duplicate), since the file cannot grow.
 - **Texture changed:** the 16-bit texture index at +0x10 set to the right one.
 - **Mirrored, other half:** a triangle cannot show the half of the tile cut along x0y0-x1y1. These become a
   quad (a, b, c, c) with routine 2 (mirrored quad, corners x1y1, x0y1, x0y0, x1y0): the triangle (a, b, c) is the
@@ -41,6 +42,31 @@ The two share this face at the same offset; the patch entries for both are updat
 | 9618 | 0x46DB4 | round 4 | turned once more counter-clockwise; also texture 0x38 at +0x10 (earlier fix) | 8049, 8113, 8052, -1 (original 8052, 8049, 8113) | 1 | 8113, 8052, 8049, -1 | 1 |
 
 L111LEV: Edward reports the level complete after this fix.
+
+## L131LEV
+
+| Face | Offset | Added | Change | Was | Routine | Now | Routine |
+|---|---|---|---|---|---|---|---|
+| 6754 | 0x3BFE4 | round 5 | texture 154 -> 183, matching the pillar | 8431, 8425, 8724, 9112 | 0 | 8431, 8425, 8724, 9112 | 0 |
+| 6752 | 0x3BFBC | round 5 | turned one step, (b, c, d, a), to match 7497 | 8431, 9112, 9164, 8432 | 0 | 9112, 9164, 8432, 8431 | 0 |
+
+## L141LEV and L903LEV
+
+The same faces at the same offsets in both; one row each.
+
+| Face | Offset | Added | Change | Was | Routine | Now | Routine |
+|---|---|---|---|---|---|---|---|
+| 2735 | 0x28B70 | round 5 | texture 223 -> 217, the crate's own | 2248, 2538, 2551, 2249 | 0 | 2248, 2538, 2551, 2249 | 0 |
+| 2736 | 0x28B84 | round 5 | flipped horizontally: the texture lies on its side, so (c, d, a, b) with routine 0 -> 2 (mirrored) | 2552, 2560, 2530, 2285 | 0 | 2530, 2285, 2552, 2560 | 2 |
+| 2196 | 0x26154 | round 5 | texture 0 -> 225 | 2556, 2562, 10307, 10306 | 0 | 2556, 2562, 10307, 10306 | 0 |
+
+## L161LEV
+
+| Face | Offset | Added | Change | Was | Routine | Now | Routine |
+|---|---|---|---|---|---|---|---|
+| 3758 | 0x29E1C | round 5 | was an exact duplicate of 3757; given over to the missing face between faces 0, 29, 36 and 40 - texture 1 -> 109, routine 1 -> 0, light 0x08 -> 0x0D (13, as its neighbours; no end-of-run bit either way) | 8645, 8646, 8655, -1 | 1 | 4178, 4177, 4148, 4149 | 0 |
+
+A face cannot be added without moving every byte after it, so a spare record is reused. L161 has three: exact duplicates 3758, 3760 and 3797. In the port the new face is exact. The original draws faces in per-cell runs (bit 0x80 of the light byte ends one), and 3758's run belongs to another part of the level, so in DOS the face may only show when that part is drawn - untraced.
 
 ## L371LEV
 

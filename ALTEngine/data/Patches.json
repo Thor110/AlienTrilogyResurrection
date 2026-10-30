@@ -33151,6 +33151,180 @@
           ]
         }
       ]
+    },
+    {
+      "target": "SECT11/L131LEV.MAP",
+      "note": "L131LEV.MAP - UV review (TESTING, Edward with the Face Index Display, 2026): face 6754 texture 154 -> 183, matching the pillar; face 6752 turned one step, (b, c, d, a), to match 7497. Tracked in Notes/uv-review-log.md",
+      "edits": [
+        {
+          "offset": "0x3BFF4",
+          "bytes": [
+            "0xB7",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3BFBC",
+          "bytes": [
+            "0x98",
+            "0x23",
+            "0x00",
+            "0x00",
+            "0xCC",
+            "0x23",
+            "0x00",
+            "0x00",
+            "0xF0",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xEF",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT12/L141LEV.MAP",
+      "note": "L141LEV.MAP - UV review (TESTING, Edward with the Face Index Display, 2026): face 2735 texture 223 -> 217 (the crate's own); face 2736 flipped horizontally - its texture lies on its side, so that is its v axis: (c, d, a, b) with routine 0 -> 2; face 2196 texture 0 -> 225. Tracked in Notes/uv-review-log.md",
+      "edits": [
+        {
+          "offset": "0x28B80",
+          "bytes": [
+            "0xD9",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x28B84",
+          "bytes": [
+            "0xE2",
+            "0x09",
+            "0x00",
+            "0x00",
+            "0xED",
+            "0x08",
+            "0x00",
+            "0x00",
+            "0xF8",
+            "0x09",
+            "0x00",
+            "0x00",
+            "0x00",
+            "0x0A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x28B96",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x26164",
+          "bytes": [
+            "0xE1",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L903LEV.MAP",
+      "note": "L903LEV.MAP - the same three faces as L141LEV.MAP (2735, 2736, 2196), same geometry at the same offsets. Tracked in Notes/uv-review-log.md",
+      "edits": [
+        {
+          "offset": "0x28B80",
+          "bytes": [
+            "0xD9",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x28B84",
+          "bytes": [
+            "0xE2",
+            "0x09",
+            "0x00",
+            "0x00",
+            "0xED",
+            "0x08",
+            "0x00",
+            "0x00",
+            "0xF8",
+            "0x09",
+            "0x00",
+            "0x00",
+            "0x00",
+            "0x0A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x28B96",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x26164",
+          "bytes": [
+            "0xE1",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT12/L161LEV.MAP",
+      "note": "L161LEV.MAP - UV review (TESTING, Edward with the Face Index Display, 2026): a missing face, the quad between faces 0, 29, 36 and 40 (vertices 4178, 4177, 4148, 4149), filled with texture 109, routine 0 and light 13 like its neighbours. A face cannot be added without moving everything after it, so face 3758, an exact duplicate of 3757 (the same triangle drawn twice), is given over to it; 3757 still draws that triangle. Its end-of-run bit is kept. In the port this is exact; the original draws faces in per-cell runs and 3758's run is elsewhere in the level, so in DOS the new face may only show when that part of the level is drawn. Tracked in Notes/uv-review-log.md",
+      "edits": [
+        {
+          "offset": "0x29E1C",
+          "bytes": [
+            "0x52",
+            "0x10",
+            "0x00",
+            "0x00",
+            "0x51",
+            "0x10",
+            "0x00",
+            "0x00",
+            "0x34",
+            "0x10",
+            "0x00",
+            "0x00",
+            "0x35",
+            "0x10",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x29E2C",
+          "bytes": [
+            "0x6D",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x29E2E",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x29E2F",
+          "bytes": [
+            "0x0D"
+          ]
+        }
+      ]
     }
   ],
   "faceUvRotations": [],
