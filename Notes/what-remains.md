@@ -1,4 +1,4 @@
-# What remains (after zip 89)
+# What remains (after zip 90)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -9,6 +9,14 @@ textures, done once everything else is in.
 Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
+
+Changed in zip 90, to check:
+- **Modern > Level Timer** (requested, for speedrunners): the mission assessment shows "Time" (the level, from
+  its first tick to the End Level trigger) and "Run" (every level played to its assessment since the game was
+  started or a save loaded, failed missions included) on one line under the bars, with "press any key" moved
+  to the bottom. Game time: one tick's length for each logic tick the player ran, so pauses, loading and the
+  screens between levels never count. Off by default and in no preset. The times also go to the console.
+  Loading a save starts a new run total; a broken run is added up by hand.
 
 Changed in zip 89, to check:
 - **Bullets** point the way they fly. They were strips centred on the round and turned a quarter-turn out, so a

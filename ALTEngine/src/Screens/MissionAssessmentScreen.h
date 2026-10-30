@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <cstdio>
 #include <filesystem>
 #include <string>
 
@@ -16,7 +17,29 @@ namespace ALTEngine::Screens
         float missionPercent = 0.0f;
         int requiredPercent = 15;   // the mission figure the level needs (15, 25 or 45)
         std::string levelDigits;    // the level just played, for its palette
+        // Modern: Level Timer. The level's game time and the run's so far,
+        // shown on one line under the bars when set.
+        bool showTimes = false;
+        double levelSeconds = 0.0;
+        double runSeconds = 0.0;
     };
+
+    // A time for the Level Timer line: m:ss.cc, or h:mm:ss.cc from an hour,
+    // in hundredths, rounded down (a timer never shows time not yet run).
+    inline std::string FormatRunTime(double seconds)
+    {
+        if (!(seconds > 0.0)) { seconds = 0.0; }
+        const long long hundredths = static_cast<long long>(seconds * 100.0 + 1e-6);
+        const long long cs = hundredths % 100;
+        const long long totalSeconds = hundredths / 100;
+        const long long s = totalSeconds % 60;
+        const long long m = (totalSeconds / 60) % 60;
+        const long long h = totalSeconds / 3600;
+        char buffer[32];
+        if (h > 0) { std::snprintf(buffer, sizeof(buffer), "%lld:%02lld:%02lld.%02lld", h, m, s, cs); }
+        else { std::snprintf(buffer, sizeof(buffer), "%lld:%02lld.%02lld", m, s, cs); }
+        return buffer;
+    }
 
     struct MissionAssessmentResult
     {

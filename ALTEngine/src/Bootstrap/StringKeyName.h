@@ -155,6 +155,10 @@ namespace ALTEngine::Bootstrap
         case StringId::DescSpeedCompensation: return "DescSpeedCompensation";
         case StringId::SaveAnywhere: return "SaveAnywhere";
         case StringId::DescSaveAnywhere: return "DescSaveAnywhere";
+        case StringId::LevelTimer: return "LevelTimer";
+        case StringId::DescLevelTimer: return "DescLevelTimer";
+        case StringId::AssessmentTime: return "AssessmentTime";
+        case StringId::AssessmentRun: return "AssessmentRun";
         case StringId::Testing: return "Testing";
         case StringId::DescTesting: return "DescTesting";
         case StringId::DisableEnemySpawn: return "DisableEnemySpawn";
@@ -496,6 +500,10 @@ namespace ALTEngine::Bootstrap
         if (name == "DescSpeedCompensation") { return StringId::DescSpeedCompensation; }
         if (name == "SaveAnywhere") { return StringId::SaveAnywhere; }
         if (name == "DescSaveAnywhere") { return StringId::DescSaveAnywhere; }
+        if (name == "LevelTimer") { return StringId::LevelTimer; }
+        if (name == "DescLevelTimer") { return StringId::DescLevelTimer; }
+        if (name == "AssessmentTime") { return StringId::AssessmentTime; }
+        if (name == "AssessmentRun") { return StringId::AssessmentRun; }
         if (name == "Testing") { return StringId::Testing; }
         if (name == "DescTesting") { return StringId::DescTesting; }
         if (name == "DisableEnemySpawn") { return StringId::DisableEnemySpawn; }

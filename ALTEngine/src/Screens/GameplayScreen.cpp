@@ -546,6 +546,10 @@ namespace ALTEngine::Screens
         // than the door tick - see PlayerCamera::TICK_HZ.
         ALTEngine::Screens::PlayerCamera::State playerCam;
         float playerTickAccumulator = 0.0f;
+        // Modern: Level Timer. The level's game time: one tick's length for
+        // each logic tick the player runs, from the first to the one the End
+        // Level trigger fires on, so pauses and loading never count.
+        double levelSeconds = 0.0;
         float pendingMouseYaw = 0.0f;   // angle units, accumulated between player ticks
         float pendingMouseY = 0.0f;     // raw mouse Y, drives the original's mouse-forward
         bool playerCamSeeded = false;
@@ -1856,6 +1860,7 @@ namespace ALTEngine::Screens
                 {
                     playerTickAccumulator -= playerTickLength;
                     playerTicksThisFrame++;
+                    if (!levelComplete && !playerDead) { levelSeconds += playerTickLength; }
                     // The original's alternate pass (see logicTick).
                     const bool halfPass = ((logicTick++ & 1u) == 0) || speedCompensationOff;
                     passHalves.push_back(halfPass);
@@ -4828,6 +4833,7 @@ namespace ALTEngine::Screens
             if (levelComplete && !playerDead && running)
             {
                 result.outcome = GameplayOutcome::LevelComplete;
+                result.levelSeconds = levelSeconds;
                 running = false;
             }
         }

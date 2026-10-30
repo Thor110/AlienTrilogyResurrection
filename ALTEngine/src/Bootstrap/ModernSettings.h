@@ -80,6 +80,12 @@ namespace ALTEngine::Bootstrap
         // player, creatures, doors, lifts, crates and pickups - instead of a
         // checkpoint at its start. The original only saves between levels.
         SaveAnywhere,
+
+        // How long each level took, from the first tick on it to its End Level
+        // trigger, on the mission assessment, with the run's running total
+        // under it - for speedrunners. Game time: the logic ticks the player
+        // ran, so pauses and loading are left out. OURS.
+        LevelTimer,
     };
 
     class ModernSettings
@@ -119,6 +125,7 @@ namespace ALTEngine::Bootstrap
             ModernFeature::FasterXenomorphs,
             ModernFeature::SpeedCompensation,
             ModernFeature::SaveAnywhere,
+            ModernFeature::LevelTimer,
         };
 
         // The individual toggle's own stored value, ignoring the mode.
@@ -216,6 +223,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::FasterXenomorphs: return "Faster Xenomorphs";
             case ModernFeature::SpeedCompensation: return "Speed Compensation";
             case ModernFeature::SaveAnywhere: return "Save Anywhere";
+            case ModernFeature::LevelTimer: return "Level Timer";
             }
             return "";
         }
@@ -236,6 +244,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::FasterXenomorphs: return "ModernFasterXenomorphs";
             case ModernFeature::SpeedCompensation: return "ModernSpeedCompensation";
             case ModernFeature::SaveAnywhere: return "ModernSaveAnywhere";
+            case ModernFeature::LevelTimer: return "ModernLevelTimer";
             }
             return "ModernUnknown";
         }

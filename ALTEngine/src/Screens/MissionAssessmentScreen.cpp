@@ -22,6 +22,10 @@ namespace ALTEngine::Screens
         constexpr int SCREEN_H = 240;
         constexpr int TITLE_Y = 0x18;
         constexpr int PROMPT_Y = 0xd2;
+        // Modern: Level Timer. Its line goes under the last bar (which ends at
+        // 0xc2) and the prompt moves down to the screen's last 16 pixels.
+        constexpr int TIMES_Y = 0xc6;
+        constexpr int TIMES_PROMPT_Y = 0xdf;
         constexpr int LABEL_X = 0x1a;              // 0x10 for the third language (FUN_00012a80)
         constexpr int FIGURE_X = 0x6e;
         constexpr int BAR_X = 0x64;
@@ -226,6 +230,10 @@ namespace ALTEngine::Screens
             TrOr(StringId::GsSecrets, language, "Secrets"),
             TrOr(StringId::GsMissionLabel, language, "Mission") };
         const std::string prompt = TrOr(StringId::GsPressAnyKey, language, "Press any key");
+        const std::string times = stats.showTimes
+            ? TrOr(StringId::AssessmentTime, language, "Time") + " " + FormatRunTime(stats.levelSeconds) + "  "
+              + TrOr(StringId::AssessmentRun, language, "Run") + " " + FormatRunTime(stats.runSeconds)
+            : std::string();
         const int labelX = (language == Bootstrap::Language::Spanish) ? 0x10 : LABEL_X;
 
         const std::array<int, 3> target{
@@ -286,7 +294,8 @@ namespace ALTEngine::Screens
                 DrawText(renderer, font, Figure(shown[size_t(i)]), FIGURE_X, ROW_FIGURE_Y[i], c);
                 DrawText(renderer, font, labels[size_t(i)], labelX, ROW_LABEL_Y[i], c);
             }
-            if (counted) { DrawCentred(renderer, font, prompt, PROMPT_Y, white); }
+            if (stats.showTimes) { DrawCentred(renderer, font, times, TIMES_Y, white); }
+            if (counted) { DrawCentred(renderer, font, prompt, stats.showTimes ? TIMES_PROMPT_Y : PROMPT_Y, white); }
 
             if (canvas)
             {

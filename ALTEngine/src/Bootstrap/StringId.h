@@ -171,6 +171,11 @@ namespace ALTEngine::Bootstrap
         DescSpeedCompensation,
         SaveAnywhere,
         DescSaveAnywhere,
+        // Modern: Level Timer, and its line on the mission assessment. OURS.
+        LevelTimer,
+        DescLevelTimer,
+        AssessmentTime,
+        AssessmentRun,
         // Modern > Testing (TestingSettings.h). OURS.
         Testing,
         DescTesting,

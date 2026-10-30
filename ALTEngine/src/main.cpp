@@ -323,6 +323,11 @@ int main(int, char**)
     // end-of-level prompt, then the next level in LevelManifest.json order.
     // A save loaded from the pause menu restarts the loop at the saved level.
     auto playCampaign = [&](std::string digits) -> CampaignEnd {
+        // Modern: Level Timer. The run's total: every level played to its
+        // assessment since this game was started or a save was loaded, failed
+        // missions included, as they are played again. A save loaded starts a
+        // new total; a broken run is added up by hand.
+        double runSeconds = 0.0;
         while (true)
         {
             const auto entry = ALTEngine::Game::Progression::Find(levelList, digits);
@@ -361,6 +366,7 @@ int main(int, char**)
                 playerInventory = save->inventory;
                 digits = save->levelDigits;
                 SetPendingRestore(save->levelDigits, save->snapshot);
+                runSeconds = 0.0;
                 continue;
             }
             case GameplayOutcome::LevelComplete:
@@ -380,6 +386,19 @@ int main(int, char**)
             stats.missionPercent = static_cast<float>(assessment.missionPercent);
             stats.requiredPercent = assessment.requiredPercent;
             stats.levelDigits = digits;
+            runSeconds += played.levelSeconds;
+            {
+                ALTEngine::Bootstrap::Config timerConfig;
+                ALTEngine::Bootstrap::ModernSettings modern(timerConfig);
+                stats.showTimes = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LevelTimer);
+            }
+            stats.levelSeconds = played.levelSeconds;
+            stats.runSeconds = runSeconds;
+            if (stats.showTimes)
+            {
+                std::cout << "Level time " << FormatRunTime(played.levelSeconds) << ", run "
+                          << FormatRunTime(runSeconds) << "\n";
+            }
             if (MissionAssessmentScreen::Run(cdDirectory, stats, language).windowClosed) { return CampaignEnd::WindowClosed; }
             std::cout << "Assessment: aliens " << assessment.aliensPercent << "%, secrets " << assessment.secretsPercent
                       << "%, mission " << assessment.missionPercent << "% (needs more than "

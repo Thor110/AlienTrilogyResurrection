@@ -32,6 +32,8 @@ namespace ALTEngine::Screens
         int aliensTotal = 0;
         // Everything the assessment counts (Game::Progression::Assess).
         ALTEngine::Game::Progression::LevelTally tally{};
+        // Its game time, first tick to the End Level trigger (Modern: Level Timer).
+        double levelSeconds = 0.0;
 
         // 1-10 when outcome is LoadGame.
         int loadSlot = 0;

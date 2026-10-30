@@ -1,6 +1,9 @@
 #include "TestFramework.h"
 
 #include "Screens/MissionAssessmentScreen.h"
+#include "Bootstrap/ModernSettings.h"
+
+#include <string>
 
 using ALTEngine::Screens::MissionAssessmentScreen;
 
@@ -28,4 +31,26 @@ TEST_CASE("MissionAssessment: the pass mark moves where green starts")
     const auto hi = MissionAssessmentScreen::FigureColours(45);
     CHECK(lo[5].g == 0); CHECK(lo[6].g == 9);
     CHECK(hi[35].g == 0); CHECK(hi[36].g == 9);
+}
+
+TEST_CASE("MissionAssessment: the Level Timer's times read m:ss.cc, and h:mm:ss.cc from an hour")
+{
+    using ALTEngine::Screens::FormatRunTime;
+    CHECK(FormatRunTime(0.0) == "0:00.00");
+    CHECK(FormatRunTime(-3.0) == "0:00.00");
+    CHECK(FormatRunTime(5.0) == "0:05.00");
+    CHECK(FormatRunTime(83.456) == "1:23.45");     // rounded down
+    CHECK(FormatRunTime(599.999) == "9:59.99");
+    CHECK(FormatRunTime(3600.0) == "1:00:00.00");
+    CHECK(FormatRunTime(3723.5) == "1:02:03.50");
+}
+
+TEST_CASE("Modern: the Level Timer is a feature of its own")
+{
+    using ALTEngine::Bootstrap::ModernFeature;
+    CHECK(std::string(ALTEngine::Bootstrap::ModernSettings::MenuLabel(ModernFeature::LevelTimer)) == "Level Timer");
+    CHECK(std::string(ALTEngine::Bootstrap::ModernSettings::KeyFor(ModernFeature::LevelTimer)) == "ModernLevelTimer");
+    bool listed = false;
+    for (ModernFeature f : ALTEngine::Bootstrap::ModernSettings::AllFeatures) { listed = listed || f == ModernFeature::LevelTimer; }
+    CHECK(listed);
 }
