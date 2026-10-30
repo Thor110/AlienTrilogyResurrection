@@ -765,6 +765,9 @@ namespace ALTEngine::Screens
                 try
                 {
                     level = ALTEngine::Formats::LevelLoader::Load(*mapPath);
+                    // Each face's cell, so only the cells the view walk takes
+                    // in are drawn (CreatureSight::FaceCells / DrawnCells).
+                    ModelRenderer::SetLevelFaceCells(cacheKey, ALTEngine::Game::CreatureSight::FaceCells(level));
 
                     // Grid centring, needed by both the player spawn and
                     // the object placement below.
@@ -4415,8 +4418,39 @@ namespace ALTEngine::Screens
                         level, ToGridSpaceX(object.x, originX) >> 9, ToGridSpaceZ(object.z, originZ) >> 9);
                     object.lightId = cell ? cell->lighting : -1;
                 }
-                std::vector<uint8_t> pixels = ModelRenderer::RenderLevelToRgba(cacheKey, view, windowW, windowH,
-                                                                               placedObjects, placedSprites);
+                // The cells the original would draw from here (0x2745b): its
+                // view walk from the camera's cell along the view's yaw, out to
+                // its last ring (14 cells). Its cones were made for its own
+                // view; the port's can be wider (aspect, and looking up or down
+                // turns the screen's corners further round), so each cone
+                // widens to the screen's widest bearing and the walk adds a
+                // cell's width per ring, so nothing at the edges drops out.
+                if (levelReady)
+                {
+                    namespace PCd = ALTEngine::Screens::PlayerCamera;
+                    const float aspect = windowH > 0 ? static_cast<float>(windowW) / static_cast<float>(windowH) : 1.0f;
+                    const float tanV = std::tan(view.fovYRadians * 0.5f);
+                    const float pitch = std::fabs(view.pitch);
+                    // The forward reach of the screen's corner ray most
+                    // turned towards the floor or ceiling.
+                    const float forward = std::cos(pitch) - tanV * std::sin(pitch);
+                    const float halfFov = forward > 0.05f ? std::atan(tanV * aspect / forward) : 3.14159265f;
+                    const int minHalfWidth = std::min(0x800,
+                        static_cast<int>(halfFov * (PCd::ANGLE_UNITS / 6.28318530718f)) + 0x20);
+                    const int yawUnits = static_cast<int>(std::lround(view.yaw * (PCd::ANGLE_UNITS / 6.28318530718f)));
+                    std::vector<uint8_t> drawnCells = ALTEngine::Game::CreatureSight::DrawnCells(
+                        level, ToGridSpaceX(view.x, originX) >> 9, ToGridSpaceZ(view.z, originZ) >> 9,
+                        (yawUnits + 0x800) & PCd::ANGLE_MASK, minHalfWidth);
+                    // A camera off the map, or in a cell with no zones (inside
+                    // a wall), walks to nothing; draw the whole level then
+                    // rather than nothing.
+                    if (std::count(drawnCells.begin(), drawnCells.end(), uint8_t(1)) <= 1) { drawnCells.clear(); }
+                    ModelRenderer::SetLevelDrawnCells(cacheKey, drawnCells);
+                }
+                // Kept between frames: a new frame-sized buffer each frame
+                // was a needless allocation and clear.
+                static std::vector<uint8_t> pixels;
+                ModelRenderer::RenderLevelToRgba(cacheKey, view, windowW, windowH, placedObjects, placedSprites, pixels);
                 placedObjects.resize(staticObjectCount); // drop this frame's particles again
                 if (!pixels.empty())
                 {

@@ -71,6 +71,15 @@ namespace ALTEngine::Renderer
             SDL_GPUBuffer* indexBuffer = nullptr;
             uint32_t indexCount = 0;
             SDL_GPUTexture* texture = nullptr; // nullptr if this group is unused by the level (0 quads)
+
+            // Drawing only some cells (SetLevelDrawnCells): the indices and
+            // the face each triangle came from, kept on the CPU, and a second
+            // index buffer holding just the triangles of the cells drawn.
+            std::vector<uint32_t> cpuIndices;
+            std::vector<uint32_t> triangleFace;
+            SDL_GPUBuffer* visibleIndexBuffer = nullptr;
+            uint32_t visibleCount = 0;
+            uint64_t builtSerial = ~0ull;
         };
 
         struct LoadedLevel
@@ -123,6 +132,12 @@ namespace ALTEngine::Renderer
             // free look. One sub-group per texture page used.
             std::array<LevelSubGroup, 5> gapGroups;
 
+            // Which cell each level face belongs to, and the cells to draw
+            // (empty: every face). The serial moves when the set does.
+            std::vector<int32_t> faceCell;
+            std::vector<uint8_t> drawnCells;
+            uint64_t drawnSerial = 0;
+
             // Set when an override .obj replaced the level's geometry. The
             // light tick must not rebuild vertex buffers in that case - the
             // .MAP quads it would rebuild from are no longer what is on screen.
@@ -149,6 +164,13 @@ namespace ALTEngine::Renderer
         // nothing to cache between frames.
         SDL_GPUBuffer* spriteVertexBuffer = nullptr;
         SDL_GPUBuffer* spriteIndexBuffer = nullptr;
+        // The sprites' per-frame upload, kept and cycled rather than made
+        // and released every frame; grown as the sprite buffers are.
+        SDL_GPUTransferBuffer* spriteTransfer = nullptr;
+        size_t spriteTransferSize = 0;
+        // The level's culled index lists' upload (RenderLevelToRgba).
+        SDL_GPUTransferBuffer* cullUpload = nullptr;
+        size_t cullUploadSize = 0;
         size_t spriteBufferCapacity = 0;   // in quads
 
         SDL_GPUDevice* device = nullptr;
@@ -265,43 +287,64 @@ namespace ALTEngine::Renderer
         // sequence a single model does). Returns a zeroed LevelSubGroup
         // (all nullptr) on failure - callers should check
         // texture/vertexBuffer/indexBuffer before trusting the result.
-        // Re-uploads ONLY a sub-group's vertex data, reusing the existing
-        // buffer. Used by the light tick: the geometry, indices and
-        // texture are unchanged, so recreating them would be wasted work.
-        // The vertex count cannot change (the same quads are rebuilt), so
-        // the existing buffer is always the right size.
-        bool ReuploadVertices(const LevelSubGroup& group, const RenderMesh& renderMesh)
+        // Re-uploads ONLY sub-groups' vertex data, reusing their buffers.
+        // Used by the light tick: the geometry, indices and texture are
+        // unchanged, and a group whose vertex count stays the same keeps
+        // a buffer of the right size.
+        // The light tick's re-uploads all go through one transfer buffer kept
+        // from tick to tick (cycled on each map, so the GPU can still be
+        // reading the last one) and one command buffer, instead of a new
+        // buffer and a submit per page and fill.
+        SDL_GPUTransferBuffer* vertexUploadBuffer = nullptr;
+        size_t vertexUploadSize = 0;
+
+        void ReuploadVerticesBatch(const std::vector<std::pair<const LevelSubGroup*, const RenderMesh*>>& uploads)
         {
-            if (!group.vertexBuffer || renderMesh.vertices.empty()) { return false; }
-
-            size_t vbSize = renderMesh.vertices.size() * sizeof(ALTEngine::Formats::RenderVertex);
-
-            SDL_GPUTransferBufferCreateInfo transferInfo{};
-            transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-            transferInfo.size = static_cast<Uint32>(vbSize);
-            SDL_GPUTransferBuffer* transfer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
-            if (!transfer) { return false; }
-
-            void* mapped = SDL_MapGPUTransferBuffer(device, transfer, false);
-            if (!mapped)
+            size_t total = 0;
+            for (const auto& [group, mesh] : uploads) { total += mesh->vertices.size() * sizeof(ALTEngine::Formats::RenderVertex); }
+            if (total == 0) { return; }
+            if (vertexUploadBuffer && vertexUploadSize < total)
             {
-                SDL_ReleaseGPUTransferBuffer(device, transfer);
-                return false;
+                SDL_ReleaseGPUTransferBuffer(device, vertexUploadBuffer);
+                vertexUploadBuffer = nullptr;
             }
-            std::memcpy(mapped, renderMesh.vertices.data(), vbSize);
-            SDL_UnmapGPUTransferBuffer(device, transfer);
+            const bool cycle = vertexUploadBuffer != nullptr;
+            if (!vertexUploadBuffer)
+            {
+                SDL_GPUTransferBufferCreateInfo transferInfo{};
+                transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+                transferInfo.size = static_cast<Uint32>(total);
+                vertexUploadBuffer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
+                if (!vertexUploadBuffer) { vertexUploadSize = 0; return; }
+                vertexUploadSize = total;
+            }
+            auto* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, vertexUploadBuffer, cycle));
+            if (!mapped) { return; }
+            size_t offset = 0;
+            for (const auto& [group, mesh] : uploads)
+            {
+                const size_t size = mesh->vertices.size() * sizeof(ALTEngine::Formats::RenderVertex);
+                std::memcpy(mapped + offset, mesh->vertices.data(), size);
+                offset += size;
+            }
+            SDL_UnmapGPUTransferBuffer(device, vertexUploadBuffer);
 
             SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
+            if (!cmd) { return; }
             SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
-            SDL_GPUTransferBufferLocation src{ transfer, 0 };
-            SDL_GPUBufferRegion dst{ group.vertexBuffer, 0, static_cast<Uint32>(vbSize) };
-            SDL_UploadToGPUBuffer(copyPass, &src, &dst, false);
+            offset = 0;
+            for (const auto& [group, mesh] : uploads)
+            {
+                const size_t size = mesh->vertices.size() * sizeof(ALTEngine::Formats::RenderVertex);
+                SDL_GPUTransferBufferLocation src{ vertexUploadBuffer, static_cast<Uint32>(offset) };
+                SDL_GPUBufferRegion dst{ group->vertexBuffer, 0, static_cast<Uint32>(size) };
+                SDL_UploadToGPUBuffer(copyPass, &src, &dst, false);
+                offset += size;
+            }
             SDL_EndGPUCopyPass(copyPass);
             SDL_SubmitGPUCommandBuffer(cmd);
-
-            SDL_ReleaseGPUTransferBuffer(device, transfer);
-            return true;
         }
+
 
         // Stamps a light record's resolved colour over every vertex of a mesh.
         // lightId < 0 leaves the mesh alone (white, i.e. unlit).
@@ -519,6 +562,31 @@ namespace ALTEngine::Renderer
             return group;
         }
 
+        // Keeps what a level group needs to draw only some cells' faces: its
+        // indices and their faces, and a GPU index buffer of the same size
+        // for the culled list. A mesh without face data (an override) is
+        // always drawn whole.
+        void AttachCulling(LevelSubGroup& group, const RenderMesh& mesh)
+        {
+            if (group.visibleIndexBuffer) { SDL_ReleaseGPUBuffer(device, group.visibleIndexBuffer); group.visibleIndexBuffer = nullptr; }
+            group.cpuIndices.clear();
+            group.triangleFace.clear();
+            group.builtSerial = ~0ull;
+            if (mesh.indices.empty() || mesh.triangleFace.size() * 3 != mesh.indices.size()) { return; }
+            SDL_GPUBufferCreateInfo info{ SDL_GPU_BUFFERUSAGE_INDEX, static_cast<Uint32>(mesh.indices.size() * sizeof(uint32_t)), 0 };
+            group.visibleIndexBuffer = SDL_CreateGPUBuffer(device, &info);
+            if (!group.visibleIndexBuffer) { return; }
+            group.cpuIndices = mesh.indices;
+            group.triangleFace = mesh.triangleFace;
+        }
+
+        void ReleaseCulling(LevelSubGroup& group)
+        {
+            if (group.visibleIndexBuffer) { SDL_ReleaseGPUBuffer(device, group.visibleIndexBuffer); group.visibleIndexBuffer = nullptr; }
+            group.cpuIndices.clear();
+            group.triangleFace.clear();
+        }
+
         // Ensures colorTarget/depthTarget/downloadBuffer exist and match
         // the requested size, recreating them if not - shared by
         // RenderToRgba (small model previews) and RenderLevelToRgba
@@ -571,7 +639,7 @@ namespace ALTEngine::Renderer
         // Downloads colorTarget (after a completed render pass in `cmd`)
         // to CPU as tightly-packed RGBA8 bytes - shared final step of
         // both RenderToRgba and RenderLevelToRgba.
-        std::vector<uint8_t> DownloadColorTarget(SDL_GPUCommandBuffer* cmd, int width, int height)
+        bool DownloadColorTarget(SDL_GPUCommandBuffer* cmd, int width, int height, std::vector<uint8_t>& result)
         {
             SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
             SDL_GPUTextureRegion srcRegion{};
@@ -590,9 +658,19 @@ namespace ALTEngine::Renderer
             SDL_ReleaseGPUFence(device, fence);
 
             void* mapped = SDL_MapGPUTransferBuffer(device, downloadBuffer, false);
-            std::vector<uint8_t> result(static_cast<size_t>(width) * height * 4);
+            if (!mapped) { result.clear(); return false; }
+            // Resizing a buffer the caller keeps from frame to frame touches
+            // nothing once it is the right size (a fresh one each frame was
+            // a whole frame's worth of zeroing and new pages).
+            result.resize(static_cast<size_t>(width) * height * 4);
             std::memcpy(result.data(), mapped, result.size());
             SDL_UnmapGPUTransferBuffer(device, downloadBuffer);
+            return true;
+        }
+        std::vector<uint8_t> DownloadColorTarget(SDL_GPUCommandBuffer* cmd, int width, int height)
+        {
+            std::vector<uint8_t> result;
+            DownloadColorTarget(cmd, width, height, result);
             return result;
         }
     }
@@ -850,6 +928,7 @@ namespace ALTEngine::Renderer
                     if (group.vertexBuffer) { SDL_ReleaseGPUBuffer(device, group.vertexBuffer); }
                     if (group.indexBuffer) { SDL_ReleaseGPUBuffer(device, group.indexBuffer); }
                     if (group.texture) { SDL_ReleaseGPUTexture(device, group.texture); }
+                    ReleaseCulling(group);
                 }
             }
         }
@@ -880,6 +959,19 @@ namespace ALTEngine::Renderer
         if (colorTarget) { SDL_ReleaseGPUTexture(device, colorTarget); colorTarget = nullptr; }
         if (depthTarget) { SDL_ReleaseGPUTexture(device, depthTarget); depthTarget = nullptr; }
         if (downloadBuffer) { SDL_ReleaseGPUTransferBuffer(device, downloadBuffer); downloadBuffer = nullptr; }
+        if (vertexUploadBuffer) { SDL_ReleaseGPUTransferBuffer(device, vertexUploadBuffer); vertexUploadBuffer = nullptr; vertexUploadSize = 0; }
+        if (spriteTransfer) { SDL_ReleaseGPUTransferBuffer(device, spriteTransfer); spriteTransfer = nullptr; spriteTransferSize = 0; }
+        if (cullUpload) { SDL_ReleaseGPUTransferBuffer(device, cullUpload); cullUpload = nullptr; cullUploadSize = 0; }
+        // The sprite buffers and sheets belong to this device too; a later
+        // Initialize must not find them and draw with the old handles.
+        if (spriteVertexBuffer) { SDL_ReleaseGPUBuffer(device, spriteVertexBuffer); spriteVertexBuffer = nullptr; }
+        if (spriteIndexBuffer) { SDL_ReleaseGPUBuffer(device, spriteIndexBuffer); spriteIndexBuffer = nullptr; }
+        spriteBufferCapacity = 0;
+        for (auto& [key, sheet] : spriteSheets)
+        {
+            if (sheet.texture) { SDL_ReleaseGPUTexture(device, sheet.texture); }
+        }
+        spriteSheets.clear();
         if (samplerLinear) { SDL_ReleaseGPUSampler(device, samplerLinear); samplerLinear = nullptr; }
         if (samplerNearest) { SDL_ReleaseGPUSampler(device, samplerNearest); samplerNearest = nullptr; }
         sampler = nullptr;
@@ -920,18 +1012,38 @@ namespace ALTEngine::Renderer
         if (!device) { return false; }
         if (loadedModels.count(cacheKey)) { return true; }
 
-        std::vector<ALTEngine::Formats::ModelMesh> meshes;
-        BndTextureSet textureSet;
+        // A catalog is loaded one model at a time, all from the same two
+        // files, so the last files read are kept: re-reading and re-parsing
+        // the whole model file and its texture pages for each of its models
+        // was most of the briefing screen's loading time.
+        static std::filesystem::path cachedObjPath;
+        static std::vector<ALTEngine::Formats::ModelMesh> cachedMeshes;
+        static std::filesystem::path cachedGfxPath;
+        static std::optional<std::array<uint8_t, 3>> cachedTransparent;
+        static BndTextureSet cachedTextures;
         try
         {
-            meshes = ModelLoader::Load(objBndPath);
-            textureSet = BndTextureLoader::Load(gfxBndPath, transparentRgb);
+            if (cachedMeshes.empty() || cachedObjPath != objBndPath)
+            {
+                cachedMeshes = ModelLoader::Load(objBndPath);
+                cachedObjPath = objBndPath;
+            }
+            if (cachedTextures.textures.empty() || cachedGfxPath != gfxBndPath || cachedTransparent != transparentRgb)
+            {
+                cachedTextures = BndTextureLoader::Load(gfxBndPath, transparentRgb);
+                cachedGfxPath = gfxBndPath;
+                cachedTransparent = transparentRgb;
+            }
         }
         catch (const std::exception& e)
         {
+            cachedMeshes.clear();
+            cachedTextures = BndTextureSet{};
             SDL_Log("ModelRenderer::LoadModel(%s): %s", DescribeCacheKey(cacheKey).c_str(), e.what());
             return false;
         }
+        const std::vector<ALTEngine::Formats::ModelMesh>& meshes = cachedMeshes;
+        const BndTextureSet& textureSet = cachedTextures;
 
         const auto* mesh = ModelLoader::FindByNumber(meshes, meshNumber);
         if (!mesh)
@@ -1440,12 +1552,11 @@ namespace ALTEngine::Renderer
                 cacheKey.c_str(), loadedLevel.animator.Count(), level.lights.size());
 
         namespace FM = ALTEngine::Formats;
-        auto perGroupMeshes = FM::BuildLevelRenderMeshPerGroup(
-            level, textureSet.uvRects, rotations, &loadedLevel.lights, &loadedLevel.animator, FM::FaceFill::Opaque);
-        auto cutoutMeshes = FM::BuildLevelRenderMeshPerGroup(
-            level, textureSet.uvRects, rotations, &loadedLevel.lights, &loadedLevel.animator, FM::FaceFill::Cutout);
-        auto translucentMeshes = FM::BuildLevelRenderMeshPerGroup(
-            level, textureSet.uvRects, rotations, &loadedLevel.lights, &loadedLevel.animator, FM::FaceFill::Translucent);
+        auto allFills = FM::BuildLevelRenderMeshAllFills(
+            level, textureSet.uvRects, rotations, &loadedLevel.lights, &loadedLevel.animator);
+        auto& perGroupMeshes = allFills[0];
+        auto& cutoutMeshes = allFills[1];
+        auto& translucentMeshes = allFills[2];
 
         for (size_t i = 0; i < 5; ++i)
         {
@@ -1463,12 +1574,12 @@ namespace ALTEngine::Renderer
             if (!cutoutMeshes[i].vertices.empty())
             {
                 loadedLevel.cutoutGroups[i] = UploadMeshWithTexture(cutoutMeshes[i], textureSet.textures[i]);
-                if (loadedLevel.cutoutGroups[i].vertexBuffer) { anyGroupUsed = true; }
+                if (loadedLevel.cutoutGroups[i].vertexBuffer) { anyGroupUsed = true; AttachCulling(loadedLevel.cutoutGroups[i], cutoutMeshes[i]); }
             }
             if (!translucentMeshes[i].vertices.empty())
             {
                 loadedLevel.translucentGroups[i] = UploadMeshWithTexture(translucentMeshes[i], textureSet.textures[i]);
-                if (loadedLevel.translucentGroups[i].vertexBuffer) { anyGroupUsed = true; }
+                if (loadedLevel.translucentGroups[i].vertexBuffer) { anyGroupUsed = true; AttachCulling(loadedLevel.translucentGroups[i], translucentMeshes[i]); }
             }
             // The opaque faces' copy: every texel drawn, palette word 0 as the
             // black it is. Uploaded even if no opaque face uses the page, since
@@ -1478,7 +1589,7 @@ namespace ALTEngine::Renderer
             if (!perGroupMeshes[i].vertices.empty())
             {
                 loadedLevel.groups[i] = UploadMeshWithTexture(perGroupMeshes[i], opaque);
-                if (loadedLevel.groups[i].vertexBuffer) { anyGroupUsed = true; }
+                if (loadedLevel.groups[i].vertexBuffer) { anyGroupUsed = true; AttachCulling(loadedLevel.groups[i], perGroupMeshes[i]); }
             }
         }
 
@@ -1655,6 +1766,7 @@ namespace ALTEngine::Renderer
                             SDL_GPUTexture* pageTexture = loadedLevel.groups[i].texture;
                             if (loadedLevel.groups[i].vertexBuffer) { SDL_ReleaseGPUBuffer(device, loadedLevel.groups[i].vertexBuffer); }
                             if (loadedLevel.groups[i].indexBuffer) { SDL_ReleaseGPUBuffer(device, loadedLevel.groups[i].indexBuffer); }
+                            ReleaseCulling(loadedLevel.groups[i]);
 
                             loadedLevel.groups[i].vertexBuffer = replacement[i].vertexBuffer;
                             loadedLevel.groups[i].indexBuffer = replacement[i].indexBuffer;
@@ -1669,6 +1781,7 @@ namespace ALTEngine::Renderer
                                 if (other->vertexBuffer) { SDL_ReleaseGPUBuffer(device, other->vertexBuffer); }
                                 if (other->indexBuffer) { SDL_ReleaseGPUBuffer(device, other->indexBuffer); }
                                 if (other->texture) { SDL_ReleaseGPUTexture(device, other->texture); }
+                                ReleaseCulling(*other);
                                 *other = LevelSubGroup{};
                             }
                         }
@@ -1738,19 +1851,22 @@ namespace ALTEngine::Renderer
         namespace FM = ALTEngine::Formats;
         struct Pass
         {
-            FM::FaceFill fill;
             std::array<LevelSubGroup, 5>* groups;
             std::array<size_t, 5>* counts;
         };
         const Pass passes[] = {
-            { FM::FaceFill::Opaque, &level.groups, &level.groupVertexCounts },
-            { FM::FaceFill::Cutout, &level.cutoutGroups, &level.cutoutVertexCounts },
-            { FM::FaceFill::Translucent, &level.translucentGroups, &level.translucentVertexCounts },
+            { &level.groups, &level.groupVertexCounts },
+            { &level.cutoutGroups, &level.cutoutVertexCounts },
+            { &level.translucentGroups, &level.translucentVertexCounts },
         };
-        for (const Pass& pass : passes)
+        // One walk over the faces builds all three fills.
+        auto allFills = FM::BuildLevelRenderMeshAllFills(
+            level.geometry, level.uvRects, level.rotations, &level.lights, &level.animator);
+        std::vector<std::pair<const LevelSubGroup*, const FM::RenderMesh*>> uploads;
+        for (size_t p = 0; p < 3; ++p)
         {
-            auto meshes = FM::BuildLevelRenderMeshPerGroup(
-                level.geometry, level.uvRects, level.rotations, &level.lights, &level.animator, pass.fill);
+            const Pass& pass = passes[p];
+            auto& meshes = allFills[p];
 
             for (size_t i = 0; i < 5; ++i)
             {
@@ -1772,12 +1888,14 @@ namespace ALTEngine::Renderer
                     group.indexBuffer = rebuilt.indexBuffer;
                     group.indexCount = rebuilt.indexCount;
                     (*pass.counts)[i] = meshes[i].vertices.size();
+                    AttachCulling(group, meshes[i]);
                     continue;
                 }
-                if (!group.vertexBuffer) { continue; }
-                ReuploadVertices(group, meshes[i]);
+                if (!group.vertexBuffer || meshes[i].vertices.empty()) { continue; }
+                uploads.emplace_back(&group, &meshes[i]);
             }
         }
+        ReuploadVerticesBatch(uploads);
         return true;
     }
 
@@ -1805,6 +1923,23 @@ namespace ALTEngine::Renderer
         for (const auto& c : entry.corner) { sum[0] += c.r; sum[1] += c.g; sum[2] += c.b; }
         for (int k = 0; k < 3; ++k) { rgb[k] = sum[k] / (4.0f * ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL); }
         return true;
+    }
+
+    void ModelRenderer::SetLevelFaceCells(const std::string& cacheKey, std::vector<int32_t> faceCells)
+    {
+        auto it = loadedLevels.find(cacheKey);
+        if (it == loadedLevels.end()) { return; }
+        it->second.faceCell = std::move(faceCells);
+        it->second.drawnSerial++;
+    }
+
+    void ModelRenderer::SetLevelDrawnCells(const std::string& cacheKey, const std::vector<uint8_t>& drawnCells)
+    {
+        auto it = loadedLevels.find(cacheKey);
+        if (it == loadedLevels.end()) { return; }
+        if (it->second.drawnCells == drawnCells) { return; }
+        it->second.drawnCells = drawnCells;
+        it->second.drawnSerial++;
     }
 
     void ModelRenderer::SetLevelLightEquipment(const std::string& cacheKey, int kind)
@@ -1941,10 +2076,20 @@ namespace ALTEngine::Renderer
                                                              const std::vector<PlacedObject>& objects,
                                                              const std::vector<PlacedSprite>& sprites)
     {
+        std::vector<uint8_t> pixels;
+        RenderLevelToRgba(cacheKey, camera, width, height, objects, sprites, pixels);
+        return pixels;
+    }
+
+    bool ModelRenderer::RenderLevelToRgba(const std::string& cacheKey, const FpsCamera& camera, int width, int height,
+                                          const std::vector<PlacedObject>& objects,
+                                          const std::vector<PlacedSprite>& sprites, std::vector<uint8_t>& pixels)
+    {
+        pixels.clear();
         if (!device || !pipeline) { return {}; }
         auto it = loadedLevels.find(cacheKey);
         if (it == loadedLevels.end()) { return {}; }
-        const LoadedLevel& level = it->second;
+        LoadedLevel& level = it->second;
 
         if (!EnsureRenderTarget(width, height)) { return {}; }
 
@@ -2004,6 +2149,97 @@ namespace ALTEngine::Renderer
         depthInfo.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
         depthInfo.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
 
+        // The cells to draw. When the set has changed since a group's list was
+        // built, its list of the drawn cells' triangles is rebuilt and copied
+        // up before the frame is drawn - one copy pass for all of them.
+        // Not with the Render Distance option on: the walk stops 15 cells
+        // out, which the original's fade hides and an unlimited view would not.
+        const bool culling = fogEnabled > 0.5f && !level.drawnCells.empty() && !level.faceCell.empty();
+        if (culling)
+        {
+            struct Pending { LevelSubGroup* group; size_t offset; size_t count; };
+            std::vector<Pending> pending;
+            std::vector<uint32_t> staging;
+            for (auto* groups : { &level.groups, &level.cutoutGroups, &level.translucentGroups })
+            {
+                for (LevelSubGroup& group : *groups)
+                {
+                    if (!group.visibleIndexBuffer || group.builtSerial == level.drawnSerial) { continue; }
+                    const size_t offset = staging.size();
+                    for (size_t t = 0; t < group.triangleFace.size(); ++t)
+                    {
+                        const uint32_t face = group.triangleFace[t];
+                        const int32_t cell = face < level.faceCell.size() ? level.faceCell[face] : -1;
+                        const bool drawn = cell < 0 || (static_cast<size_t>(cell) < level.drawnCells.size()
+                                                        && level.drawnCells[static_cast<size_t>(cell)] != 0);
+                        if (!drawn) { continue; }
+                        staging.insert(staging.end(), group.cpuIndices.begin() + static_cast<std::ptrdiff_t>(t * 3),
+                                       group.cpuIndices.begin() + static_cast<std::ptrdiff_t>(t * 3 + 3));
+                    }
+                    pending.push_back({ &group, offset, staging.size() - offset });
+                    group.builtSerial = level.drawnSerial;
+                }
+            }
+            if (!pending.empty())
+            {
+                // One upload buffer kept between frames (cycled, as the last
+                // one may still be in use), grown when a set needs more.
+                const size_t bytes = staging.size() * sizeof(uint32_t);
+                if (cullUpload && cullUploadSize < bytes)
+                {
+                    SDL_ReleaseGPUTransferBuffer(device, cullUpload);
+                    cullUpload = nullptr;
+                }
+                const bool cycle = cullUpload != nullptr;
+                if (!cullUpload && bytes > 0)
+                {
+                    SDL_GPUTransferBufferCreateInfo info{};
+                    info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+                    info.size = static_cast<Uint32>(bytes + bytes / 2);
+                    cullUpload = SDL_CreateGPUTransferBuffer(device, &info);
+                    cullUploadSize = cullUpload ? bytes + bytes / 2 : 0;
+                }
+                SDL_GPUTransferBuffer* transfer = bytes > 0 ? cullUpload : nullptr;
+                void* mapped = transfer ? SDL_MapGPUTransferBuffer(device, transfer, cycle) : nullptr;
+                if (mapped)
+                {
+                    std::memcpy(mapped, staging.data(), staging.size() * sizeof(uint32_t));
+                    SDL_UnmapGPUTransferBuffer(device, transfer);
+                    SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);
+                    for (const Pending& p : pending)
+                    {
+                        p.group->visibleCount = static_cast<uint32_t>(p.count);
+                        if (p.count == 0) { continue; }
+                        SDL_GPUTransferBufferLocation src{ transfer, static_cast<Uint32>(p.offset * sizeof(uint32_t)) };
+                        SDL_GPUBufferRegion dst{ p.group->visibleIndexBuffer, 0, static_cast<Uint32>(p.count * sizeof(uint32_t)) };
+                        SDL_UploadToGPUBuffer(copy, &src, &dst, false);
+                    }
+                    SDL_EndGPUCopyPass(copy);
+                }
+                else if (bytes == 0)
+                {
+                    for (const Pending& p : pending) { p.group->visibleCount = 0; }
+                }
+                else
+                {
+                    for (const Pending& p : pending) { p.group->visibleCount = 0; p.group->builtSerial = ~0ull; }
+                }
+            }
+        }
+        // The index buffer and count a level group draws with.
+        auto levelIndices = [&](const LevelSubGroup& group, SDL_GPUBuffer*& buffer, uint32_t& count) {
+            if (culling && group.visibleIndexBuffer && group.builtSerial == level.drawnSerial)
+            {
+                buffer = group.visibleIndexBuffer;
+                count = group.visibleCount;
+            }
+            else
+            {
+                buffer = group.indexBuffer;
+                count = group.indexCount;
+            }
+        };
+
         SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(cmd, &colorInfo, 1, &depthInfo);
         SDL_BindGPUGraphicsPipeline(renderPass, pipeline);
 
@@ -2014,10 +2250,14 @@ namespace ALTEngine::Renderer
         for (const auto& group : *groups)
         {
             if (!group.vertexBuffer || group.indexCount == 0) { continue; } // unused texture group for this level
+            SDL_GPUBuffer* indexBuffer = nullptr;
+            uint32_t indexCount = 0;
+            levelIndices(group, indexBuffer, indexCount);
+            if (indexCount == 0) { continue; }
 
             SDL_GPUBufferBinding vbBinding{ group.vertexBuffer, 0 };
             SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
-            SDL_GPUBufferBinding ibBinding{ group.indexBuffer, 0 };
+            SDL_GPUBufferBinding ibBinding{ indexBuffer, 0 };
             SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
             SDL_GPUTextureSamplerBinding texBinding{ group.texture, sampler };
             SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
@@ -2026,7 +2266,7 @@ namespace ALTEngine::Renderer
                 float fog[8] = { fogEnabled, fogStart, fogRange, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
             }
-            SDL_DrawGPUIndexedPrimitives(renderPass, group.indexCount, 1, 0, 0, 0);
+            SDL_DrawGPUIndexedPrimitives(renderPass, indexCount, 1, 0, 0, 0);
         }
 
         // -GAP override faces. Same pipeline and the level's own page
@@ -2257,13 +2497,27 @@ namespace ALTEngine::Renderer
                         const size_t vbSize = verts.size() * sizeof(ALTEngine::Formats::RenderVertex);
                         const size_t ibSize = indices.size() * sizeof(uint32_t);
 
-                        SDL_GPUTransferBufferCreateInfo transferInfo{};
-                        transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-                        transferInfo.size = static_cast<Uint32>(vbSize + ibSize);
-                        SDL_GPUTransferBuffer* transfer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
-                        if (transfer)
+                        if (spriteTransfer && spriteTransferSize < vbSize + ibSize)
                         {
-                            uint8_t* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, transfer, false));
+                            SDL_ReleaseGPUTransferBuffer(device, spriteTransfer);
+                            spriteTransfer = nullptr;
+                        }
+                        const bool cycle = spriteTransfer != nullptr;
+                        if (!spriteTransfer)
+                        {
+                            // Room for the whole sprite buffers, so it grows with them.
+                            const size_t room = std::max(vbSize + ibSize, spriteBufferCapacity
+                                * (4 * sizeof(ALTEngine::Formats::RenderVertex) + 6 * sizeof(uint32_t)));
+                            SDL_GPUTransferBufferCreateInfo transferInfo{};
+                            transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+                            transferInfo.size = static_cast<Uint32>(room);
+                            spriteTransfer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
+                            spriteTransferSize = spriteTransfer ? room : 0;
+                        }
+                        SDL_GPUTransferBuffer* transfer = spriteTransfer;
+                        uint8_t* mapped = transfer ? static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, transfer, cycle)) : nullptr;
+                        if (mapped)
+                        {
                             std::memcpy(mapped, verts.data(), vbSize);
                             std::memcpy(mapped + vbSize, indices.data(), ibSize);
                             SDL_UnmapGPUTransferBuffer(device, transfer);
@@ -2313,7 +2567,6 @@ namespace ALTEngine::Renderer
                                     SDL_DrawGPUIndexedPrimitives(renderPass, batch.count, 1, batch.first, 0, 0);
                                 }
                             }
-                            SDL_ReleaseGPUTransferBuffer(device, transfer);
                         }
                     }
                 }
@@ -2330,6 +2583,10 @@ namespace ALTEngine::Renderer
             for (const auto& group : level.translucentGroups)
             {
                 if (!group.vertexBuffer || group.indexCount == 0) { continue; }
+                SDL_GPUBuffer* indexBuffer = nullptr;
+                uint32_t indexCount = 0;
+                levelIndices(group, indexBuffer, indexCount);
+                if (indexCount == 0) { continue; }
                 if (!bound)
                 {
                     SDL_BindGPUGraphicsPipeline(renderPass, translucentPipeline ? translucentPipeline : pipeline);
@@ -2339,7 +2596,7 @@ namespace ALTEngine::Renderer
                 }
                 SDL_GPUBufferBinding vbBinding{ group.vertexBuffer, 0 };
                 SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
-                SDL_GPUBufferBinding ibBinding{ group.indexBuffer, 0 };
+                SDL_GPUBufferBinding ibBinding{ indexBuffer, 0 };
                 SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
                 SDL_GPUTextureSamplerBinding texBinding{ group.texture, sampler };
                 SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
@@ -2349,7 +2606,7 @@ namespace ALTEngine::Renderer
                 // 0x5db67 takes the texel's own colour (table 0x2273c8).
                 float fog[8] = { 0.0f, fogStart, fogRange, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
-                SDL_DrawGPUIndexedPrimitives(renderPass, group.indexCount, 1, 0, 0, 0);
+                SDL_DrawGPUIndexedPrimitives(renderPass, indexCount, 1, 0, 0, 0);
             }
             for (const auto& draw : seeThroughDraws)
             {
@@ -2376,6 +2633,6 @@ namespace ALTEngine::Renderer
 
         if (renderPass) { SDL_EndGPURenderPass(renderPass); }
 
-        return DownloadColorTarget(cmd, width, height);
+        return DownloadColorTarget(cmd, width, height, pixels);
     }
 }

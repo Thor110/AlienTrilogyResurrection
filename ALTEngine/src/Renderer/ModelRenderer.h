@@ -314,6 +314,13 @@ namespace ALTEngine::Renderer
         // whichever is on fading out (0). See LightTable::StartEquipment.
         static void SetLevelLightEquipment(const std::string& cacheKey, int kind);
 
+        // Drawing only the cells the original's view walk draws. `faceCells`
+        // (once per level) gives each level face's cell, -1 for none; then
+        // `drawnCells`, one byte a cell, says which to draw - empty draws
+        // every face. Faces with no cell are always drawn.
+        static void SetLevelFaceCells(const std::string& cacheKey, std::vector<int32_t> faceCells);
+        static void SetLevelDrawnCells(const std::string& cacheKey, const std::vector<uint8_t>& drawnCells);
+
         // A light id's colour as a multiplier (1 = neutral, 0x80), its four
         // corners averaged - what a model or creature in a cell with that
         // light is drawn in. False if the level or id isn't there.
@@ -382,5 +389,10 @@ namespace ALTEngine::Renderer
         static std::vector<uint8_t> RenderLevelToRgba(const std::string& cacheKey, const FpsCamera& camera, int width, int height,
                                                         const std::vector<PlacedObject>& objects = {},
                                                         const std::vector<PlacedSprite>& sprites = {});
+        // The same, into a buffer the caller keeps between frames; false
+        // (and an empty buffer) when nothing was drawn.
+        static bool RenderLevelToRgba(const std::string& cacheKey, const FpsCamera& camera, int width, int height,
+                                      const std::vector<PlacedObject>& objects, const std::vector<PlacedSprite>& sprites,
+                                      std::vector<uint8_t>& pixels);
     };
 }

@@ -42,6 +42,10 @@ namespace ALTEngine::Formats
         // Models only: where the see-through faces start in `indices`, or
         // SIZE_MAX if there are none - see BuildRenderMesh's flatSeeThrough.
         size_t translucentStart = SIZE_MAX;
+        // Levels only (BuildLevelRenderMeshPerGroup): the level face, an index
+        // into LevelGeometry::quads, each triangle came from - one entry per
+        // three indices. Lets the renderer draw only some cells' faces.
+        std::vector<uint32_t> triangleFace;
     };
 
     // Converts a parsed ModelMesh + its paired BX UV rects (same section
@@ -261,5 +265,15 @@ namespace ALTEngine::Formats
                                                             const LightTable* lights = nullptr,
                                                             const TextureAnimator* animator = nullptr,
                                                             FaceFill fill = FaceFill::Opaque);
+
+    // All three drawn fills in one walk over the faces: [0] opaque, [1]
+    // cutout, [2] translucent, each per page as above. A rebuild (a light or
+    // an animated texture moving) needs all three, and one walk classifies
+    // and resolves each face once instead of three times.
+    std::array<std::array<RenderMesh, 5>, 3> BuildLevelRenderMeshAllFills(const LevelGeometry& level,
+                                                                         const std::vector<BxRectangle>& uvDescriptors,
+                                                                         const std::vector<FaceUvRotation>& uvRotations = {},
+                                                                         const LightTable* lights = nullptr,
+                                                                         const TextureAnimator* animator = nullptr);
 }
 

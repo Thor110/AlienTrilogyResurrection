@@ -34,7 +34,10 @@ namespace ALTEngine::Screens
         constexpr Color COLOR_LOADING{ 220, 40, 40, 255 };  // "Loading data" - red, per the reference screenshot
         constexpr Color COLOR_READY{ 235, 235, 235, 255 };  // "Hit any key to Continue..." - light/white, per the reference screenshot
 
-        constexpr int LOADING_MS = 2000; // placeholder timer - see MissionBriefingScreen.h
+        // The shortest the "Loading data" line shows before "Hit any key".
+        // The level itself loads in well under that (Edward, 2026: one second,
+        // down from two).
+        constexpr int LOADING_MS = 1000;
         constexpr int MS_PER_CHAR = 25;  // typewriter speed - ~40 chars/sec
 
         // "1.1.1" -> chapter 1 -> COLONY. Matches the chapter/background

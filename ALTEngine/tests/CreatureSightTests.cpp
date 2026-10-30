@@ -253,3 +253,52 @@ TEST_CASE("CreatureSight: the map shows what the view walk has seen, in discover
     CHECK_EQ(plainCount, seenCount);
     CHECK(mappedCount > plainCount);
 }
+
+TEST_CASE("CreatureSight: each cell's face run partitions the level's faces")
+{
+    namespace CS = ALTEngine::Game::CreatureSight;
+    const ALTEngine::Formats::LevelGeometry level = ALTEngine::Formats::LevelLoader::Load(
+        AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
+    const std::vector<int32_t> owner = CS::FaceCells(level);
+    REQUIRE(owner.size() == level.quads.size());
+    // Every run starts at its cell's first face and ends on the end bit, and
+    // no face is claimed twice (the walk would overwrite, so check run by run).
+    std::vector<int> claims(level.quads.size(), 0);
+    size_t owned = 0;
+    for (size_t cell = 0; cell < level.collisionGrid.size(); ++cell)
+    {
+        const auto& n = level.collisionGrid[cell];
+        const uint32_t start = n.unknown1 | (n.unknown2 << 8) | (n.unknown3 << 16) | (static_cast<uint32_t>(n.unknown4) << 24);
+        if (start == 0xffffffffu || start == 0) { continue; }
+        for (size_t q = start - 1; q < level.quads.size(); ++q)
+        {
+            ++claims[q];
+            CHECK_EQ(owner[q], static_cast<int32_t>(cell));
+            if (level.quads[q].reserved & 0x80) { break; }
+        }
+    }
+    for (size_t q = 0; q < claims.size(); ++q) { CHECK(claims[q] <= 1); owned += claims[q] ? 1 : 0; }
+    CHECK(owned * 10 > level.quads.size() * 9);
+}
+
+TEST_CASE("CreatureSight: the drawn cells are the view walk's, widened only for a wider view")
+{
+    namespace CS = ALTEngine::Game::CreatureSight;
+    LevelGeometry level = Room();
+    for (auto& cell : level.collisionGrid) { cell.unknown1 = cell.unknown2 = cell.unknown3 = cell.unknown4 = 0; }
+    // Looking along +x from (2, 2): the cell ahead is drawn, the one behind
+    // (outside ring 1's 0x384 window) is not.
+    const auto ahead = CS::DrawnCells(level, 2, 2, 0xc00);
+    CHECK(ahead[2 * 12 + 2] == 1);
+    CHECK(ahead[2 * 12 + 3] == 1);
+    CHECK(ahead[2 * 12 + 1] == 0);
+    CHECK(ahead[2 * 12 + 10] == 1);
+    // A wider view takes the first two rings whole, so the cell behind is
+    // drawn too, and never takes fewer cells.
+    const auto wide = CS::DrawnCells(level, 2, 2, 0xc00, 0x300);
+    CHECK(wide[2 * 12 + 1] == 1);
+    for (size_t i = 0; i < ahead.size(); ++i) { CHECK(wide[i] >= ahead[i]); }
+    // Outside the map nothing is drawn.
+    const auto outside = CS::DrawnCells(level, -1, 2, 0xc00);
+    for (uint8_t d : outside) { CHECK(d == 0); }
+}

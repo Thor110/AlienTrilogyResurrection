@@ -4,6 +4,7 @@
 #include "ProjectileCollision.h"
 #include "ViewRings.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace ALTEngine::Game::CreatureSight
@@ -143,7 +144,8 @@ namespace ALTEngine::Game::CreatureSight
         // The view walk (0x2745b): calls `take(cellIndex)` for every cell it
         // takes in and returns the zone mask it builds.
         template <typename Take>
-        uint16_t WalkView(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ, int viewYaw, Take&& take)
+        uint16_t WalkView(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ, int viewYaw, Take&& take,
+                          int minHalfWidth = 0)
         {
             const int length = level.header.mapLength;
             const int width = level.header.mapWidth;
@@ -167,11 +169,24 @@ namespace ALTEngine::Game::CreatureSight
             const int yaw = viewYaw & 0xfff;
             for (const Pass& pass : PASSES)
             {
-                int lo = yaw - pass.halfWidth;
-                int hi = yaw + pass.halfWidth;
-                if (lo < 0) { lo += 0x1000; hi += 0x1000; }
                 for (int ring = pass.firstRing; ring <= pass.lastRing; ++ring)
                 {
+                    // The port's wider screens (minHalfWidth > 0) test each
+                    // ring's cells by their centres, so the cone also widens
+                    // by how wide a cell looks from anywhere in the player's
+                    // cell (1.5 cells over the ring's distance); the first
+                    // two rings are taken whole.
+                    int halfWidth = pass.halfWidth;
+                    if (minHalfWidth > 0)
+                    {
+                        const int margin = ring <= 1 ? 0x800
+                            : static_cast<int>(std::asin(std::min(1.0, 1.5 / ring)) * 4096.0 / 6.283185307179586);
+                        halfWidth = std::max(halfWidth, minHalfWidth + margin);
+                    }
+                    halfWidth = std::min(halfWidth, 0x800);
+                    int lo = yaw - halfWidth;
+                    int hi = yaw + halfWidth;
+                    if (lo < 0) { lo += 0x1000; hi += 0x1000; }
                     int i = ViewRings::RING_BUCKETS[ring][lo >> 7];
                     while (ViewRings::RING_CELLS[i].angle < lo) { ++i; }
                     for (; i < ViewRings::CELL_COUNT && ViewRings::RING_CELLS[i].angle <= hi; ++i)
@@ -194,6 +209,35 @@ namespace ALTEngine::Game::CreatureSight
     uint16_t DrawnZoneMask(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ, int viewYaw)
     {
         return WalkView(level, playerCellX, playerCellZ, viewYaw, [](int) {});
+    }
+
+    std::vector<uint8_t> DrawnCells(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ,
+                                    int viewYaw, int minHalfWidth)
+    {
+        const size_t cells = static_cast<size_t>(level.header.mapLength) * static_cast<size_t>(level.header.mapWidth);
+        std::vector<uint8_t> drawn(cells, 0);
+        WalkView(level, playerCellX, playerCellZ, viewYaw, [&](int i) {
+            if (i >= 0 && static_cast<size_t>(i) < cells) { drawn[static_cast<size_t>(i)] = 1; }
+        }, minHalfWidth);
+        return drawn;
+    }
+
+    std::vector<int32_t> FaceCells(const Formats::LevelGeometry& level)
+    {
+        std::vector<int32_t> owner(level.quads.size(), -1);
+        for (size_t cell = 0; cell < level.collisionGrid.size(); ++cell)
+        {
+            const auto& n = level.collisionGrid[cell];
+            const uint32_t start = static_cast<uint32_t>(n.unknown1) | (static_cast<uint32_t>(n.unknown2) << 8)
+                                 | (static_cast<uint32_t>(n.unknown3) << 16) | (static_cast<uint32_t>(n.unknown4) << 24);
+            if (start == 0xffffffffu || start == 0) { continue; }
+            for (size_t q = start - 1; q < level.quads.size(); ++q)
+            {
+                owner[q] = static_cast<int32_t>(cell);
+                if (level.quads[q].reserved & 0x80) { break; }
+            }
+        }
+        return owner;
     }
 
     void MarkSeen(const Formats::LevelGeometry& level, std::vector<uint8_t>& seen, std::vector<uint8_t>& areas,

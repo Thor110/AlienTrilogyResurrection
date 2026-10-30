@@ -1,4 +1,4 @@
-# What remains (after zip 85)
+# What remains (after zip 86)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -10,6 +10,19 @@ Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older l
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
 
+Changed in zip 86, to check:
+- **The draw limit.** The level draws only the cells the original's view walk takes in from the camera's cell
+  (0x2745b), out to its last ring (14 cells): about 4% of a level's faces in a view, against all of them before.
+  Each cell's faces are its run from bytes 0-3 to the face whose +0x13 has bit 0x80 (an exact split of every
+  level's faces). The cones widen to the port's wider screen, the first two rings are taken whole, and each
+  ring adds a cell's width, so nothing at the screen's edges drops out; looking at a straight corridor at 45
+  degrees, its far end now stops where the original's does, before the fog has hidden it. With Render Distance
+  on (no fog) the whole level is drawn as before.
+- **Loading:** the "loading" screen holds for one second (two before), and each model file is parsed once for
+  all the models in it rather than once per model.
+- **Speed:** a light or texture change rebuilds the level in one walk over the faces (three before) and sends it
+  in one upload (up to fifteen); the frame, sprite and culling uploads reuse their buffers.
+
 Changed in zip 85, to check:
 - **Models lit by their cell.** Crates, switches, pickups, doors, lifts and anything thrown take the light of
   the cell they stand in (its byte 0x0e; FUN_000269b8 and its siblings), as do the creatures' sprites
@@ -17,7 +30,9 @@ Changed in zip 85, to check:
   Metal shaders are rebuilt here; the Direct3D one is compiled from the HLSL by dxc when building on Windows.
 - **The map** shows what the view walk has seen (every cell it takes in, not a 3x3 patch round the player), in
   the areas the player has stood in; the Auto Mapper shows the whole of each discovered area rather than the
-  whole level (0x2745b, FUN_00043078).
+  whole level (0x2745b, FUN_00043078). Every cell of L111 is in area 0, the one counted from the start, so
+  there the Auto Mapper shows the whole level, as in the original. Most other levels have 1 to 21 small extra
+  areas (tens to hundreds of cells each; 21 on L331), which look like the secret areas.
 - **The shoulder lamp and night-vision goggles** can be used: Enter on the pause menu's Shoulder Lamp entry
   lights a lamp, or goggles if there is no lamp (FUN_00044b48). The lamp is a warm light, the goggles a
   green-blue one; they come up over 32 ticks, last 0x708 and 0xa8c ticks, and fade over 64 (FUN_00029d94).
@@ -47,9 +62,8 @@ library, the sound and video drivers and the DOS extender) was looked at to see 
 
 ### Known to be missing
 1. **Multiplayer.** FUN_00054a60 and everything behind `DAT_000ae0a4`.
-2. **The draw limit.** The original draws only the cells its view walk reaches; the port draws the whole level
-   (with depth testing, so only what's in sight shows). The walk is in the port (`CreatureSight`), and the
-   seen cells now come from it; limiting the draw to them needs the level mesh split by cell.
+2. **The draw limit for models.** Level faces are limited to the walk's cells (zip 86); doors, lifts, crates,
+   pickups and creatures are still drawn wherever they are (depth testing hides what is out of sight).
 3. **Effects past 0x1000.** FUN_000429f0 draws a near effect in colour 0x80 and a far one in the table's own
    colour (+0xa8) faded by distance; those table colours don't read as plain colours (ff,ff,ff and 00,ff,00), so
    the far case isn't copied. Near ones, the usual case, are right.
@@ -109,12 +123,16 @@ Still open:
 
 ## 4. Performance
 
-1. Light and texture animation: a flicker rebuilds and re-uploads the whole level mesh; upload only what
-   changed, or move light colours into a small GPU table.
-2. The frame's GPU -> CPU -> GPU copy: reuse one buffer now; draw straight to the window later (needs real
-   hardware).
-3. Sprites: one persistent upload buffer instead of a new one each frame and a render pass reopened for it.
-4. Small `reserve` calls.
+Done in zip 86: the draw limit (about 4% of the faces in a view), one walk and one upload per light change
+(half the time it took), and the frame, sprite and culling uploads keep their buffers. Shutdown now also
+frees the sprite buffers and sheets, which a later Initialize would otherwise have drawn with.
+
+1. Light and texture animation: a change still rebuilds every vertex of the level (about 1.3 ms in a release
+   build, mostly the copy). The lamp and goggles change every vertex anyway, so only moving the light colours
+   into a small GPU table would save more.
+2. The frame's GPU -> CPU -> GPU copy: draw straight to the window (needs real hardware; the HUD is drawn with
+   SDL's 2D renderer over the frame, so it means moving the HUD too).
+3. Sprites: the render pass is still closed and reopened for their upload.
 
 ## 5. Larger features
 

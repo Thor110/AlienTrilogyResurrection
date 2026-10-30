@@ -96,6 +96,20 @@ namespace ALTEngine::Game::CreatureSight
     // `viewYaw` is the camera's (DAT_000b0ba2).
     uint16_t DrawnZoneMask(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ, int viewYaw);
 
+    // The cells the renderer draws this frame (0x2745b): the player's own and
+    // every cell the walk takes in, one byte a cell. `minHalfWidth` widens
+    // each pass's cone to at least that many angle units either side of the
+    // view, for a view wider than the original's 320x240 (whose cones it
+    // already covers); 0 keeps the original's cones.
+    std::vector<uint8_t> DrawnCells(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ,
+                                    int viewYaw, int minHalfWidth = 0);
+
+    // Which cell each level face belongs to: a cell's bytes 0-3 give the
+    // first face of its run, counting from 1 (record 0 is the blank before
+    // face 0), and the run ends at the face whose light byte (+0x13) has bit
+    // 0x80. -1 for a face no cell lists.
+    std::vector<int32_t> FaceCells(const Formats::LevelGeometry& level);
+
     // What the same walk leaves behind for the map. Every cell it takes in -
     // the player's own and each ring cell sharing a zone with the mask - gets
     // its seen bit (byte 7, bit 0: 0x274d8, 0x275b8 and the other passes),

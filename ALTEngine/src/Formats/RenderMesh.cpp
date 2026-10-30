@@ -384,6 +384,27 @@ namespace ALTEngine::Formats
         return result;
     }
 
+    namespace
+    {
+        // The drawn fills' slots in BuildLevelRenderMeshAllFills; -1 for none.
+        int FillSlot(FaceFill fill)
+        {
+            switch (fill)
+            {
+            case FaceFill::Opaque: return 0;
+            case FaceFill::Cutout: return 1;
+            case FaceFill::Translucent: return 2;
+            default: return -1;
+            }
+        }
+
+        // Builds the faces of the fills `wanted` marks (by slot) into `result`.
+        void BuildLevelFills(const LevelGeometry& level, const std::vector<BxRectangle>& uvRects,
+                             const std::vector<FaceUvRotation>& uvRotations, const LightTable* lights,
+                             const TextureAnimator* animator, const std::array<bool, 3>& wanted,
+                             std::array<std::array<RenderMesh, 5>, 3>& result);
+    }
+
     std::array<RenderMesh, 5> BuildLevelRenderMeshPerGroup(const LevelGeometry& level,
                                                             const std::vector<BxRectangle>& uvRects,
                                                             const std::vector<FaceUvRotation>& uvRotations,
@@ -391,12 +412,41 @@ namespace ALTEngine::Formats
                                                             const TextureAnimator* animator,
                                                             FaceFill fill)
     {
-        std::array<RenderMesh, 5> result;
+        const int slot = FillSlot(fill);
+        if (slot < 0) { return {}; }
+        std::array<bool, 3> wanted{};
+        wanted[static_cast<size_t>(slot)] = true;
+        std::array<std::array<RenderMesh, 5>, 3> all;
+        BuildLevelFills(level, uvRects, uvRotations, lights, animator, wanted, all);
+        return std::move(all[static_cast<size_t>(slot)]);
+    }
 
-        for (const auto& original : level.quads)
+    std::array<std::array<RenderMesh, 5>, 3> BuildLevelRenderMeshAllFills(const LevelGeometry& level,
+                                                                         const std::vector<BxRectangle>& uvRects,
+                                                                         const std::vector<FaceUvRotation>& uvRotations,
+                                                                         const LightTable* lights,
+                                                                         const TextureAnimator* animator)
+    {
+        std::array<std::array<RenderMesh, 5>, 3> all;
+        BuildLevelFills(level, uvRects, uvRotations, lights, animator, { true, true, true }, all);
+        return all;
+    }
+
+    namespace
+    {
+    void BuildLevelFills(const LevelGeometry& level, const std::vector<BxRectangle>& uvRects,
+                         const std::vector<FaceUvRotation>& uvRotations, const LightTable* lights,
+                         const TextureAnimator* animator, const std::array<bool, 3>& wanted,
+                         std::array<std::array<RenderMesh, 5>, 3>& all)
+    {
+        for (size_t faceIndex = 0; faceIndex < level.quads.size(); ++faceIndex)
         {
+            const ModelQuad& original = level.quads[faceIndex];
             const DrawRoutine routine = ClassifyDrawRoutine(original.flags);
-            if (routine.fill == FaceFill::Hidden || routine.fill != fill) { continue; }
+            const int slot = FillSlot(routine.fill);
+            if (slot < 0 || !wanted[static_cast<size_t>(slot)]) { continue; }
+            const FaceFill fill = routine.fill;
+            std::array<RenderMesh, 5>& result = all[static_cast<size_t>(slot)];
 
             // Animated faces are redirected to the animator's current output
             // before anything else looks at texIndex, so texture page
@@ -459,9 +509,15 @@ namespace ALTEngine::Formats
             // The see-through fill is unlit: it reads the texel's own colour
             // (the table at 0x2273c8), not the lit one.
             const QuadColours colours = fill == FaceFill::Translucent ? WhiteColours() : LevelQuadColours(q, lights);
-            EmitQuad(result[static_cast<size_t>(group)], level.vertices, q, uvs, colours, true);
+            RenderMesh& out = result[static_cast<size_t>(group)];
+            const size_t before = out.indices.size();
+            EmitQuad(out, level.vertices, q, uvs, colours, true);
+            for (size_t t = before; t + 2 < out.indices.size(); t += 3)
+            {
+                out.triangleFace.push_back(static_cast<uint32_t>(faceIndex));
+            }
         }
-        return result;
+    }
     }
 
     std::vector<MeshFaceExtent> ExtractMeshFaces(const RenderMesh& mesh, const ModelMesh& source)
