@@ -1925,6 +1925,15 @@ namespace ALTEngine::Renderer
         return true;
     }
 
+    bool ModelRenderer::LevelLightCorner(const std::string& cacheKey, int lightId, uint8_t rgb[3])
+    {
+        auto it = loadedLevels.find(cacheKey);
+        if (it == loadedLevels.end() || lightId < 0) { return false; }
+        const auto& corner = it->second.lights.ColourFor(lightId).corner[0];
+        rgb[0] = corner.r; rgb[1] = corner.g; rgb[2] = corner.b;
+        return true;
+    }
+
     void ModelRenderer::SetLevelFaceCells(const std::string& cacheKey, std::vector<int32_t> faceCells)
     {
         auto it = loadedLevels.find(cacheKey);

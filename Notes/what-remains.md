@@ -1,4 +1,4 @@
-# What remains (after zip 88)
+# What remains (after zip 89)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -10,16 +10,26 @@ Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older l
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
 
+Changed in zip 89, to check:
+- **Bullets** point the way they fly. They were strips centred on the round and turned a quarter-turn out, so a
+  shot fired ahead lay across the screen. Now each is the original's line (FUN_0002d3e4): from the round to
+  position + velocity (+ velocity/2 for the pistol), one pixel wide, coloured from the level's lights 0 and 1:
+  the pistol yellow to white, the pulse rifle teal to white, the smartgun cyan to white, a creature's dark red
+  to white (they were all white). The shotgun's pellets are not drawn, as in the original (FUN_0002d6ec).
+  The original leaves rounds out at its lower detail settings (DAT_000a63fc: the player's at 2, creatures' at
+  1 and 2, 1 being its default); the port has no such setting and draws them all, as its highest does.
+
 Changed in zips 87-88, to check:
 - **Creatures attack up close again** (zip 87): every creature but the gunners had its line to the player
   cleared each tick (the gunners' ray test's `else` sat after the ground test), so huggers never pounced and
   no close attacker reached its attack. Confirmed by Edward for the huggers.
 - **Damaged level files** (zip 88): a player reported `BndParser: unexpected end of data reading tag` on L141,
-  which only an empty or nearly empty L141LEV.MAP or 141GFX.B16 gives. The byte patcher wrote each level in
-  place, emptying it first, so a write cut short (antivirus, a full disk, the game closed part-way) left it
-  empty; it now writes beside the file and moves the result over it, as the model removal already did. The
-  installer counts a copy whose size differs from the disc's as failed, and a level too short to read now says
-  which file and asks for it to be copied from the disc again.
+  which only an empty or nearly empty L141LEV.MAP or 141GFX.B16 gives. The cause was theirs: a "play from the
+  CD" install, whose level files never reached the hard drive; the archive.org copy works. Made sturdier anyway:
+  the byte patcher writes beside the file and moves the result over it (writing in place emptied the file
+  first, so an interrupted write could leave it empty), the installer counts a copy whose size differs from
+  the disc's as failed, and a level too short to read says which file and asks for it to be copied from the
+  disc again.
 
 Changed in zip 86, to check:
 - **The draw limit.** The level draws only the cells the original's view walk takes in from the camera's cell

@@ -1344,6 +1344,10 @@ namespace ALTEngine::Screens
                         // The particle sheet, uploaded once for the level.
                         ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
                             "particle", BuildParticleSprite(8), 8, 8);
+                        // One white texel: a bullet's line takes its colour
+                        // from the vertices alone (FUN_0002d3e4).
+                        ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
+                            "line", std::vector<uint8_t>{ 255, 255, 255, 255 }, 1, 1);
 
                         // A window's glass, cut out of the level's own texture
                         // page as its own sheet, for the panes it breaks into.
@@ -4155,10 +4159,9 @@ namespace ALTEngine::Screens
                 //
                 // The original draws a bullet as a LINE from its position to
                 // position + a fraction of its velocity (FUN_0002d3e4), and a
-                // fragment as a 2x2 pixel quad (FUN_0002d1b4). A line is not
-                // something the billboard pass can express, so a tracer is drawn
-                // as a quad stretched along its travel instead - same streak,
-                // different primitive. MARKED as a departure.
+                // fragment as a 2x2 pixel quad (FUN_0002d1b4). The sprite pass
+                // draws a line as a strip one of the original's pixels wide,
+                // from the round to its tip, turned to face the camera.
                 std::vector<ALTEngine::Renderer::PlacedSprite> placedSprites;
                 if (levelReady)
                 {
@@ -4251,43 +4254,95 @@ namespace ALTEngine::Screens
                         }
                         else
                         {
-                            // ORIENTED ALONG TRAVEL, not billboarded.
+                            // A ROUND IS A LINE (FUN_0002d6ec, FUN_0002d3e4),
+                            // one pixel wide, from where it is to where it
+                            // will be: position + velocity, or + velocity/2
+                            // for the pistol. Its colour runs from one set
+                            // per type at the round to light 1's at the tip,
+                            // both from the level's light table, so with the
+                            // shipped lights (light 0 grey, light 1 white):
+                            //     pistol (0)       yellow  -> white
+                            //     pulse rifle (2)  teal    -> white
+                            //     smartgun (4)     cyan    -> white
+                            //     a creature's (5) dark red -> white
+                            // The shotgun's pellets (1) are never drawn. Types
+                            // 0, 2 and 4 are left out at the lowest detail
+                            // setting and type 5 at any but the highest
+                            // (DAT_000a63fc); the port has no such setting,
+                            // so it draws them all, as the highest does.
                             //
-                            // A tracer stretched horizontally on a camera-facing
-                            // quad is a horizontal dash whichever way the round
-                            // is actually going - so firing straight ahead drew
-                            // a bar across the screen and looked like the bullet
-                            // had gone sideways (Edward, 2026). The trajectory
-                            // was right all along; the quad was not.
-                            //
-                            // The original draws a line from the position to
-                            // position + a fraction of the velocity
-                            // (FUN_0002d3e4), so the streak IS the velocity
-                            // vector. Turning the quad to match gives that, and
-                            // a round fired at the camera foreshortens to a dot
-                            // as it should.
-                            const float speed = std::sqrt(particle.vx * particle.vx
-                                                        + particle.vy * particle.vy
-                                                        + particle.vz * particle.vz);
-                            const float streak = speed * P::TracerVelocityFraction(particle.type) * 0.5f;
-                            // A one-pixel line (FUN_0002d3e4).
-                            spark.halfWidth = std::max(streak, originalPixel * 0.5f);
-                            spark.halfHeight = originalPixel * 0.5f;
+                            // The streak used to be a strip centred on the
+                            // round and turned by an angle a quarter-turn out,
+                            // so a round fired ahead lay across the screen,
+                            // and stood on its edge it all but vanished from
+                            // behind. Now it is the line itself: from the
+                            // round to its tip, its flat side to the camera,
+                            // one of the original's pixels wide at each end,
+                            // in two halves to carry the colour's run.
+                            if (particle.type == P::TYPE_SHOTGUN) { continue; }
+                            uint8_t light0[3] = { 160, 160, 160 }, light1[3] = { 255, 255, 255 };
+                            ModelRenderer::LevelLightCorner(cacheKey, 0, light0);
+                            ModelRenderer::LevelLightCorner(cacheKey, 1, light1);
+                            float head[3];
+                            switch (particle.type)
+                            {
+                            case P::TYPE_PISTOL:   head[0] = light1[0]; head[1] = light1[1]; head[2] = 0; break;
+                            case P::TYPE_PULSE:    head[0] = 0; head[1] = light0[1]; head[2] = light1[2]; break;
+                            case P::TYPE_SMARTGUN: head[0] = 0; head[1] = light1[1]; head[2] = light1[2]; break;
+                            default:               head[0] = light0[0]; head[1] = 0; head[2] = 0; break;
+                            }
+                            const float tail[3] = { float(light1[0]), float(light1[1]), float(light1[2]) };
 
-                            // Along the direction of travel. This was briefly a
-                            // Modern option, on the reading that the original's
-                            // flat sideways streak was deliberate - but the streak
-                            // only looked flat because rounds were being fired
-                            // with no vertical velocity at all. With that fixed
-                            // the oriented quad is simply correct, and the option
-                            // had nothing left to toggle.
+                            const float fraction = P::TracerVelocityFraction(particle.type);
+                            const float ex = particle.vx * fraction, ey = particle.vy * fraction, ez = particle.vz * fraction;
+                            // Across the line, facing the camera.
+                            const float mx = particle.x + ex * 0.5f - camera.x;
+                            const float my = particle.y + ey * 0.5f - camera.y;
+                            const float mz = particle.z + ez * 0.5f - camera.z;
+                            float sx = ey * mz - ez * my, sy = ez * mx - ex * mz, sz = ex * my - ey * mx;
+                            float side = std::sqrt(sx * sx + sy * sy + sz * sz);
+                            float length = std::sqrt(ex * ex + ey * ey + ez * ez);
+                            float lx = ex, ly = ey, lz = ez;
+                            if (side < 1e-3f || length < 1e-3f)
+                            {
+                                // Coming straight at the camera, or not moving:
+                                // a one-pixel dot.
+                                const float yawRadians = camera.yaw;
+                                sx = std::cos(yawRadians); sy = 0.0f; sz = std::sin(yawRadians);
+                                side = 1.0f;
+                                lx = 0.0f; ly = originalPixel; lz = 0.0f;
+                            }
+                            sx /= side; sy /= side; sz /= side;
+                            auto pixelAt = [&](float x, float y, float z) {
+                                const float ddx = x - camera.x, ddy = y - camera.y, ddz = z - camera.z;
+                                return std::sqrt(ddx * ddx + ddy * ddy + ddz * ddz) / 256.0f * 0.5f;
+                            };
+                            spark.textureKey = "line";
+                            spark.u0 = spark.v0 = 0.0f;
+                            spark.u1 = spark.v1 = 1.0f;
                             spark.billboard = false;
-                            // Local +X runs along the quad's width, so yaw it to
-                            // the direction of travel and pitch it by the climb.
-                            spark.rotY = std::atan2(particle.vx, -particle.vz);
-                            const float flat = std::sqrt(particle.vx * particle.vx
-                                                       + particle.vz * particle.vz);
-                            spark.rotZ = std::atan2(particle.vy, flat > 0.001f ? flat : 0.001f);
+                            spark.corners = true;
+                            for (int half = 0; half < 2; ++half)
+                            {
+                                const float t0 = half * 0.5f, t1 = t0 + 0.5f;
+                                const float ax = lx * t0, ay = ly * t0, az = lz * t0;
+                                const float bx = lx * t1, by = ly * t1, bz = lz * t1;
+                                const float wa = pixelAt(particle.x + ax, particle.y + ay, particle.z + az);
+                                const float wb = pixelAt(particle.x + bx, particle.y + by, particle.z + bz);
+                                ALTEngine::Renderer::PlacedSprite segment = spark;
+                                segment.cornerX[0] = ax + sx * wa; segment.cornerY[0] = ay + sy * wa; segment.cornerZ[0] = az + sz * wa;
+                                segment.cornerX[1] = bx + sx * wb; segment.cornerY[1] = by + sy * wb; segment.cornerZ[1] = bz + sz * wb;
+                                segment.cornerX[2] = bx - sx * wb; segment.cornerY[2] = by - sy * wb; segment.cornerZ[2] = bz - sz * wb;
+                                segment.cornerX[3] = ax - sx * wa; segment.cornerY[3] = ay - sy * wa; segment.cornerZ[3] = az - sz * wa;
+                                for (int corner = 0; corner < 4; ++corner) { segment.cornerU[corner] = 0.5f; segment.cornerV[corner] = 0.5f; }
+                                // The colour at the half's middle.
+                                const float t = half == 0 ? 0.25f : 0.75f;
+                                segment.r = (head[0] + (tail[0] - head[0]) * t) / 255.0f;
+                                segment.g = (head[1] + (tail[1] - head[1]) * t) / 255.0f;
+                                segment.b = (head[2] + (tail[2] - head[2]) * t) / 255.0f;
+                                placedSprites.push_back(segment);
+                            }
+                            continue;
                         }
                         placedSprites.push_back(spark);
                     }

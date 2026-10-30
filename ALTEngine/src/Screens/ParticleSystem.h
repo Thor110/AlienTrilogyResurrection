@@ -289,7 +289,9 @@ namespace ALTEngine::Screens
         // round in flight is a short streak pointing the way it is going:
         //     type 0        position .. position + velocity/2
         //     types 2, 4    position .. position + velocity
-        // Colour comes from three palette bytes that differ per type.
+        // Its colour runs from a per-type mix of lights 0 and 1 at the round
+        // to light 1's at the tip (the level's light table, DAT_002458dc);
+        // the shotgun's pellets (type 1) are never drawn (FUN_0002d6ec).
         //
         // A FRAGMENT IS A 2x2 PIXEL QUAD (FUN_0002d1b4) - four screen points at
         // (x,y), (x+1,y), (x,y+1), (x+1,y+1), shaded by the particle's +0x1a.

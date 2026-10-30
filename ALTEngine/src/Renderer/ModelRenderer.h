@@ -326,6 +326,11 @@ namespace ALTEngine::Renderer
         // light is drawn in. False if the level or id isn't there.
         static bool LevelLightColour(const std::string& cacheKey, int lightId, float rgb[3]);
 
+        // A light id's first corner as it stands this tick, 0-255 a channel:
+        // the bytes the original's light table (DAT_002458dc) holds, which its
+        // flat primitives - a bullet's line - take their colours from.
+        static bool LevelLightCorner(const std::string& cacheKey, int lightId, uint8_t rgb[3]);
+
         // Applies script command 9 (ChangeTexture) to one texture animator.
         // This is what arms an animated face that only changes when something
         // triggers it - L111's seven group-3 control panels each wait for
