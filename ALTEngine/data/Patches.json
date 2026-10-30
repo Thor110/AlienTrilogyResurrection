@@ -22004,20 +22004,20 @@
     },
     {
       "target": "SECT11/L111LEV.MAP",
-      "note": "L111LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38), and the face's texture turned a quarter-turn counter-clockwise by rotating its vertex list (8052, 8049, 8113 -> 8049, 8113, 8052) - see Patch/another-fix.txt",
+      "note": "L111LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38), and the face's texture turned a quarter-turn counter-clockwise by rotating its vertex list (8052, 8049, 8113 -> 8049, 8113, 8052) - see Patch/another-fix.txt Turned once more counter-clockwise in the UV review (Edward, 2026): now (8113, 8052, 8049), the one rotation not tried before - the original (8052, 8049, 8113) and the earlier quarter-turn (8049, 8113, 8052) both left the texture streaked.",
       "edits": [
         {
           "offset": "0x46DB4",
           "bytes": [
-            "0x71",
-            "0x1F",
-            "0x00",
-            "0x00",
             "0xB1",
             "0x1F",
             "0x00",
             "0x00",
             "0x74",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0x71",
             "0x1F",
             "0x00",
             "0x00",
@@ -22037,20 +22037,20 @@
     },
     {
       "target": "SECT90/L900LEV.MAP",
-      "note": "L900LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38), and the face's texture turned a quarter-turn counter-clockwise by rotating its vertex list (8052, 8049, 8113 -> 8049, 8113, 8052), same bug as L111LEV.MAP at the identical offset - see Patch/another-fix.txt",
+      "note": "L900LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38), and the face's texture turned a quarter-turn counter-clockwise by rotating its vertex list (8052, 8049, 8113 -> 8049, 8113, 8052), same bug as L111LEV.MAP at the identical offset - see Patch/another-fix.txt Turned once more counter-clockwise in the UV review (Edward, 2026): now (8113, 8052, 8049), the one rotation not tried before - the original (8052, 8049, 8113) and the earlier quarter-turn (8049, 8113, 8052) both left the texture streaked.",
       "edits": [
         {
           "offset": "0x46DB4",
           "bytes": [
-            "0x71",
-            "0x1F",
-            "0x00",
-            "0x00",
             "0xB1",
             "0x1F",
             "0x00",
             "0x00",
             "0x74",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0x71",
             "0x1F",
             "0x00",
             "0x00",
@@ -32510,6 +32510,644 @@
           "bytes": [
             "0x23",
             "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "L371LEV.MAP - UV review, round 3 (TESTING, Edward with the Face Index Display, 2026): the top right and bottom left corners of three more recesses (5893, 6288, 5320, 5303, 9876, 9607) mirrored like rounds 1 and 2, each a quad with its last corner repeated, routine 2; and faces 6815 and 5640 moved from texture 27 to 35, the band's own. Tracked in Notes/uv-review-log.md",
+      "edits": [
+        {
+          "offset": "0x301C8",
+          "bytes": [
+            "0x78",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x80",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x79",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x79",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x301DA",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x320A4",
+          "bytes": [
+            "0x70",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x7D",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x71",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x71",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x320B6",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x2D504",
+          "bytes": [
+            "0x4A",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x52",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x4B",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x4B",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2D516",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x2D3B0",
+          "bytes": [
+            "0x42",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x4F",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x43",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x43",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2D3C2",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x438F4",
+          "bytes": [
+            "0x5E",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x66",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x5F",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x5F",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x43906",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x423F0",
+          "bytes": [
+            "0x56",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x63",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x57",
+            "0x16",
+            "0x00",
+            "0x00",
+            "0x57",
+            "0x16",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x42402",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x349E0",
+          "bytes": [
+            "0x23",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2EE14",
+          "bytes": [
+            "0x23",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "note": "L371LEV.MAP - UV review, round 4 (TESTING, Edward with the Face Index Display, 2026): faces 6453, 6455, 5794 and 5792 texture 86 -> 94; face 7382 turned to face the room (it showed only from outside), its texture unchanged; the circle panel at z 11520 put together as its 3 x 3 picture (6062, 6064, 6075 the inner halves of their corner tiles, 6064 and 6075 moved to the circle's top tiles 1 and 3, 6069 no longer mirrored); and 14 pinched triangles (2580, 2583, 2244, 2241, 2077, 2078, 1457, 1456, 1636, 1458, 1460, 1459, 1637, 1461) turned so their right angle sits on the texture's. Tracked in Notes/uv-review-log.md",
+      "edits": [
+        {
+          "offset": "0x32D98",
+          "bytes": [
+            "0x5E",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x32DC0",
+          "bytes": [
+            "0x5E",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2FA1C",
+          "bytes": [
+            "0x5E",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2F9F4",
+          "bytes": [
+            "0x5E",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3761C",
+          "bytes": [
+            "0xD5",
+            "0x0D",
+            "0x00",
+            "0x00",
+            "0x46",
+            "0x0E",
+            "0x00",
+            "0x00",
+            "0x3D",
+            "0x0E",
+            "0x00",
+            "0x00",
+            "0x23",
+            "0x0E",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3762E",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x30EFC",
+          "bytes": [
+            "0xDA",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0xDA",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0xDB",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0xE4",
+            "0x0A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x30F0E",
+          "bytes": [
+            "0x06"
+          ]
+        },
+        {
+          "offset": "0x30F24",
+          "bytes": [
+            "0xDF",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0xE6",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0xE0",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0xE0",
+            "0x0A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x30F34",
+          "bytes": [
+            "0x01",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x30F36",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x31000",
+          "bytes": [
+            "0xE2",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0xE5",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0xE1",
+            "0x0A",
+            "0x00",
+            "0x00",
+            "0xE1",
+            "0x0A",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x31010",
+          "bytes": [
+            "0x03",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x31012",
+          "bytes": [
+            "0x06"
+          ]
+        },
+        {
+          "offset": "0x30F9A",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x1FEF4",
+          "bytes": [
+            "0x4A",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x49",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x4B",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1FF30",
+          "bytes": [
+            "0x50",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x4F",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x51",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1E4B4",
+          "bytes": [
+            "0x9F",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0x47",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x45",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1E478",
+          "bytes": [
+            "0x9F",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xB1",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0x9D",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1D7A8",
+          "bytes": [
+            "0x9F",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0x9E",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xA0",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1D7BC",
+          "bytes": [
+            "0x9F",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0xA1",
+            "0x1D",
+            "0x00",
+            "0x00",
+            "0x46",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1A738",
+          "bytes": [
+            "0x86",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x8A",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x8B",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1A724",
+          "bytes": [
+            "0x8A",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x86",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x85",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1B534",
+          "bytes": [
+            "0x85",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x8F",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x8A",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1A74C",
+          "bytes": [
+            "0x8F",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x85",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x8E",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1A774",
+          "bytes": [
+            "0x84",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x92",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x91",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1A760",
+          "bytes": [
+            "0x92",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x84",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x83",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1B548",
+          "bytes": [
+            "0x83",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x88",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x92",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x1A788",
+          "bytes": [
+            "0x88",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x83",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x82",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
           ]
         }
       ]

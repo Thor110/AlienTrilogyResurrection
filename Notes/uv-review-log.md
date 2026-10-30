@@ -23,12 +23,24 @@ the draw routine at +0x12, and the light id at +0x13.
 - **Turned:** rotate the vertex order. The face keeps its winding and routine.
 - **Mirrored triangle:** reverse the vertex order and move routine 1 to routine 5, the same triangle draw
   without the back-face test (0x1ef20), so the reversed face still shows.
+- **Unpinched:** a triangle whose right angle is not on c shears its texture; turning it so the right angle is on c.
+- **Facing turned:** a quad reversed to (b, a, d, c) with routine 0 <-> 2 shows from the other side with every corner keeping its texture corner.
 - **Texture changed:** the 16-bit texture index at +0x10 set to the right one.
 - **Mirrored, other half:** a triangle cannot show the half of the tile cut along x0y0-x1y1. These become a
   quad (a, b, c, c) with routine 2 (mirrored quad, corners x1y1, x0y1, x0y0, x1y0): the triangle (a, b, c) is the
   face, and (a, c, d) has no area. The port draws quads as (a, b, c) + (a, c, d), so this is exact there. No
   shipped level uses a quad like this, and how the original rasterises one is not traced, so in DOS it is
   unverified.
+
+## L111LEV and L900LEV
+
+The two share this face at the same offset; the patch entries for both are updated in place (they already wrote it).
+
+| Face | Offset | Added | Change | Was | Routine | Now | Routine |
+|---|---|---|---|---|---|---|---|
+| 9618 | 0x46DB4 | round 4 | turned once more counter-clockwise; also texture 0x38 at +0x10 (earlier fix) | 8049, 8113, 8052, -1 (original 8052, 8049, 8113) | 1 | 8113, 8052, 8049, -1 | 1 |
+
+L111LEV: Edward reports the level complete after this fix.
 
 ## L371LEV
 
@@ -38,8 +50,22 @@ the band.
 
 | Face | Offset | Added | Change | Was | Routine | Now | Routine |
 |---|---|---|---|---|---|---|---|
+| 1456 | 0x1A724 | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 8581, 8842, 8582, -1 | 1 | 8842, 8582, 8581, -1 | 1 |
+| 1457 | 0x1A738 | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 8843, 8582, 8842, -1 | 1 | 8582, 8842, 8843, -1 | 1 |
+| 1458 | 0x1A74C | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 8846, 8847, 8581, -1 | 1 | 8847, 8581, 8846, -1 | 1 |
+| 1459 | 0x1A760 | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 8579, 8850, 8580, -1 | 1 | 8850, 8580, 8579, -1 | 1 |
+| 1460 | 0x1A774 | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 8849, 8580, 8850, -1 | 1 | 8580, 8850, 8849, -1 | 1 |
+| 1461 | 0x1A788 | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 8578, 8584, 8579, -1 | 1 | 8584, 8579, 8578, -1 | 1 |
+| 1636 | 0x1B534 | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 8842, 8581, 8847, -1 | 1 | 8581, 8847, 8842, -1 | 1 |
+| 1637 | 0x1B548 | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 8850, 8579, 8584, -1 | 1 | 8579, 8584, 8850, -1 | 1 |
+| 2077 | 0x1D7A8 | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 7584, 7583, 7582, -1 | 1 | 7583, 7582, 7584, -1 | 1 |
+| 2078 | 0x1D7BC | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 8262, 7583, 7585, -1 | 1 | 7583, 7585, 8262, -1 | 1 |
+| 2241 | 0x1E478 | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 7581, 7583, 7601, -1 | 1 | 7583, 7601, 7581, -1 | 1 |
+| 2244 | 0x1E4B4 | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 8261, 7583, 8263, -1 | 1 | 7583, 8263, 8261, -1 | 1 |
+| 2580 | 0x1FEF4 | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 8267, 8266, 8265, -1 | 1 | 8266, 8265, 8267, -1 | 1 |
 | 2581 | 0x1FF08 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 8264, 8265, 8266, -1 | 1 | 8266, 8265, 8264, -1 | 5 |
 | 2582 | 0x1FF1C | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 8270, 8271, 8272, -1 | 1 | 8272, 8271, 8270, -1 | 5 |
+| 2583 | 0x1FF30 | round 4 | right angle on a: turned to (b, c, a) so it is on c, where the texture's own right angle is | 8273, 8272, 8271, -1 | 1 | 8272, 8271, 8273, -1 | 1 |
 | 4513 | 0x295F8 | round 2 | TR/BL corner, mirrored (quad, last corner repeated) | 4384, 4383, 4398, -1 | 1 | 4383, 4398, 4384, 4384 | 2 |
 | 4516 | 0x29634 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 4402, 4390, 4389, -1 | 1 | 4389, 4390, 4402, -1 | 5 |
 | 4521 | 0x29698 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 4397, 4382, 4381, -1 | 1 | 4381, 4382, 4397, -1 | 5 |
@@ -56,20 +82,35 @@ the band.
 | 5178 | 0x2C9EC | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 2695, 2683, 2682, -1 | 1 | 2682, 2683, 2695, -1 | 5 |
 | 5219 | 0x2CD20 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 2721, 2706, 2705, -1 | 1 | 2705, 2706, 2721, -1 | 5 |
 | 5222 | 0x2CD5C | round 2 | TR/BL corner, mirrored (quad, last corner repeated) | 2716, 2715, 2725, -1 | 1 | 2715, 2725, 2716, 2716 | 2 |
+| 5303 | 0x2D3B0 | round 3 | TR/BL corner, mirrored (quad, last corner repeated) | 5699, 5698, 5711, -1 | 1 | 5698, 5711, 5699, 5699 | 2 |
 | 5306 | 0x2D3EC | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 5715, 5704, 5705, -1 | 1 | 5705, 5704, 5715, -1 | 5 |
 | 5317 | 0x2D4C8 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 5710, 5696, 5697, -1 | 1 | 5697, 5696, 5710, -1 | 5 |
+| 5320 | 0x2D504 | round 3 | TR/BL corner, mirrored (quad, last corner repeated) | 5707, 5706, 5714, -1 | 1 | 5706, 5714, 5707, 5707 | 2 |
 | 5628 | 0x2ED14 | round 1 | TR/BL corner, mirrored (quad, last corner repeated) | 5807, 4408, 4418, -1 | 1 | 4408, 4418, 5807, 5807 | 2 |
 | 5628 | 0x2ED14 | round 2 | texture 27 -> 35 (+0x10), the band's own | | | | |
 | 5631 | 0x2ED50 | round 1 | TL/BR corner, mirrored (reversed to c, b, a) | 4421, 4412, 5809, -1 | 1 | 5809, 4412, 4421, -1 | 5 |
 | 5636 | 0x2EDB4 | round 1 | TL/BR corner, mirrored (reversed to c, b, a) | 4417, 4407, 4406, -1 | 1 | 4406, 4407, 4417, -1 | 5 |
 | 5640 | 0x2EE04 | round 1 | TR/BL corner, mirrored (quad, last corner repeated) | 4414, 4413, 4420, -1 | 1 | 4413, 4420, 4414, 4414 | 2 |
+| 5640 | 0x2EE04 | round 3 | texture 27 -> 35 (+0x10), the band's own | | | | |
+| 5792 | 0x2F9E4 | round 4 | texture 86 -> 94 | 5955, 5954, 5953, -1 | 1 | 5955, 5954, 5953, -1 | 1 |
+| 5794 | 0x2FA0C | round 4 | texture 86 -> 94 | 5955, 5953, 5958, -1 | 1 | 5955, 5953, 5958, -1 | 1 |
 | 5890 | 0x3018C | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 5756, 5742, 5743, -1 | 1 | 5743, 5742, 5756, -1 | 5 |
+| 5893 | 0x301C8 | round 3 | TR/BL corner, mirrored (quad, last corner repeated) | 5753, 5752, 5760, -1 | 1 | 5752, 5760, 5753, 5753 | 2 |
+| 6062 | 0x30EFC | round 4 | circle panel's bottom left corner: the inner half of tile 17, a quad with its first corner repeated, routine 6 (reversed, so double-sided) | 2788, 2779, 2778, -1 | 1 | 2778, 2778, 2779, 2788 | 6 |
+| 6064 | 0x30F24 | round 4 | circle panel's top left corner: texture 17 -> 1 (the circle's top left) and the inner half of it, a quad with its last corner repeated, routine 0 | 2790, 2784, 2783, -1 | 1 | 2783, 2790, 2784, 2784 | 0 |
+| 6069 | 0x30F88 | round 4 | circle panel's top middle (texture 2) was drawn mirrored, routine 2 -> 0 like the rest of the panel | 2790, 2789, 2785, 2784 | 2 | 2790, 2789, 2785, 2784 | 0 |
+| 6075 | 0x31000 | round 4 | circle panel's top right corner: texture 19 -> 3 (the circle's top right) and the inner half of it, a quad with its last corner repeated, routine 6 (reversed, so double-sided) | 2786, 2785, 2789, -1 | 1 | 2786, 2789, 2785, 2785 | 6 |
+| 6288 | 0x320A4 | round 3 | TR/BL corner, mirrored (quad, last corner repeated) | 5745, 5744, 5757, -1 | 1 | 5744, 5757, 5745, 5745 | 2 |
 | 6291 | 0x320E0 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 5761, 5750, 5751, -1 | 1 | 5751, 5750, 5761, -1 | 5 |
+| 6453 | 0x32D88 | round 4 | texture 86 -> 94 | 5952, 5855, 5870, -1 | 1 | 5952, 5855, 5870, -1 | 1 |
+| 6455 | 0x32DB0 | round 4 | texture 86 -> 94 | 5952, 5920, 5855, -1 | 1 | 5952, 5920, 5855, -1 | 1 |
 | 6812 | 0x34994 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 5820, 5813, 5814, -1 | 1 | 5814, 5813, 5820, -1 | 5 |
 | 6815 | 0x349D0 | round 1 | TR/BL corner, mirrored (quad, last corner repeated) | 5817, 5818, 5821, -1 | 1 | 5818, 5821, 5817, 5817 | 2 |
+| 6815 | 0x349D0 | round 3 | texture 27 -> 35 (+0x10), the band's own | | | | |
 | 6820 | 0x34A34 | round 1 | TR/BL corner, mirrored (quad, last corner repeated) | 4425, 4426, 4433, -1 | 1 | 4426, 4433, 4425, 4425 | 2 |
 | 6820 | 0x34A34 | round 2 | texture 27 -> 35 (+0x10), the band's own | | | | |
 | 6824 | 0x34A84 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 4436, 4429, 4430, -1 | 1 | 4430, 4429, 4436, -1 | 5 |
+| 7382 | 0x3761C | round 4 | faced away from the room: reversed to (b, a, d, c) and routine 0 -> 2, so every corner keeps its texture corner | 3654, 3541, 3619, 3645 | 0 | 3541, 3654, 3645, 3619 | 2 |
 | 7578 | 0x3856C | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 4329, 4315, 4314, -1 | 1 | 4314, 4315, 4329, -1 | 5 |
 | 7581 | 0x385A8 | round 2 | TR/BL corner, mirrored (quad, last corner repeated) | 4326, 4325, 4333, -1 | 1 | 4325, 4333, 4326, 4326 | 2 |
 | 7587 | 0x38620 | round 2 | TR/BL corner, mirrored (quad, last corner repeated) | 4317, 4316, 4330, -1 | 1 | 4316, 4330, 4317, 4317 | 2 |
@@ -82,8 +123,10 @@ the band.
 | 9273 | 0x409D8 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 4474, 4464, 4465, -1 | 1 | 4465, 4464, 4474, -1 | 5 |
 | 9532 | 0x41E14 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 4471, 4456, 4457, -1 | 1 | 4457, 4456, 4471, -1 | 5 |
 | 9535 | 0x41E50 | round 2 | TR/BL corner, mirrored (quad, last corner repeated) | 4462, 4463, 4475, -1 | 1 | 4463, 4475, 4462, 4462 | 2 |
+| 9607 | 0x423F0 | round 3 | TR/BL corner, mirrored (quad, last corner repeated) | 5719, 5718, 5731, -1 | 1 | 5718, 5731, 5719, 5719 | 2 |
 | 9610 | 0x4242C | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 5735, 5724, 5725, -1 | 1 | 5725, 5724, 5735, -1 | 5 |
 | 9873 | 0x438B8 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 5730, 5716, 5717, -1 | 1 | 5717, 5716, 5730, -1 | 5 |
+| 9876 | 0x438F4 | round 3 | TR/BL corner, mirrored (quad, last corner repeated) | 5727, 5726, 5734, -1 | 1 | 5726, 5734, 5727, 5727 | 2 |
 | 9881 | 0x43958 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 2768, 2754, 2755, -1 | 1 | 2755, 2754, 2768, -1 | 5 |
 | 9884 | 0x43994 | round 2 | TR/BL corner, mirrored (quad, last corner repeated) | 2760, 2761, 2772, -1 | 1 | 2761, 2772, 2760, 2760 | 2 |
 | 9889 | 0x439F8 | round 2 | TR/BL corner, mirrored (quad, last corner repeated) | 2752, 2753, 2767, -1 | 1 | 2753, 2767, 2752, 2752 | 2 |

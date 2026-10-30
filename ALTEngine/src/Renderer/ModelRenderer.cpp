@@ -809,9 +809,23 @@ namespace ALTEngine::Renderer
         return samplerLinear != nullptr && samplerNearest != nullptr;
     }
 
+    void ModelRenderer::UnloadLevelModels()
+    {
+        if (!device) { return; }
+        for (auto it = loadedModels.begin(); it != loadedModels.end();)
+        {
+            if (it->first.catalog != ModelCatalog::LevelDoor && it->first.catalog != ModelCatalog::LevelLift) { ++it; continue; }
+            if (it->second.vertexBuffer) { SDL_ReleaseGPUBuffer(device, it->second.vertexBuffer); }
+            if (it->second.indexBuffer) { SDL_ReleaseGPUBuffer(device, it->second.indexBuffer); }
+            if (it->second.texture) { SDL_ReleaseGPUTexture(device, it->second.texture); }
+            it = loadedModels.erase(it);
+        }
+    }
+
     void ModelRenderer::UnloadLevels()
     {
         if (!device) { return; }
+        UnloadLevelModels();
 
         for (auto& [index, level] : loadedLevels)
         {

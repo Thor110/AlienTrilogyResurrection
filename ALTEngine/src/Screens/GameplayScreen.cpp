@@ -1139,6 +1139,9 @@ namespace ALTEngine::Screens
                     // state machine is not implemented yet.
                     try
                     {
+                        // This level's own doors and lifts only - see
+                        // UnloadLevelModels.
+                        ModelRenderer::UnloadLevelModels();
                         auto doorMeshes = ALTEngine::Formats::ModelLoader::Load(*mapPath, "D");
                         auto levelTextures = ALTEngine::Formats::BndTextureLoader::Load(*gfxPath);
 

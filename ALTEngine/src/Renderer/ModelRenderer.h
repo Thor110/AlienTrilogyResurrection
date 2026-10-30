@@ -159,6 +159,17 @@ namespace ALTEngine::Renderer
         // (Edward, 2026).
         static void UnloadLevels();
 
+        // Releases the door and lift meshes (ModelCatalog::LevelDoor and
+        // LevelLift). They come from the level's own .MAP and are cached by
+        // slot - mesh * 8 + page - which every level reuses, and RegisterMesh
+        // keeps whatever is already in a slot. Kept across levels, the next
+        // level drew the previous one's doors and lifts wherever its slots
+        // overlapped, and a door with no mesh of its own (L371's one door
+        // record, inside solid wall, with no "D" sections in the file) showed
+        // another level's door outside the map (Edward, 2026). UnloadLevels
+        // calls this, and the level load does before registering its own.
+        static void UnloadLevelModels();
+
         // Graphics > Quality. Smoothed = bilinear texel filtering; Original =
         // point sampling, i.e. the original's hard square pixels. Takes effect
         // on the next frame - no pipeline rebuild, just a sampler swap - so
