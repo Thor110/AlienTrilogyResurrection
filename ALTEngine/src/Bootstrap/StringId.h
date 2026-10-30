@@ -180,6 +180,8 @@ namespace ALTEngine::Bootstrap
         DescDisableEnemySpawn,
         FaceIndexDisplay,
         DescFaceIndexDisplay,
+        GhostMode,
+        DescGhostMode,
 
 
         // The original game's own text, extracted from LANGUAGE/*.BIN. The

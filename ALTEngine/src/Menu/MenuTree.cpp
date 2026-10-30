@@ -417,6 +417,7 @@ namespace ALTEngine::Menu
                 MenuNode testingList = List("Testing", StringId::Testing, {
                     testingNode(TestingOption::DisableEnemySpawn, StringId::DisableEnemySpawn, StringId::DescDisableEnemySpawn),
                     testingNode(TestingOption::FaceIndexDisplay, StringId::FaceIndexDisplay, StringId::DescFaceIndexDisplay),
+                    testingNode(TestingOption::GhostMode, StringId::GhostMode, StringId::DescGhostMode),
                 });
                 testingList.descriptionStringId = static_cast<int>(StringId::DescTesting);
                 entries.push_back(std::move(testingList));

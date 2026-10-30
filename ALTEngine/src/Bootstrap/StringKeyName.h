@@ -163,6 +163,8 @@ namespace ALTEngine::Bootstrap
         case StringId::DescDisableEnemySpawn: return "DescDisableEnemySpawn";
         case StringId::FaceIndexDisplay: return "FaceIndexDisplay";
         case StringId::DescFaceIndexDisplay: return "DescFaceIndexDisplay";
+        case StringId::GhostMode: return "GhostMode";
+        case StringId::DescGhostMode: return "DescGhostMode";
         case StringId::GsOptions: return "GsOptions";
         case StringId::GsRedefineKeyboard: return "GsRedefineKeyboard";
         case StringId::GsRedefineMouse: return "GsRedefineMouse";
@@ -500,6 +502,8 @@ namespace ALTEngine::Bootstrap
         if (name == "DescDisableEnemySpawn") { return StringId::DescDisableEnemySpawn; }
         if (name == "FaceIndexDisplay") { return StringId::FaceIndexDisplay; }
         if (name == "DescFaceIndexDisplay") { return StringId::DescFaceIndexDisplay; }
+        if (name == "GhostMode") { return StringId::GhostMode; }
+        if (name == "DescGhostMode") { return StringId::DescGhostMode; }
         if (name == "GsOptions") { return StringId::GsOptions; }
         if (name == "GsRedefineKeyboard") { return StringId::GsRedefineKeyboard; }
         if (name == "GsRedefineMouse") { return StringId::GsRedefineMouse; }

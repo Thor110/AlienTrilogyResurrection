@@ -14,10 +14,14 @@ namespace ALTEngine::Bootstrap
     // Face Index Display  - outlines the level face under the crosshair and
     //   prints its number, texture, draw routine and file offset, so a face
     //   with a wrong texture can be found and patched by its number.
+    // Ghost Mode          - fly through walls: no wall, object or creature
+    //   blocks the player, the floor no longer holds them, and moving forward
+    //   climbs or dives along the view's pitch (the look keys or free look).
     enum class TestingOption
     {
         DisableEnemySpawn,
         FaceIndexDisplay,
+        GhostMode,
     };
 
     class TestingSettings
@@ -28,6 +32,7 @@ namespace ALTEngine::Bootstrap
         static constexpr TestingOption AllOptions[] = {
             TestingOption::DisableEnemySpawn,
             TestingOption::FaceIndexDisplay,
+            TestingOption::GhostMode,
         };
 
         bool IsOn(TestingOption option) const
@@ -45,6 +50,7 @@ namespace ALTEngine::Bootstrap
             {
             case TestingOption::DisableEnemySpawn: return "Disable Enemy Spawn";
             case TestingOption::FaceIndexDisplay: return "Face Index Display";
+            case TestingOption::GhostMode: return "Ghost Mode";
             }
             return "";
         }
@@ -65,6 +71,7 @@ namespace ALTEngine::Bootstrap
             {
             case TestingOption::DisableEnemySpawn: return "TestingDisableEnemySpawn";
             case TestingOption::FaceIndexDisplay: return "TestingFaceIndexDisplay";
+            case TestingOption::GhostMode: return "TestingGhostMode";
             }
             return "";
         }

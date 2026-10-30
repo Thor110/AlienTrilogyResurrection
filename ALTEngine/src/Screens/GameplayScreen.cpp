@@ -507,6 +507,11 @@ namespace ALTEngine::Screens
         // Modern > Testing (TestingSettings.h).
         bool testingNoEnemies = false;
         bool testingFaceIndex = false;
+        bool testingGhost = false;
+        // Ghost Mode's own height for the player's feet, taken from where they
+        // stood when it came on; `ghostActive` marks that it has been taken.
+        float ghostFeetY = 0.0f;
+        bool ghostActive = false;
         // The face under the crosshair this frame, -1 for none.
         int pickedFace = -1;
         // Modern "No Hit Immunity": every hit lands, during a creature's hit
@@ -582,6 +587,7 @@ namespace ALTEngine::Screens
                 ALTEngine::Bootstrap::TestingSettings testing(modernConfig);
                 testingNoEnemies = testing.IsOn(ALTEngine::Bootstrap::TestingOption::DisableEnemySpawn);
                 testingFaceIndex = testing.IsOn(ALTEngine::Bootstrap::TestingOption::FaceIndexDisplay);
+                testingGhost = testing.IsOn(ALTEngine::Bootstrap::TestingOption::GhostMode);
             }
             ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
             weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings(modernConfig).Get()
@@ -1646,6 +1652,7 @@ namespace ALTEngine::Screens
                             ALTEngine::Bootstrap::TestingSettings testing(modernConfig);
                             testingNoEnemies = testing.IsOn(ALTEngine::Bootstrap::TestingOption::DisableEnemySpawn);
                             testingFaceIndex = testing.IsOn(ALTEngine::Bootstrap::TestingOption::FaceIndexDisplay);
+                            testingGhost = testing.IsOn(ALTEngine::Bootstrap::TestingOption::GhostMode);
                         }
                         ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
                         weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings(modernConfig).Get()
@@ -1949,7 +1956,7 @@ namespace ALTEngine::Screens
                     {
                         namespace PM = ALTEngine::Game::PlayerMover;
                         int pushX = 0, pushZ = 0;
-                        if (PM::RampPush(cellAttribute, playerCam.speed, playerCam.running, pushX, pushZ))
+                        if (!testingGhost && PM::RampPush(cellAttribute, playerCam.speed, playerCam.running, pushX, pushZ))
                         {
                             stepX += static_cast<float>(pushX);
                             stepZ += static_cast<float>(pushZ);
@@ -1964,7 +1971,21 @@ namespace ALTEngine::Screens
                     }
                     if (stepX != 0.0f || stepZ != 0.0f)
                     {
-                        if (levelReady)
+                        // Testing: Ghost Mode. Straight through everything, and
+                        // up or down along the view's pitch by however far the
+                        // step goes the way the view faces.
+                        if (testingGhost)
+                        {
+                            camera.x += stepX;
+                            camera.z += stepZ;
+                            if (ghostActive)
+                            {
+                                const float along = stepX * std::sin(camera.yaw) - stepZ * std::cos(camera.yaw);
+                                const float pitch = std::clamp(camera.pitch, -1.3f, 1.3f);
+                                ghostFeetY += along * std::tan(pitch);
+                            }
+                        }
+                        else if (levelReady)
                         {
                             namespace PM = ALTEngine::Game::PlayerMover;
                             PM::World mw;
@@ -2025,7 +2046,7 @@ namespace ALTEngine::Screens
                         const int fgx = ToGridSpaceX(camera.x, originX);
                         const int fgz = ToGridSpaceZ(camera.z, originZ);
                         const float floorNow = ALTEngine::Formats::FindFloorHeightGridSpace(level, fgx, fgz);
-                        if (floorNow == playerFeetY)
+                        if (floorNow == playerFeetY && !testingGhost)
                         {
                             if (const auto* underfoot = ALTEngine::Formats::CellAt(level, fgx >> 9, fgz >> 9))
                             {
@@ -3885,6 +3906,20 @@ namespace ALTEngine::Screens
                     }
                     playerFeetY = floorY + jumpOffset;
                     camera.y = floorY + jumpOffset + EYE_HEIGHT + static_cast<float>(playerCam.bobOffsetY);
+
+                    // Testing: Ghost Mode holds its own height, starting from
+                    // where the player stood when it came on. Turned off, the
+                    // floor takes them back.
+                    if (testingGhost)
+                    {
+                        if (!ghostActive) { ghostFeetY = playerFeetY; ghostActive = true; }
+                        playerFeetY = ghostFeetY;
+                        camera.y = ghostFeetY + EYE_HEIGHT;
+                    }
+                    else
+                    {
+                        ghostActive = false;
+                    }
                 }
             }
 

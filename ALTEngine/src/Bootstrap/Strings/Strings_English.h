@@ -166,6 +166,8 @@ namespace ALTEngine::Bootstrap
             "Levels start with no creatures, for looking around in peace",
             "Face Index Display",
             "Outlines the face under the crosshair and shows its number",
+            "Ghost Mode",
+            "Fly through walls; move forward while looking up or down to climb or dive",
         };
         return table;
     }
