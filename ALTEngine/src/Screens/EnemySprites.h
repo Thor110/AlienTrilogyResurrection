@@ -152,7 +152,6 @@ namespace ALTEngine::Screens
     public:
         static constexpr int VIEW_COUNT = 8;
         static constexpr int UNIQUE_VIEWS = 5;   // the rest are mirrored
-        static constexpr int REST_SECTION = 0;   // GUESS - which pose section is idle
 
         // One frame until the view mechanism is traced - see the note above.
         static constexpr int FRAMES_TO_LOAD = 1;

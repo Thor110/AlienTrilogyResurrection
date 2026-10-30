@@ -206,7 +206,6 @@ namespace ALTEngine::Formats
         // second, identical handler at 0x00042cac using DAT_000ad0b4 instead, so
         // effect variants differ only by which table they point at.
         inline constexpr uint16_t FRAME_DURATION = 4;
-        inline constexpr uint16_t FRAME_DURATION_GUESS = FRAME_DURATION;  // old name, kept for callers
 
         // The counter shift the handler applies.
         inline constexpr int FRAME_COUNTER_SHIFT = 2;

@@ -766,7 +766,9 @@ namespace ALTEngine::Screens
             {
                 if (missionBriefing)
                 {
-                    int panelWidth = 500; // TODO: derive from actual window width once layout gets its polish pass
+                    // The briefing wraps to the room the window has right of
+                    // the menu column.
+                    const int panelWidth = std::max(scale * 40, windowWidth - panelX - margin);
                     auto wrapped = WrapBriefing(*missionBriefing, panelWidth, scale);
                     DrawWrappedBriefing(renderer, wrapped, panelX, panelY, scale, TextHeight(scale) + scale * 4);
                 }

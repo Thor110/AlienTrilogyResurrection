@@ -1,3 +1,4 @@
+#include "TestWorld.h"
 #include "TestFramework.h"
 
 #include "Screens/CreatureTasks.h"
@@ -273,10 +274,10 @@ TEST_CASE("Damage: a creature that survives a hit can be hit again once its reac
     // The flinch lasts until its animation ends (state 6 waits for the
     // script's end flag): a warrior's hit animation, 8, is four frames of four
     // ticks.
-    for (int t = 0; t < 10; ++t) { EN::Tick(w, 300, 0, 0); }
+    for (int t = 0; t < 10; ++t) { EN::Tick(w, 300, 0, 0, AltTest::OpenWorld()); }
     CHECK(!EN::ApplyHit(w, 32));
     CHECK_EQ(w.health, 448);
-    for (int t = 0; t < 20; ++t) { EN::Tick(w, 300, 0, 0); }
+    for (int t = 0; t < 20; ++t) { EN::Tick(w, 300, 0, 0, AltTest::OpenWorld()); }
     EN::ApplyHit(w, 32);
     CHECK_EQ(w.health, 416);                 // it used to stay at 448 for good
 }

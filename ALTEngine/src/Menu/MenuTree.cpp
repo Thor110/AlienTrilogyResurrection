@@ -240,13 +240,9 @@ namespace ALTEngine::Menu
         MenuNode Volume(ALTEngine::Bootstrap::AudioSettings& audioSettings, ALTEngine::Bootstrap::Language)
         {
             using ALTEngine::Bootstrap::StringId;
-            /*
-            MenuNode n;
-            n.label = "Volume";
-            n.kind = MenuNodeKind::Slider;
-            return n;
-            */ // TODO : Black is transparent on these textures. RGB 0/0/0 HSL 160/0/0
-            // only appears to be on these two models / textures.
+            // Black is transparent on the speaker textures (RGB 0/0/0) - and
+            // only on these two models and the Multitap; ModelPreviewSource::
+            // ForOptobj keys them so.
             //
             // Rendered as an actual slider bar, not a text readout
             // (Edward, 2026: "keep the design of the slider which now

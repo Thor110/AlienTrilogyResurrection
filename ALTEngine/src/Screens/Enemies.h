@@ -85,17 +85,6 @@ namespace ALTEngine::Screens
         }
 
 
-        // How fast a creature turns toward the player, and how its record's speed
-        // byte converts to world units. BOTH GUESSES - the original turns through
-        // FUN_00032f78 and stores its velocities in fields fed by the entity
-        // template, neither of which has been read.
-        inline constexpr int TURN_RATE = 0x60;
-
-        // How close to facing the player a creature must be before it advances.
-        // 0x200 of 4096 is about 45 degrees either side. GUESS.
-        inline constexpr int ALIGN_BEFORE_MOVING = 0x200;
-        inline constexpr float SPEED_SCALE = 0.5f;
-
 
         // WHEN A MONSTER ENTERS PLAY.
         //
@@ -158,7 +147,6 @@ namespace ALTEngine::Screens
 
             // Damage to apply to the player this tick, 0 for none.
             int pendingDamage = 0;
-            int attackCooldown = 0;
 
             // This tick's intended movement, before collision. The caller applies
             // it, because only it can probe the level.
@@ -191,7 +179,6 @@ namespace ALTEngine::Screens
             // makes a hugger hittable with level fire: mid-leap it rises right
             // through the line rounds fly along.
             bool leaping = false;
-            bool engaged = false;       // in the original's attack state (4)
 
             // Set by the caller each tick, since only it can see the level:
             // FUN_0003231c's clear straight line to the player, and
@@ -1190,18 +1177,19 @@ namespace ALTEngine::Screens
             }
         }
 
+        // One creature tick. Every creature type in the game's data (1-14 and
+        // the vents, 0x10-0x13) has its task: the common one (CreatureAI.h,
+        // the queen as a variant of it), the egg's, the colonist's or a vent's
+        // (CreatureTasks.h). A type with none of them does nothing.
         inline void Tick(Enemy& enemy, float playerX, float playerY, float playerZ,
-                         CreatureAI::World* world = nullptr, bool playerNoise = false)
+                         CreatureAI::World& world, bool playerNoise = false)
         {
             // The queen's task is the common one with her own differences
             // (CreatureAI.h).
-            const bool commonTask = world != nullptr
-                && (CreatureAI::UsesCommonTask(enemy.type) || enemy.type == 7);
-            const bool eggTask = world != nullptr && enemy.type == 1;
-            const bool ventTask = world != nullptr && enemy.type >= 0x10 && enemy.type <= 0x13;
-            const bool colonistTask = world != nullptr && enemy.type == 10;
-            // Types with a task of their own don't walk at the player.
-            const bool ownTask = commonTask || eggTask || colonistTask;
+            const bool commonTask = CreatureAI::UsesCommonTask(enemy.type) || enemy.type == 7;
+            const bool eggTask = enemy.type == 1;
+            const bool ventTask = enemy.type >= 0x10 && enemy.type <= 0x13;
+            const bool colonistTask = enemy.type == 10;
             enemy.releaseMonster = -1;
             enemy.dropPickup = -1;
             enemy.cried = false;
@@ -1290,60 +1278,7 @@ namespace ALTEngine::Screens
                 }
             }
 
-            // ---- movement, from FUN_00031f3c --------------------------
-            //
-            // Turn toward the player, then step. The original stores a heading
-            // and two axis velocities and lets the two step helpers resolve each
-            // axis separately; this does the same, using the traced footprint
-            // probe for each.
-            if (!ownTask && enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive && enemy.mode <= 2)
-            {
-                const int bearing = BearingTo(enemy, playerX, playerZ);
-
-                // Turn at a limited rate rather than snapping - the original
-                // turns through FUN_00032f78 before starting a move animation.
-                int delta = (bearing - enemy.facing) & PlayerCamera::ANGLE_MASK;
-                if (delta > PlayerCamera::ANGLE_UNITS / 2) { delta -= PlayerCamera::ANGLE_UNITS; }
-                const int turn = (delta > TURN_RATE) ? TURN_RATE
-                               : (delta < -TURN_RATE) ? -TURN_RATE : delta;
-                enemy.facing = (enemy.facing + turn) & PlayerCamera::ANGLE_MASK;
-
-                // TURN FIRST, THEN ADVANCE. Stepping along the heading while
-                // still turning made a creature walk AWAY from the player for the
-                // first twenty ticks - it kept its old facing, moved backwards,
-                // and only curved round once the turn caught up. Requiring rough
-                // alignment before moving fixes that.
-                //
-                // MARKED AS OURS. The original steers through FUN_00032f78 and
-                // keeps its velocities in separate fields, so it may well move
-                // and turn at once with a much faster turn; without those fields
-                // read, turn-then-advance is the behaviour that does not look
-                // broken.
-                const bool aligned = (delta > -ALIGN_BEFORE_MOVING && delta < ALIGN_BEFORE_MOVING);
-
-                // Only close in while not already touching. Mode 0 is contact
-                // range, where the creature attacks instead of advancing.
-                // Mode 0 is CONTACT range - 0x400, and that is where the
-                // creature stops advancing and attacks instead. Note this leaves
-                // it a full 0x400 (1024 units) away, which looks like a standoff
-                // rather than a mauling; the original almost certainly closes
-                // further, and the gap is probably the entity's own body radius
-                // being subtracted somewhere I have not read. MARKED.
-                if (enemy.mode >= 1 && aligned)
-                {
-                    const float speed = static_cast<float>(enemy.speed) * SPEED_SCALE;
-                    enemy.stepX = PlayerCamera::Sin(enemy.facing) / 4096.0f * speed;
-                    enemy.stepZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * speed;
-                }
-                else
-                {
-                    enemy.stepX = enemy.stepZ = 0.0f;
-                }
-            }
-            else
-            {
-                enemy.stepX = enemy.stepZ = 0.0f;
-            }
+            enemy.stepX = enemy.stepZ = 0.0f;
 
             // ---- the pounce -------------------------------------------
             //
@@ -1386,156 +1321,19 @@ namespace ALTEngine::Screens
 
             if (eggTask && enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive)
             {
-                RunEggTask(enemy, *world);
+                RunEggTask(enemy, world);
             }
             else if (colonistTask && enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive)
             {
-                RunColonistTask(enemy, playerX, playerZ, *world);
+                RunColonistTask(enemy, playerX, playerZ, world);
             }
             else if (commonTask && enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive)
             {
-                RunCommonTask(enemy, playerX, playerZ, *world, playerNoise);
-            }
-            else
-            // ---- melee creatures: the leap ------------------------------
-            //
-            // Types 2 and 3 never claw from where they stand. Their attack is
-            // FUN_00033cbc: a face hug, or a leap at the player whose damage
-            // lands with it. Either needs the creature to have closed to
-            // contact range first. See LEAP_* in EnemyBehaviour.h.
-            if (EnemyBehaviour::AttackForSubtype(enemy.type).melee
-                && enemy.state == EnemyBehaviour::STATE_ACTING
-                && enemy.alive)
-            {
-                namespace EB = EnemyBehaviour;
-                enemy.pendingDamage = 0;
-
-                if (enemy.leaping)
-                {
-                    if (enemy.vy != 0.0f)
-                    {
-                        // Still in the air: the take-off velocity carries it.
-                        enemy.stepX = enemy.leapX;
-                        enemy.stepZ = enemy.leapZ;
-                    }
-                    else
-                    {
-                        // Down. Velocities cleared, then FUN_00033ff8 - the same
-                        // gates as any other attack: contact range, within reach
-                        // vertically, and facing the player.
-                        enemy.leaping = false;
-                        enemy.leapX = enemy.leapZ = 0.0f;
-
-                        // A hugger goes back to the chase after its leap
-                        // (0x348f9: state 2); type 3 stays in the attack state.
-                        if (enemy.type == 2) { enemy.engaged = false; }
-                        enemy.stepX = enemy.stepZ = 0.0f;
-                        enemy.velocityActive = false;
-                        int delta = (enemy.facing - BearingTo(enemy, playerX, playerZ)) & PlayerCamera::ANGLE_MASK;
-                        if (delta > PlayerCamera::ANGLE_UNITS / 2) { delta = PlayerCamera::ANGLE_UNITS - delta; }
-                        if (enemy.mode == 0
-                            && enemy.separationY <= EB::ATTACK_MAX_VERTICAL
-                            && EB::WithinAttackCone(0, delta, enemy.coneHalfWidth))
-                        {
-                            enemy.pendingDamage = EB::AttackDamage(enemy.type, enemy.mode);
-                        }
-                    }
-                }
-                else
-                {
-                    // THE ATTACK STATE IS ENTERED FROM CONTACT RANGE ONLY. The
-                    // chase (state 2, 0x3445e) moves to state 4 when the mode is
-                    // 0 and the creature is within 0x600 vertically; state 4
-                    // attacks from any mode below 3 and gives up at mode 3.
-                    if (enemy.mode >= EB::FAR_MODE) { enemy.engaged = false; }
-                    else if (enemy.mode == 0 && enemy.separationY <= EB::FACE_HUG_MAX_VERTICAL && enemy.lineOfFire)
-                    {
-                        enemy.engaged = true;
-                    }
-
-                    if (enemy.attackCooldown > 0) { enemy.attackCooldown--; }
-                    const bool facingPlayer = enemy.facing == BearingTo(enemy, playerX, playerZ);
-                    if (enemy.engaged
-                        && enemy.lineOfFire
-                        && enemy.attackCooldown == 0
-                        && facingPlayer
-                        && enemy.mode < EB::FAR_MODE
-                        && enemy.separationY <= EB::ATTACK_REACH_VERTICAL)
-                    {
-                        enemy.attackCooldown = ATTACK_INTERVAL_TICKS;
-
-                        if (enemy.type == 2
-                            && enemy.mode == 0
-                            && enemy.separationY <= EB::FACE_HUG_MAX_VERTICAL
-                            && !pounceLockHeld)
-                        {
-                            pounceLockHeld = true;
-                            enemy.pouncing = true;
-                            enemy.pounceTicks = EB::POUNCE_HANDOVER_TIMER;
-
-                            // The face hug's own hit, landed ONCE at the start.
-                            // A hugger that gets on your face deals its damage
-                            // and is done.
-                            enemy.pendingDamage = EB::AttackForSubtype(enemy.type).closeDamage;
-                            enemy.stepX = enemy.stepZ = 0.0f;
-                            return;
-                        }
-
-                        enemy.leaping = true;
-                        enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * EB::LeapSpeed(enemy.type);
-                        enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * EB::LeapSpeed(enemy.type);
-                        if (enemy.vy == 0.0f) { enemy.vy = EB::LEAP_LIFT; }
-                        enemy.stepX = enemy.leapX;
-                        enemy.stepZ = enemy.leapZ;
-                    }
-                }
+                RunCommonTask(enemy, playerX, playerZ, world, playerNoise);
             }
             else
             {
-                // The attack, from FUN_00033ff8. Two gates in the original - "can it
-                // attack" and "is the player in front" - stand in here as a cooldown
-                // and a facing test, both marked, since neither FUN_00033a1c nor
-                // FUN_0003231c has been read.
                 enemy.pendingDamage = 0;
-                if (enemy.state == EnemyBehaviour::STATE_ACTING && enemy.alive)
-                {
-                    if (enemy.attackCooldown > 0) { enemy.attackCooldown--; }
-                    else
-                    {
-                        // The facing cone, the zone test (FUN_00033a1c) and the
-                        // line of fire (FUN_0003231c) - all three, or no attack.
-                        const int bearing = static_cast<int>(std::lround(
-                            std::atan2(playerX - enemy.x, -(playerZ - enemy.z))
-                            * (PlayerCamera::ANGLE_UNITS / 6.28318530718)))
-                            & PlayerCamera::ANGLE_MASK;
-
-                        int delta = ((enemy.facing - bearing) & PlayerCamera::ANGLE_MASK);
-                        if (delta > PlayerCamera::ANGLE_UNITS / 2) { delta = PlayerCamera::ANGLE_UNITS - delta; }
-
-                        // CONTACT RANGE ONLY, and within 0x600 vertically. Both are
-                        // the original's own gates, and both were missing - a creature
-                        // could reach from the middle band and from any height.
-                        const bool inReach = (enemy.mode == 0)
-                            && (enemy.separationY <= EnemyBehaviour::ATTACK_MAX_VERTICAL)
-                            && enemy.zoneVisible && enemy.lineOfFire;
-
-                        const int damage = (inReach
-                            && EnemyBehaviour::WithinAttackCone(0, delta, enemy.coneHalfWidth))
-                            ? EnemyBehaviour::AttackDamage(enemy.type, enemy.mode)
-                            : 0;
-                        if (damage > 0)
-                        {
-                            enemy.pendingDamage = damage;
-                            enemy.attackCooldown = ATTACK_INTERVAL_TICKS;
-
-                            // Attacking clears the velocity, so the contact goes dark
-                            // until the creature moves again - see the note in
-                            // HudPanel.h.
-                            enemy.velocityActive = false;
-                        }
-                    }
-                }
-
             }
 
             switch (enemy.state)

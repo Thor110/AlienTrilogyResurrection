@@ -1,40 +1,39 @@
-# What remains (after zip 79)
+# What remains (after zip 81)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
 textures, done once everything else is in.
 
-## 1. Check in play (done in code, not yet seen running)
+## 1. Check in play
 
-- **Doors** against the original's rules: open-time-0 doors staying open, timed doors holding then closing
-  once you are away, the doorway test (zip 72), and L112's one-sided door.
-- **Pickups:** reach (tables in the next cell), items left when you are full, resting height, the scale
-  table for types 17-21.
-- **Breakable windows:** the flying glass (zip 74), on L131, L211 and L212 (three rows on L212).
-- **Cryopods on L211:** its cover colour comes out pale grey (the level's palette), not dark as on L131.
-- **Thrown seismic charge and grenade** at full size.
-- **Patches at every launch:** a fresh install and an old one both end up the same.
-- From the older list: 3.5.1's walk-through walls, see-through fill and fog; the resupply levels' countdown;
-  the 21 levels that lost duplicate door and lift models; Save Anywhere mid-level; the egg, queen, colonist,
-  vents and ceiling creatures; the assessment screen on a real disc; CD music from a real drive on Linux and
-  macOS.
+Checked by Edward after zip 79: doors, pickups, the window glass and the cryopods are right; so is everything on
+the older list - 3.5.1's walk-through walls, see-through fill and fog, the resupply countdown, the levels that
+lost duplicate models, Save Anywhere, the assessment screen, music per level and the vent jets.
+
+Still open:
+- **CD music from a real drive on Linux and macOS:** untested.
+- **Creature scripting** (the egg, queen, colonist and the ceiling creatures letting go) still feels a little
+  off. Needs a closer comparison against the original in play to say where.
+- **Thrown seismic charge:** drawn and thrown, but it flies flat where the original throws it in an arc, and it
+  sits too low. Trace the throw (`FUN_0002c830`) and the particle arm (0x2db80) again.
 
 ## 2. Still a guess or not traced
 
 **Visible in play**
-- **Fog colour on 3.5.1:** the code gives dark yellow at 50%, the video shows green.
 - **The draw limit:** the original draws only the cells its ring walk reaches; the port draws the whole level.
+  Worth doing later if the information is easy to use: the ring walk and zone masks are already traced and in
+  the port (`Game/ViewRings.h`, `CreatureSight::DrawnZoneMask`), so it may be close.
 - **Model and door lighting:** drawn at full brightness; the entity light path is not traced.
 - **Neutral light value:** 128 versus 255 (`LightTable.h`).
 - **Weapon frame tables** for weapons without one (`WeaponView`).
 - **Sizes and timings:** enemy sprite scale, explosion scale and duration, the barrel fireball's offset,
   particle size.
 - **Shell casings:** their spin and gravity, and model 26 for the shotgun shell (inferred).
-- **Vent jets:** the blend of their two fills; whether a burst pipe does blast damage. Their sound plays once
+- **Vent jets:** look right in play. Whether a burst pipe does blast damage is unchecked, and the sound plays once
   instead of looping.
-- **Music per level** (`MusicPlayer.h`).
 - **The assessment screen's bar colours** (palette bit depth).
-- **Thrown seismic charge:** the original spins it (+0x20 a frame on its first angle); the port doesn't.
+- **Thrown seismic charge:** the original spins it (+0x20 a frame on its first angle); the port doesn't. See also
+  section 1: no arc, too low.
 - **A creature's dropped item** starts at the creature's height plus the type's offset; the original starts it
   0x200 above the floor (`FUN_0003bc9c`).
 - **Routine 14's colour** is taken from the level's first palette (entry 2). That is traced for model faces;
@@ -52,16 +51,33 @@ textures, done once everything else is in.
 
 ## 3. Code health
 
-1. Remove the old creature movement path in `Enemies.h`, and its unused constants.
-2. One tick loop: the player and the world have separate accumulators and can drift a tick apart; the
-   original runs both from one pass counter.
-3. Split `GameplayScreen.cpp` (load, tick, draw, HUD).
-4. Tests for what has none: the light table, texture animation, sprite decompression and RLE, the BND and BX
-   parsers.
-5. The TODOs: the pause menu's fixed 500-pixel panel, the boot list from `BootSequence.json`, black as
-   transparent on the menu's speaker textures.
-6. The general object preload looked for OBJ3D.BND in the SECT folders (fixed in zip 75); worth a look for any
-   other file looked for in the wrong place.
+Done in zip 81:
+1. **The old creature movement path is gone** (`Enemies.h`): the turn-then-walk movement, its melee leap and
+   ranged attack, `TURN_RATE`, `ALIGN_BEFORE_MOVING`, `SPEED_SCALE`, and the fields only it used. Every monster
+   type in the data (1-14, 0x10-0x13) has its own task, so `Tick` now requires the AI world. The tests that drove
+   the old path run the real tasks on an open-floor world (`tests/TestWorld.h`); one that described the old
+   path's rule (a burster's damage only on landing) is dropped, since the common task lands the hit when the
+   attack's script says. `BARREL_HEALTH_UNKNOWN`, `REST_SECTION` and `FRAME_DURATION_GUESS` are gone too
+   (`NON_LEAP_ACT_TICKS` stays: the common task uses it).
+2. **One tick loop:** the world's tick now runs exactly the player's passes, each with that pass's own alternate
+   flag, instead of its own accumulator and counter.
+3. **`GameplayScreen.cpp`, first step:** the object rules (each type's model, the switch families, the windows,
+   the cryopods, the glass texture) are in `Screens/GameplayObjects.h`; the glass sheet and the cryopod cover are
+   built in `Screens/GameplayLevelBuild.h`; both tested. `Run` itself is still one function of about 4,300 lines
+   with its state in local variables; the next step is to gather that state into a struct so the level load,
+   the tick, the draw and the HUD can become functions of their own.
+4. **Tests added:** the light table (flat, flash, gouraud, blink), texture animation (speed, loop, gate, stop),
+   the BND and BX parsers (synthetic and the demo's 111GFX), the sprite RLE and the LZSS frame decoder, the boot
+   sequence, and the object rules.
+5. **The TODOs:** the pause menu's briefing wraps to the window's width; the intro videos come from
+   `BootSequence.json` (the original's four if it is missing); the speaker-texture note was already handled
+   (`ModelPreviewSource::ForOptobj`) and its dead code is gone.
+6. **Files looked for in the wrong place:** none left - only the level's MAP and GFX are looked for in the SECT
+   folders, which is where they are.
+
+Still open:
+- **Splitting `Run`** further (above).
+- Optional: rename the settings classes' `config` parameter so `-Wshadow` can be turned on.
 
 ## 4. Performance
 

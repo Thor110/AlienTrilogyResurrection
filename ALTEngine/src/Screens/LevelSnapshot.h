@@ -210,10 +210,9 @@ namespace ALTEngine::Screens::LevelSnapshot
         e.hitCooldown = 0;
         e.pushX = e.pushZ = 0.0f;
         e.pendingDamage = 0;
-        e.attackCooldown = 0;
         e.stepX = e.stepZ = 0.0f;
         e.vy = 0.0f;
-        e.leaping = e.pouncing = e.engaged = e.springing = false;
+        e.leaping = e.pouncing = e.springing = false;
         e.leapX = e.leapZ = 0.0f;
         e.pounceTicks = 0;
         e.actTicks = e.shotCountdown = 0;

@@ -59,6 +59,7 @@ add_library(ALTFormats STATIC
     src/Formats/CddaRipper.cpp
     src/Formats/OverrideImage.cpp
     src/Formats/ModelLoader.cpp
+    src/Formats/BootSequence.cpp
     src/Formats/LevelList.cpp
     src/Formats/ObjLoader.cpp
     src/Formats/RenderMesh.cpp
@@ -120,6 +121,8 @@ if (ALTENGINE_BUILD_TESTS)
         tests/DoorTests.cpp
         tests/StringTableTests.cpp
         tests/GlassTests.cpp
+        tests/GameplayRulesTests.cpp
+        tests/FormatsTests.cpp
         tests/InventoryTests.cpp
         tests/EnemyTests.cpp
         tests/SaveGameTests.cpp

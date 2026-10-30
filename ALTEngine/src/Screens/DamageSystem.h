@@ -154,8 +154,6 @@ namespace ALTEngine::Screens
         // act on short of scaling at spawn.
         inline constexpr int CRATE_HEALTH_DERIVED = 96;
 
-        inline constexpr int BARREL_HEALTH_UNKNOWN = 96; // GUESS - no measurement for barrels
-
         // What a barrel can be hurt by.
         //
         // BEHAVIOUR IS CONFIRMED, MECHANISM IS NOT. The pistol cannot damage a

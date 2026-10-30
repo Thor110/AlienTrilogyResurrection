@@ -17,6 +17,7 @@
 #include "Bootstrap/PlatformPaths.h"
 #include "Bootstrap/RenderSettings.h"
 #include "Bootstrap/ResolutionSettings.h"
+#include "Formats/BootSequence.h"
 #include "Formats/SplashImageLoader.h"
 #include "Menu/MenuController.h"
 #include "Renderer/ModelPreview.h"
@@ -120,18 +121,18 @@ namespace
         }
     }
 
-    // Plays the four intro videos in the documented order (see
-    // data/BootSequence.json), resolved for `language` via
-    // LocalizedBaseName. A missing file is skipped, same philosophy as
-    // ShowLegalSplash - only an actual window-close aborts the boot.
-    // TODO: drive this list from BootSequence.json directly rather than
-    // hardcoding it here, once there's a general boot-step runner.
+    // Plays the intro videos data/BootSequence.json lists, in its order
+    // (the original's four if the file is missing), each resolved for
+    // `language` via LocalizedBaseName. A missing file is skipped, same
+    // philosophy as ShowLegalSplash - only an actual window-close aborts the
+    // boot.
     bool PlayIntroVideos(const std::filesystem::path& cdDirectory, Language language)
     {
         std::filesystem::path aviDir = cdDirectory / "AVI";
-        const char* baseNames[] = { "FOXDKAUD", "ALOGODUK", "PRBLOGO", "INTRO" };
+        const std::vector<std::string> baseNames =
+            ALTEngine::Formats::BootSequence::LoadVideos(ExecutableDirectory() / "data" / "BootSequence.json");
 
-        for (const char* baseName : baseNames)
+        for (const std::string& baseName : baseNames)
         {
             if (auto overridePath = FindOverrideVideo(cdDirectory, baseName))
             {

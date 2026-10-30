@@ -16,6 +16,8 @@
 #include "ParticleSystem.h"
 #include "ExplosionEffects.h"
 #include "ShatterEffects.h"
+#include "GameplayObjects.h"
+#include "GameplayLevelBuild.h"
 #include "Enemies.h"
 #include "../Game/Blast.h"
 #include "../Game/Doors.h"
@@ -68,6 +70,8 @@ namespace ALTEngine::Screens
 
     namespace
     {
+        using namespace GameplayObjects;
+
         // Movement speed is no longer a single tuned number - the original's
         // walk/run tuning sets, acceleration and deceleration are transcribed
         // in PlayerCamera.h and applied per logic tick. The one number still
@@ -88,86 +92,6 @@ namespace ALTEngine::Screens
             return digits;
         }
 
-        // Crate::type -> OBJ3D model index, per AlienTrilogyMapLoader.cs's
-        // own documented type table (Edward, 2026). Not every type has an
-        // obvious single-model match yet (the various switch/locker
-        // types need their own dedicated models, not attempted here) -
-        // covers the clearest, most common cases and falls back to
-        // SingleCrate for anything else, so an unrecognised type still
-        // spawns *something* visible and positioned rather than nothing.
-        // The switch models come in families of FOUR consecutive meshes, and
-        // every family uses the same state order:
-        //   +0 red left light, +1 red right light, +2 both off, +3 both yellow
-        // (see ModelIndices.h - the pattern repeats for small, large,
-        // small+battery, large+battery and the four Boneship variants).
-        //
-        // That is the SAME sequence the level's animated control-panel faces
-        // run: animator group 3 plays descriptors 238 -> 239 -> 240, which
-        // dumped out as top-light red, lower-light red, then both lights
-        // yellow. So a switch object and a switch wall panel are the same
-        // state machine expressed two different ways - the panel by swapping
-        // texture, the object by swapping mesh. That is why the switches exist
-        // as individual models rather than one model with changing textures:
-        // OBJ3D meshes carry no animation channel, so a state change has to be
-        // a different mesh.
-        enum class SwitchState { RedLeft = 0, RedRight = 1, BothOff = 2, BothYellow = 3 };
-
-        // Base (RedLeft) mesh of the family a crate type belongs to, or -1 if
-        // the type is not a switch.
-        //
-        // FUN_00037184's switch on the object type. The four switch types and
-        // the plain crate take a second model on episode 3's levels (campaign
-        // index 0x16-0x22, 3.1.1 onward) and on 908/909 (the byte table at
-        // 0xa706b): the boneship switches and the egg husk.
-        int SwitchFamilyBase(uint8_t type, bool episodeThree)
-        {
-            using namespace ALTEngine::Formats::ModelIndices;
-            switch (type)
-            {
-            case 0x16: return episodeThree ? Obj3D::BoneshipSwitchRedLeftLight3 : Obj3D::SwitchBatteryRedLeftLight;
-            case 0x18: return episodeThree ? Obj3D::BoneshipSwitchRedLeftLight1 : Obj3D::SwitchRedLeftLight;
-            case 0x1a: return episodeThree ? Obj3D::BoneshipSwitchRedLeftLight4 : Obj3D::LargeSwitchBatteryRedLeftLight;
-            case 0x1b: return episodeThree ? Obj3D::BoneshipSwitchRedLeftLight2 : Obj3D::LargeSwitchRedLeftLight;
-            default: return -1;
-            }
-        }
-
-        // The objects whose model changes on episode 3 (FUN_00037184's test of
-        // DAT_000b0ca8): campaign levels 3.1.1 to 3.9.1, and 908 and 909.
-        bool EpisodeThreeObjects(const std::string& digits)
-        {
-            const int index = ALTEngine::Game::Progression::CampaignIndex(digits);
-            if (index >= 0x16 && index <= 0x22) { return true; }
-            return digits == "908" || digits == "909";
-        }
-
-        // Objects with no model of their own (FUN_00037184's arm for 0x15,
-        // 0x1c and 0x1d sets none).
-        bool IsInvisibleObjectType(uint8_t type)
-        {
-            return type == 0x15 || type == 0x1c || type == 0x1d;
-        }
-
-        // The OBJ3D model an object type draws with (FUN_00037184; the
-        // model pointers at DAT_00247b84 are OBJ3D's models in order).
-        int Obj3DIndexForCrateType(uint8_t type, bool episodeThree)
-        {
-            using namespace ALTEngine::Formats::ModelIndices;
-            // A switch shows both lights off until its state says otherwise.
-            const int family = SwitchFamilyBase(type, episodeThree);
-            if (family >= 0) { return family + static_cast<int>(SwitchState::BothOff); }
-            switch (type)
-            {
-            case 0x14: return episodeThree ? Obj3D::EggHusk : Obj3D::SingleCrate;
-            case 0x17: return Obj3D::ExplosiveBarrel;
-            case 0x19: return Obj3D::DoubleCrate;
-            case 0x20: return Obj3D::StasisPodCover;
-            case 0x21: case 0x22: case 0x23: case 0x24: case 0x25:
-                return Obj3D::SteelCoil + (type - 0x21);   // 35-39
-            default: return Obj3D::SingleCrate;            // and the modelless 0x15/0x1c/0x1d, never drawn
-            }
-        }
-
         // Player collision constants, taken from the game's own entity
         // mover (Ghidra: FUN_00031afc / FUN_000315f0).
         // Ejected casings are drawn with the ammo PICKUP mesh shrunk down - see
@@ -181,33 +105,6 @@ namespace ALTEngine::Screens
         // Where the fireball sits relative to the barrel's base. GUESS - the
         // original's explosion carries its own position which has not been read.
         constexpr float EXPLOSION_HEIGHT_OFFSET = 256.0f;
-        // FUN_0003d794's FUN_00040ba0(9, -1): the sound a seismic charge's
-        // throw plays.
-        constexpr int SEISMIC_THROW_SOUND = 9;
-        // A window: the object type with its own arm in the modelless objects'
-        // handler (0x38097), and the sound that arm plays (FUN_00040c38(0x6c)).
-        constexpr int WINDOW_OBJECT_TYPE = 0x1c;
-        // The cryopod: object type 0x20, its task at 0x37bb0. Once activated
-        // (+0x1a set), its third angle falls by 8 a tick until it passes
-        // -0x100 - the cover tipping open about its own Z.
-        constexpr uint8_t CRYOPOD_OBJECT_TYPE = 0x20;
-        constexpr int OBJECT_ACTIVATE_SOUND = 0x5c;
-        constexpr int CRYOPOD_OPEN_STEP = 8;
-        constexpr int CRYOPOD_OPEN_LIMIT = 0x100;
-        constexpr int WINDOW_BREAK_SOUND = 0x6c;
-
-        // The level texture a window's flying glass wears (FUN_00045808): entry
-        // 0x118 of the level's texture table on campaign level 4 (L131), 0x158
-        // on level 0xc (L211) and 0x14f on every other.
-        int GlassTextureIndex(const std::string& digits)
-        {
-            const int index = ALTEngine::Game::Progression::CampaignIndex(digits);
-            if (index == 4) { return 0x118; }
-            if (index == 0xc) { return 0x158; }
-            return 0x14f;
-        }
-
-
         constexpr float FRAGMENT_HALF_SIZE = 6.0f;
         constexpr float TRACER_MIN_HALF_SIZE = 5.0f;
 
@@ -515,10 +412,6 @@ namespace ALTEngine::Screens
         double weaponClock = 0.0;
         double weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings::DEFAULT
             / ALTEngine::Screens::PlayerCamera::ORIGINAL_TIMER_HZ;
-        // The same split on the world tick: doors and lifts run on every
-        // tick, the lights, the HUD timers and the other cosmetic cadences on
-        // alternate ones, as they did before the base tick doubled.
-        unsigned worldTick = 0;
         float jumpOffset = 0.0f;
         float jumpVelocity = 0.0f;
         bool jumpHeld = false;
@@ -648,7 +541,6 @@ namespace ALTEngine::Screens
         }
         bool prevUseHeld = false;
         int lastCellIndex = -1;
-        float tickAccumulator = 0.0f;
 
         // Player camera state. Runs at the original's own logic rate rather
         // than the door tick - see PlayerCamera::TICK_HZ.
@@ -1020,28 +912,16 @@ namespace ALTEngine::Screens
                             const int podMesh = ALTEngine::Formats::ModelIndices::Obj3D::StasisPodCover;
                             const auto* mesh = ALTEngine::Formats::ModelLoader::FindByNumber(meshes, podMesh);
                             const auto levelSet = ALTEngine::Formats::BndTextureLoader::Load(*gfxPath);
-                            if (mesh && levelSet.firstPaletteRgb.size() >= 9)
+                            const auto cover = mesh ? GameplayLevelBuild::BuildCryopodCover(*mesh, levelSet.firstPaletteRgb)
+                                                    : std::nullopt;
+                            if (cover)
                             {
-                                // The palette is in the 0-63 range; the pages
-                                // are drawn from it times 4 (RawImageRenderer).
-                                const std::array<float, 3> colour = {
-                                    static_cast<float>(levelSet.firstPaletteRgb[6] * 4) / 255.0f,
-                                    static_cast<float>(levelSet.firstPaletteRgb[7] * 4) / 255.0f,
-                                    static_cast<float>(levelSet.firstPaletteRgb[8] * 4) / 255.0f };
-                                const std::vector<ALTEngine::Formats::BxRectangle> whiteRect = { { 0, 0, 1, 1, 0, 0 } };
-                                const auto built = ALTEngine::Formats::BuildRenderMesh(*mesh, whiteRect, true, colour);
-                                ALTEngine::Formats::BndTexture white;
-                                white.width = 1;
-                                white.height = 1;
-                                white.rgba = { 255, 255, 255, 255 };
                                 cryopodCoverReady = ModelRenderer::RegisterMesh(
-                                    { ALTEngine::Renderer::ModelCatalog::LevelObject, podMesh }, built, white);
-                                float sumX = 0.0f;
-                                for (const auto& v : mesh->vertices) { sumX += static_cast<float>(v.x); }
-                                cryopodOpenSign = (sumX < 0.0f) ? -1.0f : 1.0f;
+                                    { ALTEngine::Renderer::ModelCatalog::LevelObject, podMesh }, cover->mesh, cover->texture);
+                                cryopodOpenSign = cover->openSign;
                                 cryopodOpenSignKnown = true;
                                 SDL_Log("GameplayScreen: cryopod cover colour %d,%d,%d at half",
-                                        levelSet.firstPaletteRgb[6] * 4, levelSet.firstPaletteRgb[7] * 4, levelSet.firstPaletteRgb[8] * 4);
+                                        cover->colour[0], cover->colour[1], cover->colour[2]);
                             }
                         }
                         catch (const std::exception& e)
@@ -1461,28 +1341,10 @@ namespace ALTEngine::Screens
                         try
                         {
                             const auto glassSet = ALTEngine::Formats::BndTextureLoader::Load(*gfxPath);
-                            const size_t gi = static_cast<size_t>(GlassTextureIndex(digits));
-                            if (gi < glassSet.uvRects.size()
-                                && static_cast<size_t>(glassSet.uvRects[gi].page) < glassSet.textures.size())
+                            if (const auto cut = GameplayLevelBuild::CutTextureRect(
+                                    glassSet, static_cast<size_t>(GlassTextureIndex(digits))))
                             {
-                                const auto& r = glassSet.uvRects[gi];
-                                const auto& page = glassSet.textures[static_cast<size_t>(r.page)];
-                                std::vector<uint8_t> rgba(static_cast<size_t>(r.width) * r.height * 4, 0);
-                                for (int y = 0; y < r.height; ++y)
-                                {
-                                    for (int x = 0; x < r.width; ++x)
-                                    {
-                                        const int sx = std::min(r.x + x, page.width - 1);
-                                        const int sy = std::min(r.y + y, page.height - 1);
-                                        for (int c = 0; c < 4; ++c)
-                                        {
-                                            rgba[(static_cast<size_t>(y) * r.width + x) * 4 + c] =
-                                                page.rgba[(static_cast<size_t>(sy) * page.width + sx) * 4 + c];
-                                        }
-                                    }
-                                }
-                                glassSheetReady = ALTEngine::Renderer::ModelRenderer::UploadSpriteSheet(
-                                    "glass", rgba, r.width, r.height);
+                                glassSheetReady = ModelRenderer::UploadSpriteSheet("glass", cut->rgba, cut->width, cut->height);
                             }
                         }
                         catch (const std::exception& e)
@@ -1956,12 +1818,16 @@ namespace ALTEngine::Screens
                 playerTickAccumulator += dt;
                 const float playerTickLength = (speedCompensationOff ? 2.0f : 1.0f) / static_cast<float>(PC::TICK_HZ);
                 int playerTicksThisFrame = 0;
+                // Each pass's alternate-pass flag, in order, so the world's
+                // tick below runs the same passes (see the world tick).
+                std::vector<bool> passHalves;
                 while (playerTickAccumulator >= playerTickLength)
                 {
                     playerTickAccumulator -= playerTickLength;
                     playerTicksThisFrame++;
                     // The original's alternate pass (see logicTick).
                     const bool halfPass = ((logicTick++ & 1u) == 0) || speedCompensationOff;
+                    passHalves.push_back(halfPass);
                     const bool fasterXenoPass = fasterXenomorphs && !halfPass
                         && (fasterXenoOffPass++ % FASTER_XENO_OFF_PASS_EVERY) == 0;
                     const bool creaturePass = halfPass || fasterXenoPass;
@@ -2799,7 +2665,7 @@ namespace ALTEngine::Screens
                             enemy.animationFrames = enemySprites.FrameCount(enemy.type, enemy.animation);
                             const bool wasAlive = enemy.alive;
                             ALTEngine::Screens::Enemies::Tick(enemy, camera.x, playerFeetY, camera.z,
-                                                              &aiWorld, weaponRuntime.noise > 0);
+                                                              aiWorld, weaponRuntime.noise > 0);
                             // A creature's death counts toward the assessment
                             // (FUN_00030b04), whatever killed it.
                             if (wasAlive && !enemy.alive
@@ -3913,17 +3779,17 @@ namespace ALTEngine::Screens
                     }
                     prevUseHeld = useHeld;
 
-                    // The same fixed tick - the original moves doors one
-                    // height unit per tick, and quantising matters: the
-                    // 32-unit step is what keeps the step-up test and
-                    // clearance behaving.
-                    tickAccumulator += dt;
-                    const float worldTickLength = (speedCompensationOff ? 2.0f : 1.0f)
-                                                / static_cast<float>(ALTEngine::Screens::PlayerCamera::TICK_HZ);
-                    while (tickAccumulator >= worldTickLength)
+                    // The world's tick: the same passes as the player's above,
+                    // one for one, each with that pass's own alternate-pass
+                    // flag - the original runs everything from one pass counter
+                    // (player every pass, the creatures and cosmetic cadences on
+                    // alternate ones). It used to keep an accumulator and a
+                    // counter of its own, which could fall a tick out of step.
+                    // Doors and lifts run every pass: the original moves a door
+                    // one height unit per tick, and quantising matters - the
+                    // 32-unit step keeps the step-up test and clearance behaving.
+                    for (const bool worldHalf : passHalves)
                     {
-                        tickAccumulator -= worldTickLength;
-                        const bool worldHalf = ((worldTick++ & 1u) == 0) || speedCompensationOff;
 
                         if (worldHalf)
                         {

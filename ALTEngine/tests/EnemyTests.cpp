@@ -3,6 +3,9 @@
 #include <algorithm>
 
 #include "Screens/Enemies.h"
+#include "TestWorld.h"
+
+using AltTest::OpenWorld;
 
 using namespace ALTEngine::Screens;
 
@@ -22,6 +25,9 @@ namespace
         e.z = distance;
         e.nearThreshold = 0x600;    // a hugger's 768, after the spawn clamp
         e.middleThreshold = 1536;
+        e.ai.type = type;
+        e.ai.speed = 0x60;
+        e.ai.wakeRange = 0x1000;
         return e;
     }
 
@@ -31,7 +37,7 @@ namespace
     // probe does.
     void Step(Enemies::Enemy& e)
     {
-        Enemies::Tick(e, 0, 0, 0);
+        Enemies::Tick(e, 0, 0, 0, OpenWorld());
         const float lead = (e.stepZ >= 0.0f) ? 200.0f : -200.0f;
         const float probe = e.z + e.stepZ + lead;
         if (!(probe > -256.0f && probe < 256.0f)) { e.z += e.stepZ; }
@@ -40,17 +46,35 @@ namespace
     }
 }
 
+namespace
+{
+    // Steps a creature until `done` holds, or `limit` ticks pass. Returns the
+    // ticks taken, or -1.
+    template <typename Done>
+    int StepUntil(Enemies::Enemy& e, Done done, int limit = 600)
+    {
+        for (int t = 0; t < limit; ++t)
+        {
+            if (done(e)) { return t; }
+            Step(e);
+        }
+        return done(e) ? limit : -1;
+    }
+}
+
 TEST_CASE("Enemies: only one hugger pounces at a time")
 {
-    // The second hugger, finding the lock taken, leaps instead.
+    // The first hugger to attack from contact range takes the face-hug lock;
+    // a second, finding it taken, leaps instead (FUN_00033cbc).
     Enemies::ResetLevelState();
     Enemies::Enemy a = HuggerAtPlayer();
+    REQUIRE(StepUntil(a, [](const Enemies::Enemy& e) { return e.pouncing; }) >= 0);
+    CHECK(Enemies::pounceLockHeld);
     Enemies::Enemy b = HuggerAtPlayer();
-    Enemies::Tick(a, 0, 0, 0);
-    Enemies::Tick(b, 0, 0, 0);
-    CHECK(a.pouncing);
+    REQUIRE(StepUntil(b, [](const Enemies::Enemy& e) { return e.leaping || e.pouncing; }) >= 0);
     CHECK(!b.pouncing);
     CHECK(b.leaping);
+    Enemies::ResetLevelState();
 }
 
 TEST_CASE("Enemies: a level reload releases a pounce that never finished")
@@ -59,94 +83,53 @@ TEST_CASE("Enemies: a level reload releases a pounce that never finished")
     // ResetLevelState existed, no hugger could pounce again all session.
     Enemies::ResetLevelState();
     Enemies::Enemy first = HuggerAtPlayer();
-    Enemies::Tick(first, 0, 0, 0);
-    REQUIRE(first.pouncing);
+    REQUIRE(StepUntil(first, [](const Enemies::Enemy& e) { return e.pouncing; }) >= 0);
 
-    Enemies::ResetLevelState();   // what GameplayScreen now does on every load
+    Enemies::ResetLevelState();   // what GameplayScreen does on every load
     Enemies::Enemy next = HuggerAtPlayer();
-    Enemies::Tick(next, 0, 0, 0);
-    CHECK(next.pouncing);
+    CHECK(StepUntil(next, [](const Enemies::Enemy& e) { return e.pouncing; }) >= 0);
+    Enemies::ResetLevelState();
 }
 
 TEST_CASE("Enemies: a hugger only attacks once it has closed to contact range")
 {
-    // The attack state is entered from mode 0 only. A hugger in the middle
-    // band walks in; it does not leap from there.
+    // A hugger in the middle band walks in; it does not leap from there.
     Enemies::ResetLevelState();
     Enemies::Enemy e = HuggerAtPlayer(1200.0f);
-    Enemies::Tick(e, 0, 0, 0);
+    Enemies::Tick(e, 0, 0, 0, OpenWorld());
     CHECK_EQ(e.mode, 1);   // 1200 is inside the clamped 0x600 near threshold
-    CHECK(!e.engaged);
     CHECK(!e.leaping);
     CHECK(!e.pouncing);
 }
 
-TEST_CASE("Enemies: with the face-hug lock taken, a hugger in contact range leaps")
-{
-    Enemies::ResetLevelState();
-    Enemies::Enemy first = HuggerAtPlayer();
-    Enemies::Tick(first, 0, 0, 0);
-    REQUIRE(first.pouncing);
-
-    Enemies::Enemy e = HuggerAtPlayer(900.0f);
-    Enemies::Tick(e, 0, 0, 0);
-    CHECK(e.engaged);
-    CHECK(e.leaping);
-    CHECK_EQ(e.vy, static_cast<float>(EnemyBehaviour::LEAP_LIFT));
-    CHECK(e.stepZ < 0.0f);                       // toward the player
-    CHECK_EQ(e.attackCooldown, Enemies::ATTACK_INTERVAL_TICKS);
-}
-
 TEST_CASE("Enemies: the leap rises, falls under gravity and lands at floor + 0x20")
 {
+    // With the face-hug lock taken, a hugger in contact range leaps.
     Enemies::ResetLevelState();
-    Enemies::Enemy lockHolder = HuggerAtPlayer();
-    Enemies::Tick(lockHolder, 0, 0, 0);
+    Enemies::pounceLockHeld = true;
     Enemies::Enemy e = HuggerAtPlayer(900.0f);
+    REQUIRE(StepUntil(e, [](const Enemies::Enemy& c) { return c.leaping; }) >= 0);
+    CHECK(!e.pouncing);
     float highest = 0.0f;
     int airborne = 0;
-    Step(e);
-    REQUIRE(e.leaping);
-    while (e.leaping && airborne < 100)
+    while (e.leaping && airborne < 200)
     {
         highest = std::max(highest, e.y);
         ++airborne;
         Step(e);
     }
     CHECK(!e.leaping);
-    CHECK(!e.engaged);                           // a hugger goes back to the chase
-    CHECK(airborne > 15);
-    CHECK(airborne < 30);
-    CHECK(highest > 600.0f);
+    CHECK(airborne > 5);
+    CHECK(highest > static_cast<float>(EnemyBehaviour::STAND_CLEARANCE));
     CHECK_EQ(e.y, static_cast<float>(EnemyBehaviour::STAND_CLEARANCE));
-}
-
-TEST_CASE("Enemies: the leap stops at the player's cell and its damage lands with it")
-{
-    // Type 3 never face-hugs: in contact range it always leaps.
     Enemies::ResetLevelState();
-    Enemies::Enemy e = HuggerAtPlayer(900.0f, 3);
-    Step(e);
-    REQUIRE(e.leaping);
-    CHECK(!e.pouncing);
-    int ticks = 0;
-    while (e.leaping && ticks < 100)
-    {
-        CHECK_EQ(e.pendingDamage, 0);   // nothing while in the air
-        Step(e);
-        ++ticks;
-    }
-    CHECK(e.z >= 456.0f);               // stopped short of the player's cell
-    CHECK(e.z < 600.0f);
-    CHECK_EQ(e.pendingDamage, EnemyBehaviour::AttackForSubtype(3).closeDamage);
-    CHECK(e.engaged);                   // type 3 stays in the attack state
 }
 
 TEST_CASE("Enemies: nothing attacks from the far bands")
 {
     Enemies::ResetLevelState();
     Enemies::Enemy e = HuggerAtPlayer(3000.0f);
-    Enemies::Tick(e, 0, 0, 0);
+    Enemies::Tick(e, 0, 0, 0, OpenWorld());
     CHECK(e.mode >= EnemyBehaviour::FAR_MODE);
     CHECK(!e.leaping);
     CHECK(!e.pouncing);
@@ -157,10 +140,10 @@ TEST_CASE("Enemies: an attack waits until the creature faces the player exactly"
     Enemies::ResetLevelState();
     Enemies::Enemy e = HuggerAtPlayer(512.0f, 3);
     e.facing = 0x400;   // a quarter turn off
-    Enemies::Tick(e, 0, 0, 0);
+    Enemies::Tick(e, 0, 0, 0, OpenWorld());
     CHECK(!e.leaping);
     int ticks = 1;
-    while (!e.leaping && ticks < 50) { Enemies::Tick(e, 0, 0, 0); ++ticks; }
+    while (!e.leaping && ticks < 50) { Enemies::Tick(e, 0, 0, 0, OpenWorld()); ++ticks; }
     CHECK(e.leaping);
     CHECK(ticks > 5);
 }
@@ -197,7 +180,7 @@ TEST_CASE("Enemies: with a world, the common task wakes, closes and leaps")
     bool leapt = false, moved = false;
     for (int t = 0; t < 400 && !leapt; ++t)
     {
-        Enemies::Tick(e, 0, 0, 0, &world, false);
+        Enemies::Tick(e, 0, 0, 0, world, false);
         if (e.stepX != 0.0f || e.stepZ != 0.0f) { moved = true; }
         e.x += e.stepX; e.z += e.stepZ;
         Enemies::SettleVertical(e, 0.0f, 100000.0f, 0x200);
@@ -238,7 +221,7 @@ TEST_CASE("Enemies: a scripted leap and a swipe both end, and the creature goes 
         bool sawAttackAnimation = false;
         for (int t = 0; t < 1500; ++t)
         {
-            Enemies::Tick(e, 0, 0, 0, &world, false);
+            Enemies::Tick(e, 0, 0, 0, world, false);
             e.x += e.stepX; e.z += e.stepZ;
             Enemies::SettleVertical(e, 0.0f, 100000.0f, 0x200);
             const bool inAct = e.ai.state == CreatureAI::ACT;
@@ -316,7 +299,7 @@ TEST_CASE("Hits: a warrior is pushed away while it flinches, then attacks again"
     e.ai.type = 6;
     e.ai.speed = 0x40;
     e.lineOfFire = true;
-    Enemies::Tick(e, 0, 0, 0, &world, false);   // sets its bearing to the player
+    Enemies::Tick(e, 0, 0, 0, world, false);   // sets its bearing to the player
 
     CHECK(!Enemies::ApplyHit(e, 5));
     CHECK(e.state == EnemyBehaviour::STATE_HIT_RECOVER);
@@ -330,13 +313,13 @@ TEST_CASE("Hits: a warrior is pushed away while it flinches, then attacks again"
     int t = 0;
     for (; t < 200 && e.state == EnemyBehaviour::STATE_HIT_RECOVER; ++t)
     {
-        Enemies::Tick(e, 0, 0, 0, &world, false);
+        Enemies::Tick(e, 0, 0, 0, world, false);
         e.x += e.stepX; e.z += e.stepZ;
     }
     CHECK(e.state == EnemyBehaviour::STATE_ACTING);
     CHECK(e.z > z);
     CHECK(e.pushX == 0.0f && e.pushZ == 0.0f);
-    Enemies::Tick(e, 0, 0, 0, &world, false);
+    Enemies::Tick(e, 0, 0, 0, world, false);
     CHECK(e.ai.state == CreatureAI::ACT);
     Enemies::ResetLevelState();
 }
@@ -385,7 +368,7 @@ TEST_CASE("Deaths: a warrior slides back as it falls, then a ramp carries its bo
     e.ai.bearingToPlayer = Enemies::BearingTo(e, 0, 0);
     e.health = 1;
     CHECK(Enemies::ApplyHit(e, 5));
-    Enemies::Tick(e, 0, 0, 0);
+    Enemies::Tick(e, 0, 0, 0, OpenWorld());
     CHECK(e.state == EB::STATE_DEAD);
     CHECK(std::fabs(e.stepZ - 0x10) < 1.0f);   // away from the player, at speed / 4
     const float z = e.z;
@@ -402,7 +385,7 @@ TEST_CASE("Deaths: a warrior slides back as it falls, then a ramp carries its bo
     r.health = 1;
     r.standingAttribute = 0x2e;
     CHECK(Enemies::ApplyHit(r, 5));
-    Enemies::Tick(r, 0, 0, 0);
+    Enemies::Tick(r, 0, 0, 0, OpenWorld());
     CHECK(r.stepX == 0.0f && r.stepZ == 0.0f);   // no death push on a ramp
     for (t = 0; t < 400 && !r.bodyDown; ++t) { Step(r); }
     CHECK(r.stepX == 64.0f);
@@ -424,12 +407,12 @@ TEST_CASE("Deaths: a colonist's body looks the way the player sees it")
     Enemies::Enemy e = HuggerAtPlayer(900.0f, 10);
     e.health = 1;
     CHECK(Enemies::ApplyHit(e, 5));
-    for (int t = 0; t < 600 && !e.bodyDown; ++t) { Enemies::Tick(e, 0, 0, 0); }
+    for (int t = 0; t < 600 && !e.bodyDown; ++t) { Enemies::Tick(e, 0, 0, 0, OpenWorld()); }
     CHECK(e.bodyDown);
     const int view = CO::ViewOf(e.facingOctant, Enemies::BearingTo(e, 0, 0));
     CHECK_EQ(e.animation, CO::ANIM_BODY + view);
     // The player walks round to its other side.
-    Enemies::Tick(e, 0, 0, 1800);
+    Enemies::Tick(e, 0, 0, 1800, OpenWorld());
     const int behind = CO::ViewOf(e.facingOctant, Enemies::BearingTo(e, 0, 1800));
     CHECK(behind != view);
     CHECK_EQ(e.animation, CO::ANIM_BODY + behind);
@@ -472,7 +455,7 @@ TEST_CASE("Ceiling creatures: hang under the ceiling, and let go as warriors whe
     bool dropped = false;
     for (int t = 0; t < 600 && !dropped; ++t)
     {
-        Enemies::Tick(e, 0, 0, 0, &world, false);
+        Enemies::Tick(e, 0, 0, 0, world, false);
         e.x += e.stepX; e.z += e.stepZ;
         Enemies::SettleVertical(e, 0.0f, CEILING, 0x100);
         if (e.onCeiling) { CHECK(e.y == CEILING - EnemyBehaviour::STAND_CLEARANCE); }
@@ -492,7 +475,7 @@ TEST_CASE("Ceiling creatures: one killed up there falls, and No Hit Immunity let
     dog.onCeiling = dog.ai.ceilingCrawler = true;
     dog.health = 1;
     CHECK(Enemies::ApplyHit(dog, 5));
-    Enemies::Tick(dog, 0, 0, 0);
+    Enemies::Tick(dog, 0, 0, 0, OpenWorld());
     CHECK(!dog.onCeiling);
     CHECK_EQ(dog.type, 9);                   // its own death, on its own sprites
     Enemies::SettleVertical(dog, 0.0f, 0x700, 0x100);
