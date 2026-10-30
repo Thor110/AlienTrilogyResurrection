@@ -51,12 +51,13 @@ Each is marked GUESS or NOT TRACED in the code. Grouped by how visible it is.
 
 **Visible in play**
 - **Weapon frame tables:** a weapon without one is placed bottom-centre (`WeaponView.cpp`); the sequence data itself is not traced (`WeaponView.h`).
-- **Fog colour:** the code gives dark yellow at 50% and the video shows green (engine notes, section 8).
+- **Fog colour:** the code gives dark yellow at 50% and the video shows green (engine notes, section 8). Its distance is traced now (zip 48): 3400 to 8500 of view depth.
+- **The draw limit:** the original draws only the cells its ring walk reaches (15 rings, through the zones the player can see into); the port draws the whole level.
 - **Neutral light value:** 128 versus 255, the one remaining guess in the lighting path (`LightTable.h`).
 - **Model and door lighting:** they draw at full brightness; the entity light path is not traced (`RenderMesh.h`).
 - **Enemy sprite scale** (`EnemySprites.h`), **explosion scale and duration** (`ExplosionGraphics.h`), **the barrel fireball's offset and the particle size** (`GameplayScreen.cpp`).
 - **Shell casings:** spin and gravity (`ParticleSystem.h`), and model 26 for the shotgun shell (inferred).
-- **Ramp pitch sign** (`PlayerCamera.h`): verify by walking a ramp.
+- ~~**Ramp pitch sign**~~: worked out from the original (zip 48): the port's yaw is the original's turned half round and its pitch runs the other way, and the two cancel.
 - **Music per level** (`MusicPlayer.h`).
 - **Vent jets:** the blend of their two fills, and whether a burst pipe does blast damage.
 - **Routine 14 flat faces:** which palette their colour comes from (unused by the levels checked).

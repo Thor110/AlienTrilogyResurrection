@@ -29147,6 +29147,36 @@
     },
     {
       "target": "SECT90/L909LEV.MAP",
+      "note": "L909LEV.MAP - the start room was sealed: the four cells past its doorway, (5,37)-(5,40), have attribute 1, a solid wall at load (0x282f5), with nothing drawn there, so a player starting at the header's start could never leave. Attribute 0, open floor, as the same doorway is on L391 - see Patch/L909LEV.txt (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x5083E",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x50E1E",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x513FE",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x519DE",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L909LEV.MAP",
       "note": "L909LEV.MAP - texture orientation: 5 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L909LEV.txt) (Claude, 2026)",
       "edits": [
         {

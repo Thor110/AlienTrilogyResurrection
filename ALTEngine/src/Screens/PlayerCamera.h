@@ -335,15 +335,18 @@ namespace ALTEngine::Screens
             }
         }
 
-        // If ramps pitch the view the wrong way, flip this and only this.
-        //
-        // The sign depends on the original's yaw zero pointing the same way as
-        // the port's (yaw 0 looks down -Z). Both derive from the same level
-        // data so they should agree, but that alignment is ASSUMED, not proven
-        // - it is the one place in this file where a wrong guess produces a
-        // clean, obvious, single-symptom failure. Walking up a ramp and seeing
-        // the view tip down instead of up means this should be -1.
-        constexpr int RAMP_PITCH_SIGN = +1;   // GUESS - verify by walking a ramp
+        // The sign, worked out from the original rather than guessed. The
+        // original's yaw 0 looks toward +z (FUN_00026d1c / FUN_00047e84 turn
+        // (0, 0, s) by yaw into x = -s sin, z = s cos; the shotgun's kick along
+        // its camera yaw + 0x800 goes backwards), and the port's yaw 0 looks
+        // toward -z: the port's yaw is the original's turned half round. The
+        // table above is the original's, read against the port's yaw. And the
+        // original's pitch runs the other way to the port's: walking up 0x31
+        // facing +z (yaw within 0x200 of 0) it lowers the pitch value, which
+        // must tip the view up. The two half-turns cancel, so the table read
+        // against the port's yaw, at +1, tips the view up a slope as the
+        // original does.
+        constexpr int RAMP_PITCH_SIGN = +1;
 
         // FUN_0003d510. Walks pitch back toward its rest angle and kills the
         // rate accumulator.
@@ -413,8 +416,11 @@ namespace ALTEngine::Screens
             }
             else if (input.look)
             {
-                if (input.lookDown) { ApplyPitch(state, -1); }
-                else if (input.lookUp) { ApplyPitch(state, +1); }
+                // Up first: FUN_0003efcc tests the key that lowers its pitch
+                // value (looking up, its pitch running opposite to the port's)
+                // before the other (see RAMP_PITCH_SIGN).
+                if (input.lookUp) { ApplyPitch(state, +1); }
+                else if (input.lookDown) { ApplyPitch(state, -1); }
             }
             else
             {

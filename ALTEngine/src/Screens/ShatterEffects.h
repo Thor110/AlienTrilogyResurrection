@@ -30,8 +30,11 @@ namespace ALTEngine::Screens
         {
             float x = 0, y = 0, z = 0;
             float vx = 0, vy = 0, vz = 0;
+            // The quarter's full size; it is drawn at life / 64 of this.
             float halfWidth = 16.0f;
             float halfHeight = 16.0f;
+            // +0x18: the speed of the next bounce, 8 less each time.
+            int bounce = 0;
             float u0 = 0, v0 = 0, u1 = 1, v1 = 1;
             int angleX = 0, angleY = 0, angleZ = 0;
             int spinX = 0, spinY = 0, spinZ = 0;
@@ -80,14 +83,12 @@ namespace ALTEngine::Screens
                     shard.alive = true;
                     shard.sheetKey = sheetKey;
 
-                    // Size is RANDOM PER PIECE, not derived from the face - the
-                    // original stores (random & 0xf) + 0x20 and applies it as
-                    // << 6 on every axis.
-                    const float sizeUnits = static_cast<float>(
-                        (rng.Bits(OS::SHARD_SCALE_RANDOM) + OS::SHARD_SCALE_BASE) << OS::SHARD_SCALE_SHIFT);
-                    const float size = sizeUnits * WORLD_UNITS_PER_SCALE_UNIT;
-                    shard.halfWidth = size;
-                    shard.halfHeight = size;
+                    // A quarter of the face: from a corner to the centre
+                    // (FUN_000464ec cuts at the edge midpoints and the
+                    // centre). It is drawn at (life << 6) / 0x1000 of that
+                    // (FUN_0002d054), so it shrinks away as it flies.
+                    shard.halfWidth = face.halfWidth * 0.5f * std::max(objectScaleX, objectScaleZ);
+                    shard.halfHeight = face.halfHeight * 0.5f * objectScaleY;
 
                     // Each quarter takes its own corner of the face's UV rect,
                     // matching the corner/midpoint/centre cut.
@@ -98,9 +99,10 @@ namespace ALTEngine::Screens
                     shard.v0 = (i & 2) ? vm : face.v0;
                     shard.v1 = (i & 2) ? face.v1 : vm;
 
-                    shard.x = fx + jx * 0.25f;
-                    shard.y = fy + jy * 0.25f;
-                    shard.z = fz + jz * 0.25f;
+                    // All four start from the jittered centre.
+                    shard.x = fx + jx;
+                    shard.y = fy + jy;
+                    shard.z = fz + jz;
 
                     // UP, with a small sideways spread. Not radially outward -
                     // see LaunchSpeed.
@@ -117,41 +119,53 @@ namespace ALTEngine::Screens
                     shard.spinY = 0;
                     shard.spinZ = OS::SHARD_SPIN_PER_FRAME;
 
-                    shard.life = SHARD_LIFE_TICKS;
+                    // +0x1c, the life: (random & 0xf) + 0x20 ticks. +0x18,
+                    // the first bounce: the launch speed + (random & 0xf).
+                    shard.life = rng.Bits(OS::SHARD_SCALE_RANDOM) + OS::SHARD_SCALE_BASE;
+                    shard.bounce = static_cast<int>(launchSpeed) + rng.Bits(0x0f);
                     shards.push_back(shard);
                 }
             }
         }
 
-        // One of the original's logic ticks. `floorAt` gives the floor height
-        // under a position so shards settle rather than falling through.
+        // One of the original's particle passes, the type 6 arm at 0x2e21e:
+        // the life runs down first (0x2da0e) and the shard is gone at zero;
+        // every particle then moves by its velocity (FUN_00047524), and a
+        // shard moves up or down by it a second time. Above the floor + 0x40
+        // its fall speeds up by 4 (exactly 4 turns to -2, never 0). Below it,
+        // it is put back at that height, stops moving sideways and bounces up
+        // at its bounce speed, which drops by 8 each time; under 4 it stays
+        // down, and a shard that is not moving up or down is gone.
         template <typename FloorFn>
         void Tick(FloorFn floorAt)
         {
             for (Shard& shard : shards)
             {
                 if (!shard.alive) { continue; }
+                if (--shard.life <= 0) { shard.alive = false; continue; }
 
                 shard.angleX = (shard.angleX + shard.spinX) & PlayerCamera::ANGLE_MASK;
                 shard.angleY = (shard.angleY + shard.spinY) & PlayerCamera::ANGLE_MASK;
                 shard.angleZ = (shard.angleZ + shard.spinZ) & PlayerCamera::ANGLE_MASK;
 
-                shard.vy -= GRAVITY;
                 shard.x += shard.vx;
                 shard.y += shard.vy;
                 shard.z += shard.vz;
 
-                const float floor = floorAt(shard.x, shard.z);
-                if (shard.y <= floor)
+                if (shard.vy == 0.0f) { shard.alive = false; continue; }
+                shard.y += shard.vy;
+                const float rest = floorAt(shard.x, shard.z) + REST_HEIGHT;
+                if (shard.y < rest)
                 {
-                    // Landed: stop dead and stop spinning. The original's own
-                    // behaviour here is not traced.
-                    shard.y = floor;
-                    shard.vx = shard.vy = shard.vz = 0.0f;
-                    shard.spinX = shard.spinY = shard.spinZ = 0;
+                    shard.y = rest;
+                    shard.bounce -= BOUNCE_LOSS;
+                    shard.vy = shard.bounce < BOUNCE_MIN ? 0.0f : static_cast<float>(shard.bounce);
+                    shard.vx = shard.vz = 0.0f;
                 }
-
-                if (--shard.life <= 0) { shard.alive = false; }
+                else
+                {
+                    shard.vy = (shard.vy == GRAVITY) ? -2.0f : shard.vy - GRAVITY;
+                }
             }
 
             shards.erase(std::remove_if(shards.begin(), shards.end(),
@@ -176,8 +190,9 @@ namespace ALTEngine::Screens
                 ALTEngine::Renderer::PlacedSprite sprite;
                 sprite.textureKey = shard.sheetKey;
                 sprite.x = shard.x; sprite.y = shard.y; sprite.z = shard.z;
-                sprite.halfWidth = shard.halfWidth;
-                sprite.halfHeight = shard.halfHeight;
+                const float scale = static_cast<float>(shard.life << OS::SHARD_SCALE_SHIFT) / 0x1000;
+                sprite.halfWidth = shard.halfWidth * scale;
+                sprite.halfHeight = shard.halfHeight * scale;
                 sprite.u0 = shard.u0; sprite.v0 = shard.v0;
                 sprite.u1 = shard.u1; sprite.v1 = shard.v1;
 
@@ -194,14 +209,13 @@ namespace ALTEngine::Screens
         void Clear() { shards.clear(); }
 
     private:
-        // How long a piece lasts, how hard it is thrown, and how fast it falls.
-        // ALL THREE ARE GUESSES - the original's are in the unread tail of
-        // FUN_000464ec.
-        static constexpr int SHARD_LIFE_TICKS = 60;
-        // The original's shard size is in its own units; this converts to world
-        // units. GUESS - the only free number left in the launch.
-        static constexpr float WORLD_UNITS_PER_SCALE_UNIT = 0.02f;
-        static constexpr float GRAVITY = 6.0f;
+        // The type 6 arm's numbers (0x2e21e): gravity, the height above the
+        // floor a shard comes to rest at, the bounce lost each landing and the
+        // least that bounces at all.
+        static constexpr float GRAVITY = 4.0f;
+        static constexpr float REST_HEIGHT = 0x40;
+        static constexpr int BOUNCE_LOSS = 8;
+        static constexpr int BOUNCE_MIN = 4;
 
         // A ceiling on live pieces. The original is bounded by its particle pool
         // of 128, which everything else draws from too; this is a separate

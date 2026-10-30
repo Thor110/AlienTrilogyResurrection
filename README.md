@@ -362,6 +362,7 @@ Fixes marked "texture scan" were found by ALTLevelScan, which looks for faces wh
 - [Patched an issue on L909LEV where one face had its texture flipped (texture scan 909-19).](#L909LEV-Multiplayer-Map-10-Fix-3)
 - [Patched an issue on L909LEV where one face had its texture rotated (texture scan 909-20).](#L909LEV-Multiplayer-Map-10-Fix-4)
 - [Patched an issue on L909LEV where one face had its texture flipped and rotated (texture scan 909-23).](#L909LEV-Multiplayer-Map-10-Fix-5)
+- [Patched an issue on L909LEV where the start room could not be left.](#L909LEV-Multiplayer-Map-10-Fix-6)
 - [Patched an issue on L908LEV where one face had its texture rotated (texture scan 908-1).](#L908LEV-Multiplayer-Map-9-Fix-1)
 - [Patched an issue on L908LEV where one face had its texture rotated (texture scan 908-12).](#L908LEV-Multiplayer-Map-9-Fix-2)
 - [Patched an issue on L906LEV where a vertex had incorrect coordinates.](#L906LEV-Multiplayer-Map-7-Fix-1)
@@ -501,6 +502,16 @@ UV flipped and rotation corrected.
 Found by texture scan 909-23. Face 4541 is corrected so the texture runs on from the faces around it.
 
 Patch listed at Patch/L909LEV.txt
+
+## L909LEV Multiplayer Map 10 Fix 6
+
+The start room could not be left.
+
+The four cells just past the start room's doorway have attribute 1, a solid wall, though nothing is drawn there, so the corridor could be seen but not entered. They are set to open floor, as the same room is on L391.
+
+Patch listed at Patch/L909LEV.txt
+
+Applied by both ALTEngine and ALTViewer's patch button.
 
 ## L908LEV Multiplayer Map 9 Fix 1
 

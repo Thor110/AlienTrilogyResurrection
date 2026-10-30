@@ -2,6 +2,8 @@
 
 #include "Formats/RenderMesh.h"
 
+#include <cmath>
+
 using namespace ALTEngine::Formats;
 
 // The draw-routine table at 0x000a7098, as traced (RenderMesh.h).
@@ -87,4 +89,35 @@ TEST_CASE("Destroyed objects: the texture animators they step on")
     c.unknown7 = 3; c.unknown8 = 0;          // three of them
     CHECK_EQ(TextureStepFirst(c), 0x112);
     CHECK_EQ(TextureStepCount(c), 3);
+}
+
+TEST_CASE("Shatter faces: one per model face, triangles included, routines 0 and 2 only")
+{
+    // A quad, a triangle, another quad and a quad drawn by routine 4. The old
+    // six-indices-at-a-time walk put everything after the triangle out of step.
+    ModelMesh mesh;
+    mesh.vertices = {
+        { 0, 0, 0, 0 }, { 100, 0, 0, 0 }, { 100, 100, 0, 0 }, { 0, 100, 0, 0 },      // quad in z = 0
+        { 500, 0, 0, 0 }, { 540, 0, 0, 0 }, { 500, 0, 60, 0 },                       // triangle in y = 0
+        { 0, 0, 1000, 0 }, { 0, 200, 1000, 0 }, { 0, 200, 1300, 0 }, { 0, 0, 1300, 0 }, // quad in x = 0
+    };
+    auto quad = [](int a, int b, int c, int d, uint8_t flags) { ModelQuad q{}; q.a = a; q.b = b; q.c = c; q.d = d; q.flags = flags; return q; };
+    mesh.quads = { quad(0, 1, 2, 3, 0), quad(4, 5, 6, -1, 2), quad(7, 8, 9, 10, 0), quad(0, 1, 2, 3, 4) };
+
+    const RenderMesh render = BuildRenderMesh(mesh, {});
+    const auto faces = ExtractMeshFaces(render, mesh);
+    REQUIRE(faces.size() == size_t(3));   // the routine-4 face does not shatter
+
+    CHECK(std::fabs((faces[0].cx) - (50.0f)) < 0.01f);
+    CHECK(std::fabs((faces[0].halfWidth) - (50.0f)) < 0.01f);
+    CHECK(std::fabs((faces[0].halfHeight) - (50.0f)) < 0.01f);
+
+    CHECK(std::fabs((faces[1].cx) - (520.0f)) < 0.01f);
+    CHECK(std::fabs((faces[1].cz) - (30.0f)) < 0.01f);
+    CHECK(std::fabs((faces[1].halfWidth) - (30.0f)) < 0.01f);
+    CHECK(std::fabs((faces[1].halfHeight) - (20.0f)) < 0.01f);
+
+    CHECK(std::fabs((faces[2].cz) - (1150.0f)) < 0.01f);
+    CHECK(std::fabs((faces[2].halfWidth) - (150.0f)) < 0.01f);
+    CHECK(std::fabs((faces[2].halfHeight) - (100.0f)) < 0.01f);
 }

@@ -922,6 +922,17 @@ namespace ALTViewer
                 Tuple.Create(0x6E862L, new byte[] { 0x15 })
             };
             BinaryUtility.ReplaceBytes(replacements, patchDirectory);
+            // L909LEV.MAP - the start room was sealed by four attribute-1 (wall) cells past its doorway with nothing drawn there;
+            //   they are set to 0, open floor, as on L391 (see Patch/L909LEV.txt)
+            patchDirectory = gameDirectory + "SECT90\\L909LEV.MAP";
+            replacements = new List<Tuple<long, byte[]>>()
+            {
+                Tuple.Create(0x5083EL, new byte[] { 0x00 }),
+                Tuple.Create(0x50E1EL, new byte[] { 0x00 }),
+                Tuple.Create(0x513FEL, new byte[] { 0x00 }),
+                Tuple.Create(0x519DEL, new byte[] { 0x00 })
+            };
+            BinaryUtility.ReplaceBytes(replacements, patchDirectory);
             // L112LEV.MAP - a corner under the hanging sign was covered twice: faces 5849 and 5850 lay over triangle 5843
             //   and fought it for the same pixels; both are made zero-area at vertex 985 (see Patch/L112LEV.txt)
             patchDirectory = gameDirectory + "SECT11\\L112LEV.MAP";

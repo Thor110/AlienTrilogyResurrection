@@ -72,10 +72,11 @@ namespace ALTEngine::Formats
         return (objectType == LAUNCH_TYPE_BARREL) ? LAUNCH_SPEED_BARREL : LAUNCH_SPEED_DEFAULT;
     }
 
-    // SIZE is separate, and it is random per shard: the byte at +0x1c is
-    // (random & 0xf) + 0x20, and FUN_0002d054 applies it as (byte << 6) on all
-    // three axes. So every piece is a slightly different size regardless of what
-    // it came off.
+    // SIZE AND LIFE ARE ONE BYTE. +0x1c is (random & 0xf) + 0x20, the particle's
+    // life, which the update loop counts down each pass (0x2da0e), and
+    // FUN_0002d054 draws the piece at (byte << 6) / 0x1000 of its own size on
+    // all three axes. So a piece starts at a half to three quarters of its
+    // quarter of the face and shrinks to nothing as it dies, 32 to 47 ticks on.
     inline constexpr int SHARD_SCALE_BASE = 0x20;
     inline constexpr int SHARD_SCALE_RANDOM = 0x0f;
     inline constexpr int SHARD_SCALE_SHIFT = 6;

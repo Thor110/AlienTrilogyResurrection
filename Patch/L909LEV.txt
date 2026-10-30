@@ -14,3 +14,20 @@ Face	Offset		Scan	Change	Was					Now
 4541	0x29150	909-23	mirrored and three quarter-turns	5810, 5819, 5818, 5805	->	5805, 5810, 5819, 5818	flag 0 (0x00)		flag 2 (0x02)
 6022	0x30504	909-15	a half-turn	6815, 6827, 6826, 6813	->	6826, 6813, 6815, 6827
 9710	0x42524	909-20	a quarter-turn	6601, 5940, 5939, 6597	->	5940, 5939, 6597, 6601
+
+The start room's way out (Claude, 2026)
+
+The player starts in a small room at (1,38) whose doorway (the attribute 6 cells at x = 4) leads to
+the corridor. The four cells just past it, (5,37) to (5,40), have attribute 1, which the level load
+makes a solid wall (0x282f5 sets +7 to 0x80), though nothing is drawn there: the corridor is open to
+look at and impossible to enter, so a game started on this map could not leave the room. The same
+room on L391 has attribute 0 there. Each cell's attribute byte (+0x0a of its 16-byte record) is set
+to 0, open floor; the floor and ceiling heights are unchanged.
+
+Cell		Offset		Was	Now
+(5,37)		0x5083E		01	00
+(5,38)		0x50E1E		01	00
+(5,39)		0x513FE		01	00
+(5,40)		0x519DE		01	00
+
+Applied by ALTEngine (data/Patches.json) and by ALTViewer's patch button.

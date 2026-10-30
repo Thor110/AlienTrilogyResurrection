@@ -77,8 +77,11 @@ namespace ALTEngine::Game::PlayerMover
         switch (c->attribute)
         {
         case 0x19: { const int lim = 0x200 - fz - 1; return fx <= lim ? base + lim + 1 : x; }
-        case 0x1a: { const int lim = fz; return fx <= lim ? base + lim + 1 : x; }
-        case 0x1b: { const int lim = fz; return fx >= lim ? base + lim - 1 : x; }
+        // 0x1a and 0x1b as FUN_0002800c has them: the wall side of 0x1a is
+        // z <= x, the same side FUN_000280dc keeps a z move out of, so an x move
+        // is held below the diagonal; 0x1b the other way.
+        case 0x1a: { const int lim = fz; return fx >= lim ? base + lim - 1 : x; }
+        case 0x1b: { const int lim = fz; return fx <= lim ? base + lim + 1 : x; }
         case 0x1c: { const int lim = 0x200 - fz - 1; return fx >= lim ? base + lim - 1 : x; }
         default: return x;
         }
@@ -173,8 +176,13 @@ namespace ALTEngine::Game::PlayerMover
     //
     // A slippery ramp (attributes 0x35-0x38, the same slopes as 0x31-0x34)
     // pushes the player downhill: by their own speed (at least 0x20), or 0x80
-    // standing still; running (DAT_000b0ab4 bit 2), by their speed less 0x20.
-    // Downhill is -z, +x, -x, +z for 0x35-0x38, in that order.
+    // standing still; running (DAT_000b0ab4 bit 1), by their speed less 0x20.
+    // FUN_0003dff0 rotates (0, 0, s) by the yaw 0x800, -0x400, 0x400 or 0 for
+    // 0x35-0x38 (FUN_00026a60: FUN_00026d1c's matrix gives x = -s sin yaw,
+    // z = s cos yaw, straight into grid space), so downhill is -z, +x, -x, +z,
+    // in that order - down each slope as FUN_00027e28 gives it. (The port's own
+    // yaw runs half a turn from the original's, which is why its walking step
+    // has the opposite signs; the push is taken from the original's formula.)
     inline bool RampPush(int attribute, int speed, bool running, int& outX, int& outZ)
     {
         if (attribute < 0x35 || attribute > 0x38) { return false; }

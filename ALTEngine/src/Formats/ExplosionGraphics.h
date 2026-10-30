@@ -151,6 +151,31 @@ namespace ALTEngine::Formats
             }
         }
 
+        // THE FLAMETHROWER'S FLAMES (particle type 3), drawn by FUN_0002c94c, not
+        // as a tracer. Each flame is a square sprite from one of the effect
+        // records 0-7, picked at random every frame (FUN_000100ec & 7, into the
+        // same rect table at 0x2405a0 the vents use), so it flickers. Its
+        // half-size on screen is k / distance with k = (0x10 - life) * 0x600,
+        // or * 0xa00 once life is under 4, so a flame starts as a point at the
+        // muzzle and swells as it flies, fastest in its last ticks. Its shade
+        // byte is 0xfa (over the 0x80 that leaves a texel as it is).
+        // The world size is k / FOCAL, the same conversion as the vents.
+        // It is drawn from 0x10 away, not the 0x200 the rounds keep.
+        namespace FlameSprites
+        {
+            inline constexpr int NEAR_CUTOFF = 0x10;
+            inline constexpr float SHADE = static_cast<float>(0xfa) / VentSprites::WHITE;
+
+            struct Look { int record; float halfSize; };
+
+            inline Look For(int life, int random)
+            {
+                const int l = life < 0 ? 0 : (life > 0x10 ? 0x10 : life);
+                const int k = (0x10 - l) * (l < 4 ? 0xa00 : 0x600);
+                return { random & 7, static_cast<float>(k) / VentSprites::FOCAL };
+            }
+        }
+
         // The scale is a 12.12 fixed-point multiplier the original divides by
         // distance to get screen size. A world-space billboard needs it as a
         // world size instead, so the rect's pixel size is multiplied by the

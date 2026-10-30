@@ -2517,8 +2517,14 @@ namespace ALTEngine::Screens
                         // others (FASTER_XENO_OFF_PASS_EVERY).
                         // What the renderer would have drawn from here: the
                         // zones creatures test the player against.
+                        // The walk takes the original's camera yaw (DAT_000b0ba2),
+                        // whose 0 looks toward +z (the ring table's angle 0); the
+                        // port's yaw 0 looks toward -z, so it is turned half round.
+                        // Passing the port's own yaw walked the cells BEHIND the
+                        // player, and creatures tested the player against those.
                         const uint16_t drawnZones = ALTEngine::Game::CreatureSight::DrawnZoneMask(level,
-                            ToGridSpaceX(camera.x, originX) >> 9, ToGridSpaceZ(camera.z, originZ) >> 9, playerCam.viewYaw);
+                            ToGridSpaceX(camera.x, originX) >> 9, ToGridSpaceZ(camera.z, originZ) >> 9,
+                            (playerCam.viewYaw + 0x800) & PC::ANGLE_MASK);
                         if (creaturePass)
                         for (auto& enemy : enemies)
                         {
@@ -3870,7 +3876,10 @@ namespace ALTEngine::Screens
                         const float dy = particle.y - camera.y;
                         const float dz = particle.z - camera.z;
                         const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
-                        if (distance < P::DRAW_NEAR_CUTOFF || distance > P::DRAW_FAR_CUTOFF) { continue; }
+                        const int nearCutoff = particle.type == P::TYPE_FLAME
+                            ? ALTEngine::Formats::ExplosionGraphics::FlameSprites::NEAR_CUTOFF
+                            : P::DRAW_NEAR_CUTOFF;
+                        if (distance < nearCutoff || distance > P::DRAW_FAR_CUTOFF) { continue; }
 
                         ALTEngine::Renderer::PlacedSprite spark;
                         spark.textureKey = "particle";
@@ -3898,6 +3907,17 @@ namespace ALTEngine::Screens
                             spark.halfWidth = look.halfWidth;
                             spark.halfHeight = look.halfHeight;
                             spark.r = spark.g = spark.b = look.grey;
+                        }
+                        else if (particle.type == P::TYPE_FLAME)
+                        {
+                            // A flickering sprite that swells with age
+                            // (FUN_0002c94c; ExplosionGraphics::FlameSprites).
+                            namespace FS = ALTEngine::Formats::ExplosionGraphics::FlameSprites;
+                            ventFlicker = ventFlicker * 1103515245u + 12345u;
+                            const FS::Look look = FS::For(particle.life, static_cast<int>(ventFlicker >> 16));
+                            if (!explosions.UseRecord(look.record, spark)) { continue; }
+                            spark.halfWidth = spark.halfHeight = look.halfSize;
+                            spark.r = spark.g = spark.b = FS::SHADE;
                         }
                         else
                         {

@@ -74,6 +74,30 @@ namespace ALTEngine::Formats
     // remembering next time something "passes" that kind of test.
     RenderMesh BuildRenderMesh(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects);
 
+    // One entry per face of a model mesh BuildRenderMesh made, for the shatter
+    // (Screens/ShatterEffects.h): the face's centre, the larger two sides of its
+    // bounding box as half-extents, and its UV rect.
+    //
+    // BuildRenderMesh gives each face its own run of vertices (three for a
+    // triangle, four for a quad) and emits one triangle for a triangle face,
+    // two for a quad, and both windings again for a double-sided face. So a
+    // face is a run of consecutive triangles whose lowest index is the same:
+    // the first vertex of its run. (Reading six indices at a time, as the
+    // renderer used to, only works for single-sided quads: a triangle or a
+    // double-sided face put the rest of the list out of step and glued parts
+    // of neighbouring faces into huge, wrong shards.)
+    //
+    // FUN_000464ec only shatters faces whose draw routine (the file's +0x12,
+    // ModelQuad::flags) is 0 or 2. When the runs line up one to one with the
+    // source's faces, that gate is applied too.
+    struct MeshFaceExtent
+    {
+        float cx = 0, cy = 0, cz = 0;
+        float halfWidth = 0, halfHeight = 0;
+        float u0 = 0, v0 = 0, u1 = 0, v1 = 0;
+    };
+    std::vector<MeshFaceExtent> ExtractMeshFaces(const RenderMesh& mesh, const ModelMesh& source);
+
     // Level geometry's equivalent of BuildRenderMesh above - separate
     // function specifically because texIndex resolution genuinely
     // differs from ExportModel's:

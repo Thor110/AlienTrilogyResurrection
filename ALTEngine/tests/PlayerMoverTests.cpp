@@ -69,10 +69,16 @@ TEST_CASE("PlayerMover: rises over 0x100 and low ceilings stop it, drops step cl
 
 TEST_CASE("PlayerMover: a diagonal wall keeps the player on its side")
 {
+    // FUN_0002800c: 0x1a holds x below z within the cell, 0x1b above it - the
+    // same wall sides FUN_000280dc keeps a z move out of.
     Room r;
-    r.At(4, 3).attribute = 0x1a;                  // x within the cell kept above z
-    const int x = PM::ClampDiagonalX(r.w, 0x800 + 0x20, 0x600 + 0x80);
-    CHECK_EQ(x, 0x800 + 0x81);
+    r.At(4, 3).attribute = 0x1a;
+    CHECK_EQ(PM::ClampDiagonalX(r.w, 0x800 + 0x20, 0x600 + 0x80), 0x800 + 0x20);
+    CHECK_EQ(PM::ClampDiagonalX(r.w, 0x800 + 0xa0, 0x600 + 0x80), 0x800 + 0x7f);
+    CHECK_EQ(PM::ClampDiagonalZ(r.w, 0x800 + 0xa0, 0x600 + 0x80), 0x600 + 0xa1);
+    r.At(4, 3).attribute = 0x1b;
+    CHECK_EQ(PM::ClampDiagonalX(r.w, 0x800 + 0x20, 0x600 + 0x80), 0x800 + 0x81);
+    CHECK_EQ(PM::ClampDiagonalX(r.w, 0x800 + 0xa0, 0x600 + 0x80), 0x800 + 0xa0);
 }
 
 TEST_CASE("PlayerMover: slippery ramps push downhill")
@@ -88,6 +94,20 @@ TEST_CASE("PlayerMover: slippery ramps push downhill")
     CHECK_EQ(x, -0x70);
     CHECK(PM::RampPush(0x38, 0x10, true, x, z));
     CHECK_EQ(z, 0x20);
+
+    // Downhill by the floor itself.
+    ALTEngine::Formats::LevelGeometry level;
+    level.header.mapLength = 1; level.header.mapWidth = 1;
+    level.collisionGrid.resize(1);
+    level.collisionGrid[0].floorHeight = 0x10;
+    for (int a = 0x35; a <= 0x38; ++a)
+    {
+        level.collisionGrid[0].attribute = static_cast<uint8_t>(a);
+        CHECK(PM::RampPush(a, 0x80, false, x, z));
+        const float here = ALTEngine::Formats::FindFloorHeightGridSpace(level, 0x100, 0x100);
+        const float ahead = ALTEngine::Formats::FindFloorHeightGridSpace(level, 0x100 + x, 0x100 + z);
+        CHECK(ahead < here);
+    }
 }
 
 TEST_CASE("PlayerMover: walking into a wall at an angle slides along it at full speed")

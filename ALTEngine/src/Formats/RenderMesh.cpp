@@ -495,4 +495,50 @@ namespace ALTEngine::Formats
         }
         return result;
     }
+
+    std::vector<MeshFaceExtent> ExtractMeshFaces(const RenderMesh& mesh, const ModelMesh& source)
+    {
+        std::vector<MeshFaceExtent> faces;
+        auto lowest = [&](size_t i) { return std::min({ mesh.indices[i], mesh.indices[i + 1], mesh.indices[i + 2] }); };
+        std::vector<std::pair<size_t, size_t>> runs; // [first index, end index) of each face
+        for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
+        {
+            if (!runs.empty() && lowest(runs.back().first) == lowest(i)) { runs.back().second = i + 3; }
+            else { runs.push_back({ i, i + 3 }); }
+        }
+        const bool gate = runs.size() == source.quads.size();
+
+        for (size_t r = 0; r < runs.size(); ++r)
+        {
+            if (gate && source.quads[r].flags != 0 && source.quads[r].flags != 2) { continue; }
+            float minX = 1e30f, maxX = -1e30f, minY = 1e30f, maxY = -1e30f, minZ = 1e30f, maxZ = -1e30f;
+            float minU = 1e30f, maxU = -1e30f, minV = 1e30f, maxV = -1e30f;
+            bool ok = true;
+            for (size_t k = runs[r].first; k < runs[r].second; ++k)
+            {
+                const uint32_t vi = mesh.indices[k];
+                if (vi >= mesh.vertices.size()) { ok = false; break; }
+                const auto& v = mesh.vertices[vi];
+                minX = std::min(minX, v.x); maxX = std::max(maxX, v.x);
+                minY = std::min(minY, v.y); maxY = std::max(maxY, v.y);
+                minZ = std::min(minZ, v.z); maxZ = std::max(maxZ, v.z);
+                minU = std::min(minU, v.u); maxU = std::max(maxU, v.u);
+                minV = std::min(minV, v.v); maxV = std::max(maxV, v.v);
+            }
+            if (!ok) { continue; }
+
+            MeshFaceExtent face;
+            face.cx = (minX + maxX) * 0.5f;
+            face.cy = (minY + maxY) * 0.5f;
+            face.cz = (minZ + maxZ) * 0.5f;
+            // A face can be flat on any axis, so its size is the larger two sides.
+            float e[3] = { maxX - minX, maxY - minY, maxZ - minZ };
+            std::sort(e, e + 3);
+            face.halfWidth = std::max(e[2], 1.0f) * 0.5f;
+            face.halfHeight = std::max(e[1], 1.0f) * 0.5f;
+            face.u0 = minU; face.v0 = minV; face.u1 = maxU; face.v1 = maxV;
+            faces.push_back(face);
+        }
+        return faces;
+    }
 }

@@ -177,22 +177,20 @@ namespace ALTEngine::Renderer
         // black 0xff steps later. So in the original's own distance units the
         // ramp runs from 0xaa * 0x50 to (0xaa + 0xff) * 0x50.
         //
-        // THE UNIT CONVERSION IS EMPIRICAL. Nothing traced shows what units
-        // feed that function. Taken as raw world units the ramp starts about 26
-        // cells out, which is further than you can see down any corridor - the
-        // fade was there but did nothing visible, which is why it looked
-        // completely inert.
+        // THE UNIT CONVERSION, TRACED. The level face walker (0x25880) has
+        // FUN_00048490 store the average of the face's four view depths (the
+        // camera-space z it projects by, in world units), shifts it left by 2
+        // (0x258d1) and hands that to FUN_0004ecdc. So the ramp runs over view
+        // depth from 0xaa * 0x50 / 4 = 3400 units (about 6.6 cells) to
+        // (0xaa + 0xff) * 0x50 / 4 = 8500 (about 16.6 cells). The shader's
+        // distance is the clip-space W, the same view depth.
         //
-        // The divisor below was matched against a screenshot of the original
-        // (Edward, 2026): the corridor is fully black roughly 8-10 cells ahead.
-        // 8 lands the ramp at 3.3 cells to 8.3 cells, which fits, and being a
-        // power of two is what an engine would plausibly be doing to its
-        // distance value in the first place. Treat it as a good fit to a
-        // picture, not a derivation - if the real conversion turns up in the
-        // decompilation, this is the one number to change.
-        static constexpr float FOG_DISTANCE_DIVISOR = 8.0f;
-        float fogStart = (0xaa * 0x50) / FOG_DISTANCE_DIVISOR;          // 1700 units, ~3.3 cells
-        float fogRange = (0xff * 0x50) / FOG_DISTANCE_DIVISOR;          // 2550 units, black at ~8.3 cells
+        // This was 8 before, matched by eye to a screenshot of the original
+        // (black about 8-10 cells down a corridor) - the corridor's own
+        // lighting will have darkened it further than the fade alone.
+        static constexpr float FOG_DISTANCE_DIVISOR = 4.0f;
+        float fogStart = (0xaa * 0x50) / FOG_DISTANCE_DIVISOR;          // 3400 units, ~6.6 cells
+        float fogRange = (0xff * 0x50) / FOG_DISTANCE_DIVISOR;          // 5100 units, black at ~16.6 cells
         SDL_GPUTextureFormat depthFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
         std::unordered_map<ModelCacheKey, LoadedModel, ModelCacheKeyHash> loadedModels;
         std::unordered_map<std::string, LoadedLevel> loadedLevels;
@@ -877,47 +875,12 @@ namespace ALTEngine::Renderer
 
     namespace
     {
-        // Six indices per quad, four distinct vertices. The face's extent is
-        // taken as half its diagonal on each axis, which is what a shard needs -
-        // it is drawn as a flat quad of that size, not as the original polygon.
-        std::vector<ModelRenderer::ModelFace> ExtractFaces(const RenderMesh& mesh)
+        std::vector<ModelRenderer::ModelFace> ExtractFaces(const RenderMesh& mesh, const ALTEngine::Formats::ModelMesh& source)
         {
             std::vector<ModelRenderer::ModelFace> faces;
-            if (mesh.indices.size() < 6) { return faces; }
-
-            for (size_t i = 0; i + 5 < mesh.indices.size(); i += 6)
+            for (const auto& e : ALTEngine::Formats::ExtractMeshFaces(mesh, source))
             {
-                float minX = 1e30f, maxX = -1e30f, minY = 1e30f, maxY = -1e30f, minZ = 1e30f, maxZ = -1e30f;
-                float minU = 1e30f, maxU = -1e30f, minV = 1e30f, maxV = -1e30f;
-                bool ok = true;
-
-                for (size_t k = 0; k < 6; ++k)
-                {
-                    const uint32_t vi = mesh.indices[i + k];
-                    if (vi >= mesh.vertices.size()) { ok = false; break; }
-                    const auto& v = mesh.vertices[vi];
-                    minX = std::min(minX, v.x); maxX = std::max(maxX, v.x);
-                    minY = std::min(minY, v.y); maxY = std::max(maxY, v.y);
-                    minZ = std::min(minZ, v.z); maxZ = std::max(maxZ, v.z);
-                    minU = std::min(minU, v.u); maxU = std::max(maxU, v.u);
-                    minV = std::min(minV, v.v); maxV = std::max(maxV, v.v);
-                }
-                if (!ok) { continue; }
-
-                ModelRenderer::ModelFace face;
-                face.cx = (minX + maxX) * 0.5f;
-                face.cy = (minY + maxY) * 0.5f;
-                face.cz = (minZ + maxZ) * 0.5f;
-
-                // A face can be flat on any axis, so its on-screen size is the
-                // larger two extents.
-                float e[3] = { maxX - minX, maxY - minY, maxZ - minZ };
-                std::sort(e, e + 3);
-                face.halfWidth = std::max(e[2], 1.0f) * 0.5f;
-                face.halfHeight = std::max(e[1], 1.0f) * 0.5f;
-
-                face.u0 = minU; face.v0 = minV; face.u1 = maxU; face.v1 = maxV;
-                faces.push_back(face);
+                faces.push_back({ e.cx, e.cy, e.cz, e.halfWidth, e.halfHeight, e.u0, e.v0, e.u1, e.v1 });
             }
             return faces;
         }
@@ -1040,11 +1003,10 @@ namespace ALTEngine::Renderer
         model.baseRotationRadians = baseRotationRadians;
         model.useDoubleSided = transparentRgb.has_value();
 
-        // Keep the faces so the object can be torn into them when destroyed.
-        // BuildRenderMesh emits a quad as two triangles sharing four vertices,
-        // so six consecutive indices are one face - the same unit the original
-        // shatters (FUN_000464ec turns ONE face into four shards).
-        model.faces = ExtractFaces(renderMesh);
+        // Keep the faces so the object can be torn into them when destroyed -
+        // the same unit the original shatters (FUN_000464ec turns ONE face
+        // into four shards).
+        model.faces = ExtractFaces(renderMesh, *mesh);
 
         // And the model's own texture as a sprite sheet, so a shard can carry
         // the crate's artwork rather than a stand-in.

@@ -61,7 +61,7 @@ namespace ALTEngine::Bootstrap
 
         // The ORIGINAL's look keys - "Look Up" / "Look Down" are its own
         // strings (GsLookUp / GsLookDown). FUN_0003efcc tilts the pitch while
-        // either is held, down taking priority, within +/-0x80, and lets the
+        // either is held, up taking priority, within +/-0x80, and lets the
         // ramp/recentre code take it back to rest once released. Without these,
         // the only way to aim at anything on the floor was Free Look.
         LookUp,
