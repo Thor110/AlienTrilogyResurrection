@@ -66,7 +66,9 @@ The same faces at the same offsets in both; one row each.
 |---|---|---|---|---|---|---|---|
 | 3758 | 0x29E1C | round 5 | was an exact duplicate of 3757; given over to the missing face between faces 0, 29, 36 and 40 - texture 1 -> 109, routine 1 -> 0, light 0x08 -> 0x0D (13, as its neighbours; no end-of-run bit either way) | 8645, 8646, 8655, -1 | 1 | 4178, 4177, 4148, 4149 | 0 |
 
-A face cannot be added without moving every byte after it, so a spare record is reused. L161 has three: exact duplicates 3758, 3760 and 3797. In the port the new face is exact. The original draws faces in per-cell runs (bit 0x80 of the light byte ends one), and 3758's run belongs to another part of the level, so in DOS the face may only show when that part is drawn - untraced.
+**To be replaced in the final pass:** the original draws each cell's own run of faces (see engine-remaining-work.md, "How the original finds a cell's faces"), and 3758 is in the run of cell (34, 22), so in DOS this face would only show with that cell. The proper fix inserts a new record into the run of cell (8, 1), faces 34-37. That renumbers every later face in L161, so it is left until the level's review is finished.
+
+A face cannot be added without moving every byte after it, so for now a spare record is reused. L161 has three: exact duplicates 3758, 3760 and 3797. In the port the new face is exact. The original draws faces in per-cell runs (bit 0x80 of the light byte ends one), and 3758's run belongs to another part of the level, so in DOS the face may only show when that part is drawn - untraced.
 
 ## L371LEV
 
@@ -163,6 +165,27 @@ the band.
 | 9906 | 0x43B4C | round 2 | TR/BL corner, mirrored (quad, last corner repeated) | 4913, 4914, 4924, -1 | 1 | 4914, 4924, 4913, 4913 | 2 |
 | 9911 | 0x43BB0 | round 2 | TR/BL corner, mirrored (quad, last corner repeated) | 4440, 4906, 4919, -1 | 1 | 4906, 4919, 4440, 4440 | 2 |
 | 9915 | 0x43C00 | zip 51 | TL/BR corner, mirrored (reversed to c, b, a) | 4923, 4915, 4916, -1 | 1 | 4916, 4915, 4923, -1 | 5 |
+
+## Missing faces - to add in the final pass
+
+Holes in the levels where a face is missing. They are added once every other fix is in, because inserting a face renumbers every later face in its level (see engine-remaining-work.md, "How the original finds a cell's faces"). Each new record goes into the face run of the cell it sits in, so the original draws it with that cell; then the level's face count, the cells' run starts past it, and the MAP0 and FORM sizes all move up. None of this is patched yet, except L161's interim.
+
+| Level | Hole between faces | Corners (vertices) | New record | Texture | Routine | Light | Cell, and its run |
+|---|---|---|---|---|---|---|---|
+| L161 | 0, 29, 36, 40 | 4178, 4177, 4148, 4149 | 4178, 4177, 4148, 4149 | 109 | 0 | 0x0D | (8, 1), faces 34-37 |
+| L211 | 997, 1104, 983, 905 | 7915, 7918, 7845, 7926 | 7845, 7918, 7915, 7926 | 264 | 0 | 0x0B | (49, 19), faces 990-996 |
+| L212 | 35, 7, 5, 1 (floor) | 579, 882, 890, 629 | 579, 882, 890, 629 (no rotation - Edward) | 103 (darker, matches face 7 - Edward) | 0 | 0x0C | (16, 0) - the level's first cell, see below |
+| L242 | 25, 7, 2, 3 (floor) | 6223, 6225, 6224, 6220 | 6225, 6224, 6220, 6223 | 31 | 0 | 0x6F | (68, 0) - the level's first cell |
+| L243 | 25, 7, 2, 3 (floor) | 6223, 6225, 6224, 6220 | 6225, 6224, 6220, 6223 | 31 | 0 | 0x09 | (68, 0) - the level's first cell |
+
+- **L161**: in the port meanwhile through duplicate 3758 (round 5 above); that reverts to its original triangle when the real face goes in.
+- **L211**: laid out like its texture 264 neighbour 1104 (same corner order, facing up). Previewed in the port on a scratch copy, the hole fills and lines up with the panels beside it. Not patched.
+- **L212, L242, L243**: floors facing up, laid out like the floors beside them (face 35 on L212, face 25 on L242/L243); L212's settled with Edward as texture 103, unrotated. Previewed in the port on scratch copies (L212 with its own 212GFX). Not patched.
+- **The level's first cell (L161, L212, L242, L243).** In every level, the first open cell in grid order (always in the map's top row) has run start 0 - the blank first record - instead of its own run, which is the level's first run (faces 0 to a few). No cell names that run, so the original never draws those faces, and the cell's floor (and on most levels its ceiling) has no face at all. This looks like an off-by-one in the original level export. It is behind L161's hole (a wall of cell (8, 0)) and the floors here; on most levels that cell is presumably out of sight. In the final pass these cells need their missing faces inserted at the start of the first run, and their run start set from 0 to 1, so the original draws the whole cell. The first cell of every level, and whether its floor and ceiling exist, is listed by the scratch probe `firstcell`.
+
+## To look at again
+
+- **L262, face 11915** (0x56E10): a cabinet face drawn with routine 8, animator 9, which loops frames 295-298 (a dark turning mechanism) on its own - no switch or object drives it, and no other face uses it. The two identical cabinets in the same room have no animation, so it looks out of place (Edward). The fix would be texture 45 with routine 8 -> 0 (as texture 45, under routine 8 it would mean an animator that does not exist). Rendered on a scratch copy, not patched.
 
 ## Left as they are
 

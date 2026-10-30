@@ -429,3 +429,15 @@ All three came down to the level faces' draw routines, which the port mostly ign
 - L161: a missing face, the quad between faces 0, 29, 36 and 40. A face cannot be added without moving everything after it, so face 3758, an exact duplicate of 3757, is given over to it (texture 109, routine 0, light 13 like its neighbours). Exact in the port; in DOS its face run belongs elsewhere, so it may only show when that part of the level is drawn (untraced).
 - New scratch tools for these rounds: faceedit (apply edits by face letter or vertex number, with a record of each), spare (a level's reusable face records), tilematch, tilecol and flat (compare texture tiles between levels' graphics).
 
+
+## How the original finds a cell's faces (traced from the data, every level)
+
+- **Faces are stored per cell.** The face array is split into runs: a face whose light byte (+0x13) has bit 0x80 ends one. The draw loop (FUN_00025648 and its two distance variants) starts at a face and draws until it reaches that bit.
+- **Each open cell names its own run.** A cell's bytes 0-1 (`CollisionNode` unknown1/unknown2, read as one u16) are the file record number of its run's first face. Record 0 is the leading FF sentinel, so face n is record n + 1. 0xFFFF marks a wall cell. Checked on all 45 levels: every open cell's value is a run start, in grid order, with no two the same, except for exactly one cell per level whose value is 0. That cell points at the sentinel, an empty run.
+- **So a face is drawn when its cell is.** A face record reused from another cell's run is drawn only with that cell. L161's missing face, put in duplicate 3758 (run of cell (34, 22)), is fine in the port, which draws every face, but in DOS it would only show when cell (34, 22) is drawn. A face appended at the end of the table would be in no cell's run and never drawn.
+- **The right way to add a face** is to insert its 20-byte record inside the run of the cell it belongs to, and then:
+  - add one to the face count in the header (MAP0 + 2, file offset 0x16);
+  - add one to every cell's bytes 0-1 that point past the insertion point;
+  - add 20 to the MAP0 chunk size (big-endian, file offset 0x10) and to the FORM size (file offset 4).
+  Everything after the insertion moves 20 bytes, so it has to run after the byte patches (as the model removals already do). It also renumbers every later face in that level, which the Face Index Display and the review lists go by. For L161 the hole belongs to cell (8, 1), whose run is faces 34-37 (it holds neighbour 36). A new vertex, when one is needed, would go at the end of the vertex table: the vertex count (MAP0 + 0) goes up and everything after moves 8 bytes.
+- **Face 0 is in no cell's run**, so the original may never draw it. Unverified in DOS.
