@@ -107,6 +107,7 @@ The road map for this project.
 	- [Patched an issue on L371LEV where a secret area was inaccessible.](#L371LEV-Fix-1)
 	- [Patched an issue on L371LEV where two faces had incorrect textures.](#L371LEV-Fix-2)
 	- [Patched an issue on L371LEV where one of the textures unused tiles showed up at the edges of some faces.](#L371LEV-Fix-3)
+	- [Patched an issue on L371LEV where the corner triangles of 14 wall recesses had their textures turned (28 faces).](#L371LEV-Fix-8)
 	- [Plus the texture scan fixes, the walk-through pillars on L903LEV and the duplicate door and lift model removal: see the full list.](#patches)
 - [✅ 8 : Easter Eggs](#easter-eggs) ( ??% Complete )
 	- [Grade 33 Steel](#easter-egg-1)
@@ -456,6 +457,7 @@ Fixes marked "texture scan" were found by ALTLevelScan, which looks for faces wh
 - [Patched an issue on L371LEV where one face had its texture rotated (texture scan 371-3).](#L371LEV-Fix-5)
 - [Patched an issue on L371LEV where one face had its texture rotated (texture scan 371-4).](#L371LEV-Fix-6)
 - [Patched an issue on L371LEV where one face had its texture rotated (texture scan 371-5).](#L371LEV-Fix-7)
+- [Patched an issue on L371LEV where the corner triangles of 14 wall recesses had their textures turned (28 faces).](#L371LEV-Fix-8)
 - [Patched an issue on L381LEV where one face had its texture rotated (texture scan 381-1).](#L381LEV-Fix-1)
 - [Patched an issue on L391LEV where 246 faces of the queen's egg sack had their texture turned.](#L391LEV-Fix-1)
 - [Patched an issue on L391LEV where one face had its texture rotated (texture scan 391-1).](#L391LEV-Fix-2)
@@ -1391,6 +1393,14 @@ Patch listed at Patch/L371LEV.txt
 UV rotation corrected.
 
 Found by texture scan 371-5. Face 143 is corrected so the texture runs on from the faces around it.
+
+Patch listed at Patch/L371LEV.txt
+
+## L371LEV Fix 8
+
+UV mapping corrected.
+
+The level has 14 recesses in its walls, each with a band framed by four corner triangles. In every one, the top left and bottom right triangles had their texture running diagonally instead of carrying on the band. Those 28 triangles are mirror images of the two good corners, so their vertex order is reversed to mirror the texture, and they use the game's other triangle draw routine (5, which skips the back-face test) so they still show. The orange marks now run straight through the corners and the band.
 
 Patch listed at Patch/L371LEV.txt
 

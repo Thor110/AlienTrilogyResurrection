@@ -55,3 +55,52 @@ Face	Offset		Scan	Change	Was					Now
 453	0x158C8	371-1	mirrored and a half-turn	7673, 7672, 7749, 7750	->	7749, 7750, 7673, 7672	flag 0 (0x00)		flag 2 (0x02)
 454	0x158DC	371-1	mirrored and a half-turn	7674, 7673, 7750, 7751	->	7750, 7751, 7674, 7673	flag 0 (0x00)		flag 2 (0x02)
 5355	0x2D7C0	371-4	a quarter-turn	779, 2719, 777, 780	->	2719, 777, 780, 779
+
+
+Recess corners - texture 35 triangles (Claude, 2026)
+
+The level has 14 recesses in its walls. Each has a texture 35 band framed by four corner
+triangles. In every recess the top left and bottom right triangles were mapped wrongly, so the
+texture ran diagonally across them instead of carrying on the band (the top right and bottom
+left were already right).
+
+The game maps a triangle (a, b, c) to the texture's corners (x0y1, x1y0, x0y0), so the right
+angle has to be on c. These corners are mirror images of the good ones, so turning the vertex
+order is not enough: with the right angle on c, the texture still comes out transposed (its
+orange marks run across the band instead of along it). The vertex order is reversed instead,
+(a, b, c) -> (c, b, a), which mirrors the texture. Reversing the order turns the face round, so the
+draw routine (flag byte, offset + 0x12) goes from 1 to 5. In TRILOGY.EXE routine 5 (0x1ef20) is
+routine 1 (0x1b5c8) without the back-face test, so the face still shows from the room. (There is
+no mirrored triangle routine: routine 3 is an empty stub.) The faces sit against solid wall, so
+their backs are never seen. The fourth index stays -1 (FF FF FF FF).
+Before and after screenshots of all 14 recesses were checked.
+
+Recess	Face	Offset		Was				Now				Flag
+1	2581	0x1FF08	8264, 8265, 8266, -1	->	8266, 8265, 8264, -1	flag 1 (0x01)	->	flag 5 (0x05)
+1	2582	0x1FF1C	8270, 8271, 8272, -1	->	8272, 8271, 8270, -1	flag 1 (0x01)	->	flag 5 (0x05)
+2	4516	0x29634	4402, 4390, 4389, -1	->	4389, 4390, 4402, -1	flag 1 (0x01)	->	flag 5 (0x05)
+2	4521	0x29698	4397, 4382, 4381, -1	->	4381, 4382, 4397, -1	flag 1 (0x01)	->	flag 5 (0x05)
+3	4902	0x2B45C	2690, 2675, 2674, -1	->	2674, 2675, 2690, -1	flag 1 (0x01)	->	flag 5 (0x05)
+3	5178	0x2C9EC	2695, 2683, 2682, -1	->	2682, 2683, 2695, -1	flag 1 (0x01)	->	flag 5 (0x05)
+4	4949	0x2B808	2726, 2714, 2713, -1	->	2713, 2714, 2726, -1	flag 1 (0x01)	->	flag 5 (0x05)
+4	5219	0x2CD20	2721, 2706, 2705, -1	->	2705, 2706, 2721, -1	flag 1 (0x01)	->	flag 5 (0x05)
+5	5005	0x2BC68	4496, 4486, 4485, -1	->	4485, 4486, 4496, -1	flag 1 (0x01)	->	flag 5 (0x05)
+5	5010	0x2BCCC	4491, 4478, 4477, -1	->	4477, 4478, 4491, -1	flag 1 (0x01)	->	flag 5 (0x05)
+6	5306	0x2D3EC	5715, 5704, 5705, -1	->	5705, 5704, 5715, -1	flag 1 (0x01)	->	flag 5 (0x05)
+6	5317	0x2D4C8	5710, 5696, 5697, -1	->	5697, 5696, 5710, -1	flag 1 (0x01)	->	flag 5 (0x05)
+7	5890	0x3018C	5756, 5742, 5743, -1	->	5743, 5742, 5756, -1	flag 1 (0x01)	->	flag 5 (0x05)
+7	6291	0x320E0	5761, 5750, 5751, -1	->	5751, 5750, 5761, -1	flag 1 (0x01)	->	flag 5 (0x05)
+8	7578	0x3856C	4329, 4315, 4314, -1	->	4314, 4315, 4329, -1	flag 1 (0x01)	->	flag 5 (0x05)
+8	7591	0x38670	4334, 4324, 4323, -1	->	4323, 4324, 4334, -1	flag 1 (0x01)	->	flag 5 (0x05)
+9	7600	0x38724	4363, 4346, 4345, -1	->	4345, 4346, 4363, -1	flag 1 (0x01)	->	flag 5 (0x05)
+9	7613	0x38828	4368, 4357, 4356, -1	->	4356, 4357, 4368, -1	flag 1 (0x01)	->	flag 5 (0x05)
+10	9273	0x409D8	4474, 4464, 4465, -1	->	4465, 4464, 4474, -1	flag 1 (0x01)	->	flag 5 (0x05)
+10	9532	0x41E14	4471, 4456, 4457, -1	->	4457, 4456, 4471, -1	flag 1 (0x01)	->	flag 5 (0x05)
+11	9610	0x4242C	5735, 5724, 5725, -1	->	5725, 5724, 5735, -1	flag 1 (0x01)	->	flag 5 (0x05)
+11	9873	0x438B8	5730, 5716, 5717, -1	->	5717, 5716, 5730, -1	flag 1 (0x01)	->	flag 5 (0x05)
+12	9881	0x43958	2768, 2754, 2755, -1	->	2755, 2754, 2768, -1	flag 1 (0x01)	->	flag 5 (0x05)
+12	9893	0x43A48	2771, 2762, 2763, -1	->	2763, 2762, 2771, -1	flag 1 (0x01)	->	flag 5 (0x05)
+13	6812	0x34994	5820, 5813, 5814, -1	->	5814, 5813, 5820, -1	flag 1 (0x01)	->	flag 5 (0x05)
+13	6824	0x34A84	4436, 4429, 4430, -1	->	4430, 4429, 4436, -1	flag 1 (0x01)	->	flag 5 (0x05)
+14	9903	0x43B10	4920, 4907, 4908, -1	->	4908, 4907, 4920, -1	flag 1 (0x01)	->	flag 5 (0x05)
+14	9915	0x43C00	4923, 4915, 4916, -1	->	4916, 4915, 4923, -1	flag 1 (0x01)	->	flag 5 (0x05)
