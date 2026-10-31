@@ -1826,6 +1826,8 @@ namespace ALTEngine::Renderer
         fogEnabled = enabled ? 1.0f : 0.0f;
     }
 
+    bool ModelRenderer::DrawDistanceFade() { return fogEnabled > 0.5f; }
+
     void ModelRenderer::SetTextureSmoothing(bool smoothed)
     {
         if (!samplerLinear || !samplerNearest) { return; }
@@ -1982,6 +1984,12 @@ namespace ALTEngine::Renderer
         for (const auto& c : entry.corner) { sum[0] += c.r; sum[1] += c.g; sum[2] += c.b; }
         for (int k = 0; k < 3; ++k) { rgb[k] = sum[k] / (4.0f * ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL); }
         return true;
+    }
+
+    bool ModelRenderer::TakeLevelLightFull(const std::string& cacheKey)
+    {
+        auto it = loadedLevels.find(cacheKey);
+        return it != loadedLevels.end() && it->second.lights.TakeEquipmentFull();
     }
 
     bool ModelRenderer::LevelLightCorner(const std::string& cacheKey, int lightId, uint8_t rgb[3])
@@ -2471,15 +2479,18 @@ namespace ALTEngine::Renderer
                     verts.reserve(drawable * 4);
                     indices.reserve(drawable * 6);
 
-                    struct SpriteBatch { SDL_GPUTexture* texture; uint32_t first; uint32_t count; };
+                    struct SpriteBatch { SDL_GPUTexture* texture; uint32_t first; uint32_t count; bool ownFade; };
                     std::vector<SpriteBatch> batches;
 
+                    // Batched by sheet, and by whether the sprite fades itself.
+                    for (int fadePass = 0; fadePass < 2; ++fadePass)
                     for (const auto& sheetEntry : spriteSheets)
                     {
                         const uint32_t firstIndex = static_cast<uint32_t>(indices.size());
                         for (const PlacedSprite& sprite : sprites)
                         {
                             if (!sprite.visible || sprite.textureKey != sheetEntry.first) { continue; }
+                            if (sprite.ownFade != (fadePass == 1)) { continue; }
 
                             const uint32_t base = static_cast<uint32_t>(verts.size());
                             float px[4], py[4], pz[4];
@@ -2557,7 +2568,7 @@ namespace ALTEngine::Renderer
                             indices.push_back(base + 0); indices.push_back(base + 2); indices.push_back(base + 3);
                         }
                         const uint32_t added = static_cast<uint32_t>(indices.size()) - firstIndex;
-                        if (added > 0) { batches.push_back({ sheetEntry.second.texture, firstIndex, added }); }
+                        if (added > 0) { batches.push_back({ sheetEntry.second.texture, firstIndex, added, fadePass == 1 }); }
                     }
 
                     if (!batches.empty())
@@ -2627,9 +2638,16 @@ namespace ALTEngine::Renderer
                                 SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
                                 float fog[8] = { fogEnabled, fogStart, fogRange, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f };
                                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
+                                bool fogOff = false;
 
                                 for (const SpriteBatch& batch : batches)
                                 {
+                                    if (batch.ownFade != fogOff)
+                                    {
+                                        fogOff = batch.ownFade;
+                                        fog[0] = fogOff ? 0.0f : fogEnabled;
+                                        SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
+                                    }
                                     SDL_GPUTextureSamplerBinding texBinding{ batch.texture, sampler };
                                     SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
                                     SDL_DrawGPUIndexedPrimitives(renderPass, batch.count, 1, batch.first, 0, 0);

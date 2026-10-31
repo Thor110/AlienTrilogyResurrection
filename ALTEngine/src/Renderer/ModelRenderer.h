@@ -135,6 +135,10 @@ namespace ALTEngine::Renderer
         bool corners = false;
         float cornerX[4] = {}, cornerY[4] = {}, cornerZ[4] = {}, cornerU[4] = {}, cornerV[4] = {};
 
+        // Its colour already carries its own distance fade (an explosion's,
+        // FUN_000429f0), so the shader's fog is left off for it.
+        bool ownFade = false;
+
         bool visible = true;
     };
 
@@ -194,6 +198,7 @@ namespace ALTEngine::Renderer
         // Modern > Render Distance feature (which is the inverse: the feature
         // ON means the fade OFF).
         static void SetDrawDistanceFade(bool enabled);
+        static bool DrawDistanceFade();
 
         // Loads and GPU-uploads a model, cached under `cacheKey` (repeated
         // calls with the same key are cheap) - callers should use a
@@ -330,6 +335,9 @@ namespace ALTEngine::Renderer
         // the bytes the original's light table (DAT_002458dc) holds, which its
         // flat primitives - a bullet's line - take their colours from.
         static bool LevelLightCorner(const std::string& cacheKey, int lightId, uint8_t rgb[3]);
+
+        // True once after the lamp or goggles reach full strength (sound 0x18).
+        static bool TakeLevelLightFull(const std::string& cacheKey);
 
         // Applies script command 9 (ChangeTexture) to one texture animator.
         // This is what arms an animated face that only changes when something

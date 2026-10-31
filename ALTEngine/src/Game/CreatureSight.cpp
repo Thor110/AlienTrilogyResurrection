@@ -212,13 +212,14 @@ namespace ALTEngine::Game::CreatureSight
     }
 
     std::vector<uint8_t> DrawnCells(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ,
-                                    int viewYaw, int minHalfWidth)
+                                    int viewYaw, int minHalfWidth, uint16_t* zoneMask)
     {
         const size_t cells = static_cast<size_t>(level.header.mapLength) * static_cast<size_t>(level.header.mapWidth);
         std::vector<uint8_t> drawn(cells, 0);
-        WalkView(level, playerCellX, playerCellZ, viewYaw, [&](int i) {
+        const uint16_t mask = WalkView(level, playerCellX, playerCellZ, viewYaw, [&](int i) {
             if (i >= 0 && static_cast<size_t>(i) < cells) { drawn[static_cast<size_t>(i)] = 1; }
         }, minHalfWidth);
+        if (zoneMask) { *zoneMask = mask; }
         return drawn;
     }
 

@@ -175,9 +175,19 @@ namespace ALTEngine::Screens
         // which is exactly why bullet impacts showed on walls but never on floors
         // or ceilings (Edward, 2026). The original culls on the PROJECTED
         // distance, which includes depth.
+        // THE COLOUR (FUN_000429f0, given `light0`, light 0's first corner as
+        // the light table holds it this tick): within 0x1000 the effect is
+        // drawn in (0x80, light 0's green, light 0's blue) - the table's first
+        // word with its first byte set to 0x80 - so a little cool at normal
+        // light and more so in a flash. Past 0x1000 the original fades a colour
+        // by distance through FUN_0004ecdc, at d * 4 - 0x1200: dimmer from
+        // about 0x11c8 out to the 0x1e00 cut. The colour it fades is the
+        // effect task's +0xa8, which nothing sets (task blocks are reused
+        // without being cleared), so the port fades the near colour instead.
+        // `fade` false (Render Distance on) leaves it unfaded, as the level is.
         void Collect(std::vector<ALTEngine::Renderer::PlacedSprite>& out,
                      float cameraX = 0.0f, float cameraY = 0.0f, float cameraZ = 0.0f,
-                     bool cull = false) const
+                     bool cull = false, const uint8_t* light0 = nullptr, bool fade = false) const
         {
             if (!Ready()) { return; }
             namespace EG = ALTEngine::Formats::ExplosionGraphics;
@@ -231,6 +241,16 @@ namespace ALTEngine::Screens
 
                 // Upside down for a ceiling hit - swap the V bounds.
                 if (live.flipVertically) { std::swap(sprite.v0, sprite.v1); }
+
+                if (light0)
+                {
+                    const float ex = live.x - cameraX, ey = live.y - cameraY, ez = live.z - cameraZ;
+                    const float k = fade ? EG::EffectFade(std::sqrt(ex * ex + ey * ey + ez * ez)) : 1.0f;
+                    sprite.r = 0x80 * k / 128.0f;
+                    sprite.g = static_cast<float>(light0[1]) * k / 128.0f;
+                    sprite.b = static_cast<float>(light0[2]) * k / 128.0f;
+                    sprite.ownFade = true;
+                }
 
                 out.push_back(sprite);
             }

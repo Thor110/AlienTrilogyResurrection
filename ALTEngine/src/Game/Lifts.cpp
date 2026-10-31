@@ -113,6 +113,7 @@ namespace ALTEngine::Game::Lifts
             }
             if (lift.flags & AT_TOP) { SetOffDown(lift, r); }
             else { SetOffUp(lift, r); }
+            r.startedByTrigger = true;
             break;
 
         case Phase::Wait:

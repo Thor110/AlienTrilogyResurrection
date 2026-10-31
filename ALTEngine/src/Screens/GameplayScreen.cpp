@@ -553,6 +553,10 @@ namespace ALTEngine::Screens
         // The tick's cell occupancy and which creature each mark is (below),
         // kept between ticks so each tick refills them instead of allocating.
         std::vector<uint8_t> occupancyBuffer;
+        // The frame's models in the drawn zones (below), and whether that
+        // list or the whole one is drawn.
+        std::vector<ALTEngine::Renderer::PlacedObject> drawnObjects;
+        bool zoneCulling = false;
         std::vector<int> markedCreatureBuffer;
         float pendingMouseYaw = 0.0f;   // angle units, accumulated between player ticks
         float pendingMouseY = 0.0f;     // raw mouse Y, drives the original's mouse-forward
@@ -2871,8 +2875,7 @@ namespace ALTEngine::Screens
                             }
 
                             // A vent's jet, sound, burst and switch-off
-                            // (CreatureTasks::Vent). The sound plays once as the
-                            // jet starts: the port's mixer has no loops to hold.
+                            // (CreatureTasks::Vent).
                             if (ALTEngine::Screens::IsVent(enemy.type))
                             {
                                 namespace VT = ALTEngine::Screens::CreatureTasks::Vent;
@@ -2892,10 +2895,21 @@ namespace ALTEngine::Screens
                                     particles.SpawnVent(vp.particleType, enemy.x, enemy.y, enemy.z,
                                                         vp.speed, jetYaw, enemy.ventDown);
                                 }
+                                // The jet's sound is held while it jets
+                                // (FUN_000358a4 starts it through FUN_00040c38's
+                                // mode 2, the task stops it) - steam and flame
+                                // are both looping samples.
+                                if (enemy.ventSoundStop || enemy.ventSound)
+                                {
+                                    ALTEngine::Audio::SfxPlayer::StopLoop(enemy.ventSoundHandle);
+                                    enemy.ventSoundHandle = -1;
+                                }
                                 if (enemy.ventSound)
                                 {
-                                    ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                        vp.steam ? VT::SOUND_STEAM : VT::SOUND_FLAME, digits.c_str(), cdDirectory);
+                                    enemy.ventSoundHandle = ALTEngine::Audio::SfxPlayer::StartLoop(
+                                        vp.steam ? VT::SOUND_STEAM : VT::SOUND_FLAME,
+                                        ALTEngine::Audio::SfxPlayer::VentVolume(enemy.x - camera.x, enemy.z - camera.z),
+                                        digits.c_str(), cdDirectory);
                                 }
                                 if (enemy.ventBurst)
                                 {
@@ -3094,6 +3108,7 @@ namespace ALTEngine::Screens
                             if (inventory.TickLight())
                             {
                                 ModelRenderer::SetLevelLightEquipment(cacheKey, 0);
+                                ALTEngine::Audio::SfxPlayer::StopPlayerSlot(LIGHT_FULL_SOUND, digits.c_str(), cdDirectory);
                                 ALTEngine::Audio::SfxPlayer::PlaySlot(LIGHT_OFF_SOUND, digits.c_str(), cdDirectory);
                             }
                             hudMessages.Tick();
@@ -3975,6 +3990,10 @@ namespace ALTEngine::Screens
                             // the (rand & 3) + 1 the original adds to each
                             // blink duration.
                             ModelRenderer::TickLevelLights(cacheKey, SDL_rand(256));
+                            if (ModelRenderer::TakeLevelLightFull(cacheKey))
+                            {
+                                ALTEngine::Audio::SfxPlayer::PlayPlayerSlot(LIGHT_FULL_SOUND, digits.c_str(), cdDirectory);
+                            }
 
                             hudState.Tick();
                             if (cheatFullyLoaded) { inventory.GiveEverything(); }
@@ -4044,8 +4063,19 @@ namespace ALTEngine::Screens
                             namespace LF = ALTEngine::Game::Lifts;
                             const auto result = LF::Tick(lifts[li], level);
                             if (result.firstActivation) { hudMessages.ShowLiftActivated(language); }
-                            if (result.started) { ALTEngine::Audio::SfxPlayer::PlaySlot(LF::SOUND_START, digits.c_str(), cdDirectory); }
-                            if (result.stopped) { ALTEngine::Audio::SfxPlayer::PlaySlot(LF::SOUND_STOP, digits.c_str(), cdDirectory); }
+                            if (result.started || result.stopped)
+                            {
+                                // From the lift, louder when the player set it
+                                // off (FUN_00040c38's modes 0 and 3).
+                                const LF::Lift& lift = lifts[li];
+                                const float liftX = (static_cast<float>(lift.cellX) + lift.width * 0.5f) * 512.0f - originX;
+                                const float liftZ = (static_cast<float>(lift.cellZ) + lift.depth * 0.5f) * 512.0f - originZ;
+                                const int mode = result.started && result.startedByTrigger ? LF::SOUND_MODE_TRIGGERED : LF::SOUND_MODE;
+                                ALTEngine::Audio::SfxPlayer::PlaySlotAtVolume(
+                                    result.started ? LF::SOUND_START : LF::SOUND_STOP,
+                                    ALTEngine::Audio::SfxPlayer::DistanceVolume(mode, liftX - camera.x, liftZ - camera.z),
+                                    digits.c_str(), cdDirectory);
+                            }
                             if (li < liftPlaced.size())
                             {
                                 for (size_t k = 0; k < liftPlaced[li].second; ++k)
@@ -4174,6 +4204,7 @@ namespace ALTEngine::Screens
                 // draws a line as a strip one of the original's pixels wide,
                 // from the round to its tip, turned to face the camera.
                 std::vector<ALTEngine::Renderer::PlacedSprite> placedSprites;
+                size_t creatureSpritesBegin = 0, creatureSpritesEnd = 0;
                 if (levelReady)
                 {
                     namespace P = ALTEngine::Screens::Particles;
@@ -4357,11 +4388,18 @@ namespace ALTEngine::Screens
                         }
                         placedSprites.push_back(spark);
                     }
-                    explosions.Collect(placedSprites, camera.x, camera.y, camera.z, true);
+                    {
+                        uint8_t light0[3] = { 160, 160, 160 };
+                        ModelRenderer::LevelLightCorner(cacheKey, 0, light0);
+                        explosions.Collect(placedSprites, camera.x, camera.y, camera.z, true, light0,
+                                           ModelRenderer::DrawDistanceFade());
+                    }
                     // Each creature in the light of its cell (FUN_0002fb84 reads
                     // the cell's byte 0x0e entry, as the models do).
                     const size_t firstCreatureSprite = placedSprites.size();
                     enemySprites.Collect(enemies, placedSprites, camera.x, camera.z, true);
+                    creatureSpritesBegin = firstCreatureSprite;
+                    creatureSpritesEnd = placedSprites.size();
                     for (size_t si = firstCreatureSprite; si < placedSprites.size(); ++si)
                     {
                         auto& sprite = placedSprites[si];
@@ -4494,6 +4532,7 @@ namespace ALTEngine::Screens
                 // turns the screen's corners further round), so each cone
                 // widens to the screen's widest bearing and the walk adds a
                 // cell's width per ring, so nothing at the edges drops out.
+                zoneCulling = false;
                 if (levelReady)
                 {
                     namespace PCd = ALTEngine::Screens::PlayerCamera;
@@ -4507,19 +4546,50 @@ namespace ALTEngine::Screens
                     const int minHalfWidth = std::min(0x800,
                         static_cast<int>(halfFov * (PCd::ANGLE_UNITS / 6.28318530718f)) + 0x20);
                     const int yawUnits = static_cast<int>(std::lround(view.yaw * (PCd::ANGLE_UNITS / 6.28318530718f)));
+                    uint16_t drawnZones = 0;
                     std::vector<uint8_t> drawnCells = ALTEngine::Game::CreatureSight::DrawnCells(
                         level, ToGridSpaceX(view.x, originX) >> 9, ToGridSpaceZ(view.z, originZ) >> 9,
-                        (yawUnits + 0x800) & PCd::ANGLE_MASK, minHalfWidth);
+                        (yawUnits + 0x800) & PCd::ANGLE_MASK, minHalfWidth, &drawnZones);
                     // A camera off the map, or in a cell with no zones (inside
                     // a wall), walks to nothing; draw the whole level then
                     // rather than nothing.
                     if (std::count(drawnCells.begin(), drawnCells.end(), uint8_t(1)) <= 1) { drawnCells.clear(); }
                     ModelRenderer::SetLevelDrawnCells(cacheKey, drawnCells);
+
+                    // The models and creatures too: the original draws a door,
+                    // lift, crate, switch, pickup or creature only when its
+                    // cell's zones are among those the walk took in (FUN_00028f00,
+                    // FUN_00041ba4, FUN_0003765c and its siblings, FUN_0003c6f4,
+                    // FUN_00030304). This frame's particles (after
+                    // staticObjectCount) have no such test. Only with the fade
+                    // on, as for the level's faces.
+                    zoneCulling = ModelRenderer::DrawDistanceFade() && !drawnCells.empty();
+                    if (zoneCulling)
+                    {
+                        auto inView = [&](float x, float z) {
+                            const int cell = ALTEngine::Formats::CellIndex(
+                                level, ToGridSpaceX(x, originX) >> 9, ToGridSpaceZ(z, originZ) >> 9);
+                            return cell < 0 || ALTEngine::Game::CreatureSight::ZoneVisible(level, cell, drawnZones);
+                        };
+                        drawnObjects.clear();
+                        for (size_t i = 0; i < placedObjects.size(); ++i)
+                        {
+                            if (i >= staticObjectCount || inView(placedObjects[i].x, placedObjects[i].z))
+                            {
+                                drawnObjects.push_back(placedObjects[i]);
+                            }
+                        }
+                        for (size_t i = creatureSpritesBegin; i < creatureSpritesEnd && i < placedSprites.size(); ++i)
+                        {
+                            if (!inView(placedSprites[i].x, placedSprites[i].z)) { placedSprites[i].visible = false; }
+                        }
+                    }
                 }
                 // Kept between frames: a new frame-sized buffer each frame
                 // was a needless allocation and clear.
                 static std::vector<uint8_t> pixels;
-                ModelRenderer::RenderLevelToRgba(cacheKey, view, windowW, windowH, placedObjects, placedSprites, pixels);
+                ModelRenderer::RenderLevelToRgba(cacheKey, view, windowW, windowH,
+                                                 zoneCulling ? drawnObjects : placedObjects, placedSprites, pixels);
                 placedObjects.resize(staticObjectCount); // drop this frame's particles again
                 if (!pixels.empty())
                 {
@@ -4833,6 +4903,8 @@ namespace ALTEngine::Screens
             }
 
             SDL_RenderPresent(renderer);
+            // The vents' held sounds stay queued.
+            ALTEngine::Audio::SfxPlayer::UpdateLoops();
 
             // Leave after the frame is drawn, so the exit is seen before the
             // assessment screen. Dying on the same frame takes precedence.
@@ -4845,6 +4917,7 @@ namespace ALTEngine::Screens
         }
 
         SDL_SetWindowRelativeMouseMode(app.Window(), false);
+        ALTEngine::Audio::SfxPlayer::StopAllLoops();
         if (frameTexture) { SDL_DestroyTexture(frameTexture); frameTexture = nullptr; }
 
         result.aliensTotal = static_cast<int>(enemies.size());

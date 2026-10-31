@@ -1,4 +1,4 @@
-# What remains (after zip 91)
+# What remains (after zip 92)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -9,6 +9,30 @@ textures, done once everything else is in.
 Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
+
+Changed in zip 92, to check:
+- **Held sounds.** A vent's jet holds its sound while it jets: steam and flame are looping samples, started
+  through FUN_00040c38's mode 2 (half volume at the vent, fading to almost nothing 0x1e00 away) and stopped by
+  the vent's task when the jet stops, goes out of view or range, is switched off or is knocked back to dormant
+  (the original loses the sound in that last case). They play on voices of their own, at most six, which other
+  sounds never cut off. They used to play once as the jet started.
+- **The light's sound 0x18** (1202-nit) is not a hum: the original plays it once, on the player's channel, as
+  the lamp or goggles reach full strength 32 ticks on (0x29e37), and cuts it off if the light runs out first.
+  The port never played it.
+- **Lift sounds** come from the lift, by distance (FUN_00040c38's mode 0, or 3 when the player's trigger set it
+  off), instead of at full volume from anywhere. The original never plays the lift-running loop (3611lrun).
+- **Sounds on Linux and macOS:** the sound bank's names are mixed case and the disc's upper case, so on a
+  case-sensitive file system most samples were not found; the SFX folder is now searched without regard to
+  case.
+- **Explosions' colour** (FUN_000429f0): within 0x1000 they are drawn in (0x80, light 0's green, light 0's
+  blue) - a little cool, more so in a flash - and past it faded by distance as the original does (FUN_0004ecdc
+  at d * 4 - 0x1200, from about 0x11c8 to the 0x1e00 cut) instead of by the level's fog. The colour the
+  original fades is the explosion task's +0xa8, which nothing sets (task blocks are reused uncleared), so the
+  port fades the near colour.
+- **The draw limit for models and creatures:** doors, lifts, crates, switches, pickups and creatures are drawn
+  only when their cell's zones are among those the view walk took in, as every one of the original's draws
+  tests (FUN_00028f00, FUN_00041ba4, FUN_0003765c and its siblings, FUN_0003c6f4, FUN_00030304). Particles
+  and explosions have no such test. Off with Render Distance on, like the level's.
 
 Changed in zip 91 (review and optimisation pass), to check:
 - **Creatures' distances and bearings** are over a hundred times cheaper: the square root behind them
@@ -105,13 +129,13 @@ library, the sound and video drivers and the DOS extender) was looked at to see 
 
 ### Known to be missing
 1. **Multiplayer.** FUN_00054a60 and everything behind `DAT_000ae0a4`.
-2. **The draw limit for models.** Level faces are limited to the walk's cells (zip 86); doors, lifts, crates,
-   pickups and creatures are still drawn wherever they are (depth testing hides what is out of sight).
-3. **Effects past 0x1000.** FUN_000429f0 draws a near effect in colour 0x80 and a far one in the table's own
-   colour (+0xa8) faded by distance; those table colours don't read as plain colours (ff,ff,ff and 00,ff,00), so
-   the far case isn't copied. Near ones, the usual case, are right.
-4. **The lamp's hum** (sound 0x18 while lit) - the mixer can't hold a loop, as with the vent jets.
-5. **The pause menu's zoomed map** (entry 0 used: a 28-cell window round the player, FUN_00044b48).
+
+### Scratched (Edward): known differences, not to be done
+- **The detail setting** (DAT_000a63fc, 0-2, the original's default 1, saved in its config): at 1 it leaves
+  out the creatures' rounds and at 2 the player's too (FUN_0002d6ec); 2 also sets DAT_000b0cc1 bit 0x80. The
+  port has no such setting and draws everything, as the original's highest setting does.
+- **The pause menu's zoomed map** (FUN_00044b48's entry 0): a 28-cell window round the player. The port's
+  pause map shows the whole level.
 
 ### Inferred, or the port's own on purpose
 1. **HUD:** some icon artwork and the message presentation are the port's; which action prints which message
@@ -119,8 +143,7 @@ library, the sound and video drivers and the DOS extender) was looked at to see 
 2. **Creature sound cues** are cut past 0x1400 or out of sight (the original only quietens them), and a
    creature let out of a sealed wall vent comes out alerted - both asked for in play.
 3. **Casings** vanish at the floor; the original's fall through it out of sight.
-4. **Vent jets'** sound plays once instead of looping.
-5. The assessment bars' colours, routine 14 on level faces, L371's lifts 6-9, the weapon noise value, the
+4. The assessment bars' colours, routine 14 on level faces, L371's lifts 6-9, the weapon noise value, the
    shatter launch speed, mouse sensitivity and two settings defaults; open question A (pistol rounds against a
    standing hugger).
 

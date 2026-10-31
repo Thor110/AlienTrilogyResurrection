@@ -383,3 +383,31 @@ TEST_CASE("Vents: each jet's sprite is its own frame and size for its life")
     CHECK_EQ(VS::For(false, false, 0, 3).record, 7);
     CHECK(std::fabs(VS::For(false, false, 0, 0).grey - 0x69 / 128.0f) < 0.001f);
 }
+
+TEST_CASE("Vent: its held sound stops whenever the jet does, a hit back to dormant included")
+{
+    VT::Vent v;
+    VT::Input in = VentIn();
+    VT::Step(v, in);                         // dormant: starts jetting
+    int starts = 0, stops = 0;
+    bool on = false;
+    for (int t = 0; t < 41; ++t)
+    {
+        const VT::Output out = VT::Step(v, in);
+        CHECK(!(out.startSound && out.stopSound));
+        if (out.startSound) { ++starts; CHECK(!on); on = true; }
+        if (out.stopSound) { ++stops; CHECK(on); on = false; }
+    }
+    CHECK_EQ(starts, 2);
+    CHECK_EQ(stops, 1);                      // the quiet stretch; still jetting at the end
+    // A hit puts it back to dormant mid-jet: the sound must stop.
+    v.state = VT::DORMANT;
+    CHECK(VT::Step(v, in).stopSound);
+    // Out of range stops it too.
+    VT::Step(v, in);
+    VT::Input far = in;
+    far.distance = VT::SIMULATION_CUTOFF + 1;
+    bool stopped = false;
+    for (int t = 0; t < 3 && !stopped; ++t) { VT::Step(v, in); stopped = VT::Step(v, far).stopSound; }
+    CHECK(stopped);
+}

@@ -294,10 +294,24 @@ namespace ALTEngine::Formats
         // end the effect - a blast that goes off out of sight still finishes in
         // its own time.
         inline constexpr int EFFECT_FAR_CUTOFF = 0x1e00;
+
         inline constexpr int EFFECT_NEAR_CUTOFF = 0x10;
 
         // Under this distance the effect draws at full brightness; past it the
         // draw-distance fade applies (FUN_0004ecdc).
         inline constexpr int EFFECT_FULL_BRIGHT_DISTANCE = 0x1000;
+
+        // FUN_000429f0's fade for an effect past 0x1000 (FUN_0004ecdc at
+        // d * 4 - 0x1200): the share of its colour left at `distance`.
+        inline float EffectFade(float distance)
+        {
+            if (distance < EFFECT_FULL_BRIGHT_DISTANCE) { return 1.0f; }
+            int depth = static_cast<int>(distance) * 4 - 0x1200;
+            if (depth < 0) { depth = 0; }
+            int dim = depth / 0x50 - 0xaa;
+            if (dim > 0xff) { dim = 0xff; }
+            if (dim < 0) { dim = 0; }
+            return static_cast<float>(0xff - dim) / 256.0f;
+        }
     }
 }

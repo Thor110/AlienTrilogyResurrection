@@ -1,6 +1,7 @@
 #include "SfxPlayer.h"
 #include "SfxBank.h"
 #include "../Bootstrap/AppWindow.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include <SDL3/SDL.h>
 #include <fstream>
@@ -47,6 +48,17 @@ namespace ALTEngine::Audio
         {
             std::vector<uint8_t> data;
             std::filesystem::path path = cdDirectory / "SFX" / (stem + ".RAW");
+            // The bank's names are mixed case and the disc's are upper case:
+            // on a case-sensitive file system (Linux, most macOS installs) the
+            // exact name is often not there, so the folder is searched.
+            std::error_code ec;
+            if (!std::filesystem::exists(path, ec))
+            {
+                if (auto found = ALTEngine::Bootstrap::FindEntryCaseInsensitive(cdDirectory / "SFX", stem + ".RAW"))
+                {
+                    path = *found;
+                }
+            }
 
             std::ifstream in(path, std::ios::binary | std::ios::ate);
             if (in.is_open())
@@ -107,10 +119,8 @@ namespace ALTEngine::Audio
         const char* name = SfxBank::SlotName(levelCode, slotId);
         if (!name || name[0] == '\0') { return; }
 
-        // Looping samples (the flamethrower, steam, a running lift) are flagged
-        // in the manifests and need to be held and retriggered rather than
-        // fired once. Nothing drives a continuous sound yet, so they are played
-        // as one-shots for now - noted so it is not mistaken for correct.
+        // A looping sample through here plays once; the sounds held while
+        // something runs (a vent's jet) go through StartLoop.
         PlayFile(name, cdDirectory, 1.0f, true);
     }
 
@@ -136,6 +146,19 @@ namespace ALTEngine::Audio
         SDL_PutAudioStreamData(voice, sample.data(), static_cast<int>(sample.size()));
     }
 
+    void SfxPlayer::StopPlayerSlot(int slotId, const char* levelCode, const std::filesystem::path& cdDirectory)
+    {
+        const char* name = SfxBank::SlotName(levelCode, slotId);
+        if (!name || name[0] == '\0') { return; }
+        const std::string stem = name;
+        const std::vector<uint8_t>& sample = Sample(stem, cdDirectory);
+        auto& app = ALTEngine::Bootstrap::AppWindow::Instance();
+        SDL_AudioStream* voice = app.PlayerSfxVoice();
+        if (!voice) { return; }
+        auto& playing = VoiceSamples();
+        if (playing[voice] == &sample) { SDL_ClearAudioStream(voice); playing[voice] = nullptr; }
+    }
+
     void SfxPlayer::PlaySlotAtVolume(int slotId, float volume, const char* levelCode,
                                      const std::filesystem::path& cdDirectory)
     {
@@ -144,14 +167,86 @@ namespace ALTEngine::Audio
         PlayFile(name, cdDirectory, volume, true);
     }
 
-    float SfxPlayer::CreatureVolume(float dx, float dz)
+    namespace
     {
-        const float ax = dx < 0 ? -dx : dx;
-        const float az = dz < 0 ? -dz : dz;
-        float d = ax > az ? ax + az / 2.0f : az + ax / 2.0f;
-        if (d > 0x1400) { d = 0x1400; }
-        return (static_cast<float>(0x2fff) - d) / static_cast<float>(0x3fff);
+        struct HeldSound
+        {
+            SDL_AudioStream* voice = nullptr;
+            const std::vector<uint8_t>* sample = nullptr;
+            bool loops = false;
+        };
+        std::unordered_map<int, HeldSound>& HeldSounds()
+        {
+            static std::unordered_map<int, HeldSound> held;
+            return held;
+        }
     }
+
+    int SfxPlayer::StartLoop(int slotId, float volume, const char* levelCode, const std::filesystem::path& cdDirectory)
+    {
+        const char* name = SfxBank::SlotName(levelCode, slotId);
+        if (!name || name[0] == '\0') { return -1; }
+        const std::string stem = name;
+        const std::vector<uint8_t>& sample = Sample(stem, cdDirectory);
+        if (sample.empty()) { return -1; }
+        auto& app = ALTEngine::Bootstrap::AppWindow::Instance();
+        SDL_AudioStream* voice = app.ReserveSfxVoice();
+        if (!voice) { return -1; }
+        static int nextHandle = 0;
+        const int handle = nextHandle++ & 0x3fffffff;
+        HeldSounds()[handle] = HeldSound{ voice, &sample, SfxBank::Loops(name) };
+        VoiceSamples()[voice] = &sample;
+        SDL_SetAudioStreamGain(voice, app.SfxGain() * volume);
+        SDL_PutAudioStreamData(voice, sample.data(), static_cast<int>(sample.size()));
+        return handle;
+    }
+
+    void SfxPlayer::StopLoop(int handle)
+    {
+        auto& held = HeldSounds();
+        auto it = held.find(handle);
+        if (it == held.end()) { return; }
+        VoiceSamples().erase(it->second.voice);
+        ALTEngine::Bootstrap::AppWindow::Instance().ReleaseSfxVoice(it->second.voice);
+        held.erase(it);
+    }
+
+    void SfxPlayer::StopAllLoops()
+    {
+        auto& held = HeldSounds();
+        for (auto& [handle, sound] : held)
+        {
+            VoiceSamples().erase(sound.voice);
+            ALTEngine::Bootstrap::AppWindow::Instance().ReleaseSfxVoice(sound.voice);
+        }
+        held.clear();
+    }
+
+    void SfxPlayer::UpdateLoops()
+    {
+        auto& held = HeldSounds();
+        for (auto it = held.begin(); it != held.end();)
+        {
+            HeldSound& sound = it->second;
+            const int queued = SDL_GetAudioStreamQueued(sound.voice);
+            if (sound.loops)
+            {
+                // Always a whole sample ahead, so a slow frame never runs it dry.
+                if (queued < static_cast<int>(sound.sample->size()))
+                {
+                    SDL_PutAudioStreamData(sound.voice, sound.sample->data(), static_cast<int>(sound.sample->size()));
+                }
+                ++it;
+                continue;
+            }
+            if (queued > 0) { ++it; continue; }
+            VoiceSamples().erase(sound.voice);
+            ALTEngine::Bootstrap::AppWindow::Instance().ReleaseSfxVoice(sound.voice);
+            it = held.erase(it);
+        }
+    }
+
+
 
     void SfxPlayer::SetVolume(int volume0to10)
     {
@@ -160,6 +255,7 @@ namespace ALTEngine::Audio
 
     void SfxPlayer::ClearCache()
     {
+        StopAllLoops();   // they point at the samples being freed
         VoiceSamples().clear();
         Cache().clear();
     }

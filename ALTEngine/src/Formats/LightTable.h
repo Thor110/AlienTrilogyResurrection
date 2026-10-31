@@ -123,7 +123,7 @@ namespace ALTEngine::Formats
         // timing, which is useful when comparing against a recording.
         void Tick(int randomBits)
         {
-            StepEquipment();
+            if (StepEquipment()) { equipmentReachedFull = true; }
             int jitter = (randomBits & 3) + 1;
 
             for (size_t i = 0; i < lights.size(); ++i)
@@ -200,6 +200,9 @@ namespace ALTEngine::Formats
         void StopEquipment() { if (equipment != Equipment::None) { equipmentFadingOut = true; equipmentFadingIn = false; } }
         Equipment ActiveEquipment() const { return equipment; }
         int EquipmentRamp() const { return equipmentRamp; }
+        // True once after the tick the lamp or goggles came up to full, where
+        // the original starts sound 0x18 (0x29e37, 0x29f15).
+        bool TakeEquipmentFull() { const bool full = equipmentReachedFull; equipmentReachedFull = false; return full; }
 
         // The global multiplier triple for this tick (FUN_00029d94).
         std::array<int, 3> GlobalTriple() const
@@ -334,6 +337,7 @@ namespace ALTEngine::Formats
         bool flash = false;
         Equipment equipment = Equipment::None;
         int equipmentRamp = 0;
+        bool equipmentReachedFull = false;
         bool equipmentFadingIn = false;
         bool equipmentFadingOut = false;
     };

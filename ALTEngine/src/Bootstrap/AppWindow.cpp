@@ -153,7 +153,7 @@ namespace ALTEngine::Bootstrap
         for (size_t i = 1; i < sfxVoices.size(); ++i)   // voice 0 is the player's
         {
             SDL_AudioStream* voice = sfxVoices[i];
-            if (!voice) { continue; }
+            if (!voice || sfxReserved[i]) { continue; }
             const int queued = SDL_GetAudioStreamQueued(voice);
             if (queued == 0) { return voice; }
             if (!best || queued < bestQueued) { best = voice; bestQueued = queued; }
@@ -161,6 +161,40 @@ namespace ALTEngine::Bootstrap
         // Every voice busy: cut off the one nearest its end.
         if (best) { SDL_ClearAudioStream(best); }
         return best;
+    }
+
+    SDL_AudioStream* AppWindow::ReserveSfxVoice()
+    {
+        if (!OpenSfxVoices()) { return nullptr; }
+        int reserved = 0;
+        for (bool r : sfxReserved) { reserved += r ? 1 : 0; }
+        if (reserved >= MAX_RESERVED_SFX_VOICES) { return nullptr; }
+        // An idle voice if there is one, else the one-off sound nearest its end.
+        size_t best = 0;
+        int bestQueued = 0;
+        for (size_t i = 1; i < sfxVoices.size(); ++i)
+        {
+            if (!sfxVoices[i] || sfxReserved[i]) { continue; }
+            const int queued = SDL_GetAudioStreamQueued(sfxVoices[i]);
+            if (best == 0 || queued < bestQueued) { best = i; bestQueued = queued; }
+            if (queued == 0) { break; }
+        }
+        if (best == 0) { return nullptr; }
+        SDL_ClearAudioStream(sfxVoices[best]);
+        sfxReserved[best] = true;
+        return sfxVoices[best];
+    }
+
+    void AppWindow::ReleaseSfxVoice(SDL_AudioStream* voice)
+    {
+        for (size_t i = 0; i < sfxVoices.size(); ++i)
+        {
+            if (sfxVoices[i] == voice && voice)
+            {
+                SDL_ClearAudioStream(voice);
+                sfxReserved[i] = false;
+            }
+        }
     }
 
     SDL_AudioStream* AppWindow::PlayerSfxVoice()
@@ -205,6 +239,7 @@ namespace ALTEngine::Bootstrap
         {
             if (voice) { SDL_DestroyAudioStream(voice); voice = nullptr; }
         }
+        sfxReserved.fill(false);
         if (sfxDevice != 0) { SDL_CloseAudioDevice(sfxDevice); sfxDevice = 0; }
         if (musicStream) { SDL_DestroyAudioStream(musicStream); musicStream = nullptr; }
         if (renderer) { SDL_DestroyRenderer(renderer); renderer = nullptr; }

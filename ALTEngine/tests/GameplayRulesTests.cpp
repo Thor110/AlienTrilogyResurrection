@@ -72,3 +72,19 @@ TEST_CASE("Level build: the cryopod cover takes the level's palette entry 2, tim
     CHECK(cover->openSign < 0.0f);   // the model lies on -x, so it tips that way up
     CHECK(!GameplayLevelBuild::BuildCryopodCover(mesh, {}).has_value());
 }
+
+#include "Formats/ExplosionGraphics.h"
+
+TEST_CASE("Explosions: FUN_000429f0's distance fade past 0x1000")
+{
+    CHECK(ALTEngine::Formats::ExplosionGraphics::EffectFade(0) == 1.0f);
+    CHECK(ALTEngine::Formats::ExplosionGraphics::EffectFade(0xfff) == 1.0f);
+    // From 0x1000 the colour goes through FUN_0004ecdc at d * 4 - 0x1200:
+    // nothing taken off until (that / 0x50) passes 0xaa.
+    CHECK(ALTEngine::Formats::ExplosionGraphics::EffectFade(0x1000) == 255.0f / 256.0f);
+    CHECK(ALTEngine::Formats::ExplosionGraphics::EffectFade(0x11c0) == 255.0f / 256.0f);
+    // At the 0x1e00 cut: (0x7800 - 0x1200) / 0x50 - 0xaa = 156 taken off.
+    CHECK(ALTEngine::Formats::ExplosionGraphics::EffectFade(0x1e00) == static_cast<float>(0xff - 156) / 256.0f);
+    float last = 2.0f;
+    for (int d = 0x1000; d < 0x1e00; d += 0x40) { const float f = ALTEngine::Formats::ExplosionGraphics::EffectFade(float(d)); CHECK(f <= last); last = f; }
+}

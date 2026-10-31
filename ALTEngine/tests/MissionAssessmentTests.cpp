@@ -54,3 +54,33 @@ TEST_CASE("Modern: the Level Timer is a feature of its own")
     for (ModernFeature f : ALTEngine::Bootstrap::ModernSettings::AllFeatures) { listed = listed || f == ModernFeature::LevelTimer; }
     CHECK(listed);
 }
+
+#include "Audio/SfxPlayer.h"
+#include "Formats/LightTable.h"
+
+TEST_CASE("Sound: FUN_00040c38's distance volumes by mode")
+{
+    using ALTEngine::Audio::SfxPlayer;
+    CHECK(SfxPlayer::DistanceVolume(2, 0, 0) == 0x1fff / float(0x3fff));          // a vent, close to
+    CHECK(SfxPlayer::DistanceVolume(1, 0, 0) == 0x2fff / float(0x3fff));          // a creature
+    CHECK(SfxPlayer::DistanceVolume(3, 0, 0) == 1.0f);                            // a lift the player set off
+    CHECK(SfxPlayer::DistanceVolume(2, 0x8000, 0) == (0x1fff - 0x1e00) / float(0x3fff));   // held at the cap
+    CHECK(SfxPlayer::DistanceVolume(1, 0x1000, 0x800) == (0x2fff - 0x1400) / float(0x3fff)); // 0x1000 + 0x400 = cap
+    CHECK(SfxPlayer::DistanceVolume(4, 0x3c01, 0) == 0.0f);                        // silent far off
+    CHECK(SfxPlayer::CreatureVolume(0, 0) == SfxPlayer::DistanceVolume(1, 0, 0));
+}
+
+TEST_CASE("Lights: the lamp reports full strength once, 32 ticks on (sound 0x18)")
+{
+    ALTEngine::Formats::LightTable table;
+    table.Reset({});
+    table.StartEquipment(ALTEngine::Formats::LightTable::Equipment::Lamp);
+    int fullAt = -1;
+    for (int t = 1; t <= 40; ++t)
+    {
+        table.Tick(0);
+        if (table.TakeEquipmentFull()) { CHECK(fullAt < 0); fullAt = t; }
+    }
+    CHECK_EQ(fullAt, 32);
+    CHECK(!table.TakeEquipmentFull());
+}

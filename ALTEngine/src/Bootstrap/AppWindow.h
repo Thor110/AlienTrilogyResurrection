@@ -61,6 +61,14 @@ namespace ALTEngine::Bootstrap
 
         static constexpr int SFX_VOICE_COUNT = 12;
 
+        // A voice held by a looping sound (a vent's jet) until released:
+        // AcquireSfxVoice never hands it out or cuts it off meanwhile. At most
+        // MAX_RESERVED_SFX_VOICES at once, so one-off sounds always have room;
+        // nullptr when none is free.
+        static constexpr int MAX_RESERVED_SFX_VOICES = 6;
+        SDL_AudioStream* ReserveSfxVoice();
+        void ReleaseSfxVoice(SDL_AudioStream* voice);
+
         // Lazily opens (or reopens, if `spec` differs from whatever's
         // currently open) a persistent audio stream for music playback.
         // Separate from the SFX voices since music format isn't fixed
@@ -115,6 +123,7 @@ namespace ALTEngine::Bootstrap
 
         SDL_AudioDeviceID sfxDevice = 0;
         std::array<SDL_AudioStream*, SFX_VOICE_COUNT> sfxVoices{};
+        std::array<bool, SFX_VOICE_COUNT> sfxReserved{};
         float sfxGain = 1.0f;
         SDL_AudioStream* musicStream = nullptr;
         SDL_AudioSpec musicSpec{};

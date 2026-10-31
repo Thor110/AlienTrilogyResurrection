@@ -220,6 +220,9 @@ namespace ALTEngine::Screens::LevelSnapshot
         e.actTicks = e.shotCountdown = 0;
         e.actAnimation = -1;
         e.grenadeArmed = e.fireGrenade = e.fireShot = false;
+        // A jet's sound starts again from the restored level.
+        e.vent.soundOn = false;
+        e.ventSoundHandle = -1;
         e.recoveredFromHit = e.overlayFinished = false;
 
         // The animation: a scripted creature's is replayed up to where it

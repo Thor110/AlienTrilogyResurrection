@@ -208,6 +208,8 @@ namespace ALTEngine::Screens
             // its sound, burst (an explosion), or switch off for good.
             bool ventEmit = false;
             bool ventSound = false;
+            bool ventSoundStop = false;
+            int ventSoundHandle = -1;   // the jet's held sound (SfxPlayer::StartLoop)
             bool ventBurst = false;
             bool ventSwitchedOff = false;
             bool recoveredFromHit = false;
@@ -764,7 +766,7 @@ namespace ALTEngine::Screens
         inline void RunVentTask(Enemy& enemy)
         {
             namespace VT = CreatureTasks::Vent;
-            enemy.ventEmit = enemy.ventSound = enemy.ventBurst = enemy.ventSwitchedOff = false;
+            enemy.ventEmit = enemy.ventSound = enemy.ventSoundStop = enemy.ventBurst = enemy.ventSwitchedOff = false;
             enemy.stepX = enemy.stepZ = 0.0f;
             enemy.pendingDamage = 0;
 
@@ -795,6 +797,7 @@ namespace ALTEngine::Screens
             const VT::Output out = VT::Step(enemy.vent, in);
             enemy.ventEmit = out.emit;
             enemy.ventSound = out.startSound;
+            enemy.ventSoundStop = out.stopSound;
             enemy.ventBurst = out.explode;
             enemy.ventSwitchedOff = out.switchOffNotice;
         }

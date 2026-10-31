@@ -101,6 +101,10 @@ namespace ALTEngine::Screens::GameplayObjects
     // running out (FUN_0003e698).
     constexpr int LIGHT_ON_SOUND = 0x17;
     constexpr int LIGHT_OFF_SOUND = 0x19;
+    // The lamp or goggles at full strength (1202-nit): played once on the
+    // player's channel as the ramp reaches 0x1000 (FUN_00029d94 through
+    // FUN_0003cfd0's held channel 1), and cut off if the light runs out first.
+    constexpr int LIGHT_FULL_SOUND = 0x18;
     // A window: the object type with its own arm in the modelless objects'
     // handler (0x38097), and the sound that arm plays (FUN_00040c38(0x6c)).
     constexpr int WINDOW_OBJECT_TYPE = 0x1c;

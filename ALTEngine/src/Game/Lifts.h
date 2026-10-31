@@ -48,6 +48,10 @@ namespace ALTEngine::Game::Lifts
 
     inline constexpr int SOUND_START = 0x5e;
     inline constexpr int SOUND_STOP = 0x5f;
+    // FUN_00040c38's mode for each: a lift setting off after its wait and an
+    // arrival are mode 0, one the player's trigger set off is mode 3.
+    inline constexpr int SOUND_MODE = 0;
+    inline constexpr int SOUND_MODE_TRIGGERED = 3;
 
     struct Lift
     {
@@ -84,6 +88,7 @@ namespace ALTEngine::Game::Lifts
     struct TickResult
     {
         bool started = false;           // play SOUND_START
+        bool startedByTrigger = false;  // set off by its counter (mode 3, louder) rather than after a wait (mode 0)
         bool stopped = false;           // play SOUND_STOP
         bool firstActivation = false;   // the HUD's "lift activated"
     };

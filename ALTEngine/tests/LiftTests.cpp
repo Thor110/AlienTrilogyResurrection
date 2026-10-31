@@ -145,3 +145,22 @@ TEST_CASE("Lifts: the record's heights are a travel above the map's own floor")
     while (!L::Tick(lifts[0], level).stopped && ticks < 100) { ++ticks; }
     CHECK_EQ(FloorAt(level, 2, 1), 96);
 }
+
+TEST_CASE("Lifts: a lift its counter sets off is the loud start; one leaving after its wait is not")
+{
+    LevelGeometry level = WithLift(0, 0, 3, 1);
+    auto lifts = L::Build(level);
+    auto& lift = lifts[0];
+    REQUIRE(L::AddToCounter(lift, 1, false));
+    const auto first = L::Tick(lift, level);
+    CHECK(first.started);
+    CHECK(first.startedByTrigger);
+    // Up, wait out the dwell, and back down on its own.
+    bool sawWaitStart = false;
+    for (int t = 0; t < 60 && !sawWaitStart; ++t)
+    {
+        const auto r = L::Tick(lift, level);
+        if (r.started) { sawWaitStart = true; CHECK(!r.startedByTrigger); }
+    }
+    CHECK(sawWaitStart);
+}

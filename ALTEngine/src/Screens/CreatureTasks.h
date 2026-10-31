@@ -399,6 +399,7 @@ namespace ALTEngine::Screens::CreatureTasks
             bool emit = false;
             bool jetting = false;     // FUN_000358a4's -1: keep the sound
             bool startSound = false;
+            bool stopSound = false;   // the task's FUN_00040aec: the jet's sound ends
             bool switchOffNotice = false;
             bool explode = false;
         };
@@ -409,8 +410,13 @@ namespace ALTEngine::Screens::CreatureTasks
         // loop sound whenever that comes back 0.
         inline Output Step(Vent& v, const Input& in)
         {
+            const bool wasOn = v.soundOn;
             Output out = StepEmitter(v, in);
             if (!out.jetting) { v.soundOn = false; }
+            // Off whichever way it went: the jet's quiet stretch, out of view
+            // or range, switched off, or knocked back to dormant by a hit (the
+            // original loses the sound's handle that way and leaves it playing).
+            out.stopSound = wasOn && !v.soundOn;
             return out;
         }
 

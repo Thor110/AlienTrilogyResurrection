@@ -101,8 +101,11 @@ namespace ALTEngine::Game::CreatureSight
     // each pass's cone to at least that many angle units either side of the
     // view, for a view wider than the original's 320x240 (whose cones it
     // already covers); 0 keeps the original's cones.
+    // `zoneMask`, when given, receives the zones the walk took in - what the
+    // original's object, creature, pickup, door and lift draws test their
+    // cell against (DAT_000b0cf0).
     std::vector<uint8_t> DrawnCells(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ,
-                                    int viewYaw, int minHalfWidth = 0);
+                                    int viewYaw, int minHalfWidth = 0, uint16_t* zoneMask = nullptr);
 
     // Which cell each level face belongs to: a cell's bytes 0-3 give the
     // first face of its run, counting from 1 (record 0 is the blank before
