@@ -547,7 +547,6 @@ namespace ALTEngine::Screens
                     (int)modern.FeatureSetting(ALTEngine::Bootstrap::ModernFeature::RenderDistance),
                     (int)!unlimited, modernConfig.FilePath().string().c_str());
         }
-        bool prevUseHeld = false;
         int lastCellIndex = -1;
 
         // Player camera state. Runs at the original's own logic rate rather
@@ -1650,10 +1649,10 @@ namespace ALTEngine::Screens
         triggerHandlers.door = [&](int doorIndex, bool isOpen, int amount, bool viaSwitch,
                                    ALTEngine::Game::Triggers::Source source) {
             if (doorIndex < 0 || static_cast<size_t>(doorIndex) >= doorStates.size()) { return false; }
-            // Walking up to a door never opens it: it takes the use key, as in
-            // the original. A failed door command aborts the rest of that
-            // chain, which is what the old walk-on path did too.
-            if (source == ALTEngine::Game::Triggers::Source::WalkOn) { return false; }
+            // Which commands may run, and when, is the trigger system's
+            // (Triggers::OnPlayerTick): an unlock on walking up, the final
+            // opening (6) only with the use key, as FUN_00040ff0 has it.
+            (void)source;
             return ALTEngine::Game::Doors::ApplyCommand(doorStates[static_cast<size_t>(doorIndex)], isOpen, amount, viaSwitch);
         };
         triggerHandlers.toggleLight = [&](int light, int delta) {
@@ -4337,11 +4336,12 @@ namespace ALTEngine::Screens
                         lastCellIndex = cellIndex;
                     }
 
-                    // Walking onto a trigger cell runs its chain once on entry.
-                    // Door commands in it fail (doors take the use key - see
-                    // the door handler); lights, spawns and the level exit
-                    // fire, as they do in the original's mover.
-                    triggers.OnEnterCell(playerLastTrigger, cellIndex, triggerHandlers);
+                    // The cell's trigger, every tick, with the use key's state
+                    // (FUN_00040ff0, from the mover at 0x3e3d1): walking on
+                    // runs it, a failed chain tries again next tick, and the
+                    // use key throws its switches and opens its doors.
+                    const bool useHeldForTrigger = keys[keyBindings.GetKey(InputAction::Use)];
+                    triggers.OnPlayerTick(playerLastTrigger, cellIndex, useHeldForTrigger, triggerHandlers);
 
                     // Collection, as the pickup task does it (0x3c8d0): an item
                     // within 0x300 of the player on both ground axes and 0x400
@@ -4382,20 +4382,11 @@ namespace ALTEngine::Screens
                         SDL_Log("GameplayScreen: collected pickup type %d (amount %d)", live.type, amount);
                     }
 
-                    // Interact key - the original's way of opening a door.
-                    // Fires on the press edge for the trigger cell the player
-                    // is standing on - the only cell the original tests; there
-                    // is no neighbourhood or facing test anywhere in its
-                    // trigger paths. So a door whose trigger cells are all on
-                    // one side can only be opened from that side.
-                    bool useHeld = keys[keyBindings.GetKey(InputAction::Use)];
-                    if (useHeld && !prevUseHeld && cellIndex >= 0
-                        && static_cast<size_t>(cellIndex) < level.collisionGrid.size())
-                    {
-                        int useAction = level.collisionGrid[static_cast<size_t>(cellIndex)].scriptAction;
-                        if (useAction != 0) { triggers.Run(useAction, ALTEngine::Game::Triggers::Source::Interact, triggerHandlers); }
-                    }
-                    prevUseHeld = useHeld;
+                    // The use key reaches the cell's trigger through
+                    // OnPlayerTick above - only the cell the player stands on;
+                    // there is no neighbourhood or facing test anywhere in the
+                    // original's trigger paths, so a door whose trigger cells
+                    // are all on one side can only be opened from that side.
 
                     // The world's tick: the same passes as the player's above,
                     // one for one, each with that pass's own alternate-pass

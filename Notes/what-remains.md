@@ -1,4 +1,4 @@
-# What remains (after zip 97)
+# What remains (after zip 98)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -9,6 +9,27 @@ textures, done once everything else is in.
 Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
+
+Changed in zip 98, to check: **doors that open as you walk up to them, and the player's trigger runner.**
+- **Walk-up doors**, as in the original (Edward: match it). A trigger's "unlock door" (command 1) runs as
+  the player walks onto its cells, no key needed; at the door's threshold it opens. Most doors in L113-L115,
+  the multiplayer maps and the L3xx levels open this way, and on L111 door 5.
+- **The player's trigger runner is now the original's** (FUN_00040ff0, `Triggers::OnPlayerTick`), run every
+  tick with the use key's state instead of a walk-on run plus a separate use-key run:
+  - on a new entry the effects, unlocks and lifts run; a switch (4) and a door's final opening (6) run only
+    while the use key is held;
+  - a chain that fails clears the latch, so it is tried again next tick - a door still moving takes the
+    unlock as soon as it stops, and the use key works whenever it is pressed on the cell;
+  - standing on, with the key held, only the switch and the opening are tried again.
+- **L111's middle room** (Edward: the far door seemed to wait for the room to be cleared, then only opened on
+  walking back towards the first door). Traced: there is no clear-the-room rule anywhere in the trigger
+  commands. Door 4 (the way in, at 40,73) is opened with the use key from trigger 7's cells outside it; its
+  open time is 40, so it holds 160 ticks and closes once you are more than 1024 away, and as its trigger
+  cells are all outside, it can't be opened again from within. Door 5 (the way out, at 24,73, open time 0,
+  stays open) is unlocked by trigger 13, the line of cells just inside door 4 (39,71-76), which also turns
+  two wall panels (texture animators 5 and 6). In the original that happens the moment you walk in. The
+  port made trigger doors wait for the use key, so door 5 only opened when you pressed it on that line -
+  which is where you stand when going back to door 4.
 
 Changed in zip 97, to check: **creatures coming out of wall vents, and the level scripts traced.**
 - **Creatures in the ducts behind wall vents now come out**, as in the original - L111's huggers among them,
@@ -336,14 +357,9 @@ The result starts as a failure (ECX cleared) and a command that doesn't run leav
 stops when it reads failure. At the end, success uses the trigger once (unless 0xff) and sets the latch;
 failure on a new entry clears the latch, so the next tick tries again.
 
-**Where the port differs, on purpose.** The player's walk-on runner in the original runs command 1 (add to a
-door's unlock count) on entering the cell, with no key: at the door's threshold the door opens. Most doors
-in L113-L115, the multiplayer maps and the L3xx levels, and L111's trigger 13 (door 5 and two panels), are
-opened this way - walking up to them. The port makes every trigger door wait for the use key, as decided
-in play earlier; Edward's call whether to follow the original here (`triggerHandlers.door` in
-`GameplayScreen.cpp`). The port also runs the use key's chain from scratch (`Source::Interact`) rather than
-re-running the cell's chain every tick with the key as the original does; the results are the same for every
-chain in the game except L331's trigger 9 (six lift calls, a switch, six more).
+**The port** follows all five (zip 98: `Triggers::OnPlayerTick` for the player's, run each frame). The one
+small difference: standing on a cell without the key, the original re-runs a chain that starts with the
+level's end every tick, which changes nothing; the port doesn't.
 
 ## 5. Larger features
 

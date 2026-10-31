@@ -30,7 +30,7 @@ namespace ALTEngine::Game::Triggers
                              : (source == Source::EnemyThrow) ? FLAG_ENEMY_THROW
                              : (source == Source::Creature) ? FLAG_CREATURE : FLAG_PLAYER;
         if ((trigger.activationMask & needed) == 0 || uses == 0) { return false; }
-        if (!RunChain(trigger.commandStart, source, handlers)) { return false; }
+        if (!RunChain(trigger.commandStart, source, handlers, true, source == Source::Interact)) { return false; }
         if (uses != USES_UNLIMITED) { uses--; }
         return true;
     }
@@ -38,10 +38,12 @@ namespace ALTEngine::Game::Triggers
     bool System::RunCommands(int commandStart, const Handlers& handlers)
     {
         if (!level_) { return false; }
-        return RunChain(commandStart, Source::WalkOn, handlers);
+        // FUN_00040e2c runs every command, the switch (with 1) and the door's
+        // final opening included.
+        return RunChain(commandStart, Source::Interact, handlers, true, true);
     }
 
-    bool System::RunChain(int commandStart, Source source, const Handlers& handlers)
+    bool System::RunChain(int commandStart, Source source, const Handlers& handlers, bool fresh, bool useKey)
     {
         // The chain's result, as the original keeps it in ECX across the loop
         // (0x415a2): it starts as a failure; a command that runs sets it (an
@@ -54,7 +56,12 @@ namespace ALTEngine::Game::Triggers
         int step = commandStart;
         bool sawActivateObject = false;
         bool result = false;
-        const bool notPlayer = source == Source::Shot || source == Source::EnemyThrow || source == Source::Creature;
+        // `fresh`: the entry is new (the runner's latch differs from the
+        // cell's id), which every command but 4, 6 and 8 needs. `useKey`: the
+        // player's use key is held - only the player's runner has arms for 4
+        // and 6 at all, and only with it; for a round, a grenade or a
+        // creature they are pass-overs (their jump tables send them to the
+        // loop's end, 0x41706).
 
         for (int guard = 0; step != CHAIN_END; ++guard)
         {
@@ -69,10 +76,12 @@ namespace ALTEngine::Game::Triggers
             switch (c.action)
             {
             case TOGGLE_LIGHT:
+                if (!fresh) { break; }
                 if (handlers.toggleLight) { handlers.toggleLight(target, signedAmount); }
                 result = true;
                 break;
             case CHANGE_TEXTURE:
+                if (!fresh) { break; }
                 if (handlers.changeTexture) { handlers.changeTexture(target, signedAmount); }
                 result = true;
                 break;
@@ -82,25 +91,31 @@ namespace ALTEngine::Game::Triggers
                 // (FUN_000414f0), a grenade (FUN_00041784) and a creature
                 // (FUN_0004129c) pass over it - their jump tables send 4 and 6
                 // to the loop's end (0x41706).
-                if (notPlayer) { break; }
+                if (!useKey) { break; }
                 result = handlers.door && handlers.door(target, true, amount, sawActivateObject, source);
                 break;
             case UNLOCK_DOOR:
+                // On walking up, no key needed: most of the game's doors open
+                // this way (FUN_00029594 adds to the unlock count; at the
+                // door's threshold it opens).
+                if (!fresh) { break; }
                 result = handlers.door && handlers.door(target, false, amount, sawActivateObject, source);
                 break;
             case SPAWN_MONSTER:
                 // FUN_0002f224 adds to the monster's counter whether or not
                 // that releases it, and the runner counts it a success.
+                if (!fresh) { break; }
                 if (handlers.spawnMonster) { handlers.spawnMonster(target, amount); }
                 result = true;
                 break;
             case ACTIVATE_OBJECT:
                 // No arm in a round's, a grenade's or a creature's runner.
-                if (notPlayer) { break; }
-                result = source == Source::Interact && handlers.activateObject && handlers.activateObject(target);
+                if (!useKey) { break; }
+                result = handlers.activateObject && handlers.activateObject(target);
                 if (result) { sawActivateObject = true; }
                 break;
             case SPAWN_PICKUP:
+                if (!fresh) { break; }
                 if (handlers.spawnPickup) { handlers.spawnPickup(target, signedAmount); }
                 result = true;
                 break;
@@ -108,6 +123,7 @@ namespace ALTEngine::Game::Triggers
             case LIFT_ADD:
                 // Conditional, like the doors: a lift that is moving or already
                 // due to go refuses, and that fails the chain.
+                if (!fresh) { break; }
                 result = handlers.lift && handlers.lift(target, amount, c.action == LIFT_FINAL);
                 break;
             case END_LEVEL:
@@ -151,12 +167,31 @@ namespace ALTEngine::Game::Triggers
         return false;
     }
 
-    bool System::OnEnterCell(int& lastId, int cellIndex, const Handlers& handlers)
+    bool System::OnPlayerTick(int& latch, int cellIndex, bool useKey, const Handlers& handlers)
     {
         if (!level_) { return false; }
         const int id = CellTriggerId(*level_, cellIndex);
-        const bool fire = id != 0 && id != lastId;
-        lastId = id;
-        return fire && Run(id, Source::WalkOn, handlers);
+        if (id == 0) { latch = 0; return false; }
+        if (static_cast<size_t>(id) >= level_->actions.size()) { return false; }
+        const auto& trigger = level_->actions[static_cast<size_t>(id)];
+        uint8_t& uses = uses_[static_cast<size_t>(id)];
+        if ((trigger.activationMask & FLAG_PLAYER) == 0 || uses == 0) { return false; }
+        const bool fresh = latch != id;
+        // Standing on, without the key, nothing in a chain can run but the
+        // level's end (8), which has already run on the way in: skipped.
+        if (!fresh && !useKey) { return false; }
+        if (RunChain(trigger.commandStart, useKey ? Source::Interact : Source::WalkOn, handlers, fresh, useKey))
+        {
+            if (uses != USES_UNLIMITED) { uses--; }
+            latch = id;
+            return true;
+        }
+        if (fresh) { latch = 0; }
+        return false;
+    }
+
+    bool System::OnEnterCell(int& lastId, int cellIndex, const Handlers& handlers)
+    {
+        return OnPlayerTick(lastId, cellIndex, false, handlers);
     }
 }

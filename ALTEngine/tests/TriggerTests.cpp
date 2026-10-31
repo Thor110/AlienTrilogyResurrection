@@ -404,3 +404,67 @@ TEST_CASE("Triggers: a creature passes over switches and a door's final opening"
     REQUIRE(rec.log.size() == 1);
     CHECK(rec.log[0] == "light 9+1");
 }
+
+TEST_CASE("Triggers: walking into L111's middle room unlocks its far door, no key needed (FUN_00040ff0)")
+{
+    // Trigger 13, the line of cells just inside door 4: unlock door 5, then
+    // turn two panels. The original runs an unlock on walking on.
+    LevelGeometry level = LevelLoader::Load(AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
+    Triggers::System system(level);
+    Recorder rec;
+    const int cell = FirstCellWithTrigger(level, 13);
+    REQUIRE(cell >= 0);
+    int latch = 0;
+    CHECK(system.OnPlayerTick(latch, cell, false, rec.Handlers()));
+    const std::vector<std::string> expected{ "unlock 5+1", "texture 5+1", "texture 6+1" };
+    CHECK(rec.log == expected);
+    CHECK_EQ(system.UsesRemaining(13), 0);
+}
+
+TEST_CASE("Triggers: a door's final opening and a switch wait for the use key; a failed chain retries")
+{
+    // L111 trigger 7: open door 4 (6), three lights, an empty slot.
+    LevelGeometry level = LevelLoader::Load(AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
+    Triggers::System system(level);
+    Recorder rec;
+    const int cell = FirstCellWithTrigger(level, 7);
+    REQUIRE(cell >= 0);
+    int latch = 0;
+    // Without the key the opening is passed over, first in the chain: it fails,
+    // and the latch stays clear so it is tried again.
+    CHECK(!system.OnPlayerTick(latch, cell, false, rec.Handlers()));
+    CHECK(rec.log.empty());
+    CHECK_EQ(latch, 0);
+    // The door busy: the key's try fails too.
+    rec.doorsSucceed = false;
+    CHECK(!system.OnPlayerTick(latch, cell, true, rec.Handlers()));
+    CHECK_EQ(latch, 0);
+    // Then it takes.
+    rec.doorsSucceed = true;
+    rec.log.clear();
+    CHECK(system.OnPlayerTick(latch, cell, true, rec.Handlers()));
+    CHECK(rec.log.size() == 4);
+    CHECK_EQ(latch, 7);
+    // Holding the key on: the lights are not run again (not a new entry).
+    rec.log.clear();
+    rec.doorsSucceed = false;
+    system.OnPlayerTick(latch, cell, true, rec.Handlers());
+    CHECK(rec.log.size() == 1);   // only the door's try
+    CHECK_EQ(latch, 7);
+}
+
+TEST_CASE("Triggers: a switch thrown with the key unlocks its door")
+{
+    // L111 trigger 3: switch 8, unlock door 3, lights, panels. One use.
+    LevelGeometry level = LevelLoader::Load(AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
+    Triggers::System system(level);
+    Recorder rec;
+    const int cell = FirstCellWithTrigger(level, 3);
+    int latch = 0;
+    CHECK(!system.OnPlayerTick(latch, cell, false, rec.Handlers()));
+    CHECK(rec.log.empty());
+    CHECK(system.OnPlayerTick(latch, cell, true, rec.Handlers()));
+    CHECK(rec.log.size() == 7);
+    CHECK(rec.log[1] == "unlock 3+1 switch");
+    CHECK_EQ(system.UsesRemaining(3), 0);
+}

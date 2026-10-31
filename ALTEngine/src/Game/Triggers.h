@@ -101,10 +101,17 @@ namespace ALTEngine::Game
             // (and so used the trigger up once).
             bool Run(int triggerId, Source source, const Handlers& handlers);
 
-            // Cell entry: fires the cell's trigger once on entering it, and not
-            // again while the entity stays on cells with the same id. `lastId`
-            // is the entity's own latch (the original keeps it at entity+0x71).
-            // Returns true if a chain completed.
+            // The player's runner, FUN_00040ff0, called every tick from the
+            // mover with the use key's state. `latch` is DAT_000b0b56, the id
+            // last set off. On a new entry (latch != the cell's id) the effect,
+            // unlock and lift commands run; the switch (4) and the door's
+            // final opening (6) run only while the use key is held, and are
+            // passed over otherwise. A chain that completes uses the trigger
+            // once and sets the latch; one that fails on a new entry clears
+            // it, so the next tick tries again - a door that is still moving,
+            // say, unlocks as soon as it stops.
+            bool OnPlayerTick(int& latch, int cellIndex, bool useKey, const Handlers& handlers);
+            // OnPlayerTick without the use key.
             bool OnEnterCell(int& lastId, int cellIndex, const Handlers& handlers);
 
             // The same for a round in flight, with the round's own latch
@@ -135,7 +142,7 @@ namespace ALTEngine::Game
             bool RunCommands(int commandStart, const Handlers& handlers);
 
         private:
-            bool RunChain(int commandStart, Source source, const Handlers& handlers);
+            bool RunChain(int commandStart, Source source, const Handlers& handlers, bool fresh, bool useKey);
 
             const Formats::LevelGeometry* level_ = nullptr;
             std::vector<uint8_t> uses_;
