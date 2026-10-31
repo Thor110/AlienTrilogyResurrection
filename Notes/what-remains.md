@@ -1,4 +1,4 @@
-# What remains (after zip 101)
+# What remains (after zip 102)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -9,6 +9,12 @@ textures, done once everything else is in.
 Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
+
+Changed in zip 102, to check: **no motion tracker in multiplayer**, as in the original (Edward). Its tracker
+routine (FUN_0003a1d0) runs only with both network flags clear (DAT_000ae0a4 and DAT_000ae0a5), so neither
+the dish nor its sweep is there in a network game. The original also moves the health bar to the bottom
+right in multiplayer (FUN_0003aac8 / FUN_0003a7a4: 0xc6 in place of 0x16 when both flags are set) - left as
+the single-player layout on purpose (Edward).
 
 Changed in zip 101, to check: **bots a little slower** (Edward: they moved a little too fast). They walk
 0x40-0x60 a tick by skill (was 0x50-0x78; the player's forward walk is 0x78), and sidestep at half that, as

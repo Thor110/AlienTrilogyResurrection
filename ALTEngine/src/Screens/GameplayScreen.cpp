@@ -4401,7 +4401,10 @@ namespace ALTEngine::Screens
                                 hudState.health = 200;
                                 hudState.dead = false;
                             }
-                            hud.TickTracker();
+                            // No motion tracker in a multiplayer game: the
+                            // original's tracker (FUN_0003a1d0) runs only with
+                            // both network flags clear (DAT_000ae0a4/a5).
+                            if (!session) { hud.TickTracker(); }
 
                             // What the player has seen, for the map: every cell the
                             // view walk takes in, and the area they stand in
@@ -5225,6 +5228,10 @@ namespace ALTEngine::Screens
                         // (Edward, 2026). The plumbing for this was already here
                         // and empty; I should have filled it rather than adding a
                         // second path.
+                        // Not in a multiplayer game (FUN_0003a1d0 is skipped
+                        // with either network flag set).
+                        if (!session)
+                        {
                         std::vector<ALTEngine::Renderer::HudRenderer::Contact> contacts;
                         for (const auto& enemy : enemies)
                         {
@@ -5238,6 +5245,7 @@ namespace ALTEngine::Screens
                             contacts.push_back(c);
                         }
                         hud.DrawTracker(renderer, contacts, camera.yaw, windowW, windowH);
+                        }
 
                         // Live Minimap (Modern option). Drawn over the
                         // presented world frame with SDL_Renderer, the same way
