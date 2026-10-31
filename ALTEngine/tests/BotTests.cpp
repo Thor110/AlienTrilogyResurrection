@@ -23,7 +23,7 @@ TEST_CASE("Bots: skill runs from slow and loose to quick and close")
     CHECK(easy.reactionTicks > hard.reactionTicks);
     CHECK(easy.aimSpread > hard.aimSpread);
     CHECK(easy.fireInterval > hard.fireInterval);
-    CHECK(hard.walkSpeed <= B::PLAYER_WALK);
+    CHECK(hard.walkSpeed < B::PLAYER_WALK);       // a little slower than the player's walk
     CHECK(B::SkillFor(0).reactionTicks == easy.reactionTicks);   // clamped
     CHECK(B::SkillFor(9).reactionTicks == hard.reactionTicks);
 }

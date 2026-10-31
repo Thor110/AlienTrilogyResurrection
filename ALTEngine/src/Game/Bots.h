@@ -54,16 +54,19 @@ namespace ALTEngine::Game::Bots
     };
 
     // 1 (easiest) to 5. 3 is about a player walking and firing a pulse rifle
-    // in bursts; 5 reacts in a fifth of a second and rarely misses.
+    // in bursts; 5 reacts in a fifth of a second and rarely misses. Walking
+    // is 0x40-0x60 a tick, below the player's forward walk (0x78; Edward:
+    // the bots were a little too fast), and a sidestep is half of it, as the
+    // player's strafe is (PlayerCamera: anything but straight ahead is halved).
     inline Skill SkillFor(int level)
     {
         const int s = std::clamp(level, MIN_SKILL, MAX_SKILL) - 1;   // 0..4
         static constexpr Skill TABLE[5] = {
-            { 70, 0x90, 40, 0x30, 0x50 },
-            { 50, 0x60, 28, 0x48, 0x60 },
-            { 35, 0x40, 18, 0x60, 0x70 },
-            { 22, 0x28, 12, 0x80, 0x78 },
-            { 14, 0x14, 8, 0xa0, 0x78 },
+            { 70, 0x90, 40, 0x30, 0x40 },
+            { 50, 0x60, 28, 0x48, 0x48 },
+            { 35, 0x40, 18, 0x60, 0x50 },
+            { 22, 0x28, 12, 0x80, 0x58 },
+            { 14, 0x14, 8, 0xa0, 0x60 },
         };
         return TABLE[s];
     }
@@ -222,7 +225,8 @@ namespace ALTEngine::Game::Bots
             }
         }
         int moveYaw = AngleTo(bot.x, bot.z, goalX, goalZ);
-        if (bestSeen && bestDist < KEEP_DISTANCE)
+        const bool sidestepping = bestSeen && bestDist < KEEP_DISTANCE;
+        if (sidestepping)
         {
             // Close in: sidestep, turning the other way now and then.
             if (--bot.strafeTicks <= 0) { bot.strafe = -bot.strafe; bot.strafeTicks = 40 + bot.Random(63); }
@@ -235,15 +239,16 @@ namespace ALTEngine::Game::Bots
 
         if (walk && world.move)
         {
-            const float sx = static_cast<float>(skill.walkSpeed) * static_cast<float>(std::sin(moveYaw * 6.283185307179586 / 4096.0));
-            const float sz = -static_cast<float>(skill.walkSpeed) * static_cast<float>(std::cos(moveYaw * 6.283185307179586 / 4096.0));
+            const int speed = sidestepping ? skill.walkSpeed / 2 : skill.walkSpeed;
+            const float sx = static_cast<float>(speed) * static_cast<float>(std::sin(moveYaw * 6.283185307179586 / 4096.0));
+            const float sz = -static_cast<float>(speed) * static_cast<float>(std::cos(moveYaw * 6.283185307179586 / 4096.0));
             const float oldX = bot.x, oldZ = bot.z;
             world.move(bot.x, bot.z, bot.feetY, sx, sz);
             if (world.floor) { bot.feetY = world.floor(bot.x, bot.z); }
             const float moved = std::hypot(bot.x - oldX, bot.z - oldZ);
             bot.moving = moved > 1.0f;
             // Wedged on something: try the other strafe for a while.
-            if (moved < static_cast<float>(skill.walkSpeed) / 4.0f)
+            if (moved < static_cast<float>(speed) / 4.0f)
             {
                 if (++bot.stuckTicks > 20) { bot.strafe = -bot.strafe; bot.strafeTicks = 30; bot.stuckTicks = 0; }
             }
