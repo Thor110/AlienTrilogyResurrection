@@ -1,4 +1,4 @@
-# What remains (after zip 98)
+# What remains (after zip 100)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -9,6 +9,19 @@ textures, done once everything else is in.
 Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
+
+Changed in zip 100, to check: **multiplayer starts (Edward: every map loaded into empty space).**
+- **Players now start where the original puts them: a random path node.** The four Synthetic records the port
+  used as starts (zip 94) are parked OUTSIDE each map, in cells with no faces - they are the bodies the
+  original draws the other players with (their task, LAB_00035290, picks walk 0-7, hit 8/9, death 10/11 and
+  firing 12-19 by view), not starts. Traced (the spawn at 0x402fc): in a multiplayer game the player goes to
+  path node N, at the node's cell corner (node x, z << 9), with 100 health. N is random: masked to 0-127 at
+  the level's start (0x108b6) and to 0-63 after a death (0x1034e), drawn again until it is below the level's
+  node count; on L909 (the original's level 0x2c) node 0 is taken as node 1. Bots come back the same way.
+  Every node of the ten maps was checked: all are on the map, in open cells, except L909's node 6, which is
+  in a wall cell - OURS: such a node is drawn again. Tested: three bots on L900 all spawn on the floor
+  (height 2048) and find each other.
+- The single-player start is unchanged (the header's).
 
 Changed in zip 98, to check: **doors that open as you walk up to them, and the player's trigger runner.**
 - **Walk-up doors**, as in the original (Edward: match it). A trigger's "unlock door" (command 1) runs as
@@ -62,9 +75,8 @@ Changed in zip 96, to check: **bots, player limit, and the player look preview.*
   The layouts, from Edward's files: SYNTH.B16 has 20 sections, one per animation, all eight walking views
   its own; SOLDIER and GUARD have 8 and HANDLER 9 - five walking views (5-7 are 3-1 mirrored), then the
   hit and death animations. Their animations 11-13 (Handler 12-14) have no frames in these files at all.
-- **Player limit** (Start Multiplayer Game): 4-8, bots included; the original's four is the default. Only
-  four starts exist, so players past the fourth share them: everyone comes back at the start farthest from
-  the other living players. The protocol is now version 3 (eight places, and a bot flag in the roster).
+- **Player limit** (Start Multiplayer Game): 4-8, bots included; the original's four is the default. (Starts: see zip 100 -
+  a random path node, as in the original.) The protocol is now version 3 (eight places, and a bot flag in the roster).
 - **Bots** (Start Multiplayer Game): NONE, or 3 up to the limit less one (always room for the host), at skill
   1-5. Saved with the limit (MultiplayerPlayerLimit, MultiplayerBots, MultiplayerBotSkill). The host runs them
   (`Game/Bots.h`); each takes a player place, so everyone sees, shoots and is shot by them as by a player, and
@@ -81,12 +93,10 @@ Changed in zip 96, to check: **bots, player limit, and the player look preview.*
 Changed in zip 94, to check: **multiplayer, players' looks, starts, shots and chat.**
 - **The players are Synthetics in the original.** Every multiplayer map (L900-L909) has exactly four
   creature records, all type 0x0d, the Synthetic; FUN_0002e638's case 0xd spawns them with a task of their
-  own, and in a multiplayer game types 0xb and 0x0a are left out of cell occupancy. They are the four
-  player starts.
-- **Player starts:** player n starts (and comes back after dying) at the nth of those records, facing its
-  rotation; the records are no longer spawned as creatures. They are, cell (x,y): L900 (55,2-8),
-  L901 (21-24,41), L902 (32-37,112), L903 (59,1-7), L904 (44-50,5), L905 (44-50,48), L906 (43-53,3-4),
-  L907 (67,46-51), L908 (3,2-5), L909 (1-7,2). All face the same way (rotation 0).
+  own, and in a multiplayer game types 0xb and 0x0a are left out of cell occupancy. They are parked
+  outside the map: the other players' bodies (corrected in zip 100; they are not starts).
+- **Player starts:** WRONG in zip 94 (the records outside the map, so every map loaded into empty space);
+  see zip 100. The records are not spawned as creatures.
 - **Player look:** Multiplayer Options has a new last row, PLAYER: < SYNTHETIC >, changed with Left/Right
   or Enter: Synthetic (the original's), Soldier, Guard or Handler. The chosen creature turns on the right
   of the screen, a view every quarter second. It is saved (MultiplayerSkin) along with your name
@@ -310,9 +320,10 @@ original's four starts, seen shots and F2-F9 chat in zip 94. Still to come, roug
 1. **The score table and the end of a game:** "Minimum game length", the frag table, and what ends a round.
 2. **Pickups, doors and lifts kept the same on every machine** - each machine runs its own level for now
    (seen shots do break the same glass everywhere).
-3. **L909's sealed start room.** The traced starts are at (1-7,2), well away from it, so the room is not
-   used in a multiplayer game and the temporary patch (Patch/L909LEV.txt) can now be undone. Not done yet:
-   installs that already have it would need the four bytes set back, so it is Edward's call.
+3. **L909's sealed start room.** Players start at a random path node, and the original skips node 0 on
+   L909 only, so the room is not used in a multiplayer game; the temporary patch (Patch/L909LEV.txt) can be
+   undone. Not done yet: installs that already have it would need the four bytes set back, so it is
+   Edward's call.
 4. **Over the internet:** works by address if the host's UDP port 27960 is open (firewall allowed, and
    forwarded on the router); there is no NAT help. The README has a boxed note on this ("Multiplayer: the
    port to open"), and the Start Multiplayer Game screen says it under its options.

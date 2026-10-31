@@ -50,10 +50,11 @@ namespace ALTEngine::Net
     struct DiscoverReply { std::string gameName; std::string level; uint8_t players = 0; uint8_t maxPlayers = MAX_PLAYERS; };
     // How a player looks to the others: the creature whose sprites draw them.
     // The original draws every player as the Synthetic (type 0x0d: the four
-    // 0x0d monster records of each multiplayer level are its player starts,
-    // spawned with a task of their own, FUN_0002e638's case 0xd). The other
-    // human-shaped creatures with full walking views - the Soldier (0x0c), the
-    // Guard (0x0b) and the Handler (0x0e) - are the port's own choices.
+    // 0x0d monster records of each multiplayer level, parked outside the map,
+    // are the bodies of the other players, run by their own task, LAB_00035290,
+    // which picks walk 0-7, hit 8/9, death 10/11 and firing 12-19 by view).
+    // The Soldier (0x0c), the Guard (0x0b) and the Handler (0x0e) are the
+    // port's own choices; they draw views 5-7 as 3-1 flipped.
     enum class Skin : uint8_t { Synthetic = 0, Soldier = 1, Guard = 2, Handler = 3, Count };
     inline constexpr int SkinCreatureType(Skin skin)
     {

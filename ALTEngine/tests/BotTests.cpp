@@ -102,3 +102,25 @@ TEST_CASE("Bots: hits take a quarter, as a player's do, and a death waits to res
     CHECK(bot.respawnTicks == B::RESPAWN_TICKS);
     CHECK(!B::TakeHit(bot, 400, 5));   // already down
 }
+
+#include "Game/MultiplayerSpawn.h"
+
+TEST_CASE("Multiplayer spawn: a random path node, as the original's 0x402fc picks it")
+{
+    namespace MS = ALTEngine::Game::MultiplayerSpawn;
+    // Draws are masked to 0x7f at the level's start and 0x3f after a death,
+    // and drawn again until below the node count.
+    std::vector<int> draws{ 0x7e, 0x45, 0x10 };
+    size_t i = 0;
+    auto next = [&]() { return draws[i++ % draws.size()]; };
+    CHECK(MS::PickNode(60, true, false, next) == 0x10);   // 0x7e and 0x45 are past 60
+    i = 0;
+    CHECK(MS::PickNode(94, true, false, next) == 0x45);   // 0x7e past 94, 0x45 fits
+    i = 0;
+    CHECK(MS::PickNode(94, false, false, next) == 0x3e);  // after a death, 0x7e & 0x3f
+    // L909: node 0 is taken as node 1.
+    auto zero = []() { return 0x80; };
+    CHECK(MS::PickNode(78, true, true, zero) == 1);
+    CHECK(MS::PickNode(78, true, false, zero) == 0);
+    CHECK(MS::PickNode(0, true, false, zero) == -1);
+}

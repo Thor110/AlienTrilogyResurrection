@@ -28,6 +28,7 @@
 #include "../Game/CreatureSight.h"
 #include "../Game/FlowField.h"
 #include "../Game/Bots.h"
+#include "../Game/MultiplayerSpawn.h"
 #include "../Game/Lifts.h"
 #include "../Game/PlayerMover.h"
 #include "../Game/Triggers.h"
@@ -35,6 +36,7 @@
 #include "LevelSnapshot.h"
 #include "../Game/Progression.h"
 
+#include <random>
 #include <nlohmann/json.hpp>
 #include "EnemySprites.h"
 #include "DamageSystem.h"
@@ -131,8 +133,10 @@ namespace ALTEngine::Screens
         // Multiplayer: the box another player is shot in, and drawn as.
         constexpr float REMOTE_PLAYER_HALF_WIDTH = 0x80;
         constexpr float REMOTE_PLAYER_HEIGHT = 0x300;
-        // The monster type whose records are a multiplayer level's player starts.
-        constexpr uint8_t MULTIPLAYER_START_TYPE = 0x0d;
+        // A multiplayer level's four Synthetic records: parked outside the
+        // map, the bodies the original draws the other players with (its task
+        // LAB_00035290), not creatures and not starts (see Game::MultiplayerSpawn).
+        constexpr uint8_t MULTIPLAYER_BODY_TYPE = 0x0d;
 
         // World space -> grid space, where cell = coord >> 9. Inverts the
         // crate placement used above, so player and objects agree.
@@ -583,10 +587,32 @@ namespace ALTEngine::Screens
         // and who last hit us, for the frag.
         float spawnX = 0.0f, spawnZ = 0.0f, spawnFeetY = 0.0f, spawnYaw = 0.0f;
         int lastNetAttacker = -1;
-        // Multiplayer: the level's player starts (its 0x0d records), world
-        // x, z, feet and yaw; and the host's bots (Game::Bots).
-        struct MultiplayerStart { float x = 0, z = 0, feetY = 0, yaw = 0; };
-        std::vector<MultiplayerStart> multiplayerStarts;
+        // Multiplayer: the random draw for spawn nodes (Game::MultiplayerSpawn),
+        // and the host's bots (Game::Bots).
+        std::minstd_rand spawnRandom{ std::random_device{}() };
+        // Where a player (or bot) goes in a multiplayer level: a random path
+        // node, at its cell corner, standing on the floor there.
+        auto spawnAtNode = [&](bool levelStart, float& x, float& z, float& feetY) -> bool {
+            int node = -1;
+            // OURS: a node in a wall cell is drawn again (L909's node 6 is in
+            // one; the original would put the player inside it).
+            for (int tries = 0; tries < 16; ++tries)
+            {
+                node = ALTEngine::Game::MultiplayerSpawn::PickNode(
+                    static_cast<int>(level.pathNodes.size()), levelStart,
+                    session && session->Level() == "909", [&]() { return static_cast<int>(spawnRandom() & 0x7fffffff); });
+                if (node < 0) { return false; }
+                const auto& pn = level.pathNodes[static_cast<size_t>(node)];
+                const auto* cell = ALTEngine::Formats::CellAt(level, pn.x, pn.y);
+                if (cell && !ALTEngine::Game::PlayerMover::WallAttribute(cell->attribute)) { break; }
+            }
+            const auto& n = level.pathNodes[static_cast<size_t>(node)];
+            const int gx = static_cast<int>(n.x) << 9, gz = static_cast<int>(n.y) << 9;
+            x = static_cast<float>(gx) - originX;
+            z = static_cast<float>(gz) - originZ;
+            feetY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
+            return true;
+        };
         std::vector<ALTEngine::Game::Bots::Bot> bots;
         double botTickAccumulator = 0.0;
         double lastBotStateSent = -1.0;
@@ -842,33 +868,14 @@ namespace ALTEngine::Screens
                     // data to hand could not distinguish them (Edward, 2026 -
                     // spawned facing the wrong way in another level).
                     camera.yaw = static_cast<float>(level.header.playerStartAngle) * (3.14159265f / 4.0f);
-                    // Multiplayer: the level's four player starts are its four
-                    // Synthetic (0x0d) monster records - every multiplayer level
-                    // has exactly those four and no other monster, and the
-                    // original spawns them with a task of their own instead of
-                    // a creature's (FUN_0002e638, case 0xd). Player n takes the
-                    // nth, facing its own compass point.
-                    // With more than four players (the port's own limit, up to
-                    // eight), players past the fourth share the starts.
+                    // Multiplayer: a random path node, not the level's start
+                    // (Game::MultiplayerSpawn, the original's 0x402fc).
                     if (session && session->Connected())
                     {
-                        multiplayerStarts.clear();
-                        for (const auto& monster : level.monsters)
+                        float sx = 0, sz = 0, sy = 0;
+                        if (spawnAtNode(true, sx, sz, sy))
                         {
-                            if (monster.type != MULTIPLAYER_START_TYPE) { continue; }
-                            MultiplayerStart start;
-                            start.x = static_cast<float>(monster.x) * 512.0f + 256.0f - originX;
-                            start.z = static_cast<float>(monster.y) * 512.0f + 256.0f - originZ;
-                            start.feetY = ALTEngine::Formats::FindFloorHeightGridSpace(
-                                level, ToGridSpaceX(start.x, originX), ToGridSpaceZ(start.z, originZ));
-                            start.yaw = static_cast<float>(monster.rotation & 7) * (3.14159265f / 4.0f);
-                            multiplayerStarts.push_back(start);
-                        }
-                        if (!multiplayerStarts.empty())
-                        {
-                            const auto& start = multiplayerStarts[static_cast<size_t>(session->LocalSlot()) % multiplayerStarts.size()];
-                            camera.x = start.x; camera.z = start.z; camera.yaw = start.yaw;
-                            playerFeetY = start.feetY;
+                            camera.x = sx; camera.z = sz; playerFeetY = sy;
                             camera.y = playerFeetY + EYE_HEIGHT;
                         }
                     }
@@ -1450,14 +1457,15 @@ namespace ALTEngine::Screens
                         // out - every one of them looks its monster up by
                         // index and does nothing when it is not there.
                         if (testingNoEnemies) { enemies.clear(); }
-                        // Multiplayer: the Synthetic records are the players'
-                        // starts, not creatures. Kept in place (triggers find
-                        // monsters by index) but never in play.
+                        // Multiplayer: the Synthetic records are the other
+                        // players' bodies, parked outside the map, not
+                        // creatures. Kept in place (triggers find monsters by
+                        // index) but never in play.
                         if (session)
                         {
                             for (size_t m = 0; m < enemies.size() && m < level.monsters.size(); ++m)
                             {
-                                if (level.monsters[m].type != MULTIPLAYER_START_TYPE) { continue; }
+                                if (level.monsters[m].type != MULTIPLAYER_BODY_TYPE) { continue; }
                                 enemies[m].active = false;
                                 enemies[m].alive = false;
                                 enemies[m].health = 0;
@@ -1578,43 +1586,13 @@ namespace ALTEngine::Screens
         // - see GameOverSequence. The clip is chosen by HOW you died, which
         // ApplyDamage records. Checked wherever damage is dealt; the sequence
         // itself runs once the frame is done.
-        // Multiplayer: the start farthest from every other living player, for
-        // a respawn (and a bot's); -1 with none.
-        auto chooseStart = [&](int forSlot) -> int {
-            if (multiplayerStarts.empty()) { return -1; }
-            std::vector<std::pair<float, float>> others;
-            if (session && forSlot != session->LocalSlot() && !hudState.dead) { others.push_back({ camera.x, camera.z }); }
-            if (session)
-            {
-                const auto& states = session->RemoteStates();
-                for (size_t s = 0; s < states.size(); ++s)
-                {
-                    if (static_cast<int>(s) == forSlot || !states[s] || (states[s]->flags & 1)) { continue; }
-                    others.push_back({ states[s]->x, states[s]->z });
-                }
-            }
-            for (const auto& b : bots) { if (b.slot != forSlot && !b.dead) { others.push_back({ b.x, b.z }); } }
-            int best = 0;
-            float bestDist = -1.0f;
-            for (size_t i = 0; i < multiplayerStarts.size(); ++i)
-            {
-                float nearest = 1e30f;
-                for (const auto& o : others)
-                {
-                    nearest = std::min(nearest, std::hypot(o.first - multiplayerStarts[i].x, o.second - multiplayerStarts[i].z));
-                }
-                if (nearest > bestDist) { bestDist = nearest; best = static_cast<int>(i); }
-            }
-            return best;
-        };
-
         auto checkPlayerDeath = [&]() {
             if (!hudState.dead || playerDead) { return; }
             if (session && session->Connected())
             {
                 // Multiplayer: the death is scored - to whoever last hit us,
-                // or against us for anything else - and we come back at the
-                // level's start with fresh health.
+                // or against us for anything else - and we come back at a
+                // random path node with fresh health (Game::MultiplayerSpawn).
                 const auto me = static_cast<uint8_t>(session->LocalSlot());
                 const auto killer = lastNetAttacker >= 0 ? static_cast<uint8_t>(lastNetAttacker) : me;
                 session->SendFrag(killer, me);
@@ -1623,10 +1601,9 @@ namespace ALTEngine::Screens
                 hudState.health = 100;
                 camera.x = spawnX; camera.z = spawnZ; camera.yaw = spawnYaw;
                 playerFeetY = spawnFeetY;
-                if (const int start = chooseStart(me); start >= 0)
                 {
-                    const auto& s = multiplayerStarts[static_cast<size_t>(start)];
-                    camera.x = s.x; camera.z = s.z; camera.yaw = s.yaw; playerFeetY = s.feetY;
+                    float sx = 0, sz = 0, sy = 0;
+                    if (spawnAtNode(false, sx, sz, sy)) { camera.x = sx; camera.z = sz; playerFeetY = sy; }
                 }
                 camera.y = playerFeetY + EYE_HEIGHT;
                 playerCam.yaw = static_cast<int>(std::lround(camera.yaw * (4096.0f / 6.28318530718f))) & 0xfff;
@@ -2066,11 +2043,11 @@ namespace ALTEngine::Screens
                             if (b.dead)
                             {
                                 if (--b.respawnTicks > 0) { continue; }
-                                const int start = chooseStart(b.slot);
-                                if (start < 0) { b.respawnTicks = 1; continue; }
-                                const auto& s = multiplayerStarts[static_cast<size_t>(start)];
-                                b.x = s.x; b.z = s.z; b.feetY = s.feetY;
-                                b.yaw = static_cast<int>(std::lround(s.yaw * (4096.0f / 6.28318530718f))) & 0xfff;
+                                // A bot comes back as a player does: a random node.
+                                float sx = 0, sz = 0, sy = 0;
+                                if (!spawnAtNode(false, sx, sz, sy)) { b.respawnTicks = 1; continue; }
+                                b.x = sx; b.z = sz; b.feetY = sy;
+                                b.yaw = b.Random(0xfff);
                                 b.health = B::HEALTH;
                                 b.dead = false;
                                 continue;
