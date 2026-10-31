@@ -170,57 +170,75 @@ namespace ALTEngine::Screens
                 mirrors = creatureType != 1 && creatureType != 10 && creatureType != 13;
                 for (int view = 0; view < 8 && view < creature->count; ++view)
                 {
+                    // The whole walk is decoded, not its first frame alone: a
+                    // file holds several sections, and one frame on its own can
+                    // decode cleanly in the wrong one (a hit or death frame).
+                    // The full set of frames only fits its own section.
                     const AD::Anim& anim = creature->anims[view];
                     if (anim.count <= 0) { continue; }
-                    ALTEngine::Formats::EnemySpriteSet::Frame f;
-                    f.offsetX = anim.frames[0].ox; f.offsetY = anim.frames[0].oy;
-                    f.width = anim.frames[0].w; f.height = anim.frames[0].h;
-                    f.compressedOffset = anim.frames[0].off;
-                    auto decoded = set.DecodeAnimation({ f });
-                    if (decoded.empty() || decoded[0].width <= 0 || decoded[0].height <= 0) { continue; }
-                    const auto& d = decoded[0];
-                    std::vector<uint8_t> rgba(static_cast<size_t>(d.width) * d.height * 4, 0);
-                    const auto& pal = set.Palette();
-                    for (size_t i = 0; i < d.pixels.size() && i * 4 + 3 < rgba.size(); ++i)
+                    std::vector<ALTEngine::Formats::EnemySpriteSet::Frame> records;
+                    for (int i = 0; i < anim.count; ++i)
                     {
-                        const size_t p = static_cast<size_t>(d.pixels[i]) * 2;
-                        if (d.pixels[i] == 0 || p + 1 >= pal.size()) { continue; }
-                        const uint16_t e = static_cast<uint16_t>(pal[p] | (pal[p + 1] << 8));
-                        rgba[i * 4 + 0] = static_cast<uint8_t>((e & 0x1f) << 3);
-                        rgba[i * 4 + 1] = static_cast<uint8_t>(((e >> 5) & 0x1f) << 3);
-                        rgba[i * 4 + 2] = static_cast<uint8_t>(((e >> 10) & 0x1f) << 3);
-                        rgba[i * 4 + 3] = 255;
+                        ALTEngine::Formats::EnemySpriteSet::Frame f;
+                        f.offsetX = anim.frames[i].ox; f.offsetY = anim.frames[i].oy;
+                        f.width = anim.frames[i].w; f.height = anim.frames[i].h;
+                        f.compressedOffset = anim.frames[i].off;
+                        records.push_back(f);
                     }
-                    SDL_Texture* t = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, d.width, d.height);
-                    if (!t) { continue; }
-                    SDL_UpdateTexture(t, nullptr, rgba.data(), d.width * 4);
-                    SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
-                    SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
-                    views[static_cast<size_t>(view)] = { t, d.width, d.height };
+                    const auto decoded = set.DecodeAnimation(records);
+                    const auto& pal = set.Palette();
+                    for (const auto& d : decoded)
+                    {
+                        if (d.width <= 0 || d.height <= 0) { continue; }
+                        std::vector<uint8_t> rgba(static_cast<size_t>(d.width) * d.height * 4, 0);
+                        for (size_t i = 0; i < d.pixels.size() && i * 4 + 3 < rgba.size(); ++i)
+                        {
+                            const size_t p = static_cast<size_t>(d.pixels[i]) * 2;
+                            if (d.pixels[i] == 0 || p + 1 >= pal.size()) { continue; }
+                            const uint16_t e = static_cast<uint16_t>(pal[p] | (pal[p + 1] << 8));
+                            rgba[i * 4 + 0] = static_cast<uint8_t>((e & 0x1f) << 3);
+                            rgba[i * 4 + 1] = static_cast<uint8_t>(((e >> 5) & 0x1f) << 3);
+                            rgba[i * 4 + 2] = static_cast<uint8_t>(((e >> 10) & 0x1f) << 3);
+                            rgba[i * 4 + 3] = 255;
+                        }
+                        SDL_Texture* t = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, d.width, d.height);
+                        if (!t) { continue; }
+                        SDL_UpdateTexture(t, nullptr, rgba.data(), d.width * 4);
+                        SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+                        SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
+                        views[static_cast<size_t>(view)].push_back({ t, d.width, d.height, d.offsetX, d.offsetY });
+                    }
                 }
             }
-            // Turning once every two seconds or so, centred on (cx, bottom).
+            // Walking on the spot and turning a view every half second,
+            // standing on (cx, bottom) by each frame's own anchor offset.
             void Draw(SDL_Renderer* renderer, float cx, float bottom, float scale) const
             {
-                const int step = static_cast<int>(SDL_GetTicks() / 250) & 7;
-                int view = step;
+                const Uint64 ticks = SDL_GetTicks();
+                int view = static_cast<int>(ticks / 500) & 7;
                 bool flip = false;
                 if (mirrors && view >= 5) { view = 8 - view; flip = true; }
-                const View& v = views[static_cast<size_t>(view)];
-                if (!v.texture) { return; }
-                SDL_FRect dst{ cx - v.w * scale * 0.5f, bottom - v.h * scale, v.w * scale, v.h * scale };
+                const auto& frames = views[static_cast<size_t>(view)];
+                if (frames.empty()) { return; }
+                const View& v = frames[static_cast<size_t>(ticks / 100) % frames.size()];
+                const float ox = flip ? -static_cast<float>(v.ox + v.w) : static_cast<float>(v.ox);
+                SDL_FRect dst{ cx + ox * scale, bottom + v.oy * scale, v.w * scale, v.h * scale };
                 SDL_RenderTextureRotated(renderer, v.texture, nullptr, &dst, 0.0, nullptr,
                                          flip ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
             }
 
         private:
-            struct View { SDL_Texture* texture = nullptr; int w = 0, h = 0; };
+            struct View { SDL_Texture* texture = nullptr; int w = 0, h = 0, ox = 0, oy = 0; };
             void Clear()
             {
-                for (auto& v : views) { if (v.texture) { SDL_DestroyTexture(v.texture); } v = {}; }
+                for (auto& frames : views)
+                {
+                    for (auto& v : frames) { if (v.texture) { SDL_DestroyTexture(v.texture); } }
+                    frames.clear();
+                }
                 loadedType = -1;
             }
-            std::array<View, 8> views{};
+            std::array<std::vector<View>, 8> views{};
             int loadedType = -1;
             bool mirrors = false;
         };
@@ -357,7 +375,19 @@ namespace ALTEngine::Screens
         int bgW = 0, bgH = 0;
         SDL_Texture* background = LoadMenuBackground(cdDirectory, renderer, 1, bgW, bgH);
 
-        int cursor = 0; // 0=Start Game, 1=Name Of Game, 2=Start at level, 3=Minimum game length
+        // 0=Start Game, 1=Name Of Game, 2=Start at level, 3=Minimum game length,
+        // 4=Player limit, 5=Bots, 6=Bot skill
+        int cursor = 0;
+        constexpr int ROWS = 7;
+        // Bots: none, or 3 up to the limit less the host's place.
+        auto stepBots = [&](int delta) {
+            const int most = MultiplayerSettings::MaxBots(settings.playerLimit);
+            int n = settings.botCount;
+            if (delta > 0) { n = (n == 0) ? 3 : n + 1; }
+            else { n = (n <= 3) ? 0 : n - 1; }
+            settings.botCount = std::clamp(n, 0, most);
+            if (settings.botCount > 0 && settings.botCount < 3) { settings.botCount = 0; }
+        };
         TextFieldEditor editor;
         MultiplayerStartResult result;
         bool running = true;
@@ -382,20 +412,35 @@ namespace ALTEngine::Screens
                     switch (event.key.key)
                     {
                     case SDLK_UP:
-                        cursor = (cursor + 3) % 4;
+                        cursor = (cursor + ROWS - 1) % ROWS;
                         SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
                         break;
                     case SDLK_DOWN:
-                        cursor = (cursor + 1) % 4;
+                        cursor = (cursor + 1) % ROWS;
                         SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
                         break;
                     case SDLK_LEFT:
                         if (cursor == 2) { settings.startLevel = std::max(1, settings.startLevel - 1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
                         else if (cursor == 3) { settings.minGameLength = std::max(1, settings.minGameLength - 1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
+                        else if (cursor == 4)
+                        {
+                            settings.playerLimit = std::max(ALTEngine::Net::MIN_PLAYER_LIMIT, settings.playerLimit - 1);
+                            settings.botCount = std::min(settings.botCount, MultiplayerSettings::MaxBots(settings.playerLimit));
+                            SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+                        }
+                        else if (cursor == 5) { stepBots(-1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
+                        else if (cursor == 6) { settings.botSkill = std::max(1, settings.botSkill - 1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
                         break;
                     case SDLK_RIGHT:
                         if (cursor == 2) { settings.startLevel = std::min(10, settings.startLevel + 1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
                         else if (cursor == 3) { settings.minGameLength = std::min(99, settings.minGameLength + 1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
+                        else if (cursor == 4)
+                        {
+                            settings.playerLimit = std::min(ALTEngine::Net::MAX_PLAYERS, settings.playerLimit + 1);
+                            SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+                        }
+                        else if (cursor == 5) { stepBots(1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
+                        else if (cursor == 6) { settings.botSkill = std::min(5, settings.botSkill + 1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
                         break;
                     case SDLK_RETURN:
                     case SDLK_KP_ENTER:
@@ -438,11 +483,19 @@ namespace ALTEngine::Screens
             DrawBitmapText(renderer, "Minimum game length: " + std::to_string(settings.minGameLength), margin, rowY + lineHeight * 3, scale,
                             (cursor == 3) ? SelectedTextColor() : COLOR_DIM);
 
+            DrawBitmapText(renderer, "Player limit (4-8): " + std::to_string(settings.playerLimit), margin, rowY + lineHeight * 4, scale,
+                            (cursor == 4) ? SelectedTextColor() : COLOR_DIM);
+            DrawBitmapText(renderer, "Bots (3-" + std::to_string(MultiplayerSettings::MaxBots(settings.playerLimit)) + "): "
+                               + (settings.botCount == 0 ? std::string("NONE") : std::to_string(settings.botCount)),
+                           margin, rowY + lineHeight * 5, scale, (cursor == 5) ? SelectedTextColor() : COLOR_DIM);
+            DrawBitmapText(renderer, "Bot skill (1-5): " + std::to_string(settings.botSkill), margin, rowY + lineHeight * 6, scale,
+                            (cursor == 6) ? SelectedTextColor() : COLOR_DIM);
+
             // The host needs this port open (README: "Multiplayer: the port to open").
             DrawBitmapText(renderer, "HOSTING NEEDS UDP PORT " + std::to_string(ALTEngine::Net::DEFAULT_PORT) + " OPEN",
-                           margin, rowY + lineHeight * 5, scale, COLOR_CURSOR);
+                           margin, rowY + lineHeight * 8, scale, COLOR_CURSOR);
             DrawBitmapText(renderer, "FIREWALL: ALLOW. INTERNET: FORWARD IT ON YOUR ROUTER",
-                           margin, rowY + lineHeight * 6, scale, COLOR_DIM);
+                           margin, rowY + lineHeight * 9, scale, COLOR_DIM);
 
             SDL_RenderPresent(renderer);
         }

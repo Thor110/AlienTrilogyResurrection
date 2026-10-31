@@ -517,6 +517,18 @@ int main(int, char**)
                     if (*stored == ALTEngine::Net::SkinName(static_cast<ALTEngine::Net::Skin>(k))) { mpSettings.skin = k; }
                 }
             }
+            // The host's player limit and bots, kept too.
+            auto readInt = [&](const char* key, int fallback, int lo, int hi) {
+                if (auto stored = config.Get(key))
+                {
+                    try { return std::clamp(std::stoi(*stored), lo, hi); } catch (...) {}
+                }
+                return fallback;
+            };
+            mpSettings.playerLimit = readInt("MultiplayerPlayerLimit", 4, ALTEngine::Net::MIN_PLAYER_LIMIT, ALTEngine::Net::MAX_PLAYERS);
+            mpSettings.botCount = readInt("MultiplayerBots", 0, 0, MultiplayerSettings::MaxBots(mpSettings.playerLimit));
+            if (mpSettings.botCount > 0 && mpSettings.botCount < 3) { mpSettings.botCount = 0; }
+            mpSettings.botSkill = readInt("MultiplayerBotSkill", 3, 1, 5);
             const auto chosenSkin = [&]() {
                 return static_cast<ALTEngine::Net::Skin>(
                     std::clamp(mpSettings.skin, 0, static_cast<int>(ALTEngine::Net::Skin::Count) - 1));
@@ -535,6 +547,9 @@ int main(int, char**)
                 {
                     MultiplayerStartResult r = MultiplayerStartScreen::Run(cdDirectory, mpSettings);
                     if (r.windowClosed) { windowClosed = true; inMultiplayerMenu = false; break; }
+                    config.Set("MultiplayerPlayerLimit", std::to_string(mpSettings.playerLimit));
+                    config.Set("MultiplayerBots", std::to_string(mpSettings.botCount));
+                    config.Set("MultiplayerBotSkill", std::to_string(mpSettings.botSkill));
                     if (!r.startedGame) { break; }
                     // Host: "Start at level" 1-10 is L900-L909.
                     const int startIndex = std::clamp(mpSettings.startLevel, 1, 10) - 1;
@@ -546,7 +561,10 @@ int main(int, char**)
                         std::cout << "Multiplayer: could not host on port " << ALTEngine::Net::DEFAULT_PORT << "\n";
                         break;
                     }
-                    std::cout << "Multiplayer: hosting level " << digits << " on port " << session.Port() << "\n";
+                    session.SetPlayerLimit(mpSettings.playerLimit);
+                    session.SetBots(mpSettings.botCount, mpSettings.botSkill);
+                    std::cout << "Multiplayer: hosting level " << digits << " on port " << session.Port()
+                              << ", up to " << session.PlayerLimit() << " players, " << mpSettings.botCount << " bots\n";
                     session.SetQuickChat(mpSettings.messages);
                     if (!playMultiplayer(session)) { windowClosed = true; inMultiplayerMenu = false; }
                     break;

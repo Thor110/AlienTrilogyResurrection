@@ -66,7 +66,7 @@ namespace ALTEngine::Net
             [&](const Reject& m) { w.U8(static_cast<uint8_t>(MessageType::Reject)); w.U8(static_cast<uint8_t>(m.reason)); },
             [&](const Roster& m) {
                 w.U8(static_cast<uint8_t>(MessageType::Roster));
-                for (const auto& p : m.players) { w.U8(p.used ? 1 : 0); w.Str(p.name, MAX_NAME); w.I16(p.frags); w.U8(static_cast<uint8_t>(p.skin)); }
+                for (const auto& p : m.players) { w.U8(static_cast<uint8_t>((p.used ? 1 : 0) | (p.bot ? 2 : 0))); w.Str(p.name, MAX_NAME); w.I16(p.frags); w.U8(static_cast<uint8_t>(p.skin)); }
             },
             [&](const State& m) {
                 w.U8(static_cast<uint8_t>(MessageType::State));
@@ -105,7 +105,7 @@ namespace ALTEngine::Net
         case MessageType::Roster:
         {
             Roster m;
-            for (auto& p : m.players) { p.used = r.U8() != 0; p.name = r.Str(MAX_NAME); p.frags = r.I16(); p.skin = SkinFrom(r.U8()); }
+            for (auto& p : m.players) { const uint8_t flags = r.U8(); p.used = (flags & 1) != 0; p.bot = (flags & 2) != 0; p.name = r.Str(MAX_NAME); p.frags = r.I16(); p.skin = SkinFrom(r.U8()); }
             result = m; break;
         }
         case MessageType::State:

@@ -170,6 +170,81 @@ TEST_CASE("Net: a fifth player is turned away, and a silent one times out")
     CHECK(!host.GetRoster().players[i1].used);
 }
 
+TEST_CASE("Net: bots hold places up to the player limit and give them up to players")
+{
+    N::Session host, p1, p2;
+    REQUIRE(host.StartHost("Bots", "900", "Host", 0));
+    host.SetPlayerLimit(5);
+    CHECK(host.PlayerLimit() == 5);
+    host.SetPlayerLimit(12);
+    CHECK(host.PlayerLimit() == N::MAX_PLAYERS);
+    host.SetPlayerLimit(5);
+    const int b1 = host.AddBot("BOT 1", N::Skin::Synthetic);
+    const int b2 = host.AddBot("BOT 2", N::Skin::Soldier);
+    const int b3 = host.AddBot("BOT 3", N::Skin::Guard);
+    CHECK(b1 >= 1); CHECK(b2 >= 1); CHECK(b3 >= 1);
+    CHECK(host.IsBot(b1));
+    CHECK(!host.IsBot(0));
+    CHECK(host.BotCount() == 3);
+    CHECK(host.UsedCount() == 4);
+
+    const auto address = N::Address::Loopback(host.Port());
+    REQUIRE(p1.StartJoin(address, "Hicks"));
+    double now = 0.0;
+    Pump({ &host, &p1 }, now);
+    REQUIRE(p1.Connected());
+    CHECK(host.BotCount() == 3);   // room for one more
+    CHECK(p1.GetRoster().players[static_cast<size_t>(b1)].bot);
+    CHECK(!p1.GetRoster().players[0].bot);
+
+    REQUIRE(p2.StartJoin(address, "Hudson"));
+    Pump({ &host, &p1, &p2 }, now);
+    REQUIRE(p2.Connected());       // a bot made way
+    CHECK(host.BotCount() == 2);
+    CHECK(host.UsedCount() == 5);
+    host.TakeEvents(); p1.TakeEvents(); p2.TakeEvents();
+
+    // A player's round on a bot is the host's to apply.
+    const int bot = host.IsBot(b1) ? b1 : b2;
+    p1.SendHit(static_cast<uint8_t>(bot), 40);
+    Pump({ &host, &p1, &p2 }, now);
+    bool botHit = false;
+    for (const auto& e : host.TakeEvents())
+    {
+        if (e.kind == N::Event::Kind::BotHit)
+        {
+            botHit = true;
+            CHECK(e.hit.target == bot);
+            CHECK(e.hit.attacker == p1.LocalSlot());
+            CHECK(e.hit.damage == 40);
+        }
+    }
+    CHECK(botHit);
+
+    // A bot's round on a player reaches that player as a hit from the bot.
+    host.SendBotHit(bot, static_cast<uint8_t>(p2.LocalSlot()), 24);
+    Pump({ &host, &p1, &p2 }, now);
+    bool hit = false;
+    for (const auto& e : p2.TakeEvents())
+    {
+        if (e.kind == N::Event::Kind::Hit) { hit = true; CHECK(e.hit.attacker == bot); CHECK(e.hit.damage == 24); }
+    }
+    CHECK(hit);
+
+    // Its state reaches the players as a player's would.
+    N::State s; s.x = 321.0f; s.health = 77;
+    host.SendBotState(bot, s);
+    Pump({ &host, &p1, &p2 }, now);
+    REQUIRE(p1.RemoteStates()[static_cast<size_t>(bot)].has_value());
+    CHECK(p1.RemoteStates()[static_cast<size_t>(bot)]->x == 321.0f);
+
+    host.RemoveBot(bot);
+    Pump({ &host, &p1, &p2 }, now);
+    CHECK(!host.IsBot(bot));
+    CHECK(!p1.GetRoster().players[static_cast<size_t>(bot)].used);
+    CHECK(!p1.RemoteStates()[static_cast<size_t>(bot)].has_value());
+}
+
 TEST_CASE("Net: the game browser finds a game on this machine")
 {
     N::Session host;

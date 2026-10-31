@@ -1,4 +1,4 @@
-# What remains (after zip 94)
+# What remains (after zip 96)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -9,6 +9,30 @@ textures, done once everything else is in.
 Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
+
+Changed in zip 96, to check: **bots, player limit, and the player look preview.**
+- **The preview showed a hit frame for some views** (the Synthetic's 2, 3, 4 and 7, the Guard's 1, 2, 4, 6
+  and 7). It decoded each view's first frame on its own, and a single frame can decode cleanly from the wrong
+  section of the file; a whole animation only fits its own section, as in play. It now decodes each view's
+  whole walk, walks on the spot and turns a view every half second, each frame stood on its own anchor.
+  The layouts, from Edward's files: SYNTH.B16 has 20 sections, one per animation, all eight walking views
+  its own; SOLDIER and GUARD have 8 and HANDLER 9 - five walking views (5-7 are 3-1 mirrored), then the
+  hit and death animations. Their animations 11-13 (Handler 12-14) have no frames in these files at all.
+- **Player limit** (Start Multiplayer Game): 4-8, bots included; the original's four is the default. Only
+  four starts exist, so players past the fourth share them: everyone comes back at the start farthest from
+  the other living players. The protocol is now version 3 (eight places, and a bot flag in the roster).
+- **Bots** (Start Multiplayer Game): NONE, or 3 up to the limit less one (always room for the host), at skill
+  1-5. Saved with the limit (MultiplayerPlayerLimit, MultiplayerBots, MultiplayerBotSkill). The host runs them
+  (`Game/Bots.h`); each takes a player place, so everyone sees, shoots and is shot by them as by a player, and
+  their frags count in the roster. A player joining a full game takes a bot's place, and a bot comes back when
+  they leave. Named BOT 1, BOT 2 and so on, in the four looks in turn.
+  How they play - a variant of the Synthetic's task: follow the path network toward the nearest player
+  (the flow field's walk, FUN_000281cc / FUN_00033114), and once there is a clear line (as FUN_0003231c, out
+  to 0x4000) turn to them, wait their reaction time and fire a pulse rifle round from the hip (0x240, a
+  gunner's height); close in they sidestep. They move with the player's own mover, take a quarter of a
+  round's damage as a player does, and come back after about three seconds. Skill sets reaction time
+  (1.0 s at 1 to 0.2 s at 5), aim error, rate of fire, turning and walking speed (up to the player's walk).
+  Tested on this machine: five bots on L900 for 40 seconds found each other and the host and scored 16 frags.
 
 Changed in zip 94, to check: **multiplayer, players' looks, starts, shots and chat.**
 - **The players are Synthetics in the original.** Every multiplayer map (L900-L909) has exactly four
@@ -250,6 +274,8 @@ original's four starts, seen shots and F2-F9 chat in zip 94. Still to come, roug
    port to open"), and the Start Multiplayer Game screen says it under its options.
 5. **The rest of the original's packet types** (FUN_00054a60), traced one by one.
 6. **More looks**, such as a Doom Guy: a new `Net::Skin` value and its sprites.
+7. **Bots:** they don't use doors, lifts or pickups, and don't dodge. Rounds from a player on a client are
+   checked against a bot where the client saw it, as for any player.
 
 ## 5. Larger features
 

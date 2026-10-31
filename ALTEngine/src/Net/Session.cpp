@@ -13,6 +13,7 @@ namespace ALTEngine::Net
         gameName = name;
         level = levelDigits;
         playerName = player;
+        playerLimit = ORIGINAL_PLAYERS;
         localSlot = 0;
         welcomed = true;
         roster = {};
@@ -155,7 +156,7 @@ namespace ALTEngine::Net
         {
             uint8_t count = 0;
             for (const auto& p : roster.players) { count = static_cast<uint8_t>(count + (p.used ? 1 : 0)); }
-            Send(from, DiscoverReply{ gameName, level, count, MAX_PLAYERS });
+            Send(from, DiscoverReply{ gameName, level, count, static_cast<uint8_t>(playerLimit) });
             return;
         }
         if (const auto* join = std::get_if<Join>(&message))
@@ -163,7 +164,15 @@ namespace ALTEngine::Net
             int slot = SlotOf(from);
             if (slot < 0)
             {
-                for (int i = 1; i < MAX_PLAYERS && slot < 0; ++i) { if (!peers[static_cast<size_t>(i)].used) { slot = i; } }
+                // Full: a bot gives up its place to a player.
+                if (UsedCount() >= playerLimit)
+                {
+                    for (int i = MAX_PLAYERS - 1; i > 0; --i) { if (IsBot(i)) { RemoveBot(i); break; } }
+                }
+                if (UsedCount() < playerLimit)
+                {
+                    for (int i = 1; i < MAX_PLAYERS && slot < 0; ++i) { if (!roster.players[static_cast<size_t>(i)].used) { slot = i; } }
+                }
                 if (slot < 0) { Send(from, Reject{ RejectReason::Full }); return; }
                 peers[static_cast<size_t>(slot)] = Peer{ true, from, now };
                 roster.players[static_cast<size_t>(slot)] = RosterEntry{ true, join->name.substr(0, MAX_NAME), 0, join->skin };
@@ -200,6 +209,7 @@ namespace ALTEngine::Net
             Hit fixed = *hit;
             fixed.attacker = s;
             if (fixed.target == 0) { Event e; e.kind = Event::Kind::Hit; e.slot = s; e.hit = fixed; events.push_back(e); }
+            else if (IsBot(fixed.target)) { HitBot(fixed.attacker, fixed.target, fixed.damage); }
             else if (fixed.target < MAX_PLAYERS && peers[fixed.target].used) { Send(peers[fixed.target].address, fixed); }
         }
         else if (const auto* frag = std::get_if<Frag>(&message))
@@ -315,7 +325,84 @@ namespace ALTEngine::Net
         if (!Connected() || target >= MAX_PLAYERS || target == localSlot) { return; }
         const Hit hit{ static_cast<uint8_t>(localSlot), target, damage };
         if (role == Role::Client) { SendToHost(hit); return; }
+        if (IsBot(target)) { HitBot(hit.attacker, target, damage); return; }
         if (peers[target].used) { Send(peers[target].address, hit); }
+    }
+
+    void Session::SetPlayerLimit(int limit)
+    {
+        playerLimit = std::clamp(limit, MIN_PLAYER_LIMIT, MAX_PLAYERS);
+    }
+
+    int Session::UsedCount() const
+    {
+        int n = 0;
+        for (const auto& p : roster.players) { n += p.used ? 1 : 0; }
+        return n;
+    }
+
+    int Session::BotCount() const
+    {
+        int n = 0;
+        for (const auto& p : roster.players) { n += (p.used && p.bot) ? 1 : 0; }
+        return n;
+    }
+
+    int Session::AddBot(const std::string& name, Skin look)
+    {
+        if (role != Role::Host || UsedCount() >= playerLimit) { return -1; }
+        for (int i = 1; i < MAX_PLAYERS; ++i)
+        {
+            auto& entry = roster.players[static_cast<size_t>(i)];
+            if (entry.used) { continue; }
+            entry = RosterEntry{ true, name.substr(0, MAX_NAME), 0, look, true };
+            Broadcast(roster);
+            Event e; e.kind = Event::Kind::PlayerJoined; e.slot = static_cast<uint8_t>(i); events.push_back(e);
+            Event r; r.kind = Event::Kind::RosterChanged; events.push_back(r);
+            return i;
+        }
+        return -1;
+    }
+
+    void Session::RemoveBot(int slot)
+    {
+        if (role != Role::Host || !IsBot(slot)) { return; }
+        roster.players[static_cast<size_t>(slot)] = {};
+        remote[static_cast<size_t>(slot)].reset();
+        Broadcast(Leave{ static_cast<uint8_t>(slot) });
+        Broadcast(roster);
+        Event e; e.kind = Event::Kind::PlayerLeft; e.slot = static_cast<uint8_t>(slot); events.push_back(e);
+        Event r; r.kind = Event::Kind::RosterChanged; events.push_back(r);
+    }
+
+    void Session::SendBotState(int slot, State state)
+    {
+        if (role != Role::Host || !IsBot(slot)) { return; }
+        state.slot = static_cast<uint8_t>(slot);
+        remote[static_cast<size_t>(slot)] = state;
+        Broadcast(state);
+    }
+
+    void Session::SendBotShot(int slot, Shot shot)
+    {
+        if (role != Role::Host || !IsBot(slot)) { return; }
+        shot.slot = static_cast<uint8_t>(slot);
+        Broadcast(shot);
+    }
+
+    void Session::SendBotHit(int attacker, uint8_t target, int16_t damage)
+    {
+        if (role != Role::Host || !IsBot(attacker) || target >= MAX_PLAYERS || static_cast<int>(target) == attacker) { return; }
+        const Hit hit{ static_cast<uint8_t>(attacker), target, damage };
+        if (target == 0) { Event e; e.kind = Event::Kind::Hit; e.slot = hit.attacker; e.hit = hit; events.push_back(e); }
+        else if (IsBot(target)) { HitBot(hit.attacker, target, damage); }
+        else if (peers[target].used) { Send(peers[target].address, hit); }
+    }
+
+    void Session::HitBot(uint8_t attacker, uint8_t target, int16_t damage)
+    {
+        Event e; e.kind = Event::Kind::BotHit; e.slot = attacker; e.hit = Hit{ attacker, target, damage };
+        events.push_back(e);
     }
 
     void Session::SendFrag(uint8_t killer, uint8_t victim)

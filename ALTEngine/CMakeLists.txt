@@ -152,6 +152,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/MissionAssessmentTests.cpp
         tests/FacePickTests.cpp
         tests/NetTests.cpp
+        tests/BotTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
     target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats alt_warnings nlohmann_json::nlohmann_json)

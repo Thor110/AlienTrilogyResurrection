@@ -18,8 +18,12 @@ namespace ALTEngine::Net
     // Every datagram: "ALT" + a version byte, a type byte, then the fields,
     // little-endian. A datagram that doesn't start so, or whose fields run
     // short, is dropped.
-    inline constexpr uint8_t PROTOCOL_VERSION = 2;
-    inline constexpr int MAX_PLAYERS = 4;          // the original's four records
+    inline constexpr uint8_t PROTOCOL_VERSION = 3;
+    // The original's four records are its limit; the port allows a host to
+    // take up to eight (MIN_PLAYER_LIMIT - MAX_PLAYERS, bots included).
+    inline constexpr int MAX_PLAYERS = 8;
+    inline constexpr int MIN_PLAYER_LIMIT = 4;
+    inline constexpr int ORIGINAL_PLAYERS = 4;
     inline constexpr uint16_t DEFAULT_PORT = 27960;
     inline constexpr size_t MAX_NAME = 16;
     inline constexpr size_t MAX_GAME_NAME = 24;
@@ -76,7 +80,8 @@ namespace ALTEngine::Net
     struct Welcome { uint8_t slot = 0; std::string level; };
     enum class RejectReason : uint8_t { Full = 1, Version = 2 };
     struct Reject { RejectReason reason = RejectReason::Full; };
-    struct RosterEntry { bool used = false; std::string name; int16_t frags = 0; Skin skin = Skin::Synthetic; };
+    // `bot`: run by the host (Game::Bots), not a machine of its own.
+    struct RosterEntry { bool used = false; std::string name; int16_t frags = 0; Skin skin = Skin::Synthetic; bool bot = false; };
     struct Roster { std::array<RosterEntry, MAX_PLAYERS> players{}; };
     struct State
     {

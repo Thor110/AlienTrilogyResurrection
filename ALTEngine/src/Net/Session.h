@@ -25,6 +25,7 @@ namespace ALTEngine::Net
             Frag,           // `frag`: someone killed someone
             Chat,           // `chat`
             RosterChanged,  // names or frags changed
+            BotHit,         // host: our bot in `hit.target` was hit by `hit.attacker`
         };
         Kind kind = Kind::RosterChanged;
         uint8_t slot = 0;
@@ -35,7 +36,8 @@ namespace ALTEngine::Net
         RejectReason reason = RejectReason::Full;
     };
 
-    // A game in progress: one host (slot 0) and up to three more. The host
+    // A game in progress: one host (slot 0) and up to seven more (the host's
+    // player limit, bots included). The host
     // keeps the roster and the frag count and passes each player's state,
     // shots, hits and chat on to the others; a hit goes to the player hit,
     // who takes the damage and reports a frag if it killed them.
@@ -70,6 +72,25 @@ namespace ALTEngine::Net
         void SendFrag(uint8_t killer, uint8_t victim);
         void SendChat(const std::string& text);
 
+        // Host: how many may play, bots included (MIN_PLAYER_LIMIT-MAX_PLAYERS).
+        void SetPlayerLimit(int limit);
+        int PlayerLimit() const { return playerLimit; }
+        // Host: the bots asked for (Game::Bots) and their skill; the game
+        // keeps that many, less any place a player has taken.
+        void SetBots(int count, int skillLevel) { botsWanted = count; botSkill = skillLevel; }
+        int BotsWanted() const { return botsWanted; }
+        int BotSkill() const { return botSkill; }
+        // Host: a bot takes the first free place (-1 if none) or leaves.
+        int AddBot(const std::string& name, Skin look);
+        void RemoveBot(int slot);
+        bool IsBot(int slot) const { return slot >= 0 && slot < MAX_PLAYERS && roster.players[static_cast<size_t>(slot)].used && roster.players[static_cast<size_t>(slot)].bot; }
+        int UsedCount() const;
+        int BotCount() const;
+        // Host: a bot's state, shot, hit and death, sent as that player's.
+        void SendBotState(int slot, State state);
+        void SendBotShot(int slot, Shot shot);
+        void SendBotHit(int attacker, uint8_t target, int16_t damage);
+
         // The F2-F9 messages (Multiplayer Options), sent from play by key.
         void SetQuickChat(const std::array<std::string, 8>& messages) { quickChat = messages; }
         const std::string& QuickChat(int index) const { return quickChat[static_cast<size_t>(index & 7)]; }
@@ -88,6 +109,11 @@ namespace ALTEngine::Net
 
     private:
         std::array<std::string, 8> quickChat{};
+        int playerLimit = ORIGINAL_PLAYERS;
+        int botsWanted = 0;
+        int botSkill = 3;
+        // Host: a hit for one of the bots becomes a BotHit event.
+        void HitBot(uint8_t attacker, uint8_t target, int16_t damage);
         struct Peer { bool used = false; Address address; double lastHeard = 0.0; };
 
         void Send(const Address& to, const Message& message);

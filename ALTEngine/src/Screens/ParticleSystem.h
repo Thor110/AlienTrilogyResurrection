@@ -354,6 +354,9 @@ namespace ALTEngine::Screens
             // level as any round does, but whether it hit a player is decided
             // on the machine that fired it.
             bool remote = false;
+            // Multiplayer: the bot (its player slot) that fired it, -1 for
+            // anyone else's. The host decides what a bot's round hits.
+            int owner = -1;
 
             uint8_t type = TYPE_PISTOL;  // +0x1e
             int strength = 0;            // +0x1d, the value life started at

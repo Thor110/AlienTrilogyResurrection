@@ -6,11 +6,8 @@
 
 namespace ALTEngine::Screens
 {
-    // In-memory only - there's no real networking backend, so nothing
-    // here is actually sent anywhere or persisted. This exists purely so
-    // the menu UI has somewhere to hold what the player typed, matching
-    // "throw together using the current systems" for the pieces that
-    // can't be real yet.
+    // What the multiplayer menus hold. main.cpp keeps the name, look and
+    // host settings in the config and hands them to Net::Session.
     struct MultiplayerSettings
     {
         std::string playerName = "Player";
@@ -21,6 +18,14 @@ namespace ALTEngine::Screens
         std::string gameName;
         int startLevel = 1;    // 1-10
         int minGameLength = 2;
+        // The port's own: how many may play (4-8, bots included), how many
+        // bots the host runs (0 for none, else 3-7, always leaving room for
+        // the host) and how well they play (1-5). See Game::Bots.
+        int playerLimit = 4;
+        int botCount = 0;
+        int botSkill = 3;
+        // Bots allowed at a player limit: one place is always the host's.
+        static int MaxBots(int limit) { return limit - 1 < 7 ? limit - 1 : 7; }
     };
 
     enum class MultiplayerMainChoice

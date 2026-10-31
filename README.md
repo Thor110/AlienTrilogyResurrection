@@ -251,7 +251,7 @@ The build also makes `ALTLevelScan`, which checks every level for faces whose te
 > - **It is UDP, not TCP.** Forwarding TCP 27960 alone does nothing.
 > - Only the host needs the port open; players joining need nothing opened.
 
-Up to four players (the original's four). Multiplayer is the original's ten maps, L900-L909; "Start at level" 1-10 picks one. Each player picks a name and a look (Synthetic, Soldier, Guard or Handler) in Multiplayer Options, and F2-F9 send the chat messages set there. Every player needs the same version of ALTEngine: an older or newer one is turned away.
+Four players, as in the original, or up to eight: the host sets the player limit (4-8) on the Start Multiplayer Game screen. The host can also add bots (none, or 3 up to the limit less one, so there is always room for the host) and set their skill (1-5); a player joining a full game takes a bot's place. Multiplayer is the original's ten maps, L900-L909; "Start at level" 1-10 picks one. Each player picks a name and a look (Synthetic, Soldier, Guard or Handler) in Multiplayer Options, and F2-F9 send the chat messages set there. Every player needs the same version of ALTEngine: an older or newer one is turned away.
 
 ## Alien Trilogy Viewer
 

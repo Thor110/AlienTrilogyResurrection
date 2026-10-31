@@ -27,6 +27,7 @@
 #include "SmartgunTargeting.h"
 #include "../Game/CreatureSight.h"
 #include "../Game/FlowField.h"
+#include "../Game/Bots.h"
 #include "../Game/Lifts.h"
 #include "../Game/PlayerMover.h"
 #include "../Game/Triggers.h"
@@ -583,6 +584,14 @@ namespace ALTEngine::Screens
         // and who last hit us, for the frag.
         float spawnX = 0.0f, spawnZ = 0.0f, spawnFeetY = 0.0f, spawnYaw = 0.0f;
         int lastNetAttacker = -1;
+        // Multiplayer: the level's player starts (its 0x0d records), world
+        // x, z, feet and yaw; and the host's bots (Game::Bots).
+        struct MultiplayerStart { float x = 0, z = 0, feetY = 0, yaw = 0; };
+        std::vector<MultiplayerStart> multiplayerStarts;
+        std::vector<ALTEngine::Game::Bots::Bot> bots;
+        double botTickAccumulator = 0.0;
+        double lastBotStateSent = -1.0;
+        int botsMade = 0;
         double lastStateSent = -1.0;
         uint32_t netTick = 0;
         bool prevCamValid = false;
@@ -840,20 +849,28 @@ namespace ALTEngine::Screens
                     // original spawns them with a task of their own instead of
                     // a creature's (FUN_0002e638, case 0xd). Player n takes the
                     // nth, facing its own compass point.
+                    // With more than four players (the port's own limit, up to
+                    // eight), players past the fourth share the starts.
                     if (session && session->Connected())
                     {
-                        int seen = 0;
+                        multiplayerStarts.clear();
                         for (const auto& monster : level.monsters)
                         {
                             if (monster.type != MULTIPLAYER_START_TYPE) { continue; }
-                            if (seen++ != session->LocalSlot()) { continue; }
-                            camera.x = static_cast<float>(monster.x) * 512.0f + 256.0f - originX;
-                            camera.z = static_cast<float>(monster.y) * 512.0f + 256.0f - originZ;
-                            playerFeetY = ALTEngine::Formats::FindFloorHeightGridSpace(
-                                level, ToGridSpaceX(camera.x, originX), ToGridSpaceZ(camera.z, originZ));
+                            MultiplayerStart start;
+                            start.x = static_cast<float>(monster.x) * 512.0f + 256.0f - originX;
+                            start.z = static_cast<float>(monster.y) * 512.0f + 256.0f - originZ;
+                            start.feetY = ALTEngine::Formats::FindFloorHeightGridSpace(
+                                level, ToGridSpaceX(start.x, originX), ToGridSpaceZ(start.z, originZ));
+                            start.yaw = static_cast<float>(monster.rotation & 7) * (3.14159265f / 4.0f);
+                            multiplayerStarts.push_back(start);
+                        }
+                        if (!multiplayerStarts.empty())
+                        {
+                            const auto& start = multiplayerStarts[static_cast<size_t>(session->LocalSlot()) % multiplayerStarts.size()];
+                            camera.x = start.x; camera.z = start.z; camera.yaw = start.yaw;
+                            playerFeetY = start.feetY;
                             camera.y = playerFeetY + EYE_HEIGHT;
-                            camera.yaw = static_cast<float>(monster.rotation & 7) * (3.14159265f / 4.0f);
-                            break;
                         }
                     }
                     spawnX = camera.x; spawnZ = camera.z; spawnFeetY = playerFeetY; spawnYaw = camera.yaw;
@@ -1562,6 +1579,36 @@ namespace ALTEngine::Screens
         // - see GameOverSequence. The clip is chosen by HOW you died, which
         // ApplyDamage records. Checked wherever damage is dealt; the sequence
         // itself runs once the frame is done.
+        // Multiplayer: the start farthest from every other living player, for
+        // a respawn (and a bot's); -1 with none.
+        auto chooseStart = [&](int forSlot) -> int {
+            if (multiplayerStarts.empty()) { return -1; }
+            std::vector<std::pair<float, float>> others;
+            if (session && forSlot != session->LocalSlot() && !hudState.dead) { others.push_back({ camera.x, camera.z }); }
+            if (session)
+            {
+                const auto& states = session->RemoteStates();
+                for (size_t s = 0; s < states.size(); ++s)
+                {
+                    if (static_cast<int>(s) == forSlot || !states[s] || (states[s]->flags & 1)) { continue; }
+                    others.push_back({ states[s]->x, states[s]->z });
+                }
+            }
+            for (const auto& b : bots) { if (b.slot != forSlot && !b.dead) { others.push_back({ b.x, b.z }); } }
+            int best = 0;
+            float bestDist = -1.0f;
+            for (size_t i = 0; i < multiplayerStarts.size(); ++i)
+            {
+                float nearest = 1e30f;
+                for (const auto& o : others)
+                {
+                    nearest = std::min(nearest, std::hypot(o.first - multiplayerStarts[i].x, o.second - multiplayerStarts[i].z));
+                }
+                if (nearest > bestDist) { bestDist = nearest; best = static_cast<int>(i); }
+            }
+            return best;
+        };
+
         auto checkPlayerDeath = [&]() {
             if (!hudState.dead || playerDead) { return; }
             if (session && session->Connected())
@@ -1577,6 +1624,11 @@ namespace ALTEngine::Screens
                 hudState.health = 100;
                 camera.x = spawnX; camera.z = spawnZ; camera.yaw = spawnYaw;
                 playerFeetY = spawnFeetY;
+                if (const int start = chooseStart(me); start >= 0)
+                {
+                    const auto& s = multiplayerStarts[static_cast<size_t>(start)];
+                    camera.x = s.x; camera.z = s.z; camera.yaw = s.yaw; playerFeetY = s.feetY;
+                }
                 camera.y = playerFeetY + EYE_HEIGHT;
                 playerCam.yaw = static_cast<int>(std::lround(camera.yaw * (4096.0f / 6.28318530718f))) & 0xfff;
                 return;
@@ -1867,6 +1919,20 @@ namespace ALTEngine::Screens
                         }
                         break;
                     }
+                    case K::BotHit:
+                    {
+                        // One of our bots was hit: a quarter of it, as a player.
+                        for (auto& b : bots)
+                        {
+                            if (b.slot != e.hit.target || b.dead) { continue; }
+                            particles.SpawnBlood(ALTEngine::Screens::Particles::TYPE_BLOOD_WHITE, b.x, b.feetY + 0x200, b.z);
+                            if (ALTEngine::Game::Bots::TakeHit(b, e.hit.damage, e.hit.attacker))
+                            {
+                                session->SendFrag(static_cast<uint8_t>(e.hit.attacker), static_cast<uint8_t>(b.slot));
+                            }
+                        }
+                        break;
+                    }
                     case K::Shot:
                     {
                         // Another player's round, seen here: it flies and
@@ -1908,6 +1974,157 @@ namespace ALTEngine::Screens
                     state.weapon = static_cast<uint8_t>(selectedWeapon);
                     state.flags = static_cast<uint8_t>((hudState.dead ? 1 : 0) | (playerCam.speed != 0 ? 4 : 0));
                     session->SendState(state);
+                }
+
+                // The host's bots (Game::Bots): as many as asked for, less any
+                // place a player has taken, each a Synthetic-like hunter.
+                if (session->GetRole() == ALTEngine::Net::Session::Role::Host && levelReady)
+                {
+                    namespace B = ALTEngine::Game::Bots;
+                    bots.erase(std::remove_if(bots.begin(), bots.end(),
+                                              [&](const B::Bot& b) { return !session->IsBot(b.slot); }), bots.end());
+                    const int humans = session->UsedCount() - session->BotCount();
+                    const int wanted = std::max(0, std::min(session->BotsWanted(), session->PlayerLimit() - humans));
+                    while (session->BotCount() > wanted && !bots.empty())
+                    {
+                        session->RemoveBot(bots.back().slot);
+                        bots.pop_back();
+                    }
+                    while (session->BotCount() < wanted)
+                    {
+                        const auto look = static_cast<ALTEngine::Net::Skin>(botsMade % static_cast<int>(ALTEngine::Net::Skin::Count));
+                        const int slot = session->AddBot("BOT " + std::to_string(++botsMade), look);
+                        if (slot < 0) { break; }
+                        B::Bot b;
+                        b.slot = slot;
+                        b.rng = 0x9e3779b9u * static_cast<uint32_t>(slot + 1) + static_cast<uint32_t>(SDL_GetTicks());
+                        b.dead = true;          // placed by the respawn below
+                        b.respawnTicks = 1;
+                        bots.push_back(b);
+                    }
+
+                    // The bots' world: the player's own mover and a line test.
+                    namespace PM = ALTEngine::Game::PlayerMover;
+                    B::World bw;
+                    bw.nodes = &level.pathNodes;
+                    bw.nodeAt = [&](float x, float z) -> int {
+                        const auto* c = ALTEngine::Formats::CellAt(level, ToGridSpaceX(x, originX) >> 9, ToGridSpaceZ(z, originZ) >> 9);
+                        return (c && c->unknown7 < level.pathNodes.size()) ? static_cast<int>(c->unknown7) : -1;
+                    };
+                    bw.nodePosition = [&](int node, float& x, float& z) {
+                        int gx = 0, gz = 0;
+                        if (!flowField.Position(node, gx, gz)) { return false; }
+                        x = static_cast<float>(gx) - originX; z = static_cast<float>(gz) - originZ;
+                        return true;
+                    };
+                    bw.floor = [&](float x, float z) {
+                        return ALTEngine::Formats::FindFloorHeightGridSpace(level, ToGridSpaceX(x, originX), ToGridSpaceZ(z, originZ));
+                    };
+                    bw.clearShot = [&](float x0, float y0, float z0, float x1, float y1, float z1) {
+                        const float dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+                        const float len = std::sqrt(dx * dx + dz * dz);
+                        const int steps = std::max(1, static_cast<int>(len / 128.0f));
+                        for (int i = 1; i < steps; ++i)
+                        {
+                            const float t = static_cast<float>(i) / static_cast<float>(steps);
+                            const int gx = ToGridSpaceX(x0 + dx * t, originX), gz = ToGridSpaceZ(z0 + dz * t, originZ);
+                            const auto* c = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
+                            if (!c || PM::WallAttribute(c->attribute) || (c->attribute >= 0x19 && c->attribute <= 0x2c)) { return false; }
+                            if (c->unknown13 >= 0x14 && c->unknown13 != 0xFF) { return false; }
+                            const float y = y0 + dy * t;
+                            if (ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz) > y) { return false; }
+                            if (static_cast<float>(c->ceilingHeight) * 32.0f < y) { return false; }
+                        }
+                        return true;
+                    };
+                    bw.move = [&](float& x, float& z, float feetY, float stepX, float stepZ) {
+                        PM::World mw;
+                        mw.cell = [&](int cx, int cz) { return ALTEngine::Formats::CellAt(level, cx >> 9, cz >> 9); };
+                        mw.floor = [&](int cx, int cz) { return static_cast<int>(ALTEngine::Formats::FindFloorHeightGridSpace(level, cx, cz)); };
+                        mw.ceiling = [&](int cx, int cz) {
+                            const auto* c = ALTEngine::Formats::CellAt(level, cx >> 9, cz >> 9);
+                            return c ? static_cast<int>(c->ceilingHeight) * 32 : 0;
+                        };
+                        mw.occupied = [&](int cx, int cz) {
+                            const auto* c = ALTEngine::Formats::CellAt(level, cx >> 9, cz >> 9);
+                            return c && c->unknown13 != 0 && c->unknown13 != 0xFF;
+                        };
+                        const int gx = ToGridSpaceX(x, originX), gz = ToGridSpaceZ(z, originZ);
+                        const int gy = static_cast<int>(std::lround(feetY));
+                        const int nx = PM::MoveX(mw, gx, gz, gy, static_cast<int>(std::lround(stepX)));
+                        const int nz = PM::MoveZ(mw, nx, gz, gy, static_cast<int>(std::lround(stepZ)));
+                        x = static_cast<float>(nx) - originX;
+                        z = static_cast<float>(nz) - originZ;
+                    };
+
+                    const B::Skill skill = B::SkillFor(session->BotSkill());
+                    const double botTick = 1.0 / ALTEngine::Screens::PlayerCamera::TICK_HZ;
+                    botTickAccumulator = std::min(botTickAccumulator + static_cast<double>(dt), 0.25);
+                    while (botTickAccumulator >= botTick)
+                    {
+                        botTickAccumulator -= botTick;
+                        std::vector<B::Target> targets;
+                        targets.push_back({ session->LocalSlot(), camera.x, playerFeetY, camera.z, !hudState.dead });
+                        const auto& states = session->RemoteStates();
+                        for (size_t s = 0; s < states.size(); ++s)
+                        {
+                            if (!states[s] || session->IsBot(static_cast<int>(s))) { continue; }
+                            targets.push_back({ static_cast<int>(s), states[s]->x, states[s]->y, states[s]->z, (states[s]->flags & 1) == 0 });
+                        }
+                        for (const auto& b : bots) { targets.push_back({ b.slot, b.x, b.feetY, b.z, !b.dead }); }
+
+                        for (auto& b : bots)
+                        {
+                            if (b.dead)
+                            {
+                                if (--b.respawnTicks > 0) { continue; }
+                                const int start = chooseStart(b.slot);
+                                if (start < 0) { b.respawnTicks = 1; continue; }
+                                const auto& s = multiplayerStarts[static_cast<size_t>(start)];
+                                b.x = s.x; b.z = s.z; b.feetY = s.feetY;
+                                b.yaw = static_cast<int>(std::lround(s.yaw * (4096.0f / 6.28318530718f))) & 0xfff;
+                                b.health = B::HEALTH;
+                                b.dead = false;
+                                continue;
+                            }
+                            const B::Output act = B::Tick(b, skill, bw, targets);
+                            if (!act.fire) { continue; }
+                            // A pulse rifle round from the hip (a gunner's 0x240,
+                            // CreatureTasks::Gunner), at the target with the
+                            // bot's aim error in.
+                            namespace P = ALTEngine::Screens::Particles;
+                            namespace SGT = ALTEngine::Screens::SmartgunTargeting;
+                            const float fx = b.x, fy = b.feetY + 0x240, fz = b.z;
+                            const float dist = std::hypot(act.aimX - fx, act.aimZ - fz);
+                            const float yawRadians = static_cast<float>(act.aimYaw) * (6.28318530718f / 4096.0f);
+                            const float tx = fx + std::sin(yawRadians) * dist, tz = fz - std::cos(yawRadians) * dist;
+                            const SGT::Vec v = SGT::AimVelocity(fx, fy, fz, tx, act.aimY, tz, static_cast<float>(SGT::SPEED));
+                            if (P::Particle* round = particles.SpawnAimed(P::TYPE_PULSE, fx, fy, fz, v.x, v.y, v.z))
+                            {
+                                round->owner = b.slot;
+                                ALTEngine::Net::Shot shotMessage;
+                                shotMessage.type = static_cast<uint8_t>(P::TYPE_PULSE);
+                                shotMessage.x = fx; shotMessage.y = fy; shotMessage.z = fz;
+                                shotMessage.vx = v.x; shotMessage.vy = v.y; shotMessage.vz = v.z;
+                                session->SendBotShot(b.slot, shotMessage);
+                            }
+                        }
+                    }
+
+                    if (lastBotStateSent < 0.0 || netNow - lastBotStateSent >= 1.0 / 30.0)
+                    {
+                        lastBotStateSent = netNow;
+                        for (const auto& b : bots)
+                        {
+                            ALTEngine::Net::State state;
+                            state.tick = netTick;
+                            state.x = b.x; state.y = b.feetY; state.z = b.z;
+                            state.yaw = static_cast<int16_t>(b.yaw);
+                            state.health = static_cast<int16_t>(b.health);
+                            state.flags = static_cast<uint8_t>((b.dead ? 1 : 0) | (b.moving ? 4 : 0));
+                            session->SendBotState(b.slot, state);
+                        }
+                    }
                 }
             }
 
@@ -3769,18 +3986,30 @@ namespace ALTEngine::Screens
                             // their feet up. The hit is theirs to take (they
                             // are sent it and apply it, as the original's type 8).
                             const P::Particle* moving = particles.Ticking();
+                            const int owner = moving ? moving->owner : -1;
                             if (session && session->Connected() && !(moving && moving->remote))
                             {
+                                const auto damage = static_cast<int16_t>(D::HitDamage(def.speed, hitLife, def.strength));
+                                // A bot's round can hit the host's own player.
+                                if (owner >= 0 && !hudState.dead
+                                    && std::fabs(px - camera.x) <= REMOTE_PLAYER_HALF_WIDTH
+                                    && std::fabs(pz - camera.z) <= REMOTE_PLAYER_HALF_WIDTH
+                                    && py >= playerFeetY && py <= playerFeetY + REMOTE_PLAYER_HEIGHT)
+                                {
+                                    session->SendBotHit(owner, static_cast<uint8_t>(session->LocalSlot()), damage);
+                                    particles.SpawnBlood(P::TYPE_BLOOD_WHITE, px, py, pz);
+                                    return 2;
+                                }
                                 const auto& states = session->RemoteStates();
                                 for (size_t slot = 0; slot < states.size(); ++slot)
                                 {
-                                    if (!states[slot] || (states[slot]->flags & 1)) { continue; }
+                                    if (!states[slot] || (states[slot]->flags & 1) || static_cast<int>(slot) == owner) { continue; }
                                     const auto& other = *states[slot];
                                     if (std::fabs(px - other.x) > REMOTE_PLAYER_HALF_WIDTH
                                         || std::fabs(pz - other.z) > REMOTE_PLAYER_HALF_WIDTH
                                         || py < other.y || py > other.y + REMOTE_PLAYER_HEIGHT) { continue; }
-                                    session->SendHit(static_cast<uint8_t>(slot),
-                                                     static_cast<int16_t>(D::HitDamage(def.speed, hitLife, def.strength)));
+                                    if (owner >= 0) { session->SendBotHit(owner, static_cast<uint8_t>(slot), damage); }
+                                    else { session->SendHit(static_cast<uint8_t>(slot), damage); }
                                     particles.SpawnBlood(P::TYPE_BLOOD_WHITE, px, py, pz);
                                     return 2;
                                 }
