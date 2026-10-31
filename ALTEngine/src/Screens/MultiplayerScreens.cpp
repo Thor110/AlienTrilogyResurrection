@@ -438,6 +438,12 @@ namespace ALTEngine::Screens
             DrawBitmapText(renderer, "Minimum game length: " + std::to_string(settings.minGameLength), margin, rowY + lineHeight * 3, scale,
                             (cursor == 3) ? SelectedTextColor() : COLOR_DIM);
 
+            // The host needs this port open (README: "Multiplayer: the port to open").
+            DrawBitmapText(renderer, "HOSTING NEEDS UDP PORT " + std::to_string(ALTEngine::Net::DEFAULT_PORT) + " OPEN",
+                           margin, rowY + lineHeight * 5, scale, COLOR_CURSOR);
+            DrawBitmapText(renderer, "FIREWALL: ALLOW. INTERNET: FORWARD IT ON YOUR ROUTER",
+                           margin, rowY + lineHeight * 6, scale, COLOR_DIM);
+
             SDL_RenderPresent(renderer);
         }
 

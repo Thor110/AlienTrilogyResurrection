@@ -245,7 +245,9 @@ original's four starts, seen shots and F2-F9 chat in zip 94. Still to come, roug
 3. **L909's sealed start room.** The traced starts are at (1-7,2), well away from it, so the room is not
    used in a multiplayer game and the temporary patch (Patch/L909LEV.txt) can now be undone. Not done yet:
    installs that already have it would need the four bytes set back, so it is Edward's call.
-4. **Over the internet:** works by address if the host's port 27960 (UDP) is open; there is no NAT help.
+4. **Over the internet:** works by address if the host's UDP port 27960 is open (firewall allowed, and
+   forwarded on the router); there is no NAT help. The README has a boxed note on this ("Multiplayer: the
+   port to open"), and the Start Multiplayer Game screen says it under its options.
 5. **The rest of the original's packet types** (FUN_00054a60), traced one by one.
 6. **More looks**, such as a Doom Guy: a new `Net::Skin` value and its sprites.
 

@@ -242,6 +242,17 @@ The tests run with `ctest --test-dir <build folder>`. A mounted disc under `/Vol
 
 The build also makes `ALTLevelScan`, which checks every level for faces whose texture is turned or mirrored against the faces next to it. Run it from the `ALTEngine` folder as `ALTLevelScan <CD folder>` (the folder holding `SECT11`, `SECT12` and so on). It writes `LevelUvScan.json`, which lists the suspect faces, strongest first, with a `faceUvRotations` entry for each in Patches.json's form. Check each one in the viewer before copying it across. `--level 391` scans one level; run with no arguments, it prints its options.
 
+### Multiplayer: the port to open
+
+> **IMPORTANT: the player hosting a game must allow UDP port 27960 in.**
+>
+> - **Same network (LAN):** allow ALTEngine through the firewall when Windows (or your system) asks the first time you host. Without that, nobody can see or join the game.
+> - **Over the internet:** the host must also forward **UDP port 27960** on their router to the hosting computer, and the others join by typing the host's public address on the ADDRESS line of Join Multiplayer Game (for example `203.0.113.5`, or `203.0.113.5:27960`). There is no NAT help yet, so without the forward the join times out.
+> - **It is UDP, not TCP.** Forwarding TCP 27960 alone does nothing.
+> - Only the host needs the port open; players joining need nothing opened.
+
+Up to four players (the original's four). Multiplayer is the original's ten maps, L900-L909; "Start at level" 1-10 picks one. Each player picks a name and a look (Synthetic, Soldier, Guard or Handler) in Multiplayer Options, and F2-F9 send the chat messages set there. Every player needs the same version of ALTEngine: an older or newer one is turned away.
+
 ## Alien Trilogy Viewer
 
 The main program window.
