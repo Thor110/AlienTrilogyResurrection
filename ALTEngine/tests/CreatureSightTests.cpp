@@ -302,3 +302,16 @@ TEST_CASE("CreatureSight: the drawn cells are the view walk's, widened only for 
     const auto outside = CS::DrawnCells(level, -1, 2, 0xc00);
     for (uint8_t d : outside) { CHECK(d == 0); }
 }
+
+TEST_CASE("OriginalMath: the square root's table matches counting the root up, entry by entry")
+{
+    namespace OM = ALTEngine::Game::OriginalMath;
+    for (int64_t n = 0; n < 256; ++n)
+    {
+        int64_t r = 0;
+        while ((r + 1) * (r + 1) <= (n << 20)) { ++r; }
+        CHECK_EQ(OM::Sqrt1024(n), r);
+    }
+    CHECK_EQ(OM::Sqrt1024(-5), int64_t(0));
+    CHECK_EQ(OM::Sqrt1024(1024), 2 * OM::Sqrt1024(256));
+}

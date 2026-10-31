@@ -132,6 +132,9 @@ namespace ALTEngine::Renderer
         std::array<std::vector<FrameTexture>,
                    ALTEngine::Screens::WeaponSystem::STATE_COUNT> frames;
         int loadedWeapon = -1;
+        // A weapon whose graphic could not be loaded, so it is not looked for
+        // again every frame (each try touched the disk and logged).
+        int failedWeapon = -1;
 
         ALTEngine::Formats::SpriteAnim::Animator animator;
 

@@ -213,6 +213,7 @@ namespace ALTEngine::Formats
                     uv.first, uv.second,
                     colours.r[corner], colours.g[corner], colours.b[corner]
                 });
+                if (result.trackLights) { result.vertexCorner.push_back(static_cast<uint8_t>(corner)); }
                 return static_cast<uint32_t>(result.vertices.size() - 1);
             };
 
@@ -510,8 +511,11 @@ namespace ALTEngine::Formats
             // (the table at 0x2273c8), not the lit one.
             const QuadColours colours = fill == FaceFill::Translucent ? WhiteColours() : LevelQuadColours(q, lights);
             RenderMesh& out = result[static_cast<size_t>(group)];
+            out.trackLights = true;
             const size_t before = out.indices.size();
             EmitQuad(out, level.vertices, q, uvs, colours, true);
+            out.vertexLight.resize(out.vertices.size(),
+                                   fill == FaceFill::Translucent ? RenderMesh::NO_LIGHT : static_cast<uint8_t>(q.reserved & 0x7f));
             for (size_t t = before; t + 2 < out.indices.size(); t += 3)
             {
                 out.triangleFace.push_back(static_cast<uint32_t>(faceIndex));

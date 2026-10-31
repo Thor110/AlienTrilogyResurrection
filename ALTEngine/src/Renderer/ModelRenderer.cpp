@@ -80,6 +80,13 @@ namespace ALTEngine::Renderer
             SDL_GPUBuffer* visibleIndexBuffer = nullptr;
             uint32_t visibleCount = 0;
             uint64_t builtSerial = ~0ull;
+
+            // The vertices as uploaded, with each one's light and corner
+            // (RenderMesh::vertexLight), so a light change only recolours
+            // them (TickLevelLights).
+            std::vector<ALTEngine::Formats::RenderVertex> cpuVertices;
+            std::vector<uint8_t> vertexLight;
+            std::vector<uint8_t> vertexCorner;
         };
 
         struct LoadedLevel
@@ -298,10 +305,11 @@ namespace ALTEngine::Renderer
         SDL_GPUTransferBuffer* vertexUploadBuffer = nullptr;
         size_t vertexUploadSize = 0;
 
-        void ReuploadVerticesBatch(const std::vector<std::pair<const LevelSubGroup*, const RenderMesh*>>& uploads)
+        using VertexUpload = std::pair<const LevelSubGroup*, const std::vector<ALTEngine::Formats::RenderVertex>*>;
+        void ReuploadVerticesBatch(const std::vector<VertexUpload>& uploads)
         {
             size_t total = 0;
-            for (const auto& [group, mesh] : uploads) { total += mesh->vertices.size() * sizeof(ALTEngine::Formats::RenderVertex); }
+            for (const auto& [group, vertices] : uploads) { total += vertices->size() * sizeof(ALTEngine::Formats::RenderVertex); }
             if (total == 0) { return; }
             if (vertexUploadBuffer && vertexUploadSize < total)
             {
@@ -321,10 +329,10 @@ namespace ALTEngine::Renderer
             auto* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, vertexUploadBuffer, cycle));
             if (!mapped) { return; }
             size_t offset = 0;
-            for (const auto& [group, mesh] : uploads)
+            for (const auto& [group, vertices] : uploads)
             {
-                const size_t size = mesh->vertices.size() * sizeof(ALTEngine::Formats::RenderVertex);
-                std::memcpy(mapped + offset, mesh->vertices.data(), size);
+                const size_t size = vertices->size() * sizeof(ALTEngine::Formats::RenderVertex);
+                std::memcpy(mapped + offset, vertices->data(), size);
                 offset += size;
             }
             SDL_UnmapGPUTransferBuffer(device, vertexUploadBuffer);
@@ -333,9 +341,9 @@ namespace ALTEngine::Renderer
             if (!cmd) { return; }
             SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
             offset = 0;
-            for (const auto& [group, mesh] : uploads)
+            for (const auto& [group, vertices] : uploads)
             {
-                const size_t size = mesh->vertices.size() * sizeof(ALTEngine::Formats::RenderVertex);
+                const size_t size = vertices->size() * sizeof(ALTEngine::Formats::RenderVertex);
                 SDL_GPUTransferBufferLocation src{ vertexUploadBuffer, static_cast<Uint32>(offset) };
                 SDL_GPUBufferRegion dst{ group->vertexBuffer, 0, static_cast<Uint32>(size) };
                 SDL_UploadToGPUBuffer(copyPass, &src, &dst, false);
@@ -572,6 +580,11 @@ namespace ALTEngine::Renderer
             group.cpuIndices.clear();
             group.triangleFace.clear();
             group.builtSerial = ~0ull;
+            const bool lit = mesh.trackLights && mesh.vertexLight.size() == mesh.vertices.size()
+                          && mesh.vertexCorner.size() == mesh.vertices.size();
+            group.cpuVertices = lit ? mesh.vertices : std::vector<ALTEngine::Formats::RenderVertex>{};
+            group.vertexLight = lit ? mesh.vertexLight : std::vector<uint8_t>{};
+            group.vertexCorner = lit ? mesh.vertexCorner : std::vector<uint8_t>{};
             if (mesh.indices.empty() || mesh.triangleFace.size() * 3 != mesh.indices.size()) { return; }
             SDL_GPUBufferCreateInfo info{ SDL_GPU_BUFFERUSAGE_INDEX, static_cast<Uint32>(mesh.indices.size() * sizeof(uint32_t)), 0 };
             group.visibleIndexBuffer = SDL_CreateGPUBuffer(device, &info);
@@ -585,6 +598,9 @@ namespace ALTEngine::Renderer
             if (group.visibleIndexBuffer) { SDL_ReleaseGPUBuffer(device, group.visibleIndexBuffer); group.visibleIndexBuffer = nullptr; }
             group.cpuIndices.clear();
             group.triangleFace.clear();
+            group.cpuVertices.clear();
+            group.vertexLight.clear();
+            group.vertexCorner.clear();
         }
 
         // Ensures colorTarget/depthTarget/downloadBuffer exist and match
@@ -1848,6 +1864,45 @@ namespace ALTEngine::Renderer
         level.lastEntries = level.lights.Entries();
         level.lastAnimatorOutputs = outputs;
 
+        // Only lights moved: nothing but the vertex colours changes, so the
+        // kept vertices are recoloured from the table (as LevelQuadColours
+        // does) and sent up, without building the level again.
+        if (!animatorsMoved)
+        {
+            std::vector<VertexUpload> recoloured;
+            bool complete = true;
+            for (auto* groups : { &level.groups, &level.cutoutGroups })
+            {
+                for (LevelSubGroup& group : *groups)
+                {
+                    if (!group.texture || !group.vertexBuffer) { continue; }
+                    if (group.cpuVertices.empty()
+                        || group.vertexLight.size() != group.cpuVertices.size()
+                        || group.vertexCorner.size() != group.cpuVertices.size())
+                    {
+                        complete = false;
+                        continue;
+                    }
+                    for (size_t v = 0; v < group.cpuVertices.size(); ++v)
+                    {
+                        const uint8_t light = group.vertexLight[v];
+                        if (light == ALTEngine::Formats::RenderMesh::NO_LIGHT) { continue; }
+                        const auto& corner = level.lights.ColourFor(light).corner[group.vertexCorner[v] & 3];
+                        auto& vertex = group.cpuVertices[v];
+                        vertex.r = static_cast<float>(corner.r) / ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL;
+                        vertex.g = static_cast<float>(corner.g) / ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL;
+                        vertex.b = static_cast<float>(corner.b) / ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL;
+                    }
+                    recoloured.emplace_back(&group, &group.cpuVertices);
+                }
+            }
+            if (complete)
+            {
+                ReuploadVerticesBatch(recoloured);
+                return true;
+            }
+        }
+
         namespace FM = ALTEngine::Formats;
         struct Pass
         {
@@ -1862,7 +1917,7 @@ namespace ALTEngine::Renderer
         // One walk over the faces builds all three fills.
         auto allFills = FM::BuildLevelRenderMeshAllFills(
             level.geometry, level.uvRects, level.rotations, &level.lights, &level.animator);
-        std::vector<std::pair<const LevelSubGroup*, const FM::RenderMesh*>> uploads;
+        std::vector<VertexUpload> uploads;
         for (size_t p = 0; p < 3; ++p)
         {
             const Pass& pass = passes[p];
@@ -1892,7 +1947,11 @@ namespace ALTEngine::Renderer
                     continue;
                 }
                 if (!group.vertexBuffer || meshes[i].vertices.empty()) { continue; }
-                uploads.emplace_back(&group, &meshes[i]);
+                // Kept for the next light-only change.
+                group.cpuVertices = meshes[i].vertices;
+                group.vertexLight = meshes[i].vertexLight;
+                group.vertexCorner = meshes[i].vertexCorner;
+                uploads.emplace_back(&group, &group.cpuVertices);
             }
         }
         ReuploadVerticesBatch(uploads);

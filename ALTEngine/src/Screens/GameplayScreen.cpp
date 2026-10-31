@@ -550,6 +550,10 @@ namespace ALTEngine::Screens
         // each logic tick the player runs, from the first to the one the End
         // Level trigger fires on, so pauses and loading never count.
         double levelSeconds = 0.0;
+        // The tick's cell occupancy and which creature each mark is (below),
+        // kept between ticks so each tick refills them instead of allocating.
+        std::vector<uint8_t> occupancyBuffer;
+        std::vector<int> markedCreatureBuffer;
         float pendingMouseYaw = 0.0f;   // angle units, accumulated between player ticks
         float pendingMouseY = 0.0f;     // raw mouse Y, drives the original's mouse-forward
         bool playerCamSeeded = false;
@@ -2454,10 +2458,12 @@ namespace ALTEngine::Screens
                         // Rebuilt every tick rather than read from the map: the
                         // map's own +0x0c bytes are stale (see below), so the
                         // runtime must be writing live entities over them.
-                        std::vector<uint8_t> occupancy(level.collisionGrid.size(), 0);
+                        std::vector<uint8_t>& occupancy = occupancyBuffer;
+                        occupancy.assign(level.collisionGrid.size(), 0);
                         // Which creature a mark of 1 stands for (the index byte
                         // the original keeps at +4 alongside it), for blasts.
-                        std::vector<int> markedCreature(level.collisionGrid.size(), -1);
+                        std::vector<int>& markedCreature = markedCreatureBuffer;
+                        markedCreature.assign(level.collisionGrid.size(), -1);
                         auto occupancyCell = [&](float x, float z) {
                             return ALTEngine::Formats::CellIndex(level, ToGridSpaceX(x, originX) >> 9,
                                                                  ToGridSpaceZ(z, originZ) >> 9);

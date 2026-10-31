@@ -2,6 +2,7 @@
 
 #include "../Formats/OriginalTables.h"
 
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 
@@ -17,13 +18,25 @@ namespace ALTEngine::Game::OriginalMath
     // FUN_0004de04: square root, scaled by 1024. Exact from a 256-entry table
     // (isqrt(n << 20)), and above that 2 * root(n >> 2) - which is why it runs
     // a little low for large n.
+    //
+    // The table is built once: counting the root up a step at a time took up
+    // to 16,000 steps a call, and every creature's distance and bearing comes
+    // through here each tick.
     inline int64_t Sqrt1024(int64_t n)
     {
+        static const auto table = [] {
+            std::array<int64_t, 256> t{};
+            int64_t r = 0;
+            for (int64_t i = 0; i < 256; ++i)
+            {
+                while ((r + 1) * (r + 1) <= (i << 20)) { ++r; }   // roots only grow with i
+                t[static_cast<size_t>(i)] = r;
+            }
+            return t;
+        }();
         if (n < 0) { return 0; }
         if (n > 0xff) { return 2 * Sqrt1024(n >> 2); }
-        int64_t r = 0;
-        while ((r + 1) * (r + 1) <= (n << 20)) { ++r; }
-        return r;
+        return table[static_cast<size_t>(n)];
     }
 
     // FUN_000320f8: the distance the creature task works with (+0x60).

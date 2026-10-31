@@ -46,6 +46,14 @@ namespace ALTEngine::Formats
         // into LevelGeometry::quads, each triangle came from - one entry per
         // three indices. Lets the renderer draw only some cells' faces.
         std::vector<uint32_t> triangleFace;
+        // Levels only: each vertex's light id (the face's +0x13 byte, or
+        // NO_LIGHT for an unlit see-through face) and which of the light's four
+        // corners it takes, so a light change can recolour the vertices
+        // without building the mesh again.
+        static constexpr uint8_t NO_LIGHT = 0xff;
+        bool trackLights = false;
+        std::vector<uint8_t> vertexLight;
+        std::vector<uint8_t> vertexCorner;
     };
 
     // Converts a parsed ModelMesh + its paired BX UV rects (same section

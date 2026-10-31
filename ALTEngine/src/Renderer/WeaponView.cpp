@@ -70,6 +70,7 @@ namespace ALTEngine::Renderer
     {
         if (weaponIndex == loadedWeapon && !frames[ALTEngine::Screens::WeaponSystem::STATE_IDLE].empty()) { return true; }
         if (weaponIndex < 0 || weaponIndex >= WEAPON_COUNT) { Unload(); return false; }
+        if (weaponIndex == failedWeapon) { return false; }
 
         Unload();
 
@@ -80,7 +81,7 @@ namespace ALTEngine::Renderer
         if (!std::filesystem::is_regular_file(path, ec))
         {
             SDL_Log("WeaponView: %s not found - weapon %d will not draw", path.string().c_str(), weaponIndex);
-            return false;
+            failedWeapon = weaponIndex; return false;
         }
 
         // One section per state, sub-frames within it. A section that will not
@@ -114,7 +115,7 @@ namespace ALTEngine::Renderer
                 {
                     SDL_Log("WeaponView: could not create texture for %s: %s", stem, SDL_GetError());
                     Unload();
-                    return false;
+                    failedWeapon = weaponIndex; return false;
                 }
                 SDL_UpdateTexture(ft.texture, nullptr, frame->rgba.data(), frame->width * 4);
                 SDL_SetTextureBlendMode(ft.texture, SDL_BLENDMODE_BLEND);
@@ -132,9 +133,10 @@ namespace ALTEngine::Renderer
         {
             SDL_Log("WeaponView: %s has no section 0 - nothing to hold", stem);
             Unload();
-            return false;
+            failedWeapon = weaponIndex; return false;
         }
 
+        failedWeapon = -1;
         loadedWeapon = weaponIndex;
         BuildSequences();
         PlayState(ALTEngine::Screens::WeaponSystem::STATE_IDLE);

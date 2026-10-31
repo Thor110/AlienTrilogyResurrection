@@ -1,4 +1,4 @@
-# What remains (after zip 90)
+# What remains (after zip 91)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -9,6 +9,20 @@ textures, done once everything else is in.
 Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
+
+Changed in zip 91 (review and optimisation pass), to check:
+- **Creatures' distances and bearings** are over a hundred times cheaper: the square root behind them
+  (FUN_0004de04's 256-entry table) counted its root up one step at a time, up to 16,000 steps a call, for every
+  creature every tick. The table is now built once; every entry is checked against the old count, and the
+  emulator-checked values still match.
+- **A light change** (a flicker, the lamp or goggles coming up, a flash) recolours the level's vertices from the
+  light table instead of building the level again: about 0.35 ms where it was 1.3 (and 2.6 before zip 86). An
+  animated texture still rebuilds. Renders after flicker, the goggles and a flash are byte for byte the same as
+  before.
+- A weapon whose graphic is missing is no longer looked for, and logged, every frame; the tick's cell
+  occupancy reuses its buffers instead of allocating two map-sized arrays a tick.
+- clang-tidy (bugprone, performance and the static analyser, headers included) over all 98 files found
+  nothing else that needed changing.
 
 Changed in zip 90, to check:
 - **Modern > Level Timer** (requested, for speedrunners): the mission assessment shows "Time" (the level, from
@@ -156,9 +170,8 @@ Done in zip 86: the draw limit (about 4% of the faces in a view), one walk and o
 (half the time it took), and the frame, sprite and culling uploads keep their buffers. Shutdown now also
 frees the sprite buffers and sheets, which a later Initialize would otherwise have drawn with.
 
-1. Light and texture animation: a change still rebuilds every vertex of the level (about 1.3 ms in a release
-   build, mostly the copy). The lamp and goggles change every vertex anyway, so only moving the light colours
-   into a small GPU table would save more.
+1. Texture animation: a frame change still rebuilds the level (about 1.3 ms in a release build). Light changes
+   only recolour it (zip 91); moving the light colours into a small GPU table would save that copy too.
 2. The frame's GPU -> CPU -> GPU copy: draw straight to the window (needs real hardware; the HUD is drawn with
    SDL's 2D renderer over the frame, so it means moving the HUD too).
 3. Sprites: the render pass is still closed and reopened for their upload.
