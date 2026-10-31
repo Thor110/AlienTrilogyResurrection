@@ -1673,23 +1673,12 @@ namespace ALTEngine::Screens
         triggerHandlers.spawnMonster = [&](int monster, int amount) {
             if (ALTEngine::Screens::Enemies::TriggerSpawn(enemies, monster, amount))
             {
+                // A creature let out into a duct behind a wall vent is not
+                // alerted (FUN_0002f224 only spawns it): it notices the player
+                // from the duct by distance, as any creature in a cell with
+                // no face does (CreatureSight::CellHasNoFace), and comes out
+                // through the vent.
                 SDL_Log("GameplayScreen: trigger spawned monster %d", monster);
-                // A creature let out into a cell with no zones - a sealed duct
-                // behind a wall vent, as L111's huggers are - could never see
-                // the player there, so it would wait in the wall forever. It
-                // comes out alerted instead; once in the room the usual sight
-                // rules take over. NOT TRACED (Edward, 2026: they should come
-                // out of the vents as you pass the triggers).
-                for (auto& released : enemies)
-                {
-                    if (released.monsterIndex != monster || !released.active) { continue; }
-                    const int cell = ALTEngine::Formats::CellIndex(level,
-                        ToGridSpaceX(released.x, originX) >> 9, ToGridSpaceZ(released.z, originZ) >> 9);
-                    if (ALTEngine::Game::ProjectileCollision::CellZones(level, cell) == 0)
-                    {
-                        released.ai.alerted = true;
-                    }
-                }
             }
         };
         // Commands 5 and 7: count toward a lift's threshold (Game/Lifts.h).
@@ -3069,6 +3058,7 @@ namespace ALTEngine::Screens
                                 const int pgz = ToGridSpaceZ(camera.z, originZ);
                                 enemy.zoneVisible = CS::ZoneVisible(level,
                                     ALTEngine::Formats::CellIndex(level, egx >> 9, egz >> 9), drawnZones);
+                                enemy.inDuct = CS::CellHasNoFace(level, ALTEngine::Formats::CellIndex(level, egx >> 9, egz >> 9));
                                 // The gunners and the egg look along a ray
                                 // (FUN_00032aec, to 0x1555); everything else
                                 // along the ground (FUN_0003231c, to 0x2000).
@@ -3365,6 +3355,22 @@ namespace ALTEngine::Screens
 
                             // And mark wherever it ended up.
                             if (marks && enemy.alive && !enemy.pouncing) { markCreature(occupancyCell(enemy.x, enemy.z), &enemy); }
+
+                            // A creature crossing into another cell sets off its
+                            // trigger if that one answers to creatures (flag
+                            // 0x04) - FUN_0004129c, from the creature mover
+                            // FUN_00031f3c on a change of cell, unless it is
+                            // dying. L231's lifts 2 and 3 are called this way.
+                            if (marks && enemy.alive)
+                            {
+                                const int nowCell = occupancyCell(enemy.x, enemy.z);
+                                if (enemy.lastTriggerCell < 0) { enemy.lastTriggerCell = nowCell; }
+                                else if (nowCell != enemy.lastTriggerCell)
+                                {
+                                    enemy.lastTriggerCell = nowCell;
+                                    triggers.OnCreatureEnterCell(enemy.triggerLatch, nowCell, triggerHandlers);
+                                }
+                            }
 
                             // Moving sets the velocity flag; attacking and dying
                             // clear it. Nothing else touches it, so a creature's

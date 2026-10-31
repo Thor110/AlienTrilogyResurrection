@@ -143,6 +143,7 @@ namespace ALTEngine::Screens::CreatureAI
         int bearingToPlayer = 0;    // +0x54
         bool lineToPlayer = false;  // FUN_0003231c
         bool zoneVisible = false;   // FUN_00033a1c's first half
+        bool inDuct = false;        // its cell has no face (cell dword 0 after load)
         bool playerMakingNoise = false;   // DAT_000b0adc != 0
         bool actFinished = false;   // the act's end (+0xb6 bit 2)
 
@@ -269,10 +270,12 @@ namespace ALTEngine::Screens::CreatureAI
 
     // FUN_00033a70: has the creature noticed the player - inside half its
     // wake range and in view, or inside the whole of it while the player's
-    // weapon is still loud.
+    // weapon is still loud. "In view" is skipped for a creature in a cell
+    // with no face (its first dword 0 after load): the ducts behind wall
+    // vents, which is how the creatures waiting there come out.
     inline bool Notices(const Agent& a)
     {
-        if (!a.zoneVisible) { return false; }
+        if (!a.zoneVisible && !a.inDuct) { return false; }
         if (a.distance < (a.wakeRange >> 1)) { return true; }
         return a.distance < a.wakeRange && a.playerMakingNoise;
     }

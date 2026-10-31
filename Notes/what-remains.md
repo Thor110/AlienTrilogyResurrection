@@ -1,4 +1,4 @@
-# What remains (after zip 96)
+# What remains (after zip 97)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -9,6 +9,29 @@ textures, done once everything else is in.
 Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
+
+Changed in zip 97, to check: **creatures coming out of wall vents, and the level scripts traced.**
+- **Creatures in the ducts behind wall vents now come out**, as in the original - L111's huggers among them,
+  and about 400 creatures across most levels (L112, L122, L131, L141, L154, L161-L162, L211-L213, L222,
+  L231-L232, L262-L263, L331, L351, L381, L391). How the original does it, traced:
+  - A duct is a cell with no face of its own: its first four bytes are FF FF FF FF on disk, and the level
+    load writes 0 there in place of a face pointer (0x27983).
+  - "Has the creature noticed the player" (FUN_00033a70) skips its view test for such a cell. A creature in a
+    duct notices the player by distance alone - inside half its wake range, or all of it while the player's
+    gun is still loud - and becomes alerted. (The cone test, FUN_00033a1c, has no such exception.)
+  - It then walks to the player through the vent: a cell of attribute 1, which is a wall to the player but
+    not to a creature (the creature mover, FUN_000315f0, refuses only 0x14-0x2c).
+  - A trigger's "spawn monster" (FUN_0002f224) only adds to the creature's counter and spawns it at the
+    threshold; it never alerts it. The port's guess (alert anything released into a duct) is gone.
+  Tested on this machine: standing in L111's room at (19,82), the hugger in the duct at (15,82) noticed the
+  player at 2048 units (half its wake range is 2433), came through the vent at (16,82) and leapt.
+- **Creatures set off triggers** marked for them (flag 0x04, FUN_0004129c, run by the creature mover each
+  time a creature crosses into another cell, unless dying). Only L231 uses it: its lifts 2 and 3 are called
+  by a creature walking onto their cells.
+- **A round, a grenade and a creature pass over a door's final opening (command 6) as well as a switch
+  (4)**, and the chain's result carries over a pass-over, starting as a failure (see "Level scripts" below).
+  Only two chains in the game are affected: L212's trigger 12 (shot-only, "open door 3") does nothing when
+  shot, as in the original; L331's trigger 9 is a player trigger and is unchanged.
 
 Changed in zip 96, to check: **bots, player limit, and the player look preview.**
 - **The preview showed a hit frame for some views** (the Synthetic's 2, 3, 4 and 7, the Guard's 1, 2, 4, 6
@@ -276,6 +299,51 @@ original's four starts, seen shots and F2-F9 chat in zip 94. Still to come, roug
 6. **More looks**, such as a Doom Guy: a new `Net::Skin` value and its sprites.
 7. **Bots:** they don't use doors, lifts or pickups, and don't dodge. Rounds from a player on a client are
    checked against a bot where the client saw it, as for any player.
+
+## 4c. Level scripts (trigger commands), as the original runs them
+
+Traced from FUN_00040ff0, FUN_000414f0, FUN_00041784, FUN_0004129c and FUN_00040e2c, and their jump tables.
+
+**Data.** A cell's byte 15 is its trigger id (0 none). 64 triggers of 4 bytes at 0x248248: flags, first
+command, uses (0xff unlimited), 0. 64 commands of 4 bytes at DAT_0024834c: action, next (0xff ends), amount,
+target. Flags: 0x01 the player, 0x02 a round, 0x04 a creature, 0x08 a handler's grenade.
+
+**The five runners**, each with its own latch (the id last set off):
+
+| Runner | Called by | Flag | Latch |
+|---|---|---|---|
+| FUN_00040ff0 | the player's mover, every tick, with the use key | 0x01 | DAT_000b0b56 |
+| FUN_000414f0 | the particle task, each live round | 0x02 | particle +0x1f |
+| FUN_00041784 | a handler's grenade | 0x08 | particle +0x1f |
+| FUN_0004129c | the creature mover, on a change of cell | 0x04 | creature +0x71 |
+| FUN_00040e2c | a dying queen (her record's byte 6) | none | none, no uses |
+
+Each: a cell with no trigger clears the latch; otherwise the trigger must have its flag and uses left. "New"
+means the latch differs from the cell's id.
+
+**The commands.**
+
+| Action | Does | Runs when |
+|---|---|---|
+| 0 light (FUN_00029d44), 2 pickup (FUN_0003bb14), 3 monster (FUN_0002f224), 9 texture (FUN_00042fcc) | effect; result = success | new |
+| 1 unlock door (FUN_00029594), 5 lift final (FUN_00041e20), 7 lift add (FUN_00041dd8) | result = its answer | new |
+| 4 switch (FUN_00036f4c) | result = its answer | the player's runner only, with the use key |
+| 6 open door (FUN_00029610) | result = its answer | the player's runner only, with the use key |
+| 8 end level | result = success | always |
+| anything else (0xff an empty slot) | nothing | - |
+
+The result starts as a failure (ECX cleared) and a command that doesn't run leaves it as it was; the loop
+stops when it reads failure. At the end, success uses the trigger once (unless 0xff) and sets the latch;
+failure on a new entry clears the latch, so the next tick tries again.
+
+**Where the port differs, on purpose.** The player's walk-on runner in the original runs command 1 (add to a
+door's unlock count) on entering the cell, with no key: at the door's threshold the door opens. Most doors
+in L113-L115, the multiplayer maps and the L3xx levels, and L111's trigger 13 (door 5 and two panels), are
+opened this way - walking up to them. The port makes every trigger door wait for the use key, as decided
+in play earlier; Edward's call whether to follow the original here (`triggerHandlers.door` in
+`GameplayScreen.cpp`). The port also runs the use key's chain from scratch (`Source::Interact`) rather than
+re-running the cell's chain every tick with the key as the original does; the results are the same for every
+chain in the game except L331's trigger 9 (six lift calls, a switch, six more).
 
 ## 5. Larger features
 

@@ -268,21 +268,46 @@ TEST_CASE("Triggers: walk-only triggers ignore rounds")
     CHECK(rec.log.empty());
 }
 
-TEST_CASE("Triggers: a round skips switch commands and retries a failed chain")
+TEST_CASE("Triggers: a round passes over switches and doors' final openings, keeping the chain's result")
 {
-    LevelGeometry level = SyntheticLevel({ { Triggers::ACTIVATE_OBJECT, 0, 1, 4 }, { Triggers::OPEN_DOOR, 0, 1, 0 } });
-    level.actions[1].activationMask = Triggers::FLAG_SHOT;
-    Triggers::System system(level);
-    Recorder rec;
-    rec.doorsSucceed = false;
-    const auto handlers = rec.Handlers();
-    int latch = 0;
-    CHECK(!system.OnShotEnterCell(latch, 1, handlers));
-    CHECK_EQ(latch, 0);                       // cleared, so the next tick tries again
-    CHECK(rec.log.size() == 1 && rec.log[0] == "open 0+1");   // no "object 4"
-    rec.doorsSucceed = true;
-    CHECK(system.OnShotEnterCell(latch, 1, handlers));
-    CHECK_EQ(latch, 1);
+    // The runner's result starts as a failure (ECX cleared, 0x415a2) and a
+    // command with no arm leaves it alone: first in the chain, it fails it.
+    {
+        LevelGeometry level = SyntheticLevel({ { Triggers::ACTIVATE_OBJECT, 0, 1, 4 }, { Triggers::TOGGLE_LIGHT, 0, 1, 2 } });
+        level.actions[1].activationMask = Triggers::FLAG_SHOT;
+        Triggers::System system(level);
+        Recorder rec;
+        int latch = 0;
+        CHECK(!system.OnShotEnterCell(latch, 1, rec.Handlers()));
+        CHECK(rec.log.empty());
+        CHECK_EQ(latch, 0);                   // cleared, so the next tick tries again
+    }
+    // After a command that ran, it is stepped past.
+    {
+        LevelGeometry level = SyntheticLevel({ { Triggers::TOGGLE_LIGHT, 0, 1, 2 }, { Triggers::OPEN_DOOR, 0, 1, 0 },
+                                               { Triggers::ACTIVATE_OBJECT, 0, 1, 4 }, { Triggers::CHANGE_TEXTURE, 0, 1, 3 } });
+        level.actions[1].activationMask = Triggers::FLAG_SHOT;
+        Triggers::System system(level);
+        Recorder rec;
+        int latch = 0;
+        CHECK(system.OnShotEnterCell(latch, 1, rec.Handlers()));
+        REQUIRE(rec.log.size() == 2);
+        CHECK(rec.log[0] == "light 2+1");
+        CHECK(rec.log[1] == "texture 3+1");    // no "open", no "object"
+        CHECK_EQ(latch, 1);
+    }
+    // A door unlock is the round's to run, and its answer is the chain's.
+    {
+        LevelGeometry level = SyntheticLevel({ { Triggers::UNLOCK_DOOR, 0, 1, 0 } });
+        level.actions[1].activationMask = Triggers::FLAG_SHOT;
+        Triggers::System system(level);
+        Recorder rec;
+        rec.doorsSucceed = false;
+        int latch = 0;
+        CHECK(!system.OnShotEnterCell(latch, 1, rec.Handlers()));
+        rec.doorsSucceed = true;
+        CHECK(system.OnShotEnterCell(latch, 1, rec.Handlers()));
+    }
 }
 
 TEST_CASE("Triggers: Spawn Pickup reaches its handler and never fails the chain")
@@ -336,4 +361,46 @@ TEST_CASE("Triggers: a handler's grenade sets off flag-0x08 triggers only")
     int roundLatch = 0;
     Triggers::System thrownAgain(level);
     CHECK(!thrownAgain.OnShotEnterCell(roundLatch, 1, rec.Handlers()));
+}
+
+TEST_CASE("Triggers: a creature crossing into a cell sets off only creature triggers (FUN_0004129c)")
+{
+    LevelGeometry level = SyntheticLevel({ LogicGroup{ Triggers::LIFT_ADD, 0, 1, 2 } });
+    level.actions[1].activationMask = Triggers::FLAG_CREATURE;
+    Triggers::System system(level);
+    int lifts = 0;
+    Triggers::Handlers h;
+    h.lift = [&](int lift, int amount, bool finalOnly) { CHECK(lift == 2); CHECK(amount == 1); CHECK(!finalOnly); ++lifts; return true; };
+
+    int latch = 0;
+    CHECK(system.OnCreatureEnterCell(latch, 1, h));
+    CHECK(lifts == 1);
+    CHECK(latch == 1);
+    CHECK(!system.OnCreatureEnterCell(latch, 1, h));   // the same id again: nothing
+    system.OnCreatureEnterCell(latch, 0, h);           // a cell with none clears the latch
+    CHECK(latch == 0);
+    CHECK(system.OnCreatureEnterCell(latch, 1, h));
+    CHECK(lifts == 2);
+
+    // The player doesn't set it off, nor does a creature set off the player's.
+    int playerLatch = 0;
+    CHECK(!system.OnEnterCell(playerLatch, 1, h));
+    LevelGeometry playerOnly = SyntheticLevel({ LogicGroup{ Triggers::LIFT_ADD, 0, 1, 2 } });
+    Triggers::System other(playerOnly);
+    int creatureLatch = 0;
+    CHECK(!other.OnCreatureEnterCell(creatureLatch, 1, h));
+}
+
+TEST_CASE("Triggers: a creature passes over switches and a door's final opening")
+{
+    Recorder rec;
+    LevelGeometry level = SyntheticLevel({ LogicGroup{ Triggers::TOGGLE_LIGHT, 0, 1, 9 },
+                                           LogicGroup{ Triggers::ACTIVATE_OBJECT, 0, 1, 7 },
+                                           LogicGroup{ Triggers::OPEN_DOOR, 0, 1, 3 } });
+    level.actions[1].activationMask = Triggers::FLAG_CREATURE;
+    Triggers::System system(level);
+    int latch = 0;
+    CHECK(system.OnCreatureEnterCell(latch, 1, rec.Handlers()));
+    REQUIRE(rec.log.size() == 1);
+    CHECK(rec.log[0] == "light 9+1");
 }

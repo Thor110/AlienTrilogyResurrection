@@ -185,6 +185,12 @@ namespace ALTEngine::Screens
             // FUN_00033a1c's zone test. Every attack needs both.
             bool lineOfFire = true;
             bool zoneVisible = true;
+            // Standing in a cell with no face (a duct): FUN_00033a70 notices
+            // the player there without the zone test (CreatureSight::CellHasNoFace).
+            bool inDuct = false;
+            // +0x71: the trigger id of the cell it last set off (FUN_0004129c).
+            int triggerLatch = 0;
+            int lastTriggerCell = -1;   // the cell that was last checked
 
             // The common creature task's own state (CreatureAI.h), for the
             // types that run it. Only used when the caller supplies a world.
@@ -1017,6 +1023,7 @@ namespace ALTEngine::Screens
             a.bearingToPlayer = BearingTo(enemy, playerX, playerZ);
             a.lineToPlayer = enemy.lineOfFire;
             a.zoneVisible = enemy.zoneVisible;
+            a.inDuct = enemy.inDuct;
             a.playerMakingNoise = playerNoise;
 
             a.queen = enemy.type == 7;

@@ -277,4 +277,10 @@ namespace ALTEngine::Game::CreatureSight
     {
         return (ProjectileCollision::CellZones(level, creatureCell) & drawnZones) != 0;
     }
+
+    bool CellHasNoFace(const Formats::LevelGeometry& level, int cell)
+    {
+        if (cell < 0 || static_cast<size_t>(cell) >= level.collisionGrid.size()) { return false; }
+        return (level.collisionGrid[static_cast<size_t>(cell)].unknown4 & 0x80) != 0;
+    }
 }

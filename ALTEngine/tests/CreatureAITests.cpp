@@ -264,3 +264,22 @@ TEST_CASE("Queen: a hit before her intro is done brings her up at once")
     AI::QueenRecover(near, w.world);
     CHECK(near.state == AI::ACT);
 }
+
+TEST_CASE("CreatureAI: a creature in a duct notices the player without seeing it (FUN_00033a70)")
+{
+    // A cell with no face of its own reads as 0 after load, and the notice
+    // test skips its zone check there: L111's huggers come out of the wall
+    // vents this way.
+    AI::Agent a = Creature(0x800);
+    a.wakeRange = 0x1400;
+    a.zoneVisible = false;
+    CHECK(!AI::Notices(a));
+    a.inDuct = true;
+    CHECK(AI::Notices(a));        // inside half the wake range
+    a.distance = 0x1000;
+    CHECK(!AI::Notices(a));       // outside it, quiet
+    a.playerMakingNoise = true;
+    CHECK(AI::Notices(a));
+    // The cone (FUN_00033a1c) has no such exception.
+    CHECK(!AI::SeesInCone(a));
+}

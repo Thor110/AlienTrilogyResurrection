@@ -27,7 +27,8 @@ namespace ALTEngine::Game::Triggers
         const auto& trigger = level_->actions[static_cast<size_t>(triggerId)];
         uint8_t& uses = uses_[static_cast<size_t>(triggerId)];
         const uint8_t needed = (source == Source::Shot) ? FLAG_SHOT
-                             : (source == Source::EnemyThrow) ? FLAG_ENEMY_THROW : FLAG_PLAYER;
+                             : (source == Source::EnemyThrow) ? FLAG_ENEMY_THROW
+                             : (source == Source::Creature) ? FLAG_CREATURE : FLAG_PLAYER;
         if ((trigger.activationMask & needed) == 0 || uses == 0) { return false; }
         if (!RunChain(trigger.commandStart, source, handlers)) { return false; }
         if (uses != USES_UNLIMITED) { uses--; }
@@ -42,9 +43,18 @@ namespace ALTEngine::Game::Triggers
 
     bool System::RunChain(int commandStart, Source source, const Handlers& handlers)
     {
+        // The chain's result, as the original keeps it in ECX across the loop
+        // (0x415a2): it starts as a failure; a command that runs sets it (an
+        // effect to success, a door or lift to its own answer, the level's
+        // end to success); a command the runner has no arm for leaves it as
+        // it was. The loop stops as soon as it reads failure. So a pass-over
+        // command first in a chain fails it, and after a success it is simply
+        // stepped past.
         const auto& commands = level_->logics;
         int step = commandStart;
         bool sawActivateObject = false;
+        bool result = false;
+        const bool notPlayer = source == Source::Shot || source == Source::EnemyThrow || source == Source::Creature;
 
         for (int guard = 0; step != CHAIN_END; ++guard)
         {
@@ -56,60 +66,64 @@ namespace ALTEngine::Game::Triggers
             const int signedAmount = static_cast<int8_t>(c.modifier);
             const int target = c.objectIndex;
 
-            bool ok = true;
             switch (c.action)
             {
             case TOGGLE_LIGHT:
                 if (handlers.toggleLight) { handlers.toggleLight(target, signedAmount); }
+                result = true;
                 break;
             case CHANGE_TEXTURE:
                 if (handlers.changeTexture) { handlers.changeTexture(target, signedAmount); }
+                result = true;
+                break;
+            case OPEN_DOOR:
+                // Only the player's own runner has an arm for a door's final
+                // opening (FUN_00040ff0, with the use key): a round
+                // (FUN_000414f0), a grenade (FUN_00041784) and a creature
+                // (FUN_0004129c) pass over it - their jump tables send 4 and 6
+                // to the loop's end (0x41706).
+                if (notPlayer) { break; }
+                result = handlers.door && handlers.door(target, true, amount, sawActivateObject, source);
                 break;
             case UNLOCK_DOOR:
-            case OPEN_DOOR:
-                ok = handlers.door && handlers.door(target, c.action == OPEN_DOOR, amount, sawActivateObject, source);
+                result = handlers.door && handlers.door(target, false, amount, sawActivateObject, source);
                 break;
             case SPAWN_MONSTER:
-                // Never fails the chain in the original: the spawn adds to the
-                // monster's counter whether or not that releases it.
+                // FUN_0002f224 adds to the monster's counter whether or not
+                // that releases it, and the runner counts it a success.
                 if (handlers.spawnMonster) { handlers.spawnMonster(target, amount); }
+                result = true;
                 break;
             case ACTIVATE_OBJECT:
-                // A round cannot throw a switch: FUN_000414f0 has no arm for
-                // this command and simply moves on to the next.
-                if (source == Source::Shot || source == Source::EnemyThrow) { break; }
-                ok = source == Source::Interact && handlers.activateObject && handlers.activateObject(target);
-                if (ok) { sawActivateObject = true; }
+                // No arm in a round's, a grenade's or a creature's runner.
+                if (notPlayer) { break; }
+                result = source == Source::Interact && handlers.activateObject && handlers.activateObject(target);
+                if (result) { sawActivateObject = true; }
                 break;
             case SPAWN_PICKUP:
-                // Like Spawn Monster, never fails the chain.
                 if (handlers.spawnPickup) { handlers.spawnPickup(target, signedAmount); }
+                result = true;
                 break;
             case LIFT_FINAL:
             case LIFT_ADD:
                 // Conditional, like the doors: a lift that is moving or already
                 // due to go refuses, and that fails the chain.
-                ok = handlers.lift && handlers.lift(target, amount, c.action == LIFT_FINAL);
+                result = handlers.lift && handlers.lift(target, amount, c.action == LIFT_FINAL);
                 break;
             case END_LEVEL:
                 if (handlers.endLevel) { handlers.endLevel(); }
+                result = true;
                 break;
-            case EMPTY_SLOT:
-                // An unused command slot (all four bytes 0xFF). L111's trigger
-                // 7 runs into one after its last real command, so this is the
-                // end of the chain, not a failure.
-                step = CHAIN_END;
-                continue;
             default:
-                // Anything unknown. Failing is the safe choice:
-                // continuing would run later commands without their condition.
-                ok = false;
+                // An unused slot (0xFF, which L111's trigger 7 runs into after
+                // its last command) or anything else past 9: every runner's
+                // range check sends it to the loop's end, a pass-over.
                 break;
             }
-            if (!ok) { return false; }
+            if (!result) { return false; }
             step = c.nextStep;
         }
-        return true;
+        return result;
     }
 
     bool System::OnShotEnterCell(int& roundLatch, int cellIndex, const Handlers& handlers, Source source)
@@ -120,6 +134,20 @@ namespace ALTEngine::Game::Triggers
         if (id == roundLatch) { return false; }
         if (Run(id, source, handlers)) { roundLatch = id; return true; }
         roundLatch = 0;
+        return false;
+    }
+
+    bool System::OnCreatureEnterCell(int& latch, int cellIndex, const Handlers& handlers)
+    {
+        if (!level_) { return false; }
+        const int id = CellTriggerId(*level_, cellIndex);
+        if (id == 0) { latch = 0; return false; }
+        if (id == latch) { return false; }
+        if (Run(id, Source::Creature, handlers)) { latch = id; return true; }
+        // Only a trigger that answers to creatures, with uses left, touches
+        // the latch (FUN_0004129c's outer test).
+        const auto& trigger = level_->actions[static_cast<size_t>(id)];
+        if ((trigger.activationMask & FLAG_CREATURE) != 0 && UsesRemaining(id) != 0) { latch = 0; }
         return false;
     }
 

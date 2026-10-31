@@ -132,4 +132,14 @@ namespace ALTEngine::Game::CreatureSight
     // FUN_00033a1c's first test: the creature's cell shares a zone with that
     // mask.
     bool ZoneVisible(const Formats::LevelGeometry& level, int creatureCell, uint16_t drawnZones);
+
+    // A cell with no face of its own: its first dword is negative on disk
+    // (FF FF FF FF), and the level load writes 0 there instead of a face
+    // pointer (0x27983). These are the ducts behind wall vents, where
+    // creatures wait. FUN_00033a70 - has the creature noticed the player -
+    // skips its zone test for such a cell, so a creature in a duct notices
+    // by distance (and the player's noise) alone, and comes out through the
+    // vent: a cell of attribute 1, a wall to the player but not to a creature
+    // (FUN_000315f0 refuses only 0x14-0x2c).
+    bool CellHasNoFace(const Formats::LevelGeometry& level, int cell);
 }

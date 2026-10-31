@@ -56,6 +56,9 @@ namespace ALTEngine::Game
         // Set off by a handler's grenade entering the cell (FUN_00041784, from
         // its arm at 0x2dd8c). The same commands as a round's.
         inline constexpr uint8_t FLAG_ENEMY_THROW = 0x08;
+        // Set off by a CREATURE crossing into the cell (FUN_0004129c, from the
+        // creature mover FUN_00031f3c). Only L231 uses it, for lifts 2 and 3.
+        inline constexpr uint8_t FLAG_CREATURE = 0x04;
         inline constexpr uint8_t USES_UNLIMITED = 0xFF;
         inline constexpr uint8_t CHAIN_END = 0xFF;
         inline constexpr int MAX_CHAIN_LENGTH = 64;
@@ -65,7 +68,7 @@ namespace ALTEngine::Game
         // a switch object (ACTIVATE_OBJECT) can be thrown.
         // A player's grenade or charge counts as a Shot (FUN_000414f0 is called
         // from its arm too, 0x2dc17); a handler's grenade is EnemyThrow.
-        enum class Source { WalkOn, Interact, Shot, EnemyThrow };
+        enum class Source { WalkOn, Interact, Shot, EnemyThrow, Creature };
 
         // The world side of each command. A handler returning false is a failed
         // command and aborts the chain. Unset handlers are treated as success
@@ -110,6 +113,14 @@ namespace ALTEngine::Game
             // again next tick while it is still in the cell.
             bool OnShotEnterCell(int& roundLatch, int cellIndex, const Handlers& handlers,
                                  Source source = Source::Shot);
+
+            // A creature crossing into a cell (FUN_0004129c), with the
+            // creature's own latch (+0x71): the cell's trigger runs if it
+            // answers to creatures and is not the one last set off. It has no
+            // arm for a switch (4) or a door's final opening (6), which are
+            // passed over. A cell with no trigger clears the latch; a chain
+            // that fails clears it too, so the next cell with that id tries again.
+            bool OnCreatureEnterCell(int& latch, int cellIndex, const Handlers& handlers);
 
             int UsesRemaining(int triggerId) const;
 
