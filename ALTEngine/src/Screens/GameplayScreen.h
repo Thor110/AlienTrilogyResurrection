@@ -12,6 +12,8 @@
 #include "../Bootstrap/ResolutionSettings.h"
 #include "PlayerInventoryState.h"
 
+namespace ALTEngine::Net { class Session; }
+
 namespace ALTEngine::Screens
 {
     enum class GameplayOutcome
@@ -75,6 +77,11 @@ namespace ALTEngine::Screens
             // Owned by the caller so it can SURVIVE between levels when the
             // Modern "Keep Items" feature is on. Passing nullptr keeps the old
             // behaviour of a fresh inventory each level.
-            PlayerInventoryState* carriedInventory = nullptr);
+            PlayerInventoryState* carriedInventory = nullptr,
+            // A multiplayer game this level is part of (Net::Session), or
+            // nullptr for the campaign: other players are drawn and shot,
+            // hits from them taken, and a death respawns at the start and
+            // scores a frag instead of ending the game.
+            ALTEngine::Net::Session* session = nullptr);
     };
 }

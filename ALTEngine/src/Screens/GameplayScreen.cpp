@@ -10,6 +10,7 @@
 #include "HudMessages.h"
 #include "GameOverSequence.h"
 #include "FaceHugOverlay.h"
+#include "../Net/Session.h"
 #include "DroppedPickups.h"
 #include "PlayerCamera.h"
 #include "WeaponSystem.h"
@@ -126,6 +127,9 @@ namespace ALTEngine::Screens
         // The player's feet are ON the floor and the eye is 0x300 above them -
         // see PlayerCamera::EYE_HEIGHT_ORIGINAL for how that was settled.
         constexpr float EYE_HEIGHT = static_cast<float>(ALTEngine::Screens::PlayerCamera::EYE_HEIGHT_ORIGINAL);
+        // Multiplayer: the box another player is shot in, and drawn as.
+        constexpr float REMOTE_PLAYER_HALF_WIDTH = 0x80;
+        constexpr float REMOTE_PLAYER_HEIGHT = 0x300;
 
         // World space -> grid space, where cell = coord >> 9. Inverts the
         // crate placement used above, so player and objects agree.
@@ -198,7 +202,8 @@ namespace ALTEngine::Screens
         Bootstrap::DifficultySettings& difficultySettings,
         Bootstrap::CameraSwaySettings& cameraSwaySettings,
         Bootstrap::LanguageSettings& languageSettings,
-        PlayerInventoryState* carriedInventory)
+        PlayerInventoryState* carriedInventory,
+        ALTEngine::Net::Session* session)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
@@ -572,6 +577,12 @@ namespace ALTEngine::Screens
         // The player's Y in the original's sense (DAT_000b0a4a): the floor under
         // them. The camera sits EYE_HEIGHT above this.
         float playerFeetY = 0.0f;
+        // Multiplayer: where a player killed comes back (the level's start),
+        // and who last hit us, for the frag.
+        float spawnX = 0.0f, spawnZ = 0.0f, spawnFeetY = 0.0f, spawnYaw = 0.0f;
+        int lastNetAttacker = -1;
+        double lastStateSent = -1.0;
+        uint32_t netTick = 0;
         bool prevCamValid = false;
         // Camera Sway (the original's DAT_000acea0) gates head bob, view roll
         // and the yaw sway together. Footsteps keep running either way.
@@ -821,6 +832,37 @@ namespace ALTEngine::Screens
                     // data to hand could not distinguish them (Edward, 2026 -
                     // spawned facing the wrong way in another level).
                     camera.yaw = static_cast<float>(level.header.playerStartAngle) * (3.14159265f / 4.0f);
+                    // Multiplayer: everyone but the host starts on an open cell
+                    // near the start instead of on top of it. A STAND-IN until
+                    // the original's own multiplayer starts are traced.
+                    if (session && session->LocalSlot() > 0)
+                    {
+                        std::vector<std::pair<int, int>> open;   // (distance squared, cell)
+                        const int sx = level.header.playerStartX, sz = level.header.playerStartY;
+                        for (int dz = -6; dz <= 6; ++dz)
+                        {
+                            for (int dx = -6; dx <= 6; ++dx)
+                            {
+                                const int cx = sx + dx, cz = sz + dz;
+                                if ((dx == 0 && dz == 0) || !ALTEngine::Formats::CellAt(level, cx, cz)) { continue; }
+                                if (ALTEngine::Formats::IsCellBlocking(level, cx << 9, cz << 9)) { continue; }
+                                open.push_back({ dx * dx + dz * dz, cz * level.header.mapLength + cx });
+                            }
+                        }
+                        std::sort(open.begin(), open.end());
+                        const size_t pick = static_cast<size_t>(session->LocalSlot()) * 3 - 1;
+                        if (!open.empty())
+                        {
+                            const int cell = open[std::min(pick, open.size() - 1)].second;
+                            const int cx = cell % level.header.mapLength, cz = cell / level.header.mapLength;
+                            camera.x = static_cast<float>(cx) * 512.0f + 256.0f - originX;
+                            camera.z = static_cast<float>(cz) * 512.0f + 256.0f - originZ;
+                            playerFeetY = ALTEngine::Formats::FindFloorHeightGridSpace(
+                                level, ToGridSpaceX(camera.x, originX), ToGridSpaceZ(camera.z, originZ));
+                            camera.y = playerFeetY + EYE_HEIGHT;
+                        }
+                    }
+                    spawnX = camera.x; spawnZ = camera.z; spawnFeetY = playerFeetY; spawnYaw = camera.yaw;
 
                     // Object spawning (Edward, 2026: "all of the level
                     // objects spawning") - crates/barrels/switches first,
@@ -1503,6 +1545,23 @@ namespace ALTEngine::Screens
         // itself runs once the frame is done.
         auto checkPlayerDeath = [&]() {
             if (!hudState.dead || playerDead) { return; }
+            if (session && session->Connected())
+            {
+                // Multiplayer: the death is scored - to whoever last hit us,
+                // or against us for anything else - and we come back at the
+                // level's start with fresh health.
+                const auto me = static_cast<uint8_t>(session->LocalSlot());
+                const auto killer = lastNetAttacker >= 0 ? static_cast<uint8_t>(lastNetAttacker) : me;
+                session->SendFrag(killer, me);
+                lastNetAttacker = -1;
+                hudState.dead = false;
+                hudState.health = 100;
+                camera.x = spawnX; camera.z = spawnZ; camera.yaw = spawnYaw;
+                playerFeetY = spawnFeetY;
+                camera.y = playerFeetY + EYE_HEIGHT;
+                playerCam.yaw = static_cast<int>(std::lround(camera.yaw * (4096.0f / 6.28318530718f))) & 0xfff;
+                return;
+            }
             playerDead = true;
             running = false;
             deathVideoIndex = ALTEngine::Screens::GameOverSequence::DeathVideoForCause(hudState.lastDamageCause);
@@ -1747,6 +1806,66 @@ namespace ALTEngine::Screens
             // - the menu does the same in its own loop.
             ALTEngine::Audio::MusicPlayer::Update();
             dt = std::min(dt, 0.1f); // clamp so a stall/hitch doesn't teleport the camera
+
+            // Multiplayer: what the other players did since the last frame.
+            if (session)
+            {
+                const double netNow = static_cast<double>(SDL_GetTicks()) / 1000.0;
+                session->Update(netNow);
+                auto nameOf = [&](int slot) -> std::string {
+                    if (slot < 0 || slot >= ALTEngine::Net::MAX_PLAYERS) { return "?"; }
+                    const auto& entry = session->GetRoster().players[static_cast<size_t>(slot)];
+                    return entry.name.empty() ? "PLAYER " + std::to_string(slot + 1) : entry.name;
+                };
+                for (const auto& e : session->TakeEvents())
+                {
+                    using K = ALTEngine::Net::Event::Kind;
+                    switch (e.kind)
+                    {
+                    case K::Hit:
+                    {
+                        // The original's type 8: a quarter of it, through the
+                        // armour (FUN_0003e5c4 with cause 5).
+                        const int amount = e.hit.damage / 4;
+                        if (amount > 0 && !hudState.dead)
+                        {
+                            lastNetAttacker = e.hit.attacker;
+                            hudState.ApplyDamage(amount, 5);
+                            checkPlayerDeath();
+                        }
+                        break;
+                    }
+                    case K::Frag:
+                        hudMessages.Show(e.frag.killer == e.frag.victim
+                            ? nameOf(e.frag.victim) + " DIED"
+                            : nameOf(e.frag.killer) + " KILLED " + nameOf(e.frag.victim));
+                        break;
+                    case K::PlayerJoined: hudMessages.Show(nameOf(e.slot) + " JOINED"); break;
+                    case K::PlayerLeft: hudMessages.Show("PLAYER " + std::to_string(e.slot + 1) + " LEFT"); break;
+                    case K::Chat: hudMessages.Show(nameOf(e.chat.slot) + ": " + e.chat.text); break;
+                    case K::Disconnected:
+                        hudMessages.Show("LOST THE HOST");
+                        result.outcome = GameplayOutcome::ExitGame;
+                        running = false;
+                        break;
+                    default: break;
+                    }
+                }
+                // Our own state, thirty times a second.
+                if (session->Connected() && (lastStateSent < 0.0 || netNow - lastStateSent >= 1.0 / 30.0))
+                {
+                    lastStateSent = netNow;
+                    ALTEngine::Net::State state;
+                    state.tick = netTick++;
+                    state.x = camera.x; state.y = playerFeetY; state.z = camera.z;
+                    state.yaw = static_cast<int16_t>(playerCam.viewYaw);
+                    state.pitch = static_cast<int16_t>(playerCam.pitch);
+                    state.health = hudState.health;
+                    state.weapon = static_cast<uint8_t>(selectedWeapon);
+                    state.flags = hudState.dead ? 1 : 0;
+                    session->SendState(state);
+                }
+            }
 
             if (levelReady)
             {
@@ -2245,6 +2364,14 @@ namespace ALTEngine::Screens
                             P::Particle* round = particles.SpawnProjectile(
                                 projectileType, camera.x, camera.y, camera.z,
                                 playerCam.viewYaw, firingPitch, launchSpeed);
+                            if (round && session)
+                            {
+                                ALTEngine::Net::Shot shotMessage;
+                                shotMessage.type = static_cast<uint8_t>(projectileType);
+                                shotMessage.x = round->x; shotMessage.y = round->y; shotMessage.z = round->z;
+                                shotMessage.vx = round->vx; shotMessage.vy = round->vy; shotMessage.vz = round->vz;
+                                session->SendShot(shotMessage);
+                            }
 
                             // Flamethrower particle n (1, 2) lives 0x10 - n ticks
                             // and starts n steps out (FUN_0002bcac). The steps go
@@ -3594,6 +3721,26 @@ namespace ALTEngine::Screens
                             }
                             if (hitAny) { return 2; }
 
+                            // 2b. Multiplayer: another player, a column from
+                            // their feet up. The hit is theirs to take (they
+                            // are sent it and apply it, as the original's type 8).
+                            if (session && session->Connected())
+                            {
+                                const auto& states = session->RemoteStates();
+                                for (size_t slot = 0; slot < states.size(); ++slot)
+                                {
+                                    if (!states[slot] || (states[slot]->flags & 1)) { continue; }
+                                    const auto& other = *states[slot];
+                                    if (std::fabs(px - other.x) > REMOTE_PLAYER_HALF_WIDTH
+                                        || std::fabs(pz - other.z) > REMOTE_PLAYER_HALF_WIDTH
+                                        || py < other.y || py > other.y + REMOTE_PLAYER_HEIGHT) { continue; }
+                                    session->SendHit(static_cast<uint8_t>(slot),
+                                                     static_cast<int16_t>(D::HitDamage(def.speed, hitLife, def.strength)));
+                                    particles.SpawnBlood(P::TYPE_BLOOD_WHITE, px, py, pz);
+                                    return 2;
+                                }
+                            }
+
                             // 3. Triggers a round can set off (flag 0x02).
                             triggers.OnShotEnterCell(roundLatch, roundCell, triggerHandlers);
                             return 0;
@@ -4533,6 +4680,29 @@ namespace ALTEngine::Screens
                 // widens to the screen's widest bearing and the walk adds a
                 // cell's width per ring, so nothing at the edges drops out.
                 zoneCulling = false;
+
+                // Multiplayer: the other players. A STAND-IN until the
+                // original's player graphic is traced - a marine-sized column
+                // in each slot's colour, standing on their feet.
+                if (session && levelReady)
+                {
+                    static constexpr float SLOT_COLOURS[4][3] = {
+                        { 0.2f, 1.0f, 0.4f }, { 0.3f, 0.6f, 1.0f }, { 1.0f, 0.9f, 0.2f }, { 1.0f, 0.3f, 0.3f } };
+                    const auto& states = session->RemoteStates();
+                    for (size_t slot = 0; slot < states.size(); ++slot)
+                    {
+                        if (!states[slot] || (states[slot]->flags & 1)) { continue; }
+                        ALTEngine::Renderer::PlacedSprite marker;
+                        marker.textureKey = "line";
+                        marker.x = states[slot]->x;
+                        marker.z = states[slot]->z;
+                        marker.halfWidth = REMOTE_PLAYER_HALF_WIDTH;
+                        marker.halfHeight = REMOTE_PLAYER_HEIGHT * 0.5f;
+                        marker.y = states[slot]->y + marker.halfHeight;
+                        marker.r = SLOT_COLOURS[slot][0]; marker.g = SLOT_COLOURS[slot][1]; marker.b = SLOT_COLOURS[slot][2];
+                        placedSprites.push_back(marker);
+                    }
+                }
                 if (levelReady)
                 {
                     namespace PCd = ALTEngine::Screens::PlayerCamera;

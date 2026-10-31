@@ -7,6 +7,7 @@
 #include "../Menu/MenuTree.h" // for ModelIndex::NetworkedComputers
 #include "../Renderer/ModelRenderer.h"
 #include "../Renderer/ModelPreview.h"
+#include "../Net/Session.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -337,28 +338,86 @@ namespace ALTEngine::Screens
         return result;
     }
 
-    MultiplayerSubResult MultiplayerJoinScreen::Run(const std::filesystem::path& cdDirectory)
+    MultiplayerJoinResult MultiplayerJoinScreen::Run(const std::filesystem::path& cdDirectory, std::string& typedAddress)
     {
         AppWindow& app = AppWindow::Instance();
-        if (!app.EnsureCreated()) { return { true }; }
+        if (!app.EnsureCreated()) { MultiplayerJoinResult closed; closed.windowClosed = true; return closed; }
         SDL_Renderer* renderer = app.Renderer();
 
         int bgW = 0, bgH = 0;
         SDL_Texture* background = LoadMenuBackground(cdDirectory, renderer, 1, bgW, bgH);
 
-        MultiplayerSubResult result;
-        bool running = true;
+        ALTEngine::Net::GameBrowser browser;
+        browser.Start();
+        constexpr int SLOTS = 5;
+        constexpr int ADDRESS_ROW = SLOTS;   // the line after the five games
+        int cursor = 0;
+        TextFieldEditor editor;
 
+        MultiplayerJoinResult result;
+        bool running = true;
         while (running)
         {
+            const double now = static_cast<double>(SDL_GetTicks()) / 1000.0;
+            browser.Update(now);
+            const auto& games = browser.Games();
+
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
-                if (event.type == SDL_EVENT_QUIT) { result.windowClosed = true; running = false; }
-                else if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)
+                if (event.type == SDL_EVENT_QUIT) { result.windowClosed = true; running = false; break; }
+                if (editor.IsEditing())
                 {
+                    editor.HandleEvent(event);
+                    if (!editor.IsEditing()) { typedAddress = editor.Value(); }
+                    continue;
+                }
+                if (event.type != SDL_EVENT_KEY_DOWN) { continue; }
+                switch (event.key.key)
+                {
+                case SDLK_ESCAPE:
                     running = false;
                     SfxPlayer::Play(SfxId::MenuBack, cdDirectory);
+                    break;
+                case SDLK_UP:
+                    cursor = (cursor + ADDRESS_ROW) % (ADDRESS_ROW + 1);
+                    SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+                    break;
+                case SDLK_DOWN:
+                    cursor = (cursor + 1) % (ADDRESS_ROW + 1);
+                    SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+                    break;
+                case SDLK_RETURN:
+                case SDLK_KP_ENTER:
+                    if (cursor < static_cast<int>(games.size()))
+                    {
+                        result.chosen = true;
+                        result.address = games[static_cast<size_t>(cursor)].address.ToString();
+                        running = false;
+                        SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                    }
+                    else if (cursor == ADDRESS_ROW)
+                    {
+                        if (!typedAddress.empty())
+                        {
+                            result.chosen = true;
+                            result.address = typedAddress;
+                            running = false;
+                            SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                        }
+                        else
+                        {
+                            editor.BeginEdit(typedAddress, 40);
+                        }
+                    }
+                    break;
+                case SDLK_BACKSPACE:
+                case SDLK_E:
+                    // Edit the address again.
+                    if (cursor == ADDRESS_ROW) { editor.BeginEdit(typedAddress, 40); }
+                    break;
+                default:
+                    break;
                 }
             }
             if (!running) { break; }
@@ -374,17 +433,27 @@ namespace ALTEngine::Screens
             std::string title = "SEARCHING FOR NET GAMES....";
             DrawBitmapText(renderer, title, (windowW - TextWidth(title, scale)) / 2, margin, scale, COLOR_CURSOR);
 
-            // No real network discovery exists - always empty. Matches
-            // the reference exactly (5 numbered, unfilled slots).
-            for (int i = 0; i < 5; ++i)
+            for (int i = 0; i < SLOTS; ++i)
             {
                 std::string line = std::to_string(i + 1) + ":";
-                DrawBitmapText(renderer, line, margin, margin + lineHeight * 3 + i * lineHeight, scale, COLOR_DIM);
+                if (i < static_cast<int>(games.size()))
+                {
+                    const auto& g = games[static_cast<size_t>(i)];
+                    line += " " + g.info.gameName + "  LEVEL " + g.info.level + "  "
+                          + std::to_string(g.info.players) + "/" + std::to_string(g.info.maxPlayers);
+                }
+                const Color colour = (i == cursor) ? COLOR_WHITE : (i < static_cast<int>(games.size()) ? COLOR_CURSOR : COLOR_DIM);
+                DrawBitmapText(renderer, line, margin, margin + lineHeight * 3 + i * lineHeight, scale, colour);
             }
+            const std::string addressLine = "ADDRESS: " + (editor.IsEditing() ? editor.Value() + "_" : typedAddress);
+            DrawBitmapText(renderer, addressLine, margin, margin + lineHeight * 3 + (SLOTS + 1) * lineHeight, scale,
+                           editor.IsEditing() ? COLOR_EDITING : (cursor == ADDRESS_ROW ? COLOR_WHITE : COLOR_DIM));
 
             SDL_RenderPresent(renderer);
+            SDL_Delay(10);
         }
 
+        browser.Stop();
         if (background) { SDL_DestroyTexture(background); }
         return result;
     }

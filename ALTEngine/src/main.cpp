@@ -25,6 +25,9 @@
 #include "Screens/GameplayScreen.h"
 #include "Screens/MissionBriefingScreen.h"
 #include "Screens/MultiplayerScreens.h"
+#include "Net/Session.h"
+
+#include <algorithm>
 #include "Screens/SaveSlotScreen.h"
 #include "Screens/EndLevelPromptScreen.h"
 #include "Screens/MissionAssessmentScreen.h"
@@ -490,6 +493,20 @@ int main(int, char**)
 
         if (menuResult.action == "Multiplayer")
         {
+            // One multiplayer level, as host or guest, until the player leaves
+            // or the game ends; then back to the multiplayer menu.
+            auto playMultiplayer = [&](ALTEngine::Net::Session& session) -> bool {
+                const std::string digits = session.Level();
+                MissionBriefingScreen::PreloadObjectModels(cdDirectory, language);
+                ALTEngine::Screens::PlayerInventoryState netInventory;
+                GameplayResult played = GameplayScreen::Run(cdDirectory, language, DottedOf(digits), keyBindings,
+                                                            audioSettings, renderSettings, resolutionSettings,
+                                                            difficultySettings, cameraSwaySettings, languageSettings,
+                                                            &netInventory, &session);
+                session.Stop();
+                return played.outcome != GameplayOutcome::WindowClosed;
+            };
+            static std::string typedAddress;
             MultiplayerSettings mpSettings;
             int multiplayerCursor = 0;
             bool inMultiplayerMenu = true;
@@ -504,16 +521,59 @@ int main(int, char**)
                 case MultiplayerMainChoice::StartGame:
                 {
                     MultiplayerStartResult r = MultiplayerStartScreen::Run(cdDirectory, mpSettings);
-                    if (r.windowClosed) { windowClosed = true; inMultiplayerMenu = false; }
-                    // r.startedGame has nowhere to hand off to yet - no
-                    // real networking exists. Falls back to the
-                    // multiplayer menu.
+                    if (r.windowClosed) { windowClosed = true; inMultiplayerMenu = false; break; }
+                    if (!r.startedGame) { break; }
+                    // Host: "Start at level" 1-10 is L900-L909.
+                    const int startIndex = std::clamp(mpSettings.startLevel, 1, 10) - 1;
+                    const std::string digits = "90" + std::to_string(startIndex);
+                    ALTEngine::Net::Session session;
+                    if (!session.StartHost(mpSettings.gameName.empty() ? mpSettings.playerName : mpSettings.gameName,
+                                           digits, mpSettings.playerName))
+                    {
+                        std::cout << "Multiplayer: could not host on port " << ALTEngine::Net::DEFAULT_PORT << "\n";
+                        break;
+                    }
+                    std::cout << "Multiplayer: hosting level " << digits << " on port " << session.Port() << "\n";
+                    if (!playMultiplayer(session)) { windowClosed = true; inMultiplayerMenu = false; }
                     break;
                 }
                 case MultiplayerMainChoice::JoinGame:
                 {
-                    MultiplayerSubResult r = MultiplayerJoinScreen::Run(cdDirectory);
-                    if (r.windowClosed) { windowClosed = true; inMultiplayerMenu = false; }
+                    MultiplayerJoinResult r = MultiplayerJoinScreen::Run(cdDirectory, typedAddress);
+                    if (r.windowClosed) { windowClosed = true; inMultiplayerMenu = false; break; }
+                    if (!r.chosen) { break; }
+                    const auto address = ALTEngine::Net::Resolve(r.address, ALTEngine::Net::DEFAULT_PORT);
+                    if (!address) { std::cout << "Multiplayer: can't read the address " << r.address << "\n"; break; }
+                    ALTEngine::Net::Session session;
+                    if (!session.StartJoin(*address, mpSettings.playerName)) { break; }
+                    std::cout << "Multiplayer: joining " << address->ToString() << "\n";
+                    // Wait for the host's welcome (or its refusal, or nothing).
+                    bool waiting = true;
+                    while (waiting)
+                    {
+                        SDL_Event event;
+                        while (SDL_PollEvent(&event))
+                        {
+                            if (event.type == SDL_EVENT_QUIT) { windowClosed = true; waiting = false; }
+                            else if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) { waiting = false; }
+                        }
+                        session.Update(static_cast<double>(SDL_GetTicks()) / 1000.0);
+                        for (const auto& e : session.TakeEvents())
+                        {
+                            if (e.kind == ALTEngine::Net::Event::Kind::Rejected)
+                            {
+                                std::cout << "Multiplayer: the game refused us or did not answer\n";
+                                waiting = false;
+                            }
+                        }
+                        if (session.Connected()) { break; }
+                        if (session.GetRole() == ALTEngine::Net::Session::Role::None) { waiting = false; }
+                        SDL_Delay(10);
+                    }
+                    if (windowClosed) { inMultiplayerMenu = false; break; }
+                    if (!waiting || !session.Connected()) { session.Stop(); break; }
+                    std::cout << "Multiplayer: in as player " << session.LocalSlot() + 1 << ", level " << session.Level() << "\n";
+                    if (!playMultiplayer(session)) { windowClosed = true; inMultiplayerMenu = false; }
                     break;
                 }
                 case MultiplayerMainChoice::Options:

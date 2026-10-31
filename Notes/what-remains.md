@@ -1,4 +1,4 @@
-# What remains (after zip 92)
+# What remains (after zip 93)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -9,6 +9,22 @@ textures, done once everything else is in.
 Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
+
+Changed in zip 93, to check: **multiplayer, first version.**
+- **Networking** (`src/Net`): the original's IPX packet loop (FUN_00054a60, types 4-0x16, four 0x3c-byte
+  player records at 0x402b50) can't run on today's networks, so the port does the same job over UDP: a
+  host (player 1) and up to three more, the original's four. Port 27960. Tested on this machine: joining,
+  each player's position passed on to the others, hits, frags, a fifth player turned away, a silent player
+  dropped (after 30 seconds, so the pause menu - which stops the game loop - doesn't drop anyone), leaving.
+- **Start Multiplayer Game** hosts: "Start at level" 1-10 is L900-L909, "Name Of Game" is what others see.
+  **Join Multiplayer Game** lists the games on the local network in the original's five slots as they
+  answer, plus an ADDRESS line (Enter to type, e.g. 192.168.1.20 or a host name, :port optional) for one
+  further away; Enter joins, and the host's level loads.
+- **In play:** other players are drawn and can be shot; a hit is sent to the player hit, who takes a
+  quarter of it through the armour, as the original's type 8 does (FUN_0003e5c4, cause 5). A death is
+  scored to whoever last hit you (anything else counts against you) and you start again at the level's
+  start with 100 health instead of the game ending. Joins, leaves, frags and losing the host show as HUD
+  messages; losing the host ends the level. Your name is the one in Multiplayer Options.
 
 Changed in zip 92, to check:
 - **Held sounds.** A vent's jet holds its sound while it jets: steam and flame are looping samples, started
@@ -128,7 +144,7 @@ and every game-side routine the port never cites (about 240 of the 1,242 Ghidra 
 library, the sound and video drivers and the DOS extender) was looked at to see what it does.
 
 ### Known to be missing
-1. **Multiplayer.** FUN_00054a60 and everything behind `DAT_000ae0a4`.
+1. **Multiplayer: a first working version is in (zip 93); see "Multiplayer" below for what is still to do.**
 
 ### Scratched (Edward): known differences, not to be done
 - **The detail setting** (DAT_000a63fc, 0-2, the original's default 1, saved in its config): at 1 it leaves
@@ -199,9 +215,23 @@ frees the sprite buffers and sheets, which a later Initialize would otherwise ha
    SDL's 2D renderer over the frame, so it means moving the HUD too).
 3. Sprites: the render pass is still closed and reopened for their upload.
 
+## 4b. Multiplayer: what is still to do
+
+The networking, menus, joining, positions, hits and frags are in (zip 93). Still to come, roughly in order:
+1. **How other players look.** They are a coloured column for now (green, blue, yellow, red by slot); the
+   original's player graphic and its animation are to be traced.
+2. **Seeing their shots.** Shots are sent (`Net::Shot`) but not yet drawn on the other machines.
+3. **Where players start and come back.** Players after the host start on an open cell near the level's start;
+   the original's multiplayer starts (and L909's sealed start room - see the L909 patch note) are to be traced.
+4. **The score table and the end of a game:** "Minimum game length", the frag table, and what ends a round.
+5. **Pickups, doors and lifts kept the same on every machine** - each machine runs its own level for now.
+6. **Chat:** the F2-F9 messages are held in Multiplayer Options but not yet sent from play (`SendChat` exists).
+7. **Over the internet:** works by address if the host's port 27960 (UDP) is open; there is no NAT help.
+8. **The rest of the original's packet types** (FUN_00054a60), traced one by one.
+
 ## 5. Larger features
 
-- **Multiplayer:** the menus exist, no networking.
+- **Multiplayer:** see 4b.
 - **Direct-to-window rendering.**
 - **ALTViewer:** a compressor for replacing compressed images; level object export; its patcher checking every
   file before it starts.

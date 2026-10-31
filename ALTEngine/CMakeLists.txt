@@ -90,10 +90,16 @@ add_library(ALTGame STATIC
     src/Game/Progression.cpp
     src/Game/SaveGame.cpp
     src/Game/Triggers.cpp
+    src/Net/UdpSocket.cpp
+    src/Net/Protocol.cpp
+    src/Net/Session.cpp
 )
 target_include_directories(ALTGame PUBLIC src)
 target_link_libraries(ALTGame PUBLIC ALTFormats)
 target_link_libraries(ALTGame PRIVATE nlohmann_json::nlohmann_json alt_warnings)
+if(WIN32)
+    target_link_libraries(ALTGame PUBLIC ws2_32)   # the multiplayer sockets (src/Net)
+endif()
 
 # ---------------------------------------------------------------------------
 # ALTLevelScan - a command-line check of every level's texture orientation
@@ -145,6 +151,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/ResupplyTimerTests.cpp
         tests/MissionAssessmentTests.cpp
         tests/FacePickTests.cpp
+        tests/NetTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
     target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats alt_warnings nlohmann_json::nlohmann_json)

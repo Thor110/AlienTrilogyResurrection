@@ -78,12 +78,20 @@ namespace ALTEngine::Screens
         static MultiplayerStartResult Run(const std::filesystem::path& cdDirectory, MultiplayerSettings& settings);
     };
 
-    // "SEARCHING FOR NET GAMES...." - no real network discovery exists,
-    // so this always shows 5 empty slots. Escape returns to the main
-    // multiplayer menu.
+    // "SEARCHING FOR NET GAMES...." - the games on the local network fill the
+    // original's five slots as they answer (Net::GameBrowser); a sixth line
+    // takes an address for a game further away. Enter on either picks it;
+    // Escape returns to the main multiplayer menu.
+    struct MultiplayerJoinResult
+    {
+        bool windowClosed = false;
+        bool chosen = false;
+        std::string address;   // "1.2.3.4:port", or as typed
+    };
+
     class MultiplayerJoinScreen
     {
     public:
-        static MultiplayerSubResult Run(const std::filesystem::path& cdDirectory);
+        static MultiplayerJoinResult Run(const std::filesystem::path& cdDirectory, std::string& typedAddress);
     };
 }
