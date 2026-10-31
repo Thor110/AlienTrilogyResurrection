@@ -55,9 +55,9 @@ namespace ALTEngine::Net
         // Hosting on `port` (DEFAULT_PORT unless testing); false if the port
         // can't be had.
         bool StartHost(const std::string& gameName, const std::string& level, const std::string& playerName,
-                       uint16_t port = DEFAULT_PORT);
+                       uint16_t port = DEFAULT_PORT, Skin skin = Skin::Synthetic);
         // Asks `host` to be let in; Welcomed or Rejected follows from Update.
-        bool StartJoin(const Address& host, const std::string& playerName);
+        bool StartJoin(const Address& host, const std::string& playerName, Skin skin = Skin::Synthetic);
         // Leaves (telling the others) and closes.
         void Stop();
 
@@ -69,6 +69,10 @@ namespace ALTEngine::Net
         void SendHit(uint8_t target, int16_t damage);
         void SendFrag(uint8_t killer, uint8_t victim);
         void SendChat(const std::string& text);
+
+        // The F2-F9 messages (Multiplayer Options), sent from play by key.
+        void SetQuickChat(const std::array<std::string, 8>& messages) { quickChat = messages; }
+        const std::string& QuickChat(int index) const { return quickChat[static_cast<size_t>(index & 7)]; }
 
         std::vector<Event> TakeEvents() { std::vector<Event> out; out.swap(events); return out; }
 
@@ -83,6 +87,7 @@ namespace ALTEngine::Net
         uint16_t Port() const { return socket.LocalPort(); }
 
     private:
+        std::array<std::string, 8> quickChat{};
         struct Peer { bool used = false; Address address; double lastHeard = 0.0; };
 
         void Send(const Address& to, const Message& message);
@@ -98,6 +103,7 @@ namespace ALTEngine::Net
         UdpSocket socket;
         Role role = Role::None;
         std::string gameName, level, playerName;
+        Skin skin = Skin::Synthetic;
         int localSlot = -1;
         bool welcomed = false;
         Address hostAddress;

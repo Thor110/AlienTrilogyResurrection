@@ -14,6 +14,9 @@ namespace ALTEngine::Screens
     struct MultiplayerSettings
     {
         std::string playerName = "Player";
+        // How the others see this player (Net::Skin): the original's Synthetic,
+        // or the Soldier, Guard or Handler.
+        int skin = 0;
         std::array<std::string, 8> messages{}; // F2-F9 quick-chat presets
         std::string gameName;
         int startLevel = 1;    // 1-10

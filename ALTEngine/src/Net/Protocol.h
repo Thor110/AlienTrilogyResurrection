@@ -18,7 +18,7 @@ namespace ALTEngine::Net
     // Every datagram: "ALT" + a version byte, a type byte, then the fields,
     // little-endian. A datagram that doesn't start so, or whose fields run
     // short, is dropped.
-    inline constexpr uint8_t PROTOCOL_VERSION = 1;
+    inline constexpr uint8_t PROTOCOL_VERSION = 2;
     inline constexpr int MAX_PLAYERS = 4;          // the original's four records
     inline constexpr uint16_t DEFAULT_PORT = 27960;
     inline constexpr size_t MAX_NAME = 16;
@@ -44,11 +44,39 @@ namespace ALTEngine::Net
 
     struct DiscoverQuery {};
     struct DiscoverReply { std::string gameName; std::string level; uint8_t players = 0; uint8_t maxPlayers = MAX_PLAYERS; };
-    struct Join { std::string name; };
+    // How a player looks to the others: the creature whose sprites draw them.
+    // The original draws every player as the Synthetic (type 0x0d: the four
+    // 0x0d monster records of each multiplayer level are its player starts,
+    // spawned with a task of their own, FUN_0002e638's case 0xd). The other
+    // human-shaped creatures with full walking views - the Soldier (0x0c), the
+    // Guard (0x0b) and the Handler (0x0e) - are the port's own choices.
+    enum class Skin : uint8_t { Synthetic = 0, Soldier = 1, Guard = 2, Handler = 3, Count };
+    inline constexpr int SkinCreatureType(Skin skin)
+    {
+        switch (skin)
+        {
+        case Skin::Soldier: return 0x0c;
+        case Skin::Guard: return 0x0b;
+        case Skin::Handler: return 0x0e;
+        default: return 0x0d;
+        }
+    }
+    inline constexpr const char* SkinName(Skin skin)
+    {
+        switch (skin)
+        {
+        case Skin::Soldier: return "SOLDIER";
+        case Skin::Guard: return "GUARD";
+        case Skin::Handler: return "HANDLER";
+        default: return "SYNTHETIC";
+        }
+    }
+
+    struct Join { std::string name; Skin skin = Skin::Synthetic; };
     struct Welcome { uint8_t slot = 0; std::string level; };
     enum class RejectReason : uint8_t { Full = 1, Version = 2 };
     struct Reject { RejectReason reason = RejectReason::Full; };
-    struct RosterEntry { bool used = false; std::string name; int16_t frags = 0; };
+    struct RosterEntry { bool used = false; std::string name; int16_t frags = 0; Skin skin = Skin::Synthetic; };
     struct Roster { std::array<RosterEntry, MAX_PLAYERS> players{}; };
     struct State
     {

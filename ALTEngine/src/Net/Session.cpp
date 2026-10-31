@@ -4,7 +4,8 @@
 
 namespace ALTEngine::Net
 {
-    bool Session::StartHost(const std::string& name, const std::string& levelDigits, const std::string& player, uint16_t port)
+    bool Session::StartHost(const std::string& name, const std::string& levelDigits, const std::string& player, uint16_t port,
+                            Skin chosen)
     {
         Stop();
         if (!socket.Open(port, true)) { return false; }
@@ -15,15 +16,17 @@ namespace ALTEngine::Net
         localSlot = 0;
         welcomed = true;
         roster = {};
-        roster.players[0] = RosterEntry{ true, player.substr(0, MAX_NAME), 0 };
+        skin = chosen;
+        roster.players[0] = RosterEntry{ true, player.substr(0, MAX_NAME), 0, chosen };
         return true;
     }
 
-    bool Session::StartJoin(const Address& host, const std::string& player)
+    bool Session::StartJoin(const Address& host, const std::string& player, Skin chosen)
     {
         Stop();
         if (!socket.Open(0)) { return false; }
         role = Role::Client;
+        skin = chosen;
         hostAddress = host;
         playerName = player;
         localSlot = -1;
@@ -131,7 +134,7 @@ namespace ALTEngine::Net
             if (lastJoinTry < 0.0 || now - lastJoinTry >= JOIN_RETRY_SECONDS)
             {
                 lastJoinTry = now;
-                SendToHost(Join{ playerName.substr(0, MAX_NAME) });
+                SendToHost(Join{ playerName.substr(0, MAX_NAME), skin });
             }
             return;
         }
@@ -163,7 +166,7 @@ namespace ALTEngine::Net
                 for (int i = 1; i < MAX_PLAYERS && slot < 0; ++i) { if (!peers[static_cast<size_t>(i)].used) { slot = i; } }
                 if (slot < 0) { Send(from, Reject{ RejectReason::Full }); return; }
                 peers[static_cast<size_t>(slot)] = Peer{ true, from, now };
-                roster.players[static_cast<size_t>(slot)] = RosterEntry{ true, join->name.substr(0, MAX_NAME), 0 };
+                roster.players[static_cast<size_t>(slot)] = RosterEntry{ true, join->name.substr(0, MAX_NAME), 0, join->skin };
                 Event e; e.kind = Event::Kind::PlayerJoined; e.slot = static_cast<uint8_t>(slot); events.push_back(e);
                 Event r; r.kind = Event::Kind::RosterChanged; events.push_back(r);
             }

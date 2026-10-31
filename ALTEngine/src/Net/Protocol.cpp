@@ -44,6 +44,8 @@ namespace ALTEngine::Net
             }
         };
 
+        Skin SkinFrom(uint8_t v) { return v < static_cast<uint8_t>(Skin::Count) ? static_cast<Skin>(v) : Skin::Synthetic; }
+
         template <class... Ts> struct Overloaded : Ts... { using Ts::operator()...; };
         template <class... Ts> Overloaded(Ts...) -> Overloaded<Ts...>;
     }
@@ -59,12 +61,12 @@ namespace ALTEngine::Net
                 w.U8(static_cast<uint8_t>(MessageType::DiscoverReply));
                 w.Str(m.gameName, MAX_GAME_NAME); w.Str(m.level, 8); w.U8(m.players); w.U8(m.maxPlayers);
             },
-            [&](const Join& m) { w.U8(static_cast<uint8_t>(MessageType::Join)); w.Str(m.name, MAX_NAME); },
+            [&](const Join& m) { w.U8(static_cast<uint8_t>(MessageType::Join)); w.Str(m.name, MAX_NAME); w.U8(static_cast<uint8_t>(m.skin)); },
             [&](const Welcome& m) { w.U8(static_cast<uint8_t>(MessageType::Welcome)); w.U8(m.slot); w.Str(m.level, 8); },
             [&](const Reject& m) { w.U8(static_cast<uint8_t>(MessageType::Reject)); w.U8(static_cast<uint8_t>(m.reason)); },
             [&](const Roster& m) {
                 w.U8(static_cast<uint8_t>(MessageType::Roster));
-                for (const auto& p : m.players) { w.U8(p.used ? 1 : 0); w.Str(p.name, MAX_NAME); w.I16(p.frags); }
+                for (const auto& p : m.players) { w.U8(p.used ? 1 : 0); w.Str(p.name, MAX_NAME); w.I16(p.frags); w.U8(static_cast<uint8_t>(p.skin)); }
             },
             [&](const State& m) {
                 w.U8(static_cast<uint8_t>(MessageType::State));
@@ -97,13 +99,13 @@ namespace ALTEngine::Net
             DiscoverReply m; m.gameName = r.Str(MAX_GAME_NAME); m.level = r.Str(8); m.players = r.U8(); m.maxPlayers = r.U8();
             result = m; break;
         }
-        case MessageType::Join: { Join m; m.name = r.Str(MAX_NAME); result = m; break; }
+        case MessageType::Join: { Join m; m.name = r.Str(MAX_NAME); m.skin = SkinFrom(r.U8()); result = m; break; }
         case MessageType::Welcome: { Welcome m; m.slot = r.U8(); m.level = r.Str(8); result = m; break; }
         case MessageType::Reject: { Reject m; m.reason = static_cast<RejectReason>(r.U8()); result = m; break; }
         case MessageType::Roster:
         {
             Roster m;
-            for (auto& p : m.players) { p.used = r.U8() != 0; p.name = r.Str(MAX_NAME); p.frags = r.I16(); }
+            for (auto& p : m.players) { p.used = r.U8() != 0; p.name = r.Str(MAX_NAME); p.frags = r.I16(); p.skin = SkinFrom(r.U8()); }
             result = m; break;
         }
         case MessageType::State:

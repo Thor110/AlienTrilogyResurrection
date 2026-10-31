@@ -38,10 +38,20 @@ TEST_CASE("Net: every message survives encoding")
     CHECK(s2.slot == 2); CHECK(s2.tick == 123456u); CHECK(s2.x == -1234.5f); CHECK(s2.z == 777.25f);
     CHECK(s2.yaw == 0xabc); CHECK(s2.pitch == -0x40); CHECK(s2.health == 87); CHECK(s2.weapon == 3); CHECK(s2.flags == 5);
 
-    N::Roster r; r.players[0] = { true, "Ripley", 3 }; r.players[2] = { true, "Hicks", -1 };
+    N::Roster r; r.players[0] = { true, "Ripley", 3, N::Skin::Guard }; r.players[2] = { true, "Hicks", -1 };
     const auto r2 = RoundTrip(r);
     CHECK(r2.players[0].used); CHECK(r2.players[0].name == "Ripley"); CHECK(r2.players[0].frags == 3);
     CHECK(!r2.players[1].used); CHECK(r2.players[2].frags == -1);
+    CHECK(r2.players[0].skin == N::Skin::Guard); CHECK(r2.players[2].skin == N::Skin::Synthetic);
+    CHECK(RoundTrip(N::Join{ "Bishop", N::Skin::Guard }).skin == N::Skin::Guard);
+    CHECK(N::SkinCreatureType(N::Skin::Synthetic) == 0x0d);
+    CHECK(N::SkinCreatureType(N::Skin::Soldier) == 0x0c);
+    CHECK(N::SkinCreatureType(N::Skin::Guard) == 0x0b);
+    CHECK(N::SkinCreatureType(N::Skin::Handler) == 0x0e);
+    // A look this version doesn't know arrives as the Synthetic.
+    auto bytes = N::Encode(N::Join{ "X", N::Skin::Handler });
+    bytes.back() = 9;
+    CHECK(std::get<N::Join>(*N::Decode(bytes)).skin == N::Skin::Synthetic);
 
     N::Shot shot; shot.slot = 1; shot.type = 2; shot.vx = 256.0f; shot.vz = -12.5f;
     CHECK(RoundTrip(shot).vz == -12.5f);
@@ -74,7 +84,7 @@ TEST_CASE("Net: a host and two players on this machine")
     N::Session host, a, b;
     REQUIRE(host.StartHost("Test", "900", "Ripley", 0));
     const auto address = N::Address::Loopback(host.Port());
-    REQUIRE(a.StartJoin(address, "Hicks"));
+    REQUIRE(a.StartJoin(address, "Hicks", N::Skin::Guard));
     REQUIRE(b.StartJoin(address, "Hudson"));
     double now = 0.0;
     Pump({ &host, &a, &b }, now);
@@ -85,6 +95,7 @@ TEST_CASE("Net: a host and two players on this machine")
     CHECK(a.LocalSlot() >= 1);
     CHECK(host.GetRoster().players[static_cast<size_t>(a.LocalSlot())].name == "Hicks");
     CHECK(b.GetRoster().players[0].name == "Ripley");
+    CHECK(b.GetRoster().players[static_cast<size_t>(a.LocalSlot())].skin == N::Skin::Guard);
     host.TakeEvents(); a.TakeEvents(); b.TakeEvents();
 
     // A player's state reaches the host and, through it, the other player.

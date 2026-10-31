@@ -130,6 +130,8 @@ namespace ALTEngine::Screens
         // Multiplayer: the box another player is shot in, and drawn as.
         constexpr float REMOTE_PLAYER_HALF_WIDTH = 0x80;
         constexpr float REMOTE_PLAYER_HEIGHT = 0x300;
+        // The monster type whose records are a multiplayer level's player starts.
+        constexpr uint8_t MULTIPLAYER_START_TYPE = 0x0d;
 
         // World space -> grid space, where cell = coord >> 9. Inverts the
         // crate placement used above, so player and objects agree.
@@ -832,34 +834,26 @@ namespace ALTEngine::Screens
                     // data to hand could not distinguish them (Edward, 2026 -
                     // spawned facing the wrong way in another level).
                     camera.yaw = static_cast<float>(level.header.playerStartAngle) * (3.14159265f / 4.0f);
-                    // Multiplayer: everyone but the host starts on an open cell
-                    // near the start instead of on top of it. A STAND-IN until
-                    // the original's own multiplayer starts are traced.
-                    if (session && session->LocalSlot() > 0)
+                    // Multiplayer: the level's four player starts are its four
+                    // Synthetic (0x0d) monster records - every multiplayer level
+                    // has exactly those four and no other monster, and the
+                    // original spawns them with a task of their own instead of
+                    // a creature's (FUN_0002e638, case 0xd). Player n takes the
+                    // nth, facing its own compass point.
+                    if (session && session->Connected())
                     {
-                        std::vector<std::pair<int, int>> open;   // (distance squared, cell)
-                        const int sx = level.header.playerStartX, sz = level.header.playerStartY;
-                        for (int dz = -6; dz <= 6; ++dz)
+                        int seen = 0;
+                        for (const auto& monster : level.monsters)
                         {
-                            for (int dx = -6; dx <= 6; ++dx)
-                            {
-                                const int cx = sx + dx, cz = sz + dz;
-                                if ((dx == 0 && dz == 0) || !ALTEngine::Formats::CellAt(level, cx, cz)) { continue; }
-                                if (ALTEngine::Formats::IsCellBlocking(level, cx << 9, cz << 9)) { continue; }
-                                open.push_back({ dx * dx + dz * dz, cz * level.header.mapLength + cx });
-                            }
-                        }
-                        std::sort(open.begin(), open.end());
-                        const size_t pick = static_cast<size_t>(session->LocalSlot()) * 3 - 1;
-                        if (!open.empty())
-                        {
-                            const int cell = open[std::min(pick, open.size() - 1)].second;
-                            const int cx = cell % level.header.mapLength, cz = cell / level.header.mapLength;
-                            camera.x = static_cast<float>(cx) * 512.0f + 256.0f - originX;
-                            camera.z = static_cast<float>(cz) * 512.0f + 256.0f - originZ;
+                            if (monster.type != MULTIPLAYER_START_TYPE) { continue; }
+                            if (seen++ != session->LocalSlot()) { continue; }
+                            camera.x = static_cast<float>(monster.x) * 512.0f + 256.0f - originX;
+                            camera.z = static_cast<float>(monster.y) * 512.0f + 256.0f - originZ;
                             playerFeetY = ALTEngine::Formats::FindFloorHeightGridSpace(
                                 level, ToGridSpaceX(camera.x, originX), ToGridSpaceZ(camera.z, originZ));
                             camera.y = playerFeetY + EYE_HEIGHT;
+                            camera.yaw = static_cast<float>(monster.rotation & 7) * (3.14159265f / 4.0f);
+                            break;
                         }
                     }
                     spawnX = camera.x; spawnZ = camera.z; spawnFeetY = playerFeetY; spawnYaw = camera.yaw;
@@ -1440,6 +1434,20 @@ namespace ALTEngine::Screens
                         // out - every one of them looks its monster up by
                         // index and does nothing when it is not there.
                         if (testingNoEnemies) { enemies.clear(); }
+                        // Multiplayer: the Synthetic records are the players'
+                        // starts, not creatures. Kept in place (triggers find
+                        // monsters by index) but never in play.
+                        if (session)
+                        {
+                            for (size_t m = 0; m < enemies.size() && m < level.monsters.size(); ++m)
+                            {
+                                if (level.monsters[m].type != MULTIPLAYER_START_TYPE) { continue; }
+                                enemies[m].active = false;
+                                enemies[m].alive = false;
+                                enemies[m].health = 0;
+                                enemies[m].bodyRemoved = true;
+                            }
+                        }
                         {
                             size_t waiting = 0;
                             for (const auto& e : enemies) { if (!e.active) { waiting++; } }
@@ -1471,7 +1479,18 @@ namespace ALTEngine::Screens
                             SDL_Log("FaceHugOverlay: FINGERS.B16 not loaded");
                         }
 
-                        if (!enemySprites.Load(cdDirectory, digits, enemies))
+                        // Multiplayer: every look a player can choose, too.
+                        std::vector<ALTEngine::Screens::Enemies::Enemy> spriteTypes = enemies;
+                        if (session)
+                        {
+                            for (int skin = 0; skin < static_cast<int>(ALTEngine::Net::Skin::Count); ++skin)
+                            {
+                                ALTEngine::Screens::Enemies::Enemy look;
+                                look.type = ALTEngine::Net::SkinCreatureType(static_cast<ALTEngine::Net::Skin>(skin));
+                                spriteTypes.push_back(look);
+                            }
+                        }
+                        if (!enemySprites.Load(cdDirectory, digits, spriteTypes))
                         {
                             SDL_Log("GameplayScreen: no enemy sprites loaded for level %s", digits.c_str());
                         }
@@ -1690,6 +1709,19 @@ namespace ALTEngine::Screens
             while (SDL_PollEvent(&event))
             {
                 if (event.type == SDL_EVENT_QUIT) { result.outcome = GameplayOutcome::WindowClosed; running = false; }
+                else if (session && event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat
+                         && event.key.scancode >= SDL_SCANCODE_F2 && event.key.scancode <= SDL_SCANCODE_F9)
+                {
+                    // Multiplayer: F2-F9 send the messages set in Multiplayer
+                    // Options; the sender sees their own too.
+                    const std::string& text = session->QuickChat(event.key.scancode - SDL_SCANCODE_F2);
+                    if (!text.empty() && session->Connected())
+                    {
+                        session->SendChat(text);
+                        const auto& me = session->GetRoster().players[static_cast<size_t>(session->LocalSlot())];
+                        hudMessages.Show((me.name.empty() ? std::string("YOU") : me.name) + ": " + text);
+                    }
+                }
                 else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == keyBindings.GetKey(ALTEngine::Bootstrap::InputAction::Pause))
                 {
                     SDL_SetWindowRelativeMouseMode(app.Window(), false);
@@ -1835,6 +1867,18 @@ namespace ALTEngine::Screens
                         }
                         break;
                     }
+                    case K::Shot:
+                    {
+                        // Another player's round, seen here: it flies and
+                        // strikes the level as theirs does (their machine
+                        // decides whether it hit a player).
+                        if (ALTEngine::Screens::Particles::Particle* round = particles.SpawnAimed(e.shot.type, e.shot.x, e.shot.y, e.shot.z,
+                                                                      e.shot.vx, e.shot.vy, e.shot.vz))
+                        {
+                            round->remote = true;
+                        }
+                        break;
+                    }
                     case K::Frag:
                         hudMessages.Show(e.frag.killer == e.frag.victim
                             ? nameOf(e.frag.victim) + " DIED"
@@ -1862,7 +1906,7 @@ namespace ALTEngine::Screens
                     state.pitch = static_cast<int16_t>(playerCam.pitch);
                     state.health = hudState.health;
                     state.weapon = static_cast<uint8_t>(selectedWeapon);
-                    state.flags = hudState.dead ? 1 : 0;
+                    state.flags = static_cast<uint8_t>((hudState.dead ? 1 : 0) | (playerCam.speed != 0 ? 4 : 0));
                     session->SendState(state);
                 }
             }
@@ -3724,7 +3768,8 @@ namespace ALTEngine::Screens
                             // 2b. Multiplayer: another player, a column from
                             // their feet up. The hit is theirs to take (they
                             // are sent it and apply it, as the original's type 8).
-                            if (session && session->Connected())
+                            const P::Particle* moving = particles.Ticking();
+                            if (session && session->Connected() && !(moving && moving->remote))
                             {
                                 const auto& states = session->RemoteStates();
                                 for (size_t slot = 0; slot < states.size(); ++slot)
@@ -4681,27 +4726,32 @@ namespace ALTEngine::Screens
                 // cell's width per ring, so nothing at the edges drops out.
                 zoneCulling = false;
 
-                // Multiplayer: the other players. A STAND-IN until the
-                // original's player graphic is traced - a marine-sized column
-                // in each slot's colour, standing on their feet.
+                // Multiplayer: the other players, in the look each chose (the
+                // original's Synthetic, or the Soldier, Guard or Handler), walking or
+                // standing, facing the way they look - the view picked as for
+                // a creature (FUN_000314b8).
                 if (session && levelReady)
                 {
-                    static constexpr float SLOT_COLOURS[4][3] = {
-                        { 0.2f, 1.0f, 0.4f }, { 0.3f, 0.6f, 1.0f }, { 1.0f, 0.9f, 0.2f }, { 1.0f, 0.3f, 0.3f } };
+                    namespace EN = ALTEngine::Screens::Enemies;
+                    std::vector<EN::Enemy> bodies;
                     const auto& states = session->RemoteStates();
                     for (size_t slot = 0; slot < states.size(); ++slot)
                     {
                         if (!states[slot] || (states[slot]->flags & 1)) { continue; }
-                        ALTEngine::Renderer::PlacedSprite marker;
-                        marker.textureKey = "line";
-                        marker.x = states[slot]->x;
-                        marker.z = states[slot]->z;
-                        marker.halfWidth = REMOTE_PLAYER_HALF_WIDTH;
-                        marker.halfHeight = REMOTE_PLAYER_HEIGHT * 0.5f;
-                        marker.y = states[slot]->y + marker.halfHeight;
-                        marker.r = SLOT_COLOURS[slot][0]; marker.g = SLOT_COLOURS[slot][1]; marker.b = SLOT_COLOURS[slot][2];
-                        placedSprites.push_back(marker);
+                        const auto& other = *states[slot];
+                        EN::Enemy body;
+                        body.type = ALTEngine::Net::SkinCreatureType(session->GetRoster().players[slot].skin);
+                        body.active = true;
+                        body.alive = true;
+                        body.x = other.x; body.y = other.y; body.z = other.z;
+                        const float yawRadians = static_cast<float>(other.yaw) * (6.28318530718f / 4096.0f);
+                        body.facing = EN::BearingTo(body, other.x + std::sin(yawRadians) * 1024.0f,
+                                                    other.z - std::cos(yawRadians) * 1024.0f);
+                        EN::PlayWalkByView(body, EN::BearingTo(body, camera.x, camera.z));
+                        body.animationFrame = (other.flags & 4) ? static_cast<int>(SDL_GetTicks() / 120) : 0;
+                        bodies.push_back(body);
                     }
+                    enemySprites.Collect(bodies, placedSprites, camera.x, camera.z, true);
                 }
                 if (levelReady)
                 {

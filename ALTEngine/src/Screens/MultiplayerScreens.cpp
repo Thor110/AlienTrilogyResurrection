@@ -8,6 +8,8 @@
 #include "../Renderer/ModelRenderer.h"
 #include "../Renderer/ModelPreview.h"
 #include "../Net/Session.h"
+#include "../Formats/EnemyAnimData.h"
+#include "../Formats/EnemySpriteSet.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -146,6 +148,84 @@ namespace ALTEngine::Screens
         return result;
     }
 
+    namespace
+    {
+        // The chosen look, turning: the creature's eight walking views
+        // (animations 0-7, frame 0), one after another. A type that mirrors
+        // (all but 1, 10 and 13 - FUN_000314b8) draws views 5-7 as 3-1 flipped.
+        class SkinPreview
+        {
+        public:
+            ~SkinPreview() { Clear(); }
+            void Load(const std::filesystem::path& cdDirectory, SDL_Renderer* renderer, int creatureType)
+            {
+                if (creatureType == loadedType) { return; }
+                Clear();
+                loadedType = creatureType;
+                namespace AD = ALTEngine::Formats::EnemyAnimData;
+                const AD::Creature* creature = AD::ForType(creatureType);
+                if (!creature) { return; }
+                ALTEngine::Formats::EnemySpriteSet set;
+                if (!set.Load(cdDirectory / "NME" / (std::string(creature->file) + ".B16"))) { return; }
+                mirrors = creatureType != 1 && creatureType != 10 && creatureType != 13;
+                for (int view = 0; view < 8 && view < creature->count; ++view)
+                {
+                    const AD::Anim& anim = creature->anims[view];
+                    if (anim.count <= 0) { continue; }
+                    ALTEngine::Formats::EnemySpriteSet::Frame f;
+                    f.offsetX = anim.frames[0].ox; f.offsetY = anim.frames[0].oy;
+                    f.width = anim.frames[0].w; f.height = anim.frames[0].h;
+                    f.compressedOffset = anim.frames[0].off;
+                    auto decoded = set.DecodeAnimation({ f });
+                    if (decoded.empty() || decoded[0].width <= 0 || decoded[0].height <= 0) { continue; }
+                    const auto& d = decoded[0];
+                    std::vector<uint8_t> rgba(static_cast<size_t>(d.width) * d.height * 4, 0);
+                    const auto& pal = set.Palette();
+                    for (size_t i = 0; i < d.pixels.size() && i * 4 + 3 < rgba.size(); ++i)
+                    {
+                        const size_t p = static_cast<size_t>(d.pixels[i]) * 2;
+                        if (d.pixels[i] == 0 || p + 1 >= pal.size()) { continue; }
+                        const uint16_t e = static_cast<uint16_t>(pal[p] | (pal[p + 1] << 8));
+                        rgba[i * 4 + 0] = static_cast<uint8_t>((e & 0x1f) << 3);
+                        rgba[i * 4 + 1] = static_cast<uint8_t>(((e >> 5) & 0x1f) << 3);
+                        rgba[i * 4 + 2] = static_cast<uint8_t>(((e >> 10) & 0x1f) << 3);
+                        rgba[i * 4 + 3] = 255;
+                    }
+                    SDL_Texture* t = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, d.width, d.height);
+                    if (!t) { continue; }
+                    SDL_UpdateTexture(t, nullptr, rgba.data(), d.width * 4);
+                    SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+                    SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
+                    views[static_cast<size_t>(view)] = { t, d.width, d.height };
+                }
+            }
+            // Turning once every two seconds or so, centred on (cx, bottom).
+            void Draw(SDL_Renderer* renderer, float cx, float bottom, float scale) const
+            {
+                const int step = static_cast<int>(SDL_GetTicks() / 250) & 7;
+                int view = step;
+                bool flip = false;
+                if (mirrors && view >= 5) { view = 8 - view; flip = true; }
+                const View& v = views[static_cast<size_t>(view)];
+                if (!v.texture) { return; }
+                SDL_FRect dst{ cx - v.w * scale * 0.5f, bottom - v.h * scale, v.w * scale, v.h * scale };
+                SDL_RenderTextureRotated(renderer, v.texture, nullptr, &dst, 0.0, nullptr,
+                                         flip ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+            }
+
+        private:
+            struct View { SDL_Texture* texture = nullptr; int w = 0, h = 0; };
+            void Clear()
+            {
+                for (auto& v : views) { if (v.texture) { SDL_DestroyTexture(v.texture); } v = {}; }
+                loadedType = -1;
+            }
+            std::array<View, 8> views{};
+            int loadedType = -1;
+            bool mirrors = false;
+        };
+    }
+
     MultiplayerSubResult MultiplayerOptionsScreen::Run(const std::filesystem::path& cdDirectory, MultiplayerSettings& settings)
     {
         AppWindow& app = AppWindow::Instance();
@@ -155,8 +235,12 @@ namespace ALTEngine::Screens
         int bgW = 0, bgH = 0;
         SDL_Texture* background = LoadMenuBackground(cdDirectory, renderer, 1, bgW, bgH);
 
-        int cursor = 0; // 0 = name, 1-8 = F2-F9 messages
+        int cursor = 0; // 0 = name, 1-8 = F2-F9 messages, 9 = how the others see you
+        constexpr int ROWS = 10;
+        constexpr int SKIN_ROW = 9;
         TextFieldEditor editor;
+        SkinPreview preview;
+        const int skinCount = static_cast<int>(ALTEngine::Net::Skin::Count);
         MultiplayerSubResult result;
         bool running = true;
 
@@ -185,16 +269,31 @@ namespace ALTEngine::Screens
                     switch (event.key.key)
                     {
                     case SDLK_UP:
-                        cursor = (cursor + 8) % 9;
+                        cursor = (cursor + ROWS - 1) % ROWS;
                         SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
                         break;
                     case SDLK_DOWN:
-                        cursor = (cursor + 1) % 9;
+                        cursor = (cursor + 1) % ROWS;
                         SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+                        break;
+                    case SDLK_LEFT:
+                    case SDLK_RIGHT:
+                        if (cursor == SKIN_ROW)
+                        {
+                            const int delta = event.key.key == SDLK_LEFT ? skinCount - 1 : 1;
+                            settings.skin = (settings.skin + delta) % skinCount;
+                            SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+                        }
                         break;
                     case SDLK_RETURN:
                     case SDLK_KP_ENTER:
                     {
+                        if (cursor == SKIN_ROW)
+                        {
+                            settings.skin = (settings.skin + 1) % skinCount;
+                            SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                            break;
+                        }
                         std::string current = (cursor == 0) ? settings.playerName : settings.messages[static_cast<size_t>(cursor - 1)];
                         editor.BeginEdit(current, cursor == 0 ? 16 : 40);
                         break;
@@ -233,6 +332,14 @@ namespace ALTEngine::Screens
                 Color color = (cursor == row) ? (editor.IsEditing() ? COLOR_EDITING : SelectedTextColor()) : COLOR_DIM;
                 DrawBitmapText(renderer, label + value, margin, rowY + lineHeight * (i + 2), scale, color);
             }
+
+            // How the others see you, turning on the right.
+            const auto skin = static_cast<ALTEngine::Net::Skin>(std::clamp(settings.skin, 0, skinCount - 1));
+            const std::string skinLine = std::string("PLAYER: < ") + ALTEngine::Net::SkinName(skin) + " >";
+            DrawBitmapText(renderer, skinLine, margin, rowY + lineHeight * (SKIN_ROW + 2), scale,
+                           cursor == SKIN_ROW ? SelectedTextColor() : COLOR_DIM);
+            preview.Load(cdDirectory, renderer, ALTEngine::Net::SkinCreatureType(skin));
+            preview.Draw(renderer, windowW * 0.8f, windowH * 0.8f, static_cast<float>(scale) * 1.5f);
 
             SDL_RenderPresent(renderer);
         }

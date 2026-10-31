@@ -350,6 +350,10 @@ namespace ALTEngine::Screens
             // Steps a flame still owes from its spawn (FUN_0002bcac takes them
             // at once, each through the full collision test, FUN_0002a448).
             int preSteps = 0;
+            // Multiplayer: another player's round, shown here. It hits the
+            // level as any round does, but whether it hit a player is decided
+            // on the machine that fired it.
+            bool remote = false;
 
             uint8_t type = TYPE_PISTOL;  // +0x1e
             int strength = 0;            // +0x1d, the value life started at
@@ -724,12 +728,17 @@ namespace ALTEngine::Screens
                 }
             }
 
+            // The particle Tick is moving, for its test to look at (null
+            // outside Tick).
+            const Particle* Ticking() const { return ticking; }
+
             template <typename BlockedFn>
             void Tick(BlockedFn blocked)
             {
                 for (Particle& p : particles)
                 {
                     if (!p.alive || IsVentParticle(p.type)) { continue; }
+                    ticking = &p;
 
                     // A flame's spawn steps, before it moves on its own. Each
                     // goes through the same test as a flying round, so a crate,
@@ -856,10 +865,12 @@ namespace ALTEngine::Screens
                     p.y = ny;
                     p.z = nz;
                 }
+                ticking = nullptr;
             }
 
         private:
             std::vector<Particle> particles;
+            const Particle* ticking = nullptr;
             Rng rng;
         };
     }

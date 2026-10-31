@@ -508,6 +508,19 @@ int main(int, char**)
             };
             static std::string typedAddress;
             MultiplayerSettings mpSettings;
+            // The name and look are kept between sessions.
+            if (auto stored = config.Get("MultiplayerName"); stored && !stored->empty()) { mpSettings.playerName = *stored; }
+            if (auto stored = config.Get("MultiplayerSkin"))
+            {
+                for (int k = 0; k < static_cast<int>(ALTEngine::Net::Skin::Count); ++k)
+                {
+                    if (*stored == ALTEngine::Net::SkinName(static_cast<ALTEngine::Net::Skin>(k))) { mpSettings.skin = k; }
+                }
+            }
+            const auto chosenSkin = [&]() {
+                return static_cast<ALTEngine::Net::Skin>(
+                    std::clamp(mpSettings.skin, 0, static_cast<int>(ALTEngine::Net::Skin::Count) - 1));
+            };
             int multiplayerCursor = 0;
             bool inMultiplayerMenu = true;
             bool windowClosed = false;
@@ -528,12 +541,13 @@ int main(int, char**)
                     const std::string digits = "90" + std::to_string(startIndex);
                     ALTEngine::Net::Session session;
                     if (!session.StartHost(mpSettings.gameName.empty() ? mpSettings.playerName : mpSettings.gameName,
-                                           digits, mpSettings.playerName))
+                                           digits, mpSettings.playerName, ALTEngine::Net::DEFAULT_PORT, chosenSkin()))
                     {
                         std::cout << "Multiplayer: could not host on port " << ALTEngine::Net::DEFAULT_PORT << "\n";
                         break;
                     }
                     std::cout << "Multiplayer: hosting level " << digits << " on port " << session.Port() << "\n";
+                    session.SetQuickChat(mpSettings.messages);
                     if (!playMultiplayer(session)) { windowClosed = true; inMultiplayerMenu = false; }
                     break;
                 }
@@ -545,7 +559,7 @@ int main(int, char**)
                     const auto address = ALTEngine::Net::Resolve(r.address, ALTEngine::Net::DEFAULT_PORT);
                     if (!address) { std::cout << "Multiplayer: can't read the address " << r.address << "\n"; break; }
                     ALTEngine::Net::Session session;
-                    if (!session.StartJoin(*address, mpSettings.playerName)) { break; }
+                    if (!session.StartJoin(*address, mpSettings.playerName, chosenSkin())) { break; }
                     std::cout << "Multiplayer: joining " << address->ToString() << "\n";
                     // Wait for the host's welcome (or its refusal, or nothing).
                     bool waiting = true;
@@ -573,6 +587,7 @@ int main(int, char**)
                     if (windowClosed) { inMultiplayerMenu = false; break; }
                     if (!waiting || !session.Connected()) { session.Stop(); break; }
                     std::cout << "Multiplayer: in as player " << session.LocalSlot() + 1 << ", level " << session.Level() << "\n";
+                    session.SetQuickChat(mpSettings.messages);
                     if (!playMultiplayer(session)) { windowClosed = true; inMultiplayerMenu = false; }
                     break;
                 }
@@ -580,6 +595,8 @@ int main(int, char**)
                 {
                     MultiplayerSubResult r = MultiplayerOptionsScreen::Run(cdDirectory, mpSettings);
                     if (r.windowClosed) { windowClosed = true; inMultiplayerMenu = false; }
+                    config.Set("MultiplayerName", mpSettings.playerName);
+                    config.Set("MultiplayerSkin", ALTEngine::Net::SkinName(chosenSkin()));
                     break;
                 }
                 case MultiplayerMainChoice::Back:

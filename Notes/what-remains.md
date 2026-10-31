@@ -1,4 +1,4 @@
-# What remains (after zip 93)
+# What remains (after zip 94)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -9,6 +9,26 @@ textures, done once everything else is in.
 Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
+
+Changed in zip 94, to check: **multiplayer, players' looks, starts, shots and chat.**
+- **The players are Synthetics in the original.** Every multiplayer map (L900-L909) has exactly four
+  creature records, all type 0x0d, the Synthetic; FUN_0002e638's case 0xd spawns them with a task of their
+  own, and in a multiplayer game types 0xb and 0x0a are left out of cell occupancy. They are the four
+  player starts.
+- **Player starts:** player n starts (and comes back after dying) at the nth of those records, facing its
+  rotation; the records are no longer spawned as creatures. They are, cell (x,y): L900 (55,2-8),
+  L901 (21-24,41), L902 (32-37,112), L903 (59,1-7), L904 (44-50,5), L905 (44-50,48), L906 (43-53,3-4),
+  L907 (67,46-51), L908 (3,2-5), L909 (1-7,2). All face the same way (rotation 0).
+- **Player look:** Multiplayer Options has a new last row, PLAYER: < SYNTHETIC >, changed with Left/Right
+  or Enter: Synthetic (the original's), Soldier, Guard or Handler. The chosen creature turns on the right
+  of the screen, a view every quarter second. It is saved (MultiplayerSkin) along with your name
+  (MultiplayerName), and sent when joining; the protocol is now version 2. Room is left for more looks.
+- **Other players** are drawn as that creature, with its walking animation while they move, from the view
+  that matches the way they face, as a creature is (FUN_000314b8); they were a coloured column.
+- **Their shots** are seen: each round fired is sent and flies on the other machines, striking the level
+  (walls, glass, crates) as it does on theirs; only the machine that fired it decides whether it hit a
+  player.
+- **Chat:** F2-F9 send the messages set in Multiplayer Options; everyone sees "NAME: message".
 
 Changed in zip 93, to check: **multiplayer, first version.**
 - **Networking** (`src/Net`): the original's IPX packet loop (FUN_00054a60, types 4-0x16, four 0x3c-byte
@@ -144,7 +164,7 @@ and every game-side routine the port never cites (about 240 of the 1,242 Ghidra 
 library, the sound and video drivers and the DOS extender) was looked at to see what it does.
 
 ### Known to be missing
-1. **Multiplayer: a first working version is in (zip 93); see "Multiplayer" below for what is still to do.**
+1. **Multiplayer: a working version is in (zips 93-94); see "Multiplayer" below for what is still to do.**
 
 ### Scratched (Edward): known differences, not to be done
 - **The detail setting** (DAT_000a63fc, 0-2, the original's default 1, saved in its config): at 1 it leaves
@@ -217,17 +237,17 @@ frees the sprite buffers and sheets, which a later Initialize would otherwise ha
 
 ## 4b. Multiplayer: what is still to do
 
-The networking, menus, joining, positions, hits and frags are in (zip 93). Still to come, roughly in order:
-1. **How other players look.** They are a coloured column for now (green, blue, yellow, red by slot); the
-   original's player graphic and its animation are to be traced.
-2. **Seeing their shots.** Shots are sent (`Net::Shot`) but not yet drawn on the other machines.
-3. **Where players start and come back.** Players after the host start on an open cell near the level's start;
-   the original's multiplayer starts (and L909's sealed start room - see the L909 patch note) are to be traced.
-4. **The score table and the end of a game:** "Minimum game length", the frag table, and what ends a round.
-5. **Pickups, doors and lifts kept the same on every machine** - each machine runs its own level for now.
-6. **Chat:** the F2-F9 messages are held in Multiplayer Options but not yet sent from play (`SendChat` exists).
-7. **Over the internet:** works by address if the host's port 27960 (UDP) is open; there is no NAT help.
-8. **The rest of the original's packet types** (FUN_00054a60), traced one by one.
+The networking, menus, joining, positions, hits and frags are in (zip 93); the players' looks, the
+original's four starts, seen shots and F2-F9 chat in zip 94. Still to come, roughly in order:
+1. **The score table and the end of a game:** "Minimum game length", the frag table, and what ends a round.
+2. **Pickups, doors and lifts kept the same on every machine** - each machine runs its own level for now
+   (seen shots do break the same glass everywhere).
+3. **L909's sealed start room.** The traced starts are at (1-7,2), well away from it, so the room is not
+   used in a multiplayer game and the temporary patch (Patch/L909LEV.txt) can now be undone. Not done yet:
+   installs that already have it would need the four bytes set back, so it is Edward's call.
+4. **Over the internet:** works by address if the host's port 27960 (UDP) is open; there is no NAT help.
+5. **The rest of the original's packet types** (FUN_00054a60), traced one by one.
+6. **More looks**, such as a Doom Guy: a new `Net::Skin` value and its sprites.
 
 ## 5. Larger features
 
