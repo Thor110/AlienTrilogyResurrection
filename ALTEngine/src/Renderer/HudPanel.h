@@ -2,7 +2,6 @@
 
 #include <cmath>
 
-#include "../Bootstrap/Font8x8.h"
 
 // HUD PANEL GRAPHICS - decoded, not yet implemented.
 //
@@ -443,9 +442,7 @@ namespace ALTEngine::Renderer
     inline constexpr int HUD_ITEM_TEXT_INSET = 3;
     inline constexpr float HUD_ITEM_CORNER = 3.0f;
     inline constexpr int HUD_GRENADE_WEAPON = 2;   // the pulse rifle
-    inline constexpr ALTEngine::Bootstrap::Color HUD_ITEM_BACKGROUND{ 24, 32, 24, 200 };
-    inline constexpr ALTEngine::Bootstrap::Color HUD_ITEM_LABEL{ 150, 190, 150, 255 };
-    inline constexpr ALTEngine::Bootstrap::Color HUD_ITEM_COUNT{ 235, 245, 235, 255 };
+    // The item boxes' colours are in HudRenderer.cpp, which draws them (keeping this file free of SDL).
 
     // WHAT THE ORIGINAL'S ICONS LOOK LIKE IS NOT KNOWN. What each of the four icons actually depicts needs
     // the sprite descriptors inside those four functions, and three of the four
@@ -826,6 +823,10 @@ namespace ALTEngine::Renderer
     inline constexpr int HUD_MINIMAP_Y = 19;   // == HUD_OVERLAY_HEALTH_Y, declared below
     inline constexpr int HUD_MINIMAP_W = 98 * HUD_MINIMAP_SCALE;
     inline constexpr int HUD_MINIMAP_H = 34 * HUD_MINIMAP_SCALE;
+    // The minimap assembly's bottom edge: its top strip, the map, its bottom strip.
+    inline constexpr int HUD_MINIMAP_BOTTOM = HUD_MINIMAP_Y + HUD_MINIMAP_STRIP_H + HUD_MINIMAP_H + HUD_MINIMAP_STRIP_H;
+    // The space left between one thing and the next down the HUD's left side.
+    inline constexpr int HUD_LEFT_COLUMN_GAP = 3;
 
     // THE TYPED-OUT MESSAGE PANEL, top left of the 320x240 HUD surface.
     //
@@ -834,10 +835,10 @@ namespace ALTEngine::Renderer
     // text is the original's (see Screens/HudMessages.h) but nothing traced gives
     // the box's own bounds, so these are chosen to sit clear of the weapon and
     // the ammo row.
-    // Sits BELOW the minimap, aligned to its left edge. HUD_MINIMAP_Y plus the
-    // strip and the map's own height puts the minimap's bottom at 92, so this
-    // starts just under it - and it stays put whether or not the Live Minimap
-    // option is on, since the pause map occupies the same region.
+    // Aligned to the minimap's left edge. This is the panel's highest start;
+    // LayoutHudLeftColumn (HudLayout.h) moves it further down when the Live
+    // Minimap, the resupply countdown or the carried-item stack reach below it,
+    // so the left side's markers never overlap.
     //
     // Square corners, not rounded: the menus use rounded boxes for buttons and
     // this is not one - it is a terminal readout (Edward, 2026).

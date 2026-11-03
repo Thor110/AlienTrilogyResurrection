@@ -1,8 +1,13 @@
 #include "TestFramework.h"
 
+#include "Formats/BndTextureLoader.h"
+#include "Formats/LevelLoader.h"
 #include "Formats/RenderMesh.h"
 
+#include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <iterator>
 
 using namespace ALTEngine::Formats;
 
@@ -140,4 +145,69 @@ TEST_CASE("Level triangles: a, b, c take the texture's x0y1, x1y0, x0y0")
     CHECK(std::fabs(mesh.vertices[0].u - x0) < 1e-5f); CHECK(std::fabs(mesh.vertices[0].v - y1) < 1e-5f);
     CHECK(std::fabs(mesh.vertices[1].u - x1) < 1e-5f); CHECK(std::fabs(mesh.vertices[1].v - y0) < 1e-5f);
     CHECK(std::fabs(mesh.vertices[2].u - x0) < 1e-5f); CHECK(std::fabs(mesh.vertices[2].v - y0) < 1e-5f);
+}
+
+TEST_CASE("Animated faces: rebuilding just their runs gives the whole level's build, frame after frame")
+{
+    const auto bytes = [] {
+        std::ifstream in(AltTest::RequireDemoFile("SECT11/L112LEV.MAP"), std::ios::binary);
+        return std::vector<uint8_t>(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }();
+    const auto level = ALTEngine::Formats::LevelLoader::Parse(bytes, "L112");
+    const auto set = ALTEngine::Formats::BndTextureLoader::LoadLevelPages(AltTest::RequireDemoFile("SECT11/112GFX.BIN"));
+    ALTEngine::Formats::LightTable lights;
+    lights.Reset(level.lights);
+    ALTEngine::Formats::TextureAnimator animator;
+    animator.Reset(level);
+    REQUIRE(animator.Count() > 0);
+
+    auto kept = BuildLevelRenderMeshAllFills(level, set.uvRects, {}, &lights, &animator);
+    size_t runs = 0;
+    for (const auto& fill : kept) { for (const auto& page : fill) { runs += page.animatedFaces.size(); } }
+    REQUIRE(runs > 0);
+
+    int patched = 0;
+    for (int tick = 0; tick < 400; ++tick)
+    {
+        animator.Tick(tick * 7919);
+        lights.Tick(tick * 104729);
+        const auto full = BuildLevelRenderMeshAllFills(level, set.uvRects, {}, &lights, &animator);
+        bool rebuild = false;   // what the renderer does when a run cannot be patched
+        for (size_t p = 0; p < 3; ++p)
+        {
+            for (size_t g = 0; g < 5; ++g)
+            {
+                auto& mesh = kept[p][g];
+                // Lights: the kept colours follow the table, as the renderer's recolour does.
+                for (size_t v = 0; v < mesh.vertices.size(); ++v)
+                {
+                    if (mesh.vertexLight[v] == RenderMesh::NO_LIGHT) { continue; }
+                    const auto& c = lights.ColourFor(mesh.vertexLight[v]).corner[mesh.vertexCorner[v] & 3];
+                    mesh.vertices[v].r = static_cast<float>(c.r) / ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL;
+                    mesh.vertices[v].g = static_cast<float>(c.g) / ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL;
+                    mesh.vertices[v].b = static_cast<float>(c.b) / ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL;
+                }
+                for (const auto& run : mesh.animatedFaces)
+                {
+                    LevelFaceVertices face;
+                    REQUIRE(BuildLevelFaceVertices(level, set.uvRects, {}, &lights, &animator, run.face, face));
+                    if (face.slot != int(p) || face.page != int(g)) { rebuild = true; continue; }
+                    REQUIRE(face.mesh.vertices.size() == run.count);
+                    std::copy(face.mesh.vertices.begin(), face.mesh.vertices.end(), mesh.vertices.begin() + run.first);
+                    ++patched;
+                }
+                if (full[p][g].vertices.size() != mesh.vertices.size()) { rebuild = true; continue; }
+                bool same = true;
+                for (size_t v = 0; v < mesh.vertices.size() && same; ++v)
+                {
+                    const auto& a = mesh.vertices[v];
+                    const auto& b = full[p][g].vertices[v];
+                    same = a.x == b.x && a.y == b.y && a.z == b.z && a.u == b.u && a.v == b.v && a.r == b.r && a.g == b.g && a.b == b.b;
+                }
+                if (!rebuild) { CHECK(same); }
+            }
+        }
+        if (rebuild) { kept = full; }
+    }
+    CHECK(patched > 0);
 }

@@ -1,6 +1,7 @@
 #include "HudRenderer.h"
 
 #include "HudPanel.h"
+#include "../Bootstrap/Font8x8.h"
 #include "../Formats/OverrideImage.h"
 
 #include <algorithm>
@@ -10,6 +11,14 @@
 
 namespace ALTEngine::Renderer
 {
+    namespace
+    {
+        // The carried-item boxes' colours - ours, like their shape (see the stack in Draw).
+        constexpr ALTEngine::Bootstrap::Color HUD_ITEM_BACKGROUND{ 24, 32, 24, 200 };
+        constexpr ALTEngine::Bootstrap::Color HUD_ITEM_LABEL{ 150, 190, 150, 255 };
+        constexpr ALTEngine::Bootstrap::Color HUD_ITEM_COUNT{ 235, 245, 235, 255 };
+    }
+
     namespace
     {
         // The two bar colours, read from the panel sheet's own CL00 palette at
@@ -708,10 +717,8 @@ namespace ALTEngine::Renderer
         // 2026). Positions and the stacking rule are the original's; the look is
         // not.
         {
-            int itemY = HUD_ITEM_STACK_TOP;
+            int itemY = leftColumn.itemTop;
             auto drawItem = [&](const char* label, int count) {
-                if (count <= 0) { return; }
-
                 const SDL_FRect box{ static_cast<float>(HUD_ITEM_X),
                                      static_cast<float>(itemY),
                                      static_cast<float>(HUD_ITEM_WIDTH),
@@ -729,14 +736,8 @@ namespace ALTEngine::Renderer
                 itemY += HUD_ITEM_ROW_STEP;
             };
 
-            // Slot 1 is Fire 2's: the grenade launcher with the pulse rifle up,
-            // the seismic charges with anything else, while there are any
-            // (0x3ac5a-0x3acc3).
-            if (state.currentWeapon == HUD_GRENADE_WEAPON) { drawItem("GREN", state.grenades); }
-            else if (state.seismicCharges > 0) { drawItem("CHRG", state.seismicCharges); }
-            drawItem("ARMR", state.armourItem);
-            drawItem("SPD",  state.terrainSpeed);
-            drawItem("SHLD", state.terrainShield);
+            const HudItems shown = ShownHudItems(state);
+            for (int i = 0; i < shown.count; ++i) { drawItem(shown.items[static_cast<size_t>(i)].label, shown.items[static_cast<size_t>(i)].count); }
         }
 
         // Last, on top of every panel: the typed-out messages. They belong here

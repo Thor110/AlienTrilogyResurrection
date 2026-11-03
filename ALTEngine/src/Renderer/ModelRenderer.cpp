@@ -87,6 +87,9 @@ namespace ALTEngine::Renderer
             std::vector<ALTEngine::Formats::RenderVertex> cpuVertices;
             std::vector<uint8_t> vertexLight;
             std::vector<uint8_t> vertexCorner;
+            // The animated faces' vertex runs in cpuVertices, so an animator
+            // moving rewrites only those (TickLevelLights).
+            std::vector<ALTEngine::Formats::RenderMesh::FaceVertices> animatedFaces;
         };
 
         struct LoadedLevel
@@ -306,6 +309,56 @@ namespace ALTEngine::Renderer
         size_t vertexUploadSize = 0;
 
         using VertexUpload = std::pair<const LevelSubGroup*, const std::vector<ALTEngine::Formats::RenderVertex>*>;
+        // Parts of groups' vertex buffers: `count` vertices from `first`, taken
+        // from the group's cpuVertices. One transfer, one copy pass.
+        struct VertexRange { const LevelSubGroup* group; uint32_t first; uint32_t count; };
+        void ReuploadVertexRanges(const std::vector<VertexRange>& ranges)
+        {
+            constexpr size_t STRIDE = sizeof(ALTEngine::Formats::RenderVertex);
+            size_t total = 0;
+            for (const auto& r : ranges) { total += size_t(r.count) * STRIDE; }
+            if (total == 0) { return; }
+            if (vertexUploadBuffer && vertexUploadSize < total)
+            {
+                SDL_ReleaseGPUTransferBuffer(device, vertexUploadBuffer);
+                vertexUploadBuffer = nullptr;
+            }
+            const bool cycle = vertexUploadBuffer != nullptr;
+            if (!vertexUploadBuffer)
+            {
+                SDL_GPUTransferBufferCreateInfo transferInfo{};
+                transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+                transferInfo.size = static_cast<Uint32>(total);
+                vertexUploadBuffer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
+                if (!vertexUploadBuffer) { vertexUploadSize = 0; return; }
+                vertexUploadSize = total;
+            }
+            auto* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, vertexUploadBuffer, cycle));
+            if (!mapped) { return; }
+            size_t offset = 0;
+            for (const auto& r : ranges)
+            {
+                std::memcpy(mapped + offset, r.group->cpuVertices.data() + r.first, size_t(r.count) * STRIDE);
+                offset += size_t(r.count) * STRIDE;
+            }
+            SDL_UnmapGPUTransferBuffer(device, vertexUploadBuffer);
+
+            SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
+            if (!cmd) { return; }
+            SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
+            offset = 0;
+            for (const auto& r : ranges)
+            {
+                const size_t size = size_t(r.count) * STRIDE;
+                SDL_GPUTransferBufferLocation src{ vertexUploadBuffer, static_cast<Uint32>(offset) };
+                SDL_GPUBufferRegion dst{ r.group->vertexBuffer, static_cast<Uint32>(size_t(r.first) * STRIDE), static_cast<Uint32>(size) };
+                SDL_UploadToGPUBuffer(copyPass, &src, &dst, false);
+                offset += size;
+            }
+            SDL_EndGPUCopyPass(copyPass);
+            SDL_SubmitGPUCommandBuffer(cmd);
+        }
+
         void ReuploadVerticesBatch(const std::vector<VertexUpload>& uploads)
         {
             size_t total = 0;
@@ -585,6 +638,7 @@ namespace ALTEngine::Renderer
             group.cpuVertices = lit ? mesh.vertices : std::vector<ALTEngine::Formats::RenderVertex>{};
             group.vertexLight = lit ? mesh.vertexLight : std::vector<uint8_t>{};
             group.vertexCorner = lit ? mesh.vertexCorner : std::vector<uint8_t>{};
+            group.animatedFaces = lit ? mesh.animatedFaces : std::vector<ALTEngine::Formats::RenderMesh::FaceVertices>{};
             if (mesh.indices.empty() || mesh.triangleFace.size() * 3 != mesh.indices.size()) { return; }
             SDL_GPUBufferCreateInfo info{ SDL_GPU_BUFFERUSAGE_INDEX, static_cast<Uint32>(mesh.indices.size() * sizeof(uint32_t)), 0 };
             group.visibleIndexBuffer = SDL_CreateGPUBuffer(device, &info);
@@ -601,6 +655,7 @@ namespace ALTEngine::Renderer
             group.cpuVertices.clear();
             group.vertexLight.clear();
             group.vertexCorner.clear();
+            group.animatedFaces.clear();
         }
 
         // Ensures colorTarget/depthTarget/downloadBuffer exist and match
@@ -1864,15 +1919,33 @@ namespace ALTEngine::Renderer
         if (!lightsMoved && !animatorsMoved) { return false; }
 
         level.lastEntries = level.lights.Entries();
-        level.lastAnimatorOutputs = outputs;
+        level.lastAnimatorOutputs = std::move(outputs);
 
-        // Only lights moved: nothing but the vertex colours changes, so the
-        // kept vertices are recoloured from the table (as LevelQuadColours
-        // does) and sent up, without building the level again.
-        if (!animatorsMoved)
+        namespace FM = ALTEngine::Formats;
+        struct Pass
         {
-            std::vector<VertexUpload> recoloured;
-            bool complete = true;
+            std::array<LevelSubGroup, 5>* groups;
+            std::array<size_t, 5>* counts;
+        };
+        const Pass passes[] = {
+            { &level.groups, &level.groupVertexCounts },
+            { &level.cutoutGroups, &level.cutoutVertexCounts },
+            { &level.translucentGroups, &level.translucentVertexCounts },
+        };
+
+        // The kept vertices are changed in place and only what changed goes
+        // up: a light moving recolours every lit vertex from the table (as
+        // LevelQuadColours does); an animator moving rebuilds just its faces
+        // (FM::BuildLevelFaceVertices, the whole build's own code for one
+        // face) over their runs. Anything this cannot express - a frame on
+        // another page, a group without its kept vertices - builds the level
+        // again below.
+        bool complete = true;
+        std::vector<VertexUpload> whole;
+        if (lightsMoved)
+        {
+            // Not the translucent fill: it is drawn unlit (RenderMesh.cpp), so a
+            // light changing leaves it as it is.
             for (auto* groups : { &level.groups, &level.cutoutGroups })
             {
                 for (LevelSubGroup& group : *groups)
@@ -1895,27 +1968,49 @@ namespace ALTEngine::Renderer
                         vertex.g = static_cast<float>(corner.g) / ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL;
                         vertex.b = static_cast<float>(corner.b) / ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL;
                     }
-                    recoloured.emplace_back(&group, &group.cpuVertices);
+                    whole.emplace_back(&group, &group.cpuVertices);
                 }
             }
-            if (complete)
+        }
+        std::vector<VertexRange> ranges;
+        if (complete && animatorsMoved)
+        {
+            FM::LevelFaceVertices face;
+            for (int p = 0; p < 3 && complete; ++p)
             {
-                ReuploadVerticesBatch(recoloured);
-                return true;
+                for (int i = 0; i < 5 && complete; ++i)
+                {
+                    LevelSubGroup& group = (*passes[p].groups)[static_cast<size_t>(i)];
+                    if (group.animatedFaces.empty()) { continue; }
+                    if (!group.vertexBuffer || group.cpuVertices.empty()) { complete = false; break; }
+                    const bool uploadedWhole = std::any_of(whole.begin(), whole.end(),
+                                                           [&](const VertexUpload& u) { return u.first == &group; });
+                    for (const auto& run : group.animatedFaces)
+                    {
+                        if (!FM::BuildLevelFaceVertices(level.geometry, level.uvRects, level.rotations, &level.lights,
+                                                        &level.animator, run.face, face)
+                            || face.slot != p || face.page != i || face.mesh.vertices.size() != run.count
+                            || size_t(run.first) + run.count > group.cpuVertices.size())
+                        {
+                            complete = false;
+                            break;
+                        }
+                        // Unchanged faces (another animator moved) are left alone.
+                        auto* kept = group.cpuVertices.data() + run.first;
+                        if (std::memcmp(kept, face.mesh.vertices.data(), run.count * sizeof(FM::RenderVertex)) == 0) { continue; }
+                        std::memcpy(kept, face.mesh.vertices.data(), run.count * sizeof(FM::RenderVertex));
+                        if (!uploadedWhole) { ranges.push_back({ &group, run.first, run.count }); }
+                    }
+                }
             }
         }
-
-        namespace FM = ALTEngine::Formats;
-        struct Pass
+        if (complete)
         {
-            std::array<LevelSubGroup, 5>* groups;
-            std::array<size_t, 5>* counts;
-        };
-        const Pass passes[] = {
-            { &level.groups, &level.groupVertexCounts },
-            { &level.cutoutGroups, &level.cutoutVertexCounts },
-            { &level.translucentGroups, &level.translucentVertexCounts },
-        };
+            ReuploadVerticesBatch(whole);
+            ReuploadVertexRanges(ranges);
+            return true;
+        }
+
         // One walk over the faces builds all three fills.
         auto allFills = FM::BuildLevelRenderMeshAllFills(
             level.geometry, level.uvRects, level.rotations, &level.lights, &level.animator);
@@ -1953,6 +2048,7 @@ namespace ALTEngine::Renderer
                 group.cpuVertices = meshes[i].vertices;
                 group.vertexLight = meshes[i].vertexLight;
                 group.vertexCorner = meshes[i].vertexCorner;
+                group.animatedFaces = meshes[i].animatedFaces;
                 uploads.emplace_back(&group, &group.cpuVertices);
             }
         }

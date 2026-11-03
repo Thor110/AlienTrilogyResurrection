@@ -1,0 +1,77 @@
+#pragma once
+
+#include "HudPanel.h"
+#include "../Game/ResupplyTimer.h"
+#include "../Screens/PlayerHudState.h"
+
+#include <algorithm>
+#include <array>
+
+namespace ALTEngine::Renderer
+{
+    // THE LEFT SIDE OF THE HUD, top to bottom: the Live Minimap (a Modern
+    // option), the resupply countdown, the carried-item stack and the typed
+    // messages. Each starts below the one above it, so none covers another.
+    // Without the minimap the countdown and the stack keep the original's
+    // places, (16, 19) and y 0x37; with it they move down below the map, in
+    // the same order (Edward, 2026). The messages start at HUD_MESSAGE_Y, or
+    // below the stack if it reaches that far. All in 320x240 HUD units.
+    struct HudLeftColumn
+    {
+        int resupplyY = 0;
+        int itemTop = 0;
+        int itemBottom = 0;   // == itemTop when no item is shown
+        int messageTop = 0;
+    };
+
+    // The carried-item stack's boxes, top to bottom, each only while its count
+    // is above 0 (FUN_0003aac8). Slot 1 is Fire 2's: the grenade launcher with
+    // the pulse rifle up, the seismic charges with anything else
+    // (0x3ac5a-0x3acc3). The one list both the drawing and the layout read.
+    struct HudItem { const char* label; int count; };
+    struct HudItems
+    {
+        std::array<HudItem, 4> items{};
+        int count = 0;
+    };
+
+    inline HudItems ShownHudItems(const ALTEngine::Screens::PlayerHudState& state)
+    {
+        HudItems out;
+        auto add = [&](const char* label, int count) { if (count > 0) { out.items[static_cast<size_t>(out.count++)] = { label, count }; } };
+        if (state.currentWeapon == HUD_GRENADE_WEAPON) { add("GREN", state.grenades); }
+        else { add("CHRG", state.seismicCharges); }
+        add("ARMR", state.armourItem);
+        add("SPD", state.terrainSpeed);
+        add("SHLD", state.terrainShield);
+        return out;
+    }
+
+    inline int HudItemCount(const ALTEngine::Screens::PlayerHudState& state) { return ShownHudItems(state).count; }
+
+    inline HudLeftColumn LayoutHudLeftColumn(const ALTEngine::Screens::PlayerHudState& state,
+                                             bool minimapShown, bool resupplyShown)
+    {
+        HudLeftColumn out;
+        if (!minimapShown)
+        {
+            out.resupplyY = ALTEngine::Game::ResupplyTimer::HUD_Y;
+            out.itemTop = HUD_ITEM_STACK_TOP;
+        }
+        else
+        {
+            int y = HUD_MINIMAP_BOTTOM + HUD_LEFT_COLUMN_GAP;
+            out.resupplyY = y;
+            if (resupplyShown) { y += HUD_FONT_GLYPH_HEIGHT + HUD_LEFT_COLUMN_GAP; }
+            out.itemTop = y;
+        }
+        const int items = HudItemCount(state);
+        // The last box ends HUD_ITEM_HEIGHT below its row, not a whole step.
+        out.itemBottom = items > 0 ? out.itemTop + (items - 1) * HUD_ITEM_ROW_STEP + HUD_ITEM_HEIGHT : out.itemTop;
+        int messageTop = HUD_MESSAGE_Y;
+        if (minimapShown) { messageTop = std::max(messageTop, out.itemTop); }
+        if (items > 0) { messageTop = std::max(messageTop, out.itemBottom + HUD_LEFT_COLUMN_GAP); }
+        out.messageTop = messageTop;
+        return out;
+    }
+}

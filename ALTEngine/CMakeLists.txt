@@ -170,6 +170,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/BotTests.cpp
         tests/LevelCleanupTests.cpp
         tests/TextureBlankTests.cpp
+        tests/HudLayoutTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
     target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats alt_warnings nlohmann_json::nlohmann_json)

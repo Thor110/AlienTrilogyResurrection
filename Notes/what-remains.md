@@ -664,3 +664,32 @@ smaller (LZMA 19.1%). Report: `Notes/texture-use.md`. The whole routine, in orde
    Zip 122: the end room floor's far slice (texture 246, in 141GFX and 903GFX) given the strip's grey outline on its
    right edge - its last two columns are texture 221's first two, mirrored, as L111's 302 carries 299's (Edward,
    FaceLog); the blanking list's two CRCs follow. Testing > Level Cleanup is now on by default.
+   Zip 123: the HUD's left side laid out as one column (Renderer/HudLayout.h) - with the Live Minimap on, the
+   resupply countdown, the CHRG/GREN/ARMR/SPD/SHLD boxes and the typed messages start below the map, in that order,
+   and the messages never start inside the item boxes; without it the countdown and boxes keep the original's places.
+   Code review and optimisation pass: the texture blanking is cached like the cleanup (a second start renames files
+   instead of rewriting 30 MB); a failed swap of a cached cleaned or blanked file puts the uncleaned one back rather
+   than leaving the file missing; the live minimap tests each cell's blocking once instead of up to nine times and
+   uploads its image only when it changed, its texture kept per renderer; the item boxes come from one list that the
+   drawing and the layout share.
+   Zip 124 (v0.9.5): an animated texture moving no longer builds the whole level again. Each animated face's vertices
+   are one run in its page's mesh (RenderMesh::animatedFaces); a frame change builds just that face with the level
+   build's own code (Formats::BuildLevelFaceVertices) over its run, and only the runs that changed go to the GPU. On
+   L111 and L371: 1.9 ms of CPU and about 1.3 MB of upload a change become 0.05 ms and about 20 KB. L906's 23
+   animators drive no face at all and used to rebuild the level 450 times a minute for nothing. A frame on another
+   page (none found on L111, L161, L371 or L906) still builds the level again. Tested against the whole build, frame
+   by frame (RenderMeshTests).
+
+## Install size (v0.9.4, Edward's measurements)
+
+The original installed: 129,751,918 bytes (its music streams off the disc). ALTEngine: 548,430,318, of which the ripped
+music is 413,606,960, leaving 134,823,358 - 5,071,440 bytes more than the original. Ways to get below it:
+
+- **FFmpeg (about 13 MB).** The game's videos are Duck TrueMotion 1 (FourCC `DUCK`) with plain PCM audio in AVI, so
+  all ALTEngine needs is one decoder and the AVI demuxer. An FFmpeg built with only those (`--disable-everything
+  --enable-decoder=truemotion1,pcm_u8,pcm_s16le --enable-demuxer=avi --enable-protocol=file`, still LGPL) is well
+  under 1 MB; our own TrueMotion 1 decoder would drop FFmpeg altogether, but OVERRIDE videos (any codec) need it.
+- **The kept copies.** With Level Cleanup on, each cleaned level keeps its `.untrimmed` copy and each blanked sheet
+  its `.unblanked` one (about 18 MB and 15 MB), so the fixes can be re-run against the files they were written for.
+  Once the cleanup is always on, the install can write the final files once and keep only what a reinstall needs.
+- **Music** (not in the comparison): 413 MB of WAV would be about half as FLAC, lossless.

@@ -24,7 +24,10 @@ it has been tested enough it is to become always on and leave the Testing menu.
    and its sheet are not copied.
 2. **Put the cleaned files back.** A level the Level Cleanup changed has its fixed-but-uncleaned copy beside it as
    `<file>.untrimmed`, and a blanked sheet its unblanked copy as `<sheet>.unblanked`. These go back first, so the
-   fixes always apply to the files they were written against.
+   fixes always apply to the files they were written against; the cleaned and blanked copies are set aside as
+   `<file>.cleaned` and `<sheet>.blanked`, and steps 5 and 6 put them back (renames only, about 0.2 s for the whole
+   game) when the file and the list are the ones they were made from - their CRCs are kept in `CD/LevelCleanup.json`
+   and `CD/TextureBlank.json`. Anything else is made again.
 3. **Model removals** (`modelRemovals`): door and lift models that are exact duplicates of another, or that no door
    or lift record uses, are cut out of the level file, and the records pointing past them are renumbered
    (`Notes/duplicate-level-models.md`, `Patch/DUPLICATE-MODELS.txt`). First, because every byte offset in step 4 is

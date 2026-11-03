@@ -54,6 +54,11 @@ namespace ALTEngine::Formats
         bool trackLights = false;
         std::vector<uint8_t> vertexLight;
         std::vector<uint8_t> vertexCorner;
+        // Levels only: where each animated face's vertices are (one run each,
+        // as EmitQuad writes them), so a texture animator moving rebuilds just
+        // those faces (BuildLevelFaceVertices) instead of the whole level.
+        struct FaceVertices { uint32_t face = 0; uint32_t first = 0; uint32_t count = 0; };
+        std::vector<FaceVertices> animatedFaces;
     };
 
     // Converts a parsed ModelMesh + its paired BX UV rects (same section
@@ -283,5 +288,20 @@ namespace ALTEngine::Formats
                                                                          const std::vector<FaceUvRotation>& uvRotations = {},
                                                                          const LightTable* lights = nullptr,
                                                                          const TextureAnimator* animator = nullptr);
+
+    // One level face as BuildLevelRenderMeshAllFills builds it, on its own:
+    // the fill slot ([0] opaque, [1] cutout, [2] translucent; -1 for a face no
+    // fill draws), the page, and its vertices (with their light corners).
+    // Writing these over the face's run (RenderMesh::animatedFaces) gives the
+    // same vertices as building the whole level again.
+    struct LevelFaceVertices
+    {
+        int slot = -1;
+        int page = 0;
+        RenderMesh mesh;
+    };
+    bool BuildLevelFaceVertices(const LevelGeometry& level, const std::vector<BxRectangle>& uvDescriptors,
+                                const std::vector<FaceUvRotation>& uvRotations, const LightTable* lights,
+                                const TextureAnimator* animator, size_t faceIndex, LevelFaceVertices& out);
 }
 

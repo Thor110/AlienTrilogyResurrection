@@ -3,6 +3,7 @@
 #include "HudPanel.h"
 #include "../Formats/BndTextureLoader.h"
 #include "../Screens/PlayerHudState.h"
+#include "HudLayout.h"
 
 #include <SDL3/SDL.h>
 
@@ -70,6 +71,9 @@ namespace ALTEngine::Renderer
                         int letterSpacing = 0, SDL_Color tint = SDL_Color{ 255, 255, 255, 255 }) const;
 
         void Unload();
+
+        // Set before Draw each frame; Draw puts the item stack at its itemTop.
+        void SetLeftColumn(const HudLeftColumn& layout) { leftColumn = layout; }
 
         // Draws the HUD over the current frame. `outputWidth/Height` are the
         // real render target size.
@@ -147,6 +151,7 @@ namespace ALTEngine::Renderer
         ~HudRenderer() { Unload(); }
 
     private:
+        HudLeftColumn leftColumn = LayoutHudLeftColumn(ALTEngine::Screens::PlayerHudState{}, false, false);
         // The original's 320x240 HUD surface. Created on first use and kept for
         // the renderer's lifetime; Draw() is const, hence mutable.
         mutable SDL_Texture* hudTarget = nullptr;

@@ -157,7 +157,12 @@ namespace ALTEngine::Bootstrap
                     && state[key].get<uint32_t>() == source)
                 {
                     std::filesystem::rename(file, With(file, ".untrimmed"), ec);
-                    if (!ec) { std::filesystem::rename(cleanedCopy, file, ec); }
+                    if (!ec)
+                    {
+                        std::filesystem::rename(cleanedCopy, file, ec);
+                        // Never leave the level missing: put the untrimmed one back.
+                        if (ec) { std::error_code back; std::filesystem::rename(With(file, ".untrimmed"), file, back); }
+                    }
                     if (ec) { std::cout << "Level cleanup: could not swap " << file.string() << ": " << ec.message() << "\n"; }
                     ++kept;
                     continue;
@@ -232,9 +237,14 @@ namespace ALTEngine::Bootstrap
         // TEXTURE BLANKING's files (with Testing > Level Cleanup; Game::
         // TextureBlank). Beside each blanked sheet: <sheet>.unblanked, the
         // sheet as the fixes left it. Every start puts it back before the
-        // fixes run (they are written against the sheets as shipped), and
-        // blanks it again afterwards from data/TextureBlankList.json - a few
-        // milliseconds a sheet, so nothing is cached.
+        // fixes run (they are written against the sheets as shipped), the
+        // blanked one set aside as <sheet>.blanked; after the fixes the
+        // blanked copy goes back if it was made from exactly this sheet and
+        // list (their CRCs are kept in TextureBlank.json), so an unchanged
+        // install only renames files; otherwise the sheet is blanked again
+        // from data/TextureBlankList.json.
+        constexpr int BLANK_APPLY_VERSION = 1;
+
         void SetBlankedAside(const std::filesystem::path& cdDirectory)
         {
             std::error_code ec;
@@ -243,7 +253,9 @@ namespace ALTEngine::Bootstrap
                 const auto file = cdDirectory / relative;
                 const auto unblanked = With(file, ".unblanked");
                 if (!std::filesystem::exists(unblanked, ec)) { continue; }
-                std::filesystem::remove(file, ec);
+                const auto blanked = With(file, ".blanked");
+                std::filesystem::remove(blanked, ec);
+                if (std::filesystem::exists(file, ec)) { std::filesystem::rename(file, blanked, ec); }
                 std::filesystem::rename(unblanked, file, ec);
                 if (ec) { std::cout << "Texture blanking: could not restore " << file.string() << ": " << ec.message() << "\n"; }
             }
@@ -251,32 +263,71 @@ namespace ALTEngine::Bootstrap
 
         void ApplyTextureBlanking(const std::filesystem::path& cdDirectory, bool enabled)
         {
-            if (!enabled) { return; }
+            const auto statePath = cdDirectory / "TextureBlank.json";
+            nlohmann::json state = nlohmann::json::object();
+            {
+                std::ifstream in(statePath);
+                if (in) { try { in >> state; } catch (...) { state = nlohmann::json::object(); } }
+                if (!state.is_object()) { state = nlohmann::json::object(); }
+            }
+            std::error_code ec;
+            const auto sheets = ALTEngine::Game::TextureBlank::SheetFiles(cdDirectory);
+            auto dropCopies = [&] {
+                for (const auto& relative : sheets) { std::filesystem::remove(With(cdDirectory / relative, ".blanked"), ec); }
+                std::filesystem::remove(statePath, ec);
+            };
+            if (!enabled) { dropCopies(); return; }
+
             const auto listPath = ExecutableDirectory() / "data" / "TextureBlankList.json";
             std::vector<uint8_t> raw;
             nlohmann::json list;
+            uint32_t listCrc = 0;
             if (ReadAll(listPath, raw))
             {
+                listCrc = ALTEngine::Formats::Crc32(raw.data(), raw.size());
                 try { list = nlohmann::json::parse(raw.begin(), raw.end()); }
                 catch (...) { list = nlohmann::json(); }
             }
             if (!list.is_object() || !list.contains("sheets") || !list["sheets"].is_object())
             {
                 std::cout << "Texture blanking: " << listPath.string() << " is missing or cannot be read - sheets left as the fixes leave them.\n";
+                dropCopies();
                 return;
             }
-            int blanked = 0, skipped = 0;
+            // Blanked copies made from another list, or by another Apply, are made again.
+            const bool current = state.contains("list") && state["list"].is_number_unsigned() && state["list"].get<uint32_t>() == listCrc
+                                 && state.contains("apply") && state["apply"].is_number_integer()
+                                 && state["apply"].get<int>() == BLANK_APPLY_VERSION;
+            nlohmann::json next = nlohmann::json::object();
+            next["list"] = listCrc;
+            next["apply"] = BLANK_APPLY_VERSION;
+
+            int blanked = 0, kept = 0, skipped = 0;
             size_t changed = 0;
-            for (const auto& relative : ALTEngine::Game::TextureBlank::SheetFiles(cdDirectory))
+            for (const auto& relative : sheets)
             {
                 const std::string key = relative.generic_string();
-                if (!list["sheets"].contains(key)) { continue; }
-                const auto& entry = list["sheets"][key];
                 const auto file = cdDirectory / relative;
+                const auto blankedCopy = With(file, ".blanked");
                 std::vector<uint8_t> bytes;
-                if (!ReadAll(file, bytes)) { continue; }
-                if (!entry.contains("crc") || !entry["crc"].is_number_unsigned()
-                    || entry["crc"].get<uint32_t>() != ALTEngine::Formats::Crc32(bytes.data(), bytes.size()))
+                if (!list["sheets"].contains(key) || !ReadAll(file, bytes)) { std::filesystem::remove(blankedCopy, ec); continue; }
+                const uint32_t source = ALTEngine::Formats::Crc32(bytes.data(), bytes.size());
+                if (current && std::filesystem::exists(blankedCopy, ec) && state.contains(key) && state[key].is_number_unsigned()
+                    && state[key].get<uint32_t>() == source)
+                {
+                    std::filesystem::rename(file, With(file, ".unblanked"), ec);
+                    if (!ec)
+                    {
+                        std::filesystem::rename(blankedCopy, file, ec);
+                        // Never leave the sheet missing: put the unblanked one back.
+                        if (ec) { std::error_code back; std::filesystem::rename(With(file, ".unblanked"), file, back); }
+                    }
+                    if (!ec) { next[key] = source; ++kept; continue; }
+                    std::cout << "Texture blanking: could not swap " << file.string() << ": " << ec.message() << "\n";
+                }
+                std::filesystem::remove(blankedCopy, ec);
+                const auto& entry = list["sheets"][key];
+                if (!entry.contains("crc") || !entry["crc"].is_number_unsigned() || entry["crc"].get<uint32_t>() != source)
                 {
                     std::cout << "  [skipped]  " << key << " - its plan was made for another version of the sheet (a fix changed it?);"
                               << " remake data/TextureBlankList.json with ALTTextureBlankList\n";
@@ -312,15 +363,17 @@ namespace ALTEngine::Bootstrap
                 if (!WriteAll(With(file, ".unblanked"), original) || !WriteAll(file, bytes))
                 {
                     std::cout << "  [FAILED]   " << key << " - could not write the blanked sheet\n";
-                    std::error_code ec;
                     std::filesystem::remove(With(file, ".unblanked"), ec);
                     continue;
                 }
+                next[key] = source;
                 ++blanked;
                 changed += report.texelsChanged;
             }
-            std::cout << "Texture blanking: " << blanked << " sheets, " << changed << " texels set to their page's background"
-                      << (skipped ? ", " + std::to_string(skipped) + " skipped" : std::string()) << ".\n";
+            std::ofstream out(statePath, std::ios::trunc);
+            out << next.dump(1);
+            std::cout << "Texture blanking: " << blanked << " sheets blanked (" << changed << " texels set to their page's background), "
+                      << kept << " already blanked" << (skipped ? ", " + std::to_string(skipped) + " skipped" : std::string()) << ".\n";
         }
     }
 

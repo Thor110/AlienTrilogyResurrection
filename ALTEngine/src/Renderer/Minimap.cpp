@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace ALTEngine::Renderer
 {
@@ -109,12 +110,20 @@ namespace ALTEngine::Renderer
         // overlaps at a fractional scale however the edges were rounded; a
         // gridW x gridH image scaled up has neither by construction, and it is
         // also far less work per frame (Edward, 2026).
+        // Kept for the renderer that made it: a texture belongs to its
+        // renderer, so a new renderer gets a new one (the old one went with
+        // its renderer). The last image is kept too, so an unchanged map is
+        // not sent up again.
         static SDL_Texture* cached = nullptr;
+        static SDL_Renderer* cachedFor = nullptr;
         static int cachedW = 0, cachedH = 0;
+        static std::vector<uint8_t> uploaded;
 
+        if (cachedFor != renderer) { cached = nullptr; cachedFor = renderer; uploaded.clear(); }
         if (!cached || cachedW != gridW || cachedH != gridH)
         {
             if (cached) { SDL_DestroyTexture(cached); }
+            uploaded.clear();
             cached = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
                                        SDL_TEXTUREACCESS_STATIC, gridW, gridH);
             if (!cached) { return drawn; }
@@ -125,6 +134,16 @@ namespace ALTEngine::Renderer
         }
 
         std::vector<uint8_t> pixels(static_cast<size_t>(gridW) * gridH * 4, 0);
+        // Each cell's blocking test once, not again for each neighbour that
+        // asks whether it touches floor.
+        std::vector<uint8_t> blocking(static_cast<size_t>(gridW) * gridH, 0);
+        for (int z = 0; z < gridH; ++z)
+        {
+            for (int x = 0; x < gridW; ++x)
+            {
+                blocking[static_cast<size_t>(z) * gridW + x] = ALTEngine::Formats::IsCellBlocking(level, x << 9, z << 9) ? 1 : 0;
+            }
+        }
         auto put = [&](int x, int z, const SDL_Color& c) {
             if (x < 0 || z < 0 || x >= gridW || z >= gridH) { return; }
             size_t i = (static_cast<size_t>(z) * gridW + x) * 4;
@@ -205,7 +224,7 @@ namespace ALTEngine::Renderer
                 // walkable floor, which gives the one-cell outline the original has
                 // (1180 cells there, 1045 here). Every other solid cell is backdrop -
                 // 5684 of them on L111, and colouring those was what flooded the map.
-                if (!ALTEngine::Formats::IsCellBlocking(level, x << 9, z << 9))
+                if (!blocking[index])
                 {
                     put(x, z, FLOOR);
                 }
@@ -219,7 +238,7 @@ namespace ALTEngine::Renderer
                             if (dx == 0 && dz == 0) { continue; }
                             int nx = x + dx, nz = z + dz;
                             if (nx < 0 || nz < 0 || nx >= gridW || nz >= gridH) { continue; }
-                            if (!ALTEngine::Formats::IsCellBlocking(level, nx << 9, nz << 9))
+                            if (!blocking[static_cast<size_t>(nz) * gridW + nx])
                             {
                                 touchesFloor = true;
                                 break;
@@ -264,7 +283,11 @@ namespace ALTEngine::Renderer
             put(cx, cz, CRATE);
         }
 
-        SDL_UpdateTexture(cached, nullptr, pixels.data(), gridW * 4);
+        if (pixels != uploaded)
+        {
+            SDL_UpdateTexture(cached, nullptr, pixels.data(), gridW * 4);
+            uploaded.swap(pixels);
+        }
         SDL_SetTextureAlphaMod(cached, style.alpha);
 
         SDL_FRect blit{ originX, originY, drawW, drawH };

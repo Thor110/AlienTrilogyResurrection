@@ -5145,6 +5145,11 @@ namespace ALTEngine::Screens
                         // frame, and the single blit at the end scales both
                         // together.
                         weaponView.SetWeapon(renderer, cdDirectory, hudState.currentWeapon);
+                        // The left side of the HUD, laid out top to bottom so
+                        // nothing there covers the Live Minimap or another.
+                        const auto leftColumn = ALTEngine::Renderer::LayoutHudLeftColumn(
+                            hudState, liveMinimap && levelReady, resupply.active && !testingNoResupply);
+                        hud.SetLeftColumn(leftColumn);
                         hud.Draw(renderer, hudState, windowW, windowH,
                             [&] {
                                 weaponView.Draw(renderer,
@@ -5185,7 +5190,7 @@ namespace ALTEngine::Screens
                                     namespace RT = ALTEngine::Game::ResupplyTimer;
                                     const SDL_Color colour = !RT::Blinking(resupply) ? SDL_Color{ 0, 255, 0, 255 }
                                         : RT::BlinkPhase(resupply) ? SDL_Color{ 255, 255, 0, 255 } : SDL_Color{ 255, 0, 0, 255 };
-                                    hud.DrawHudText(renderer, RT::Text(resupply), RT::HUD_X, RT::HUD_Y,
+                                    hud.DrawHudText(renderer, RT::Text(resupply), RT::HUD_X, leftColumn.resupplyY,
                                                     ALTEngine::Renderer::HUD_FONT_FIRST_DESCRIPTOR, 1.0f, 1.0f, 0, colour);
                                 }
 
@@ -5242,7 +5247,7 @@ namespace ALTEngine::Screens
                                 // face and font A were both too big against a
                                 // 320x240 surface.
                                 namespace R = ALTEngine::Renderer;
-                                int lineY = R::HUD_MESSAGE_Y;
+                                int lineY = leftColumn.messageTop;
                                 for (size_t i = 0; i < visible.size(); ++i)
                                 {
                                     const std::string& line = visible[i];
