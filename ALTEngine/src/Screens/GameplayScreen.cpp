@@ -1314,7 +1314,21 @@ namespace ALTEngine::Screens
                             for (const auto& lift : lifts)
                             {
                                 const size_t first = placedObjects.size();
-                                const int mesh = (static_cast<size_t>(lift.model) < liftMeshes.size()) ? lift.model : 0;
+                                // The original fills its 32-entry model table
+                                // (0x248354) with the level's L0 sections in
+                                // order and leaves the rest 0; FUN_00041ba4
+                                // draws nothing for a lift whose entry is 0. So a
+                                // lift naming a model past them is drawn with no
+                                // platform - it only moves its cells' floors.
+                                // (L371's lifts 6-26 name model 5 of its five:
+                                // lift 6, beside the start, seals the start room
+                                // behind the player and is never seen.)
+                                if (lift.model < 0 || static_cast<size_t>(lift.model) >= liftMeshes.size())
+                                {
+                                    liftPlaced.emplace_back(first, 0);
+                                    continue;
+                                }
+                                const int mesh = lift.model;
                                 for (int page = 0; page < 5; ++page)
                                 {
                                     ALTEngine::Renderer::PlacedObject placed;

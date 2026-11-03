@@ -1,4 +1,4 @@
-# What remains (after zip 116)
+# What remains (after zip 117)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -51,6 +51,14 @@ Cleanup off (the vertex lists were taken with it on or off as marked; matched to
   L908) do not: in each, record 0 lies in the first cell and ends its run (0x80 set) - the cell's one face, a
   texture 0 strip on the map's first row (texture 280 on L155). Giving them back is the same copy, with a
   judgement of whether it is ever seen; to do with the face additions, after the removals.
+- **L371's lift at the start** (zip 117; Edward: a lift visible from the start, overlapping faces, that the
+  original never shows). Lift 6, at (97, 72-75) beside the start, is used: trigger action 15, on the cells at
+  x = 90 (71-76) the way out, runs logic 19 (op 7, add 1) once, and with threshold 1 the lift rises its 31
+  units from floor 224 to the ceiling (255), sealing the start room behind the player. It names model 5, but
+  L371 has five lift models (L000-L004): the original fills its 32-entry model table (0x248354) from the L0
+  sections in order and leaves the rest 0, and FUN_00041ba4 draws nothing for a lift whose entry is 0. The port
+  fell back to model 0 (a 4 x 4 platform). Now such a lift draws nothing, as in the original; it still moves
+  its cells' floors. Only L371 has any: lifts 6-26, 21 of its 27. Nothing in the file changed.
 - **L909's holding rooms taken out by hand** (Edward's FaceLog, zip 115): 163 faces, the floors, walls,
   ceilings and lift-door dressing of both rooms behind the corridor's doorways (the doorway faces themselves,
   textures 26 and 0-5, stay as the corridor's wall). 14581 faces in all.
