@@ -32,3 +32,9 @@ Face	Offset		Old export remap		Change				Was						Now
 8108	0x42F34		face 8110's UVs as 1,2,3,0		texture of face 8110 and three quarter-turns		10294, 8542, 10298, 10297 tex 226 flag 0	->	10297, 10294, 8542, 10298 tex 224 flag 0
 8111	0x42F70		face 8110's UVs as 3,0,1,2		texture of face 8110 and a quarter-turn		10297, 10298, 10299, 10296 tex 225 flag 0	->	10298, 10299, 10296, 10297 tex 224 flag 0
 8112	0x42F84		face 8111's UVs as 0,1,2,3		texture of face 8111		10290, 8603, 8601, 5299 tex 85 flag 0	->	10290, 8603, 8601, 5299 tex 225 flag 0
+
+The end room's floor, as L141's (Claude, 2026)
+
+L903 is made from L141 and has the same room with the same faces, vertices and offsets: its floor is
+laid the same way, and 903GFX.B16 gets the same two slices - see Patch/L141LEV.txt, "The end room's floor", for
+the faces, slots and bytes.

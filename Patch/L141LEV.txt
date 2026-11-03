@@ -22,3 +22,45 @@ Face	Offset		Old export remap		Change				Was						Now
 8108	0x42F34		face 8110's UVs as 1,2,3,0		texture of face 8110 and three quarter-turns		10294, 8542, 10298, 10297 tex 226 flag 0	->	10297, 10294, 8542, 10298 tex 224 flag 0
 8111	0x42F70		face 8110's UVs as 3,0,1,2		texture of face 8110 and a quarter-turn		10297, 10298, 10299, 10296 tex 225 flag 0	->	10298, 10299, 10296, 10297 tex 224 flag 0
 8112	0x42F84		face 8111's UVs as 0,1,2,3		texture of face 8111		10290, 8603, 8601, 5299 tex 85 flag 0	->	10290, 8603, 8601, 5299 tex 225 flag 0
+
+The end room's floor (Edward, FaceLog, 2026; Claude, 2026)
+
+The floor of the room at the level's end, cells (27-30, 0-4) (x -6914 to -4866, z -26880 to -24320), is
+four tiles across and five deep. Its strips are one picture, 128 x 32, cut into four 32-texel slices: an end,
+two different middles and the other end. L111's spawn floor uses all four in order, unturned (textures 299,
+300, 301, 302), and runs on seamlessly. L141's sheet held only the first two - 221 (L111's 299) and 222
+(L111's 300) - so the room repeated one middle and turned the ends about, and the weave broke at every join;
+no turning or mirroring of 221 and 222 can make it whole (a repeated middle leaves a seam, a mirrored one a V).
+
+141GFX.B16 (and 903GFX.B16, whose page 3 is the same byte for byte): the two missing slices go into texture
+slots no face, animated texture or door or lift model of L141 or L903 uses - 223 (page 3 at 224,96, right
+after 222) for the second middle and 246 (page 3 at 192,192) for the far end. Each texel is one of L141's own
+colour indices: for each texel of L111's 301 and 302, the place in L111's 299/300 whose 5 x 5 surroundings
+match it best (same row, or one off) gives the L141 texel at that place in 221/222. So the slices keep L141's
+darker colours (Edward) - their average colour is within half a step of 221's and 222's - and every join
+steps no more than the texture does inside a tile. Page 3's pixels start at 0x30B0C (TP03 + 8); 32 rows of
+32 bytes each, at 0x30B0C + (y + row) * 256 + x.
+
+L141LEV.MAP (and L903LEV.MAP, made from L141, the same faces at the same offsets): each of the first four rows
+is now 221, 222, 223, 246 across the room, each tile's own four corners turned (a rotation, so it still faces
+up) to run as row 1's do; routine 0 throughout. The fifth row is texture 73.
+
+Face	Offset		Was					Now
+12	0x1B6B4	11187, 11174, 11178, 11189 tex 222	->	11187, 11174, 11178, 11189 tex 223
+17	0x1B718	11178, 11174, 11177, 11179 tex 221	->	11174, 11177, 11179, 11178 tex 246
+25	0x1B7B8	11186, 11185, 11191, 11192 tex 222	->	11192, 11186, 11185, 11191 tex 221
+30	0x1B81C	11184, 11187, 11185, 11186 tex 222	->	11186, 11184, 11187, 11185 tex 222
+32	0x1B844	11187, 11184, 11175, 11174 tex 222	->	11184, 11175, 11174, 11187 tex 223
+34	0x1B86C	11174, 11175, 11176, 11177 tex 222	->	11175, 11176, 11177, 11174 tex 246
+39	0x1B8D0	11180, 11186, 11192, 11193 tex 222	->	11193, 11180, 11186, 11192 tex 221
+44	0x1B934	11183, 11184, 11186, 11180 tex 222	->	11180, 11183, 11184, 11186 tex 222
+46	0x1B95C	11184, 11183, 11170, 11175 tex 222	->	11183, 11170, 11175, 11184 tex 223
+48	0x1B984	11175, 11170, 11173, 11176 tex 222	->	11170, 11173, 11176, 11175 tex 246
+53	0x1B9E8	11181, 11180, 11193, 11194 tex 222	->	11194, 11181, 11180, 11193 tex 221
+58	0x1BA4C	11182, 11183, 11180, 11181 tex 222	->	11181, 11182, 11183, 11180 tex 222
+60	0x1BA74	11183, 11182, 11171, 11170 tex 222	->	11182, 11171, 11170, 11183 tex 223
+62	0x1BA9C	11170, 11171, 11172, 11173 tex 222	->	11171, 11172, 11173, 11170 tex 246
+67	0x1BB00	11165, 11181, 11194, 11250 tex 221	->	11165, 11181, 11194, 11250 tex 73
+97	0x1BD58	11164, 11182, 11181, 11165 tex 222	->	11164, 11182, 11181, 11165 tex 73
+112	0x1BE84	11182, 11164, 11160, 11171 tex 222	->	11182, 11164, 11160, 11171 tex 73
+127	0x1BFB0	11172, 11171, 11160, 11158 tex 221	->	11172, 11171, 11160, 11158 tex 73

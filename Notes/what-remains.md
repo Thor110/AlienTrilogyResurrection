@@ -1,4 +1,4 @@
-# What remains (after zip 118)
+# What remains (after zip 119)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -51,6 +51,14 @@ Cleanup off (the vertex lists were taken with it on or off as marked; matched to
   L908) do not: in each, record 0 lies in the first cell and ends its run (0x80 set) - the cell's one face, a
   texture 0 strip on the map's first row (texture 280 on L155). Giving them back is the same copy, with a
   judgement of whether it is ever seen; to do with the face additions, after the removals.
+- **L141's end-room floor** (zip 119; Edward's FaceLog, then: "compare with the floor of L111's spawn"). The
+  strip is one 128 x 32 picture in four slices - end, middle, middle, end - which L111 uses whole (299-302).
+  L141's sheet had only the first two (221, 222), so no layout of them could be seamless. The two missing
+  slices go into 141GFX/903GFX's unused slots 223 and 246, made of L141's own colours (each texel the L141
+  texel where L111's first two slices match its surroundings; averages within half a step of 221/222's), and
+  the first four rows become 221, 222, 223, 246 across the room, unturned like L111's; the last row is 73.
+  L903 (made from L141) has the same room and sheet page and gets the same. The first fix that patches a
+  texture sheet. See Patch/L141LEV.txt. To check in play.
 - **L371's lift at the start** (zip 117; Edward: a lift visible from the start, overlapping faces, that the
   original never shows). Lift 6, at (97, 72-75) beside the start, is used: trigger action 15, on the cells at
   x = 90 (71-76) the way out, runs logic 19 (op 7, add 1) once, and with threshold 1 the lift rises its 31
@@ -608,6 +616,8 @@ section 7 insertions, since both renumber the same lists. NOT done: Edward's cal
    review-log notes that name a face or vertex of a trimmed level by number must be renumbered to match.
 
 ## 6c. After the geometry cleanup: blank the texture space nothing uses (Edward)
+
+(141GFX and 903GFX's slots 223 and 246 now hold the end-room floor's missing slices, zip 119: in use.)
 
 Once the level trimming is finished, every texture-page area that no face, model or sprite of that level (or of
 anything else that loads the same sheet) uses any more is to be filled with that sheet's background colour - as
