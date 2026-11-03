@@ -23,6 +23,7 @@
         {
             if (File.Exists("Run.exe")) { return "HDD\\TRILOGY\\CD\\"; }
             else if (File.Exists("TRILOGY.EXE")) { return "CD\\"; }
+            else if (File.Exists("ALTEngine.exe")) { return "GameData\\CD\\"; }
             return "";
         }
     }
