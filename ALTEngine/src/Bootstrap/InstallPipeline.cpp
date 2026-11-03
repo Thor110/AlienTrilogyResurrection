@@ -4,6 +4,7 @@
 #include "TestingSettings.h"
 
 #include "../Game/LevelCleanup.h"
+#include "../Game/TextureBlank.h"
 
 #include "../Formats/CddaRipper.h"
 #include "../Formats/DiscManifest.h"
@@ -226,12 +227,110 @@ namespace ALTEngine::Bootstrap
         }
     }
 
+    namespace
+    {
+        // TEXTURE BLANKING's files (with Testing > Level Cleanup; Game::
+        // TextureBlank). Beside each blanked sheet: <sheet>.unblanked, the
+        // sheet as the fixes left it. Every start puts it back before the
+        // fixes run (they are written against the sheets as shipped), and
+        // blanks it again afterwards from data/TextureBlankList.json - a few
+        // milliseconds a sheet, so nothing is cached.
+        void SetBlankedAside(const std::filesystem::path& cdDirectory)
+        {
+            std::error_code ec;
+            for (const auto& relative : ALTEngine::Game::TextureBlank::SheetFiles(cdDirectory))
+            {
+                const auto file = cdDirectory / relative;
+                const auto unblanked = With(file, ".unblanked");
+                if (!std::filesystem::exists(unblanked, ec)) { continue; }
+                std::filesystem::remove(file, ec);
+                std::filesystem::rename(unblanked, file, ec);
+                if (ec) { std::cout << "Texture blanking: could not restore " << file.string() << ": " << ec.message() << "\n"; }
+            }
+        }
+
+        void ApplyTextureBlanking(const std::filesystem::path& cdDirectory, bool enabled)
+        {
+            if (!enabled) { return; }
+            const auto listPath = ExecutableDirectory() / "data" / "TextureBlankList.json";
+            std::vector<uint8_t> raw;
+            nlohmann::json list;
+            if (ReadAll(listPath, raw))
+            {
+                try { list = nlohmann::json::parse(raw.begin(), raw.end()); }
+                catch (...) { list = nlohmann::json(); }
+            }
+            if (!list.is_object() || !list.contains("sheets") || !list["sheets"].is_object())
+            {
+                std::cout << "Texture blanking: " << listPath.string() << " is missing or cannot be read - sheets left as the fixes leave them.\n";
+                return;
+            }
+            int blanked = 0, skipped = 0;
+            size_t changed = 0;
+            for (const auto& relative : ALTEngine::Game::TextureBlank::SheetFiles(cdDirectory))
+            {
+                const std::string key = relative.generic_string();
+                if (!list["sheets"].contains(key)) { continue; }
+                const auto& entry = list["sheets"][key];
+                const auto file = cdDirectory / relative;
+                std::vector<uint8_t> bytes;
+                if (!ReadAll(file, bytes)) { continue; }
+                if (!entry.contains("crc") || !entry["crc"].is_number_unsigned()
+                    || entry["crc"].get<uint32_t>() != ALTEngine::Formats::Crc32(bytes.data(), bytes.size()))
+                {
+                    std::cout << "  [skipped]  " << key << " - its plan was made for another version of the sheet (a fix changed it?);"
+                              << " remake data/TextureBlankList.json with ALTTextureBlankList\n";
+                    ++skipped;
+                    continue;
+                }
+                ALTEngine::Game::TextureBlank::Plan plan;
+                std::string error;
+                if (!entry.contains("unused") || !entry["unused"].is_string()
+                    || !ALTEngine::Game::LevelCleanup::DecodeList(entry["unused"].get<std::string>(), plan.unused))
+                {
+                    std::cout << "  [FAILED]   " << key << " - its plan cannot be read\n";
+                    continue;
+                }
+                if (entry.contains("backgrounds") && entry["backgrounds"].is_array())
+                {
+                    for (const auto& b : entry["backgrounds"])
+                    {
+                        if (b.contains("page") && b["page"].is_number_integer() && b.contains("background") && b["background"].is_number_integer())
+                        {
+                            plan.background[b["page"].get<int>()] = b["background"].get<int>();
+                        }
+                    }
+                }
+                const std::vector<uint8_t> original = bytes;
+                ALTEngine::Game::TextureBlank::Report report;
+                if (!ALTEngine::Game::TextureBlank::Apply(bytes, plan, report, error))
+                {
+                    std::cout << "  [FAILED]   " << key << " - " << error << "\n";
+                    continue;
+                }
+                if (report.texelsChanged == 0) { continue; }
+                if (!WriteAll(With(file, ".unblanked"), original) || !WriteAll(file, bytes))
+                {
+                    std::cout << "  [FAILED]   " << key << " - could not write the blanked sheet\n";
+                    std::error_code ec;
+                    std::filesystem::remove(With(file, ".unblanked"), ec);
+                    continue;
+                }
+                ++blanked;
+                changed += report.texelsChanged;
+            }
+            std::cout << "Texture blanking: " << blanked << " sheets, " << changed << " texels set to their page's background"
+                      << (skipped ? ", " + std::to_string(skipped) + " skipped" : std::string()) << ".\n";
+        }
+    }
+
     void RunPatches(const std::filesystem::path& cdDirectory)
     {
         // Update Fixes -> Boolean -> Trim -> Add Faces: the fixes always run
         // against the level files as shipped, so a cleaned level is put back
         // first (see ApplyLevelCleanup).
         SetCleanedAside(cdDirectory);
+        SetBlankedAside(cdDirectory);
 
         std::filesystem::path patchesJson = ExecutableDirectory() / "data" / "Patches.json";
 
@@ -302,6 +401,8 @@ namespace ALTEngine::Bootstrap
 
         Config config;
         ApplyLevelCleanup(cdDirectory, TestingSettings(config).IsOn(TestingOption::LevelCleanup));
+        // Last: the texture blanking, against the sheets as the fixes leave them.
+        ApplyTextureBlanking(cdDirectory, TestingSettings(config).IsOn(TestingOption::LevelCleanup));
     }
 
     bool InstallFromDisc(const std::filesystem::path& discRoot, const std::filesystem::path& destination)

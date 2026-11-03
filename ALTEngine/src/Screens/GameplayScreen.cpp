@@ -173,13 +173,13 @@ namespace ALTEngine::Screens
             SDL_RenderLines(renderer, points.data(), static_cast<int>(points.size()));
         }
 
-        // TEMPORARY (Edward, after zip 108): with Face Index Display on, each
-        // Fire 1 press appends the face under the crosshair to FaceLog.txt
-        // beside the executable - the level, the face's vertices as the
-        // display shows them, then its number, texture, routine and corners -
-        // for listing faces by hand (data/LevelCleanupExtra.json). The corners
-        // place a face whether the level was cleaned or not. Take out once the
-        // lists are made.
+        // The face logger (Edward, after zip 108; kept for finding a face
+        // quickly): with Testing > Face Index Display on, each Fire 1 press
+        // appends the face under the crosshair to FaceLog.txt beside the
+        // executable - the level, the face's vertices as the display shows
+        // them, then its number, texture, routine and corners - for listing
+        // faces by hand (data/LevelCleanupExtra.json, Patches.json). The
+        // corners place a face whether the level was cleaned or not.
         void LogShotFace(const ALTEngine::Formats::LevelGeometry& level, const std::string& digits, int face)
         {
             if (face < 0 || static_cast<size_t>(face) >= level.quads.size()) { return; }
@@ -2505,7 +2505,7 @@ namespace ALTEngine::Screens
                     const bool fireHeld = keys[keyBindings.GetKey(InputAction::Fire1)] || mouseFire1;
                     const bool firePressed = fireHeld && !firePressedLastTick;
                     firePressedLastTick = fireHeld;
-                    if (firePressed && testingFaceIndex) { LogShotFace(level, digits, pickedFace); }   // TEMPORARY, see LogShotFace
+                    if (firePressed && testingFaceIndex) { LogShotFace(level, digits, pickedFace); }   // the face logger, see LogShotFace
 
                     // The swap happens at the bottom of the lower, out of sight.
                     // On the weapon's own (drawing-pass) rate, like its animation.

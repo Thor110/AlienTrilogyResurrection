@@ -1,4 +1,4 @@
-# What remains (after zip 119)
+# What remains (after zip 120)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -85,10 +85,10 @@ Cleanup off (the vertex lists were taken with it on or off as marked; matched to
   its cell that borders a wall cell (8 elsewhere). Before, an eye 49 units from the wall beside L322's gate saw
   into the room through the gap at its left. It also lets a few more lift faces go on L322-L325 (14218 faces in
   all, from 14158).
-- **Face logger (TEMPORARY):** with Testing > Face Index Display on, every Fire 1 press appends the face under the
-  crosshair to `FaceLog.txt` beside the executable: the level, the face's vertices as the display shows them, then
-  its number, texture, routine and corners (GameplayScreen's LogShotFace). The corners place a face whether the
-  level was cleaned or not. Take it out once the lists are made.
+- **Face logger (kept, Edward):** with Testing > Face Index Display on, every Fire 1 press appends the face under
+  the crosshair to `FaceLog.txt` beside the executable: the level, the face's vertices as the display shows them,
+  then its number, texture, routine and corners (GameplayScreen's LogShotFace). The corners place a face whether
+  the level was cleaned or not. It stays in, with the index display, for finding a face quickly.
 - **Faces with no texture**, to look at once the other levels are checked: the triangles with texture 183 at the
   lift doors - 2949 (14,31), 2954 (15,31), 4151 (14,36), 4156 (15,36), 955 (31,14), 1118 (31,15), 976 (36,14),
   1131 (36,15), 4302 (53,36), 4297 (52,36), 3079 (53,31), 3074 (52,31). Routine 1, except 4151 and 4156 (5).
@@ -615,19 +615,18 @@ section 7 insertions, since both renumber the same lists. NOT done: Edward's cal
 4. Then bring the README.md, the patch folder's notes and ALTViewer up to date with it. Patches.json entries and
    review-log notes that name a face or vertex of a trimmed level by number must be renumbered to match.
 
-## 6c. After the geometry cleanup: blank the texture space nothing uses (Edward)
+## 6c. Texture blanking - done in zip 120 (Edward)
 
-(141GFX and 903GFX's slots 223 and 246 now hold the end-room floor's missing slices, zip 119: in use.)
-
-Once the level trimming is finished, every texture-page area that no face, model or sprite of that level (or of
-anything else that loads the same sheet) uses any more is to be filled with that sheet's background colour - as
-Edward already did for one texture, to stop purple edge bleed on some faces. Two gains: no bleed from unused
-neighbours at the edges of a face's rectangle, and long runs of one repeated byte, which the planned fork into a
-sieve cache loading engine (a compression engine that turns long repeats into instructions) will shrink to almost
-nothing. To work out: which pages each level's faces, animated textures (the animator's frame lists) and models
-reach, through their BX rectangles; which sheets are shared between levels or with the models and HUD; what each
-sheet's background colour is; and whether it is done as a tool writing patches into Patches.json (as the fixes
-are) or as part of the Level Cleanup's plan.
+Every texel of a level's sheet that no texture the level draws covers takes its page's background: the texels of
+the unused textures that no used one overlaps, and the texels no texture covers. Used: what a face names (an
+animated face: its animator's frames), every animator program's frames, the door and lift models' faces, and the
+faces the Level Cleanup adds (Game/TextureUse). The background is the most common colour of the space blanked,
+placeholder magenta left out (Edward: most common, not averaged; it gives the 0xFA of his 371GFX fix). Worked out
+by `ALTTextureBlankList` into `data/TextureBlankList.json` (per sheet: its CRC32, the unused textures, each page's
+background); applied at install after the Level Cleanup, with the same option, keeping `<sheet>.unblanked`
+(Game/TextureBlank). 45 sheets: 4088 of 15100 textures unused, 2,730,471 bytes changed; the sheets deflate 18.8%
+smaller (LZMA 19.1%). Report: `Notes/texture-use.md`. The whole routine, in order: `Notes/cleanup-procedure.md`.
+(141GFX and 903GFX's slots 223 and 246 hold the end-room floor's slices, zip 119: in use.)
 
 ## 7. The final step: missing faces, then a triple check of the textures
 

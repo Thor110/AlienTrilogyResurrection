@@ -92,6 +92,8 @@ add_library(ALTGame STATIC
     src/Game/Triggers.cpp
     src/Game/LevelCleanup.cpp
     src/Game/LevelCleanupPlan.cpp
+    src/Game/TextureUse.cpp
+    src/Game/TextureBlank.cpp
     src/Game/LevelOcclusion.cpp
     src/Net/UdpSocket.cpp
     src/Net/Protocol.cpp
@@ -108,7 +110,7 @@ endif()
 # ALTLevelScan - a command-line check of every level's texture orientation
 # (src/Tools/LevelScanMain.cpp). SDL-free, like the tests.
 # ---------------------------------------------------------------------------
-option(ALTENGINE_BUILD_TOOLS "Build the ALTLevelScan and ALTLevelCleanupList command-line tools" ON)
+option(ALTENGINE_BUILD_TOOLS "Build the ALTLevelScan, ALTLevelCleanupList and ALTTextureBlankList command-line tools" ON)
 if (ALTENGINE_BUILD_TOOLS)
     add_executable(ALTLevelScan src/Tools/LevelScanMain.cpp)
     target_link_libraries(ALTLevelScan PRIVATE ALTFormats alt_warnings nlohmann_json::nlohmann_json)
@@ -117,6 +119,11 @@ if (ALTENGINE_BUILD_TOOLS)
     # Cleanup's per-level plans (src/Tools/LevelCleanupListMain.cpp).
     add_executable(ALTLevelCleanupList src/Tools/LevelCleanupListMain.cpp)
     target_link_libraries(ALTLevelCleanupList PRIVATE ALTGame ALTFormats alt_warnings nlohmann_json::nlohmann_json)
+
+    # ALTTextureBlankList - works out data/TextureBlankList.json, the texture
+    # blanking's plan (src/Tools/TextureBlankListMain.cpp).
+    add_executable(ALTTextureBlankList src/Tools/TextureBlankListMain.cpp)
+    target_link_libraries(ALTTextureBlankList PRIVATE ALTGame ALTFormats alt_warnings nlohmann_json::nlohmann_json)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -162,6 +169,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/NetTests.cpp
         tests/BotTests.cpp
         tests/LevelCleanupTests.cpp
+        tests/TextureBlankTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
     target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats alt_warnings nlohmann_json::nlohmann_json)
