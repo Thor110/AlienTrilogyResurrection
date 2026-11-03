@@ -23,7 +23,8 @@ namespace ALTEngine::Bootstrap
     //   every fix: faces that can never be seen are taken out and each level's
     //   missing first-cell faces put back (Game::LevelCleanup). Off restores
     //   the files as the fixes left them (the copy kept beside each, .untrimmed),
-    //   for working with the original face and vertex numbers. Not part of
+    //   for working with the original face and vertex numbers. On by default
+    //   (until it has been tested enough to stop being an option). Not part of
     //   "All Testing Options", since it rewrites files.
     //
     // The menu's "All Testing Options" row sets every one of them at once
@@ -55,7 +56,9 @@ namespace ALTEngine::Bootstrap
         bool IsOn(TestingOption option) const
         {
             auto value = config.Get(KeyFor(option));
-            return value.has_value() && *value == "On";
+            // Level Cleanup is on until it is turned off, so a first run cleans the levels; the rest start off.
+            if (!value.has_value()) { return option == TestingOption::LevelCleanup; }
+            return *value == "On";
         }
 
         void Set(TestingOption option, bool enabled) { config.Set(KeyFor(option), enabled ? "On" : "Off"); }

@@ -65,7 +65,6 @@ Face	Offset		Was					Now
 112	0x1BE84	11182, 11164, 11160, 11171 tex 222	->	11182, 11164, 11160, 11171 tex 73
 127	0x1BFB0	11172, 11171, 11160, 11158 tex 221	->	11172, 11171, 11160, 11158 tex 73
 
-
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.

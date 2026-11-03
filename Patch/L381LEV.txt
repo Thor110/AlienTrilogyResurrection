@@ -11,7 +11,6 @@ unchanged.
 Face	Offset		Scan	Change	Was					Now
 100	0x15E2C	381-1	three quarter-turns	7351, 8834, 7453, 7449	->	7449, 7351, 8834, 7453
 
-
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.

@@ -15,7 +15,6 @@ Face	Offset		Scan	Change	Was					Now
 3207	0x28AD0	331-3	a half-turn	12606, 2862, 2667, 12603	->	2667, 12603, 12606, 2862
 5843	0x358C0	331-6	mirrored	3695, 3696, 3700, 3699	->	3695, 3696, 3700, 3699	flag 2 (0x02)		flag 0 (0x00)
 
-
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.

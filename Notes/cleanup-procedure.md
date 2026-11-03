@@ -13,8 +13,9 @@ files exactly as the step before leaves them, so the whole routine can be replay
 | 5 | Level Cleanup: faces out, first cell back, faces added | Game/LevelCleanup (`Apply`) | `data/LevelCleanupList.json` | Testing > Level Cleanup off |
 | 6 | Texture blanking | Game/TextureBlank (`Apply`) | `data/TextureBlankList.json` | Testing > Level Cleanup off |
 
-Steps 2 to 6 run at every start (`RunPatches`). Steps 5 and 6 follow the Testing > Level Cleanup option (off by
-default); with it off the files stay as step 4 leaves them.
+Steps 2 to 6 run at every start (`RunPatches`). Steps 5 and 6 follow the Testing > Level Cleanup option, on by
+default (since zip 122, so a first run applies everything); with it off the files stay as step 4 leaves them. Once
+it has been tested enough it is to become always on and leave the Testing menu.
 
 ## The steps
 

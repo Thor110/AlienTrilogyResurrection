@@ -29,7 +29,6 @@ Face	Offset		Old export remap		Change				Was						Now
 3622	0x29944		its own UVs as 2,3,0,1		a half-turn		5659, 5818, 5657, 5656 tex 193 flag 0	->	5657, 5656, 5659, 5818 tex 193 flag 0
 7780	0x3DE1C		its own UVs as 2,3,0,1		a half-turn		2002, 1995, 2016, 2015 tex 193 flag 0	->	2016, 2015, 2002, 1995 tex 193 flag 0
 
-
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.

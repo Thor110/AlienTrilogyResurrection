@@ -33535,7 +33535,7 @@
     },
     {
       "target": "SECT12/141GFX.B16",
-      "note": "141GFX.B16 - the floor strip's missing slices, for the end room's floor: texture 223 (page 3 at 224,96) becomes the strip's second middle and 246 (page 3 at 192,192) its far end - slices 3 and 4 of the picture whose first two are 221 and 222, as L111's 301 and 302 are. Nothing in the level used either slot (faces, animated textures, door and lift models). Each texel is L141's own colour index, taken from 221/222 where L111's slices 299/300 match the surroundings of that texel of 301/302, so the slices keep L141's darker colours (Edward) and the weave runs on unbroken. Page 3's pixels are at TP03 + 8 = 0x30B0C. See Patch/L141LEV.txt (Claude, 2026)",
+      "note": "141GFX.B16 - the floor strip's missing slices, for the end room's floor: texture 223 (page 3 at 224,96) becomes the strip's second middle and 246 (page 3 at 192,192) its far end - slices 3 and 4 of the picture whose first two are 221 and 222, as L111's 301 and 302 are. Nothing in the level used either slot (faces, animated textures, door and lift models). Each texel is L141's own colour index, taken from 221/222 where L111's slices 299/300 match the surroundings of that texel of 301/302, so the slices keep L141's darker colours (Edward) and the weave runs on unbroken. Page 3's pixels are at TP03 + 8 = 0x30B0C. See Patch/L141LEV.txt (Claude, 2026) The far end slice's right edge carries the strip's grey outline: its last two columns are texture 221's first two, mirrored, as L111's 302 carries 299's (Edward, 2026).",
       "edits": [
         {
           "offset": "0x36BEC",
@@ -34755,7 +34755,7 @@
             "0x6B",
             "0x6D",
             "0x6B",
-            "0x6D"
+            "0x4C"
           ]
         },
         {
@@ -34792,7 +34792,7 @@
             "0x81",
             "0x80",
             "0x81",
-            "0x6D"
+            "0x6B"
           ]
         },
         {
@@ -34828,8 +34828,8 @@
             "0xDB",
             "0xCF",
             "0xC0",
-            "0x81",
-            "0x95"
+            "0x80",
+            "0x6D"
           ]
         },
         {
@@ -34866,7 +34866,7 @@
             "0xDD",
             "0xDB",
             "0x81",
-            "0xDB"
+            "0x6D"
           ]
         },
         {
@@ -34902,7 +34902,7 @@
             "0xC0",
             "0x95",
             "0xDD",
-            "0xCF",
+            "0x81",
             "0x6B"
           ]
         },
@@ -34939,7 +34939,7 @@
             "0xC0",
             "0xCF",
             "0xC0",
-            "0xC0",
+            "0x80",
             "0x6D"
           ]
         },
@@ -34977,7 +34977,7 @@
             "0xC0",
             "0xC0",
             "0x81",
-            "0xDD"
+            "0x6B"
           ]
         },
         {
@@ -35014,7 +35014,7 @@
             "0xC0",
             "0x93",
             "0x80",
-            "0xDD"
+            "0x6D"
           ]
         },
         {
@@ -35051,7 +35051,7 @@
             "0xDB",
             "0xC0",
             "0x81",
-            "0xB7"
+            "0x6B"
           ]
         },
         {
@@ -35088,7 +35088,7 @@
             "0xDD",
             "0xDB",
             "0x80",
-            "0xDB"
+            "0x6D"
           ]
         },
         {
@@ -35124,7 +35124,7 @@
             "0xC0",
             "0x95",
             "0xDD",
-            "0xCF",
+            "0x81",
             "0x6B"
           ]
         },
@@ -35161,7 +35161,7 @@
             "0xC0",
             "0xCF",
             "0xC0",
-            "0xC0",
+            "0x81",
             "0x6B"
           ]
         },
@@ -35199,7 +35199,7 @@
             "0xC0",
             "0xC0",
             "0x81",
-            "0xDD"
+            "0x6B"
           ]
         },
         {
@@ -35236,7 +35236,7 @@
             "0xC0",
             "0x93",
             "0x80",
-            "0xDD"
+            "0x6D"
           ]
         },
         {
@@ -35273,7 +35273,7 @@
             "0xDB",
             "0xC0",
             "0x81",
-            "0xB7"
+            "0x6B"
           ]
         },
         {
@@ -35310,7 +35310,7 @@
             "0xDD",
             "0xDB",
             "0x81",
-            "0xDB"
+            "0x6B"
           ]
         },
         {
@@ -35346,7 +35346,7 @@
             "0xC0",
             "0x95",
             "0xDD",
-            "0xCF",
+            "0x81",
             "0x6B"
           ]
         },
@@ -35383,7 +35383,7 @@
             "0xC0",
             "0xCF",
             "0xC0",
-            "0xC0",
+            "0x81",
             "0x6B"
           ]
         },
@@ -35421,7 +35421,7 @@
             "0xC0",
             "0xC0",
             "0x81",
-            "0xDD"
+            "0x6B"
           ]
         },
         {
@@ -35458,7 +35458,7 @@
             "0xC0",
             "0x93",
             "0x81",
-            "0xDB"
+            "0x6B"
           ]
         },
         {
@@ -35495,7 +35495,7 @@
             "0xDB",
             "0xC0",
             "0x80",
-            "0xB7"
+            "0x6D"
           ]
         },
         {
@@ -35532,7 +35532,7 @@
             "0xDD",
             "0xDB",
             "0x81",
-            "0xDB"
+            "0x6B"
           ]
         },
         {
@@ -35568,7 +35568,7 @@
             "0xC0",
             "0x95",
             "0xDD",
-            "0xCF",
+            "0x81",
             "0x6B"
           ]
         },
@@ -35605,7 +35605,7 @@
             "0xC0",
             "0xCF",
             "0xC0",
-            "0xC0",
+            "0x81",
             "0x6B"
           ]
         },
@@ -35643,7 +35643,7 @@
             "0xC0",
             "0xC0",
             "0x80",
-            "0xDD"
+            "0x6D"
           ]
         },
         {
@@ -35680,7 +35680,7 @@
             "0xC0",
             "0x93",
             "0x81",
-            "0xDB"
+            "0x6B"
           ]
         },
         {
@@ -35717,7 +35717,7 @@
             "0xDB",
             "0xC0",
             "0x80",
-            "0xB7"
+            "0x6D"
           ]
         },
         {
@@ -35754,7 +35754,7 @@
             "0xDD",
             "0xDB",
             "0x81",
-            "0xDB"
+            "0x6B"
           ]
         },
         {
@@ -35790,7 +35790,7 @@
             "0xC0",
             "0x95",
             "0xDD",
-            "0xCF",
+            "0x81",
             "0x6B"
           ]
         },
@@ -35827,7 +35827,7 @@
             "0xC0",
             "0xCF",
             "0xC0",
-            "0xC0",
+            "0x95",
             "0x6B"
           ]
         },
@@ -35864,7 +35864,7 @@
             "0x80",
             "0x81",
             "0x80",
-            "0x81",
+            "0x80",
             "0x6B"
           ]
         },
@@ -35902,7 +35902,7 @@
             "0x6B",
             "0x6D",
             "0x6B",
-            "0x6D"
+            "0x4C"
           ]
         }
       ]
@@ -36293,7 +36293,7 @@
     },
     {
       "target": "SECT90/903GFX.B16",
-      "note": "903GFX.B16 (as 141GFX.B16, whose page 3 it shares byte for byte) - the floor strip's missing slices, for the end room's floor: texture 223 (page 3 at 224,96) becomes the strip's second middle and 246 (page 3 at 192,192) its far end - slices 3 and 4 of the picture whose first two are 221 and 222, as L111's 301 and 302 are. Nothing in the level used either slot (faces, animated textures, door and lift models). Each texel is L141's own colour index, taken from 221/222 where L111's slices 299/300 match the surroundings of that texel of 301/302, so the slices keep L141's darker colours (Edward) and the weave runs on unbroken. Page 3's pixels are at TP03 + 8 = 0x30B0C. See Patch/L141LEV.txt (Claude, 2026)",
+      "note": "903GFX.B16 (as 141GFX.B16, whose page 3 it shares byte for byte) - the floor strip's missing slices, for the end room's floor: texture 223 (page 3 at 224,96) becomes the strip's second middle and 246 (page 3 at 192,192) its far end - slices 3 and 4 of the picture whose first two are 221 and 222, as L111's 301 and 302 are. Nothing in the level used either slot (faces, animated textures, door and lift models). Each texel is L141's own colour index, taken from 221/222 where L111's slices 299/300 match the surroundings of that texel of 301/302, so the slices keep L141's darker colours (Edward) and the weave runs on unbroken. Page 3's pixels are at TP03 + 8 = 0x30B0C. See Patch/L141LEV.txt (Claude, 2026) The far end slice's right edge carries the strip's grey outline: its last two columns are texture 221's first two, mirrored, as L111's 302 carries 299's (Edward, 2026).",
       "edits": [
         {
           "offset": "0x36BEC",
@@ -37513,7 +37513,7 @@
             "0x6B",
             "0x6D",
             "0x6B",
-            "0x6D"
+            "0x4C"
           ]
         },
         {
@@ -37550,7 +37550,7 @@
             "0x81",
             "0x80",
             "0x81",
-            "0x6D"
+            "0x6B"
           ]
         },
         {
@@ -37586,8 +37586,8 @@
             "0xDB",
             "0xCF",
             "0xC0",
-            "0x81",
-            "0x95"
+            "0x80",
+            "0x6D"
           ]
         },
         {
@@ -37624,7 +37624,7 @@
             "0xDD",
             "0xDB",
             "0x81",
-            "0xDB"
+            "0x6D"
           ]
         },
         {
@@ -37660,7 +37660,7 @@
             "0xC0",
             "0x95",
             "0xDD",
-            "0xCF",
+            "0x81",
             "0x6B"
           ]
         },
@@ -37697,7 +37697,7 @@
             "0xC0",
             "0xCF",
             "0xC0",
-            "0xC0",
+            "0x80",
             "0x6D"
           ]
         },
@@ -37735,7 +37735,7 @@
             "0xC0",
             "0xC0",
             "0x81",
-            "0xDD"
+            "0x6B"
           ]
         },
         {
@@ -37772,7 +37772,7 @@
             "0xC0",
             "0x93",
             "0x80",
-            "0xDD"
+            "0x6D"
           ]
         },
         {
@@ -37809,7 +37809,7 @@
             "0xDB",
             "0xC0",
             "0x81",
-            "0xB7"
+            "0x6B"
           ]
         },
         {
@@ -37846,7 +37846,7 @@
             "0xDD",
             "0xDB",
             "0x80",
-            "0xDB"
+            "0x6D"
           ]
         },
         {
@@ -37882,7 +37882,7 @@
             "0xC0",
             "0x95",
             "0xDD",
-            "0xCF",
+            "0x81",
             "0x6B"
           ]
         },
@@ -37919,7 +37919,7 @@
             "0xC0",
             "0xCF",
             "0xC0",
-            "0xC0",
+            "0x81",
             "0x6B"
           ]
         },
@@ -37957,7 +37957,7 @@
             "0xC0",
             "0xC0",
             "0x81",
-            "0xDD"
+            "0x6B"
           ]
         },
         {
@@ -37994,7 +37994,7 @@
             "0xC0",
             "0x93",
             "0x80",
-            "0xDD"
+            "0x6D"
           ]
         },
         {
@@ -38031,7 +38031,7 @@
             "0xDB",
             "0xC0",
             "0x81",
-            "0xB7"
+            "0x6B"
           ]
         },
         {
@@ -38068,7 +38068,7 @@
             "0xDD",
             "0xDB",
             "0x81",
-            "0xDB"
+            "0x6B"
           ]
         },
         {
@@ -38104,7 +38104,7 @@
             "0xC0",
             "0x95",
             "0xDD",
-            "0xCF",
+            "0x81",
             "0x6B"
           ]
         },
@@ -38141,7 +38141,7 @@
             "0xC0",
             "0xCF",
             "0xC0",
-            "0xC0",
+            "0x81",
             "0x6B"
           ]
         },
@@ -38179,7 +38179,7 @@
             "0xC0",
             "0xC0",
             "0x81",
-            "0xDD"
+            "0x6B"
           ]
         },
         {
@@ -38216,7 +38216,7 @@
             "0xC0",
             "0x93",
             "0x81",
-            "0xDB"
+            "0x6B"
           ]
         },
         {
@@ -38253,7 +38253,7 @@
             "0xDB",
             "0xC0",
             "0x80",
-            "0xB7"
+            "0x6D"
           ]
         },
         {
@@ -38290,7 +38290,7 @@
             "0xDD",
             "0xDB",
             "0x81",
-            "0xDB"
+            "0x6B"
           ]
         },
         {
@@ -38326,7 +38326,7 @@
             "0xC0",
             "0x95",
             "0xDD",
-            "0xCF",
+            "0x81",
             "0x6B"
           ]
         },
@@ -38363,7 +38363,7 @@
             "0xC0",
             "0xCF",
             "0xC0",
-            "0xC0",
+            "0x81",
             "0x6B"
           ]
         },
@@ -38401,7 +38401,7 @@
             "0xC0",
             "0xC0",
             "0x80",
-            "0xDD"
+            "0x6D"
           ]
         },
         {
@@ -38438,7 +38438,7 @@
             "0xC0",
             "0x93",
             "0x81",
-            "0xDB"
+            "0x6B"
           ]
         },
         {
@@ -38475,7 +38475,7 @@
             "0xDB",
             "0xC0",
             "0x80",
-            "0xB7"
+            "0x6D"
           ]
         },
         {
@@ -38512,7 +38512,7 @@
             "0xDD",
             "0xDB",
             "0x81",
-            "0xDB"
+            "0x6B"
           ]
         },
         {
@@ -38548,7 +38548,7 @@
             "0xC0",
             "0x95",
             "0xDD",
-            "0xCF",
+            "0x81",
             "0x6B"
           ]
         },
@@ -38585,7 +38585,7 @@
             "0xC0",
             "0xCF",
             "0xC0",
-            "0xC0",
+            "0x95",
             "0x6B"
           ]
         },
@@ -38622,7 +38622,7 @@
             "0x80",
             "0x81",
             "0x80",
-            "0x81",
+            "0x80",
             "0x6B"
           ]
         },
@@ -38660,7 +38660,7 @@
             "0x6B",
             "0x6D",
             "0x6B",
-            "0x6D"
+            "0x4C"
           ]
         }
       ]

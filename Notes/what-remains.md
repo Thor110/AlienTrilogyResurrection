@@ -661,3 +661,6 @@ smaller (LZMA 19.1%). Report: `Notes/texture-use.md`. The whole routine, in orde
    (`Images/<level>/`), made by ALTEngine's renderer from an untouched copy of the shipped levels. The byte counts
    (`Notes/patching-byte-counts.md`) were measured again from that copy: the first level set used had 13 files that
    already carried patches 0-19.
+   Zip 122: the end room floor's far slice (texture 246, in 141GFX and 903GFX) given the strip's grey outline on its
+   right edge - its last two columns are texture 221's first two, mirrored, as L111's 302 carries 299's (Edward,
+   FaceLog); the blanking list's two CRCs follow. Testing > Level Cleanup is now on by default.

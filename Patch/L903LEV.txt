@@ -39,7 +39,6 @@ L903 is made from L141 and has the same room with the same faces, vertices and o
 laid the same way, and 903GFX.B16 gets the same two slices - see Patch/L141LEV.txt, "The end room's floor", for
 the faces, slots and bytes.
 
-
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.

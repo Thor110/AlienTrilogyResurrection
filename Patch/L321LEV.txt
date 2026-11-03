@@ -29,7 +29,6 @@ Face	Offset		Scan	Change	Was					Now
 6987	0x2FCC0	321-12	three quarter-turns	6900, 6896, 6889, 6509	->	6509, 6900, 6896, 6889
 7003	0x2FE00	321-13	a quarter-turn	6555, 6559, 6508, 6893	->	6559, 6508, 6893, 6555
 
-
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.

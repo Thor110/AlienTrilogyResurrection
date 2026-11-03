@@ -25,7 +25,6 @@ stays on record: "face N's UVs as a,b,c,d" means corner k took corner p[k] of fa
 Face	Offset		Old export remap		Change				Was						Now
 3505	0x28A58		face 3315's UVs as 2,3,0,1		texture of face 3315 and a half-turn		325, 324, 327, 331 tex 213 flag 0	->	327, 331, 325, 324 tex 214 flag 0
 
-
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
