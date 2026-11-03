@@ -2706,24 +2706,25 @@ namespace ALTEngine::Screens
 
                     // Weapon audio.
                     //
-                    // THIS IS A STAND-IN. In the original the report comes from
-                    // an OP_EVENT opcode inside the weapon's firing sequence, so
-                    // it lands on whichever frame the artist put it on. Those
-                    // sequences are data this cannot read yet (the pistol's are
-                    // at 0x0901a4), and the sequences built here are synthesised
-                    // and contain no opcodes at all - which is why nothing was
-                    // playing. Firing on the state change instead gets the sound
-                    // out at roughly the right moment; replacing it with the real
-                    // sequence is a data change, not a code one.
-                    // The PISTOL carries its own OP_EVENT and plays itself, so
-                    // firing it here as well would double the report. Every
-                    // other weapon still runs a synthesised sequence with no
-                    // opcodes in it, so those need the stand-in until their
-                    // sequence tables are dumped.
+                    // In the original the report comes from an OP_EVENT opcode
+                    // in the weapon's firing sequence, on the player's channel
+                    // (see the cue below). Every weapon now runs its own
+                    // sequence, so this stand-in only covers a weapon whose
+                    // graphics don't match the original's frame table and so
+                    // runs a built sequence with no cues in it.
+                    //
+                    // It used to fire for every weapon but the pistol, which
+                    // played each report twice: once here on a pool voice and
+                    // once from the cue. The pool copy won't restart a sample
+                    // that is still sounding, and the shotgun's report runs 2.4
+                    // seconds, so a fast second shot skipped it while its pump
+                    // cut the cue's copy short - the report went missing.
                     if (weaponRuntime.stateChanged
                         && weaponRuntime.state == WS::STATE_FIRING
                         && hudState.currentWeapon > 0
-                        && hudState.currentWeapon < ALTEngine::Screens::PlayerHudState::WEAPON_COUNT)
+                        && hudState.currentWeapon < ALTEngine::Screens::PlayerHudState::WEAPON_COUNT
+                        && !(weaponView.CurrentWeapon() == hudState.currentWeapon
+                             && weaponView.HasOriginalSequence(WS::STATE_FIRING)))
                     {
                         ALTEngine::Audio::SfxPlayer::PlaySlot(
                             ALTEngine::Formats::SoundIds::WEAPON_SHOT[hudState.currentWeapon],

@@ -103,6 +103,15 @@ namespace ALTEngine::Renderer
         bool EventFired() const { return animator.EventFired(); }
         int EventParam() const { return static_cast<int>(animator.param); }
 
+        // True when a state runs the original's own sequence, which carries
+        // its sound cues. False when it runs a built stand-in with none (a
+        // weapon whose frame count doesn't match the original's table).
+        bool HasOriginalSequence(int weaponState) const
+        {
+            if (weaponState < 0 || weaponState >= ALTEngine::Screens::WeaponSystem::STATE_COUNT) { return false; }
+            return originalSequence[static_cast<size_t>(weaponState)];
+        }
+
         void Unload();
         bool Ready() const { return !frames[ALTEngine::Screens::WeaponSystem::STATE_IDLE].empty(); }
         int CurrentWeapon() const { return loadedWeapon; }
@@ -147,6 +156,8 @@ namespace ALTEngine::Renderer
         std::array<std::vector<uint16_t>,
                    ALTEngine::Screens::WeaponSystem::STATE_COUNT> stateSequences;
         int currentState = ALTEngine::Screens::WeaponSystem::STATE_IDLE;
+        // Which states run the original's own sequence rather than a built one.
+        std::array<bool, ALTEngine::Screens::WeaponSystem::STATE_COUNT> originalSequence{};
         int cameraDip = 0;
         int switchOffset = 0;
 

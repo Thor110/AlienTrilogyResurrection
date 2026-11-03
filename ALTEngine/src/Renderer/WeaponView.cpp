@@ -190,12 +190,14 @@ namespace ALTEngine::Renderer
         // guard matters: if a .B16 section has fewer frames than the sequence
         // indexes, the animator would run off the end of the loaded textures.
         const WeaponData::WeaponTables& tables = WeaponData::For(loadedWeapon);
+        originalSequence.fill(false);
         for (int state = 0; state < 4; ++state)
         {
             const std::vector<uint16_t>* seq = tables.sequences[state];
             if (!seq) { continue; }
             if (FrameCount(state) < static_cast<int>(tables.offsetCounts[state])) { continue; }
             stateSequences[static_cast<size_t>(state)] = *seq;
+            originalSequence[static_cast<size_t>(state)] = true;
         }
     }
 
@@ -227,6 +229,7 @@ namespace ALTEngine::Renderer
             section.clear();
         }
         for (auto& seq : stateSequences) { seq.clear(); }
+        originalSequence.fill(false);
         animator = ALTEngine::Formats::SpriteAnim::Animator{};
         currentState = ALTEngine::Screens::WeaponSystem::STATE_IDLE;
         loadedWeapon = -1;
