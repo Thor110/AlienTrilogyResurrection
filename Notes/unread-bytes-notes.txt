@@ -1,7 +1,14 @@
 The MAP0 section of a level file - what every byte is
 =====================================================
 
-Nothing is left unread. On all 45 shipped levels LevelLoader reads MAP0 to its last byte (checked against the
+Nothing is left unread. Since zip 126 every field is named for what it is in LevelLoader.h (faceRun0-3, objectIndex,
+area, pathNode, runtimeFlags, occupancy; unusedByte9; unusedByte7; unusedByte5, cellsX/cellsZ, textureStepFirst/Count;
+Door::flags, floorHeight; Lift::unusedByte6, unusedBytes; animatorCount, frameListCount, textureAnimators,
+animationFrames, unusedVentTypes).
+
+One thing came of it (zip 126): the doors' frames. The level start and every door set cell +7 bit 0x80, a wall to the
+player, on the door's first and last cell; ALTEngine raised all four cells' ceilings with the door and so let the
+player walk through an open door's frame. It now sets the bit as the game does, and the player mover stops on it. On all 45 shipped levels LevelLoader reads MAP0 to its last byte (checked against the
 untouched disc copies). The "~4 KB per level left to decode" this note used to list came from reading the light
 records 24 bytes apart instead of 28 (128 x 4 = 512 bytes) and from the tables after them not yet being read; both
 were fixed long ago.

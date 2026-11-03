@@ -90,8 +90,8 @@ TEST_CASE("Draw routines: the level is built once per fill, hidden faces nowhere
 TEST_CASE("Destroyed objects: the texture animators they step on")
 {
     Crate c;
-    c.unknown5 = 0x12; c.unknown6 = 0x01;   // first 0x112
-    c.unknown7 = 3; c.unknown8 = 0;          // three of them
+    c.textureStepFirst = 0x112;
+    c.textureStepCount = 3;       // three of them
     CHECK_EQ(TextureStepFirst(c), 0x112);
     CHECK_EQ(TextureStepCount(c), 3);
 }

@@ -2,6 +2,7 @@
 
 #include "Formats/LevelLoader.h"
 #include "Game/Doors.h"
+#include "Game/PlayerMover.h"
 
 using namespace ALTEngine::Formats;
 using namespace ALTEngine::Game;
@@ -131,9 +132,31 @@ TEST_CASE("Doors: something standing just in front of the doorway keeps it from 
     CHECK(Doors::ApplyCommand(door, false, 0, false) == false);   // still unlocked from opening
     const size_t across = door.alongZ ? 1 : static_cast<size_t>(level.header.mapLength);
     const size_t front = door.cells[1] + across;
-    level.collisionGrid[front].unknown13 = 5;
+    level.collisionGrid[front].occupancy = 5;
     for (int t = 0; t < 100; ++t) { Doors::Tick(door, level, 1e6f, 1e6f); }
     CHECK(door.phase == DoorState::Phase::Open);
-    level.collisionGrid[front].unknown13 = 0;
+    level.collisionGrid[front].occupancy = 0;
     CHECK(TickUntil(door, level, DoorState::Phase::Idle, 1e6f, 1e6f) >= 0);
+}
+
+TEST_CASE("Doors: the frame stays a wall to the player, the middle two cells open (FUN_00029704's +7 bit)")
+{
+    LevelGeometry level = LevelLoader::Load(AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
+    auto doors = Doors::Build(level, 30, 0.0f, 0.0f);
+    REQUIRE(!doors.empty());
+    DoorState& door = doors[0];
+    REQUIRE(door.cellCount == 4);
+    CHECK(Doors::ApplyCommand(door, true, 1, false));
+    REQUIRE(TickUntil(door, level, DoorState::Phase::Hold, door.worldX, door.worldZ) >= 0);
+
+    namespace PM = ALTEngine::Game::PlayerMover;
+    PM::World w;
+    w.cell = [&](int x, int z) { return CellAt(level, x >> 9, z >> 9); };
+    const int length = level.header.mapLength;
+    for (int i = 0; i < 4; ++i)
+    {
+        const int index = static_cast<int>(door.cells[static_cast<size_t>(i)]);
+        const int x = (index % length) * 512 + 256, z = (index / length) * 512 + 256;
+        CHECK_EQ(PM::Blocked(w, x, z), i == 0 || i == 3);
+    }
 }

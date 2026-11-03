@@ -90,7 +90,7 @@ namespace ALTEngine::Renderer
     // nothing else depends on how this draws.
     //
     // What each cell is taken from:
-    //   unknown3 / unknown4 == 255  a wall. Confirmed to only ever be 255 or 0
+    //   faceRun2 / faceRun3 == 255  a wall. Confirmed to only ever be 255 or 0
     //                               across every level, so it is a reliable
     //                               solid/open test.
     //   floorHeight                 shades open floor, so height changes read

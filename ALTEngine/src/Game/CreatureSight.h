@@ -80,7 +80,7 @@ namespace ALTEngine::Game::CreatureSight
         float targetFloorY = 0;              // the player's floor (b0a4a)
         int distance = 0;                    // the creature's own +0x60
         // Creature and player marks, as for Query; objects are read from the
-        // cells' own +0x0c (CollisionNode::unknown13).
+        // cells' own +0x0c (CollisionNode::occupancy).
         const std::vector<uint8_t>* occupancy = nullptr;
     };
 

@@ -42,7 +42,7 @@ namespace ALTEngine::Game::CreatureSight
 
             int floor = static_cast<int>(Formats::FindFloorHeightGridSpace(level, x, z));
             const int index = Formats::CellIndex(level, cellX, cellZ);
-            uint8_t occupant = cell->unknown13;
+            uint8_t occupant = cell->occupancy;
             if (q.occupancy && index >= 0 && static_cast<size_t>(index) < q.occupancy->size()
                 && (*q.occupancy)[static_cast<size_t>(index)] != 0)
             {
@@ -159,7 +159,7 @@ namespace ALTEngine::Game::CreatureSight
             // Bytes 0-3 are the cell's first face, 0xffffffff for none (the
             // runtime turns it into the list the renderer draws).
             auto hasFaces = [](const Formats::CollisionNode& c) {
-                return (c.unknown1 & c.unknown2 & c.unknown3 & c.unknown4) != 0xff;
+                return (c.faceRun0 & c.faceRun1 & c.faceRun2 & c.faceRun3) != 0xff;
             };
 
             uint16_t mask = zones(at(playerCellX, playerCellZ));
@@ -238,8 +238,8 @@ namespace ALTEngine::Game::CreatureSight
         for (size_t cell = 0; cell < level.collisionGrid.size(); ++cell)
         {
             const auto& n = level.collisionGrid[cell];
-            const uint32_t start = static_cast<uint32_t>(n.unknown1) | (static_cast<uint32_t>(n.unknown2) << 8)
-                                 | (static_cast<uint32_t>(n.unknown3) << 16) | (static_cast<uint32_t>(n.unknown4) << 24);
+            const uint32_t start = static_cast<uint32_t>(n.faceRun0) | (static_cast<uint32_t>(n.faceRun1) << 8)
+                                 | (static_cast<uint32_t>(n.faceRun2) << 16) | (static_cast<uint32_t>(n.faceRun3) << 24);
             if (start == 0xffffffffu || start == 0) { continue; }
             for (size_t q = start - 1; q < level.quads.size(); ++q)
             {
@@ -263,7 +263,7 @@ namespace ALTEngine::Game::CreatureSight
         if (playerCellX >= 0 && playerCellZ >= 0 && playerCellX < level.header.mapLength
             && playerCellZ < level.header.mapWidth && static_cast<size_t>(playerIndex) < level.collisionGrid.size())
         {
-            areas[level.collisionGrid[static_cast<size_t>(playerIndex)].unknown6] = 1;
+            areas[level.collisionGrid[static_cast<size_t>(playerIndex)].area] = 1;
         }
     }
 
@@ -274,7 +274,7 @@ namespace ALTEngine::Game::CreatureSight
         std::vector<uint8_t> reveal(cells, 0);
         for (size_t i = 0; i < cells && i < level.collisionGrid.size(); ++i)
         {
-            const uint8_t area = level.collisionGrid[i].unknown6;
+            const uint8_t area = level.collisionGrid[i].area;
             const bool discovered = area == 0 || (area < areas.size() && areas[area] != 0);
             const bool wasSeen = i < seen.size() && seen[i] != 0;
             reveal[i] = (discovered && (autoMapper || wasSeen)) ? 1 : 0;
@@ -290,6 +290,6 @@ namespace ALTEngine::Game::CreatureSight
     bool CellHasNoFace(const Formats::LevelGeometry& level, int cell)
     {
         if (cell < 0 || static_cast<size_t>(cell) >= level.collisionGrid.size()) { return false; }
-        return (level.collisionGrid[static_cast<size_t>(cell)].unknown4 & 0x80) != 0;
+        return (level.collisionGrid[static_cast<size_t>(cell)].faceRun3 & 0x80) != 0;
     }
 }

@@ -133,16 +133,17 @@ namespace ALTEngine::Screens
         //
         // CHECKED AGAINST THE FILE, so nobody has to look again: L111LEV.MAP's
         // 44 object records have no health field. Every byte is accounted for -
-        // x, y, type, drop, two unknowns, two drop indices, then unknown3 and
-        // unknown4 constant at 1, unknown5 through unknown8 and unknown10
-        // constant at 0, and rotation. Nothing varies that could carry health,
+        // x, y, type, drop, health / 16, an unused byte, two drop indices, then
+        // cellsX and cellsZ (1 for a crate), textureStepFirst/Count and
+        // rotationHigh constant at 0, and rotation (Notes/unread-bytes-notes.txt;
+        // byte 4 turned out to be health / 16 after all - ObjectHealth). Nothing varies that could carry health,
         // and nothing varies per instance of the same type at all. Object health
         // is therefore per-TYPE and lives in the template, exactly as
         // FUN_00027b90 says.
         //
         // (The port's own Crate layout is confirmed correct by the same pass:
         // all 44 records satisfy its documented invariants - drop in {0,2},
-        // unknown2 in {0,10}, rotation even, x/y inside the map - and no other
+        // unusedByte5 in {0,10}, rotation even, x/y inside the map - and no other
         // alignment does.)
         //
         // DIFFICULTY: object health almost certainly does not vary with it.

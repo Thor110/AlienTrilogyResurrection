@@ -47,7 +47,7 @@ TEST_CASE("ProjectileCollision: every demo wall cell stops a round")
         for (int cx = 0; cx < level.header.mapLength; ++cx)
         {
             const CollisionNode* cell = CellAt(level, cx, cz);
-            if (cell->unknown3 != 255 && cell->unknown4 != 255) { continue; }
+            if (cell->faceRun2 != 255 && cell->faceRun3 != 255) { continue; }
             if (cell->attribute == 0x14)
             {
                 // A real wall: at any height.
@@ -76,8 +76,8 @@ TEST_CASE("ProjectileCollision: every demo wall cell stops a round")
 TEST_CASE("ProjectileCollision: objects are hit inside their height window only")
 {
     LevelGeometry level = OneCell();
-    level.collisionGrid[0].unknown13 = 0x14;   // a crate
-    level.collisionGrid[0].unknown5 = 7;       // record 7
+    level.collisionGrid[0].occupancy = 0x14;   // a crate
+    level.collisionGrid[0].objectIndex = 7;       // record 7
     auto low = PCol::TestCell(level, 256, 256, 288.0f, PCol::TYPE_PISTOL, 0x10);
     CHECK(low.blocked);
     CHECK_EQ(low.objectHit, 7);
@@ -85,15 +85,15 @@ TEST_CASE("ProjectileCollision: objects are hit inside their height window only"
     auto high = PCol::TestCell(level, 256, 256, 700.0f, PCol::TYPE_PISTOL, 0x10);
     CHECK(!high.blocked);         // over the top of it
 
-    level.collisionGrid[0].unknown13 = 0x19;   // the tall one: 0x400
+    level.collisionGrid[0].occupancy = 0x19;   // the tall one: 0x400
     CHECK(PCol::TestCell(level, 256, 256, 700.0f, PCol::TYPE_PISTOL, 0x10).objectHit == 7);
 }
 
 TEST_CASE("ProjectileCollision: the pistol stops against a barrel without hurting it")
 {
     LevelGeometry level = OneCell();
-    level.collisionGrid[0].unknown13 = 0x17;
-    level.collisionGrid[0].unknown5 = 3;
+    level.collisionGrid[0].occupancy = 0x17;
+    level.collisionGrid[0].objectIndex = 3;
     auto pistol = PCol::TestCell(level, 256, 256, 200.0f, PCol::TYPE_PISTOL, 0x10);
     CHECK(pistol.blocked);
     CHECK_EQ(pistol.objectHit, -1);
@@ -103,8 +103,8 @@ TEST_CASE("ProjectileCollision: the pistol stops against a barrel without hurtin
 TEST_CASE("ProjectileCollision: 0x15 objects only take smartgun rounds")
 {
     LevelGeometry level = OneCell();
-    level.collisionGrid[0].unknown13 = 0x15;
-    level.collisionGrid[0].unknown5 = 1;
+    level.collisionGrid[0].occupancy = 0x15;
+    level.collisionGrid[0].objectIndex = 1;
     CHECK_EQ(PCol::TestCell(level, 256, 256, 200.0f, PCol::TYPE_PULSE, 0x60).objectHit, -1);
     CHECK_EQ(PCol::TestCell(level, 256, 256, 200.0f, PCol::TYPE_SMARTGUN, 0xa0).objectHit, 1);
 }

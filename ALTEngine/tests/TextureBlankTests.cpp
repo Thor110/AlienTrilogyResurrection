@@ -38,7 +38,7 @@ TEST_CASE("Texture use: L112's faces, animated faces' frames and nothing past it
         if (q.texIndex < use.use.size()) { CHECK((use.use[q.texIndex] & Game::TextureUse::FACE) != 0); }
     }
     // Every frame an animator's program shows is used.
-    for (uint32_t word : geometry.unknownListB)
+    for (uint32_t word : geometry.animationFrames)
     {
         const uint16_t entry = uint16_t(word >> 16);
         if ((entry & 0x8000) == 0 && entry < use.use.size()) { CHECK((use.use[entry] & Game::TextureUse::FRAME) != 0); }

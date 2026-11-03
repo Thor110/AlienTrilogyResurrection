@@ -65,7 +65,10 @@ namespace ALTEngine::Game::PlayerMover
         if (w.noclip) { return false; }
         const auto* c = w.cell(x, z);
         if (!c) { return true; }
-        return WallAttribute(c->attribute) || (w.occupied && w.occupied(x, z));
+        // +7 bit 0x80 (the level start sets it for the wall attributes, the
+        // doors on their frames) or a creature or object in the cell.
+        return WallAttribute(c->attribute) || (c->runtimeFlags & Formats::CollisionNode::PLAYER_WALL) != 0
+            || (w.occupied && w.occupied(x, z));
     }
 
     // FUN_0002800c: a diagonal cell keeps `x` on its own side.

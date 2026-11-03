@@ -32,10 +32,10 @@ namespace ALTEngine::Formats
         uint16_t doorCount = 0;
         uint16_t liftCount = 0;
         uint16_t playerStartAngle = 0;
-        uint16_t unknownBlockA = 0;       // unknownListA size = this * 4
-        uint16_t unknownBlockB = 0;       // unknownListB size = this * 4
+        uint16_t animatorCount = 0;       // textureAnimators entries (4 bytes each)
+        uint16_t frameListCount = 0;      // animationFrames entries (4 bytes each)
         uint16_t enemyTypes = 0;          // bitmask - which enemy types are loaded into memory for this level
-        uint16_t ventTypes = 0;           // never read by the game (nothing touches 0x000b0c56): editor data - Notes/unread-bytes-notes.txt
+        uint16_t unusedVentTypes = 0;     // header +34: never read by the game (nothing touches 0x000b0c56) - editor data, Notes/unread-bytes-notes.txt
     };
 
     // 28 bytes, indexed directly by a quad's flags byte (& 0x7f) - a
@@ -90,31 +90,36 @@ namespace ALTEngine::Formats
         std::vector<struct ActionGroup> actions;  // always exactly 64, unfiltered - a cell's action byte indexes this directly
         std::vector<struct LogicGroup> logics;    // always exactly 64 entries
         std::vector<LightRecord> lights;          // 128 entries of 28 bytes
-        std::vector<uint32_t> unknownListA;       // header unknownBlockA entries of 4 bytes
-        std::vector<uint32_t> unknownListB;       // header unknownBlockB entries of 4 bytes - the texture-animation frame lists
+        std::vector<uint32_t> textureAnimators;   // header animatorCount entries of 4 bytes: each animator's program start, variant and limit (TextureAnimator)
+        std::vector<uint32_t> animationFrames;    // header frameListCount entries of 4 bytes - the texture-animation frame lists
     };
 
     // 16 bytes. One per grid cell, mapLength*mapWidth of them, row-major -
-    // confirmed against AlienTrilogyMapLoader.cs's CollisionNode/its
-    // read loop. unknown3/unknown4 are confirmed always 255 (wall) or 0
-    // (traversable) across every level in the game - the only two
-    // fields with a clearly-established gameplay meaning so far besides
-    // floor/ceiling height.
+    // confirmed against AlienTrilogyMapLoader.cs's CollisionNode/its read
+    // loop. What every byte is: Notes/unread-bytes-notes.txt.
     struct CollisionNode
     {
-        uint8_t unknown1 = 0;
-        uint8_t unknown2 = 0;
-        uint8_t unknown3 = 0;    // 255 = wall, 0 = traversable (confirmed, only ever these two values)
-        uint8_t unknown4 = 0;    // 255 = wall, 0 = traversable (confirmed, only ever these two values)
-        uint8_t unknown5 = 0;    // confirmed always 0 on disk - runtime-only, entity+0x70 copied here (Ghidra: FUN_00032aec)
-        uint8_t unknown6 = 0;
-        uint8_t unknown7 = 0;
-        uint8_t unknown8 = 0;    // confirmed always 0 on disk - runtime-only, unidentified
+        // +0..3, little-endian: the cell's first face record (its run), or
+        // 0xffffffff for none - which is why faceRun2/faceRun3 read 255 on
+        // every cell with no faces (a solid wall).
+        uint8_t faceRun0 = 0;
+        uint8_t faceRun1 = 0;
+        uint8_t faceRun2 = 0;
+        uint8_t faceRun3 = 0;
+        uint8_t objectIndex = 0;  // +4 runtime: the object standing in the cell (cleared at level start, FUN_000282c8)
+        uint8_t area = 0;         // +5 the map-reveal area the cell belongs to
+        uint8_t pathNode = 0;     // +6 the nearest path node (the flow field's)
+        uint8_t runtimeFlags = 0; // +7 runtime: 0x80 marks door and wall-attribute cells (rebuilt at level start, FUN_000282c8)
+        // +7's bit 0x80: a wall to the player (FUN_0003d804 / FUN_0003dbec
+        // stop on it, as on +12). Set at level start for the wall attributes
+        // and by every door on the first and last of its four cells - the
+        // frame, which stays solid however far the door opens.
+        static constexpr uint8_t PLAYER_WALL = 0x80;
         uint8_t ceilingFog = 0;  // low byte of a u16 "visibility" field spanning +0x08/+0x09 per Ghidra - kept as two bytes here since nothing currently interprets it as one value
         uint8_t floorFog = 0;
         uint8_t attribute = 0;   // WAS misnamed ceilingHeight - Ghidra: GetFloorHeight's switch on this exact byte drives ramp/stair sub-height interpolation (0x2d-0x38) and the 0x13<a<0x2d blocking/sloped predicate
         uint8_t floorHeight = 0; // world Y = floorHeight * 32 (confirmed scale, Ghidra FUN_00027e28), modified by `attribute` for ramps/stairs - see LevelLoader::FindFloorHeight
-        uint8_t unknown13 = 0;
+        uint8_t occupancy = 0;   // +12 runtime: the type of the object or creature in the cell, 0xff the player (cleared at level start)
         uint8_t ceilingHeight = 0; // WAS misnamed unknown14 - Ghidra FUN_00027fb0: world ceiling Y = this * 32, same scale as floorHeight
         uint8_t lighting = 0;
         uint8_t scriptAction = 0; // indexes into `actions`
@@ -194,22 +199,13 @@ namespace ALTEngine::Formats
         // tests the bearing against. Usually exactly 512.
         // Bytes 12/13 go to +0x50: the range within which the creature
         // notices the player (CreatureAI::Notices, FUN_00033a70).
-        uint8_t unk4 = 0;              // byte 9: never read by the game (0, 2 or 4 on 36 monsters) - editor data
+        uint8_t unusedByte9 = 0;       // byte 9: never read by the game (0, 2 or 4 on 36 monsters) - editor data
         uint16_t coneHalfWidth = 0;    // bytes 10,11 (was unknownA)
         uint16_t wakeRange = 0;        // bytes 12,13 (was unknownB)
-        uint8_t unknown4 = 0;
-        uint8_t unknown5 = 0;
-        uint8_t unknown6 = 0;
-        uint8_t unknown7 = 0;
-        uint8_t unknown8 = 0;
         // Bytes 14/15, a word (+0x5e): the speed - or a colonist's burster,
         // or a vent's stopped stretch.
         uint8_t speed = 0;
         uint8_t speedHigh = 0;  // was unknown9; 0 on every level so far
-        uint8_t unknown10 = 0;
-        uint8_t unknown11 = 0;
-        uint8_t unknown12 = 0;
-        uint8_t unknown13 = 0;
     };
 
     // 8 bytes. count = header.pickupCount. Type value table in the .cpp.
@@ -222,7 +218,7 @@ namespace ALTEngine::Formats
         uint8_t multiplier = 0;
         uint8_t triggerCount = 0;     // was unknown1: always 0 on disc, counts up to the threshold (FUN_0003bb14)
         uint8_t triggerThreshold = 0; // was z: 0 = there from the start, else waits on a trigger or a crate
-        uint8_t unknown2 = 0; // never read by the game (FUN_0003b93c and the trigger paths stop at byte 6): editor data, often a copy of the amount (Edward, 2026)
+        uint8_t unusedByte7 = 0; // never read by the game (FUN_0003b93c and the trigger paths stop at byte 6): editor data, often a copy of the amount (Edward, 2026)
     };
 
     // 16 bytes. count = header.objectCount ("boxCount" in the C#
@@ -235,26 +231,24 @@ namespace ALTEngine::Formats
         uint8_t type = 0;
         uint8_t flags = 0;    // was drop: bit 1 indestructible, 2 = holds an enemy rather than pickups
         uint8_t healthDiv16 = 0; // was unknown1: the object's health / 16 (ProjectileCollision::ObjectHealth)
-        uint8_t unknown2 = 0; // never read by the game (FUN_00037184 does not copy it): 10 on the crate types 20, 25, 29, 32, else 0
+        uint8_t unusedByte5 = 0; // never read by the game (FUN_00037184 does not copy it): 10 on the crate types 20, 25, 29, 32, else 0
         uint8_t drop1 = 0;    // index of first pickup dropped
         uint8_t drop2 = 0;    // index of second pickup dropped
-        uint8_t unknown3 = 0;  // the cells the object fills along x (to +0x20; FUN_00037084) - 1 for most, a breakable wall 1-4
-        uint8_t unknown4 = 0;  // ... and along z (+0x21)
+        uint8_t cellsX = 0;   // the cells the object fills along x (to +0x20; FUN_00037084) - 1 for most, a breakable wall up to 4
+        uint8_t cellsZ = 0;   // ... and along z (+0x21)
         // +10/+12, two u16s: the first texture animator, and how many, that
         // step on when the object is destroyed (FUN_00037184 copies them to
         // +0x24/+0x26; FUN_00037ff8 steps each by one). A window's glass, a
         // curtain: the faces that show the break. See TextureStepsOnDestroy.
-        uint8_t unknown5 = 0;
-        uint8_t unknown6 = 0;  // confirmed always 0
-        uint8_t unknown7 = 0;
-        uint8_t unknown8 = 0;  // confirmed always 0
+        uint16_t textureStepFirst = 0;  // +10/+11: the first texture animator stepped when it is destroyed
+        uint16_t textureStepCount = 0;  // +12/+13: how many
         uint8_t rotation = 0;  // 4-direction: 0=N,2=E,4=S,6=W (only even values - 90 degrees per step, unlike Monster's 8-direction scheme)
-        uint8_t unknown10 = 0; // confirmed always 0
+        uint8_t rotationHigh = 0; // +15: the rotation's high byte (read as a u16 with +14), always 0
     };
 
     // The texture animators a destroyed object steps on: [first, first + count).
-    inline int TextureStepFirst(const Crate& c) { return c.unknown5 | (c.unknown6 << 8); }
-    inline int TextureStepCount(const Crate& c) { return c.unknown7 | (c.unknown8 << 8); }
+    inline int TextureStepFirst(const Crate& c) { return c.textureStepFirst; }
+    inline int TextureStepCount(const Crate& c) { return c.textureStepCount; }
 
     // 8 bytes. count = header.doorCount. No explicit Z field - needs the
     // collision grid's floorHeight, same as Crate.
@@ -262,10 +256,10 @@ namespace ALTEngine::Formats
     {
         uint8_t x = 0;
         uint8_t y = 0;
-        uint8_t unknown = 0;    // flags (runtime +0x18): 0x40 = starts open (FUN_00029704; Game/Doors.cpp)
+        uint8_t flags = 0;      // runtime +0x18: 0x40 = starts open (FUN_00029704; Game/Doors.cpp); the game adds 2 itself for east/west
         uint8_t time = 0;       // open time - 0 means manually closed at the collider
         uint8_t lockState = 0;  // 1=unlocked, 2=locked, shootable = number of shots
-        uint8_t unknown2 = 0;   // runtime: the door cell's floor height, written at level start (FUN_00028e70); 0 on disc
+        uint8_t floorHeight = 0; // runtime: the door cell's floor height, written at level start (FUN_00028e70); 0 on disc
         uint8_t rotation = 0;   // 4-direction: 0=N,2=E,4=S,6=W, same scheme as Crate
         uint8_t modelIndex = 0; // index into the door model BND
     };
@@ -282,16 +276,16 @@ namespace ALTEngine::Formats
         uint8_t depth = 0;
         uint8_t low = 0;             // always 0 on disc: the load sets it to the first cell's floor
         uint8_t travel = 0;          // height units above that floor (the runtime's "high")
-        uint8_t unknown6Always1 = 0; // copied to +0x14, never read
+        uint8_t unusedByte6 = 0;     // always 1: copied to +0x14, never read
         uint8_t flags = 0;           // 1 top, 4 bottom, 0x10 fast
         uint8_t autoDwell = 0;       // non-zero: cycles by itself
         uint8_t dwell = 0;           // ticks it waits at an end
         uint8_t threshold = 0;       // trigger count it needs to set off
         uint8_t counter = 0;         // that count, always 0 on disc
         uint8_t model = 0;           // its platform mesh ("L0" sections)
-        uint8_t unknown11 = 0; // bytes 13-15 never read by the game (FUN_00041b30 copies 0-12): all three equal, 0 or an old copy of `model`
-        uint8_t unknown12 = 0;
-        uint8_t unknown13 = 0;
+        // Bytes 13-15: never read by the game (FUN_00041b30 copies 0-12). All
+        // three equal: 0, or an old copy of `model`.
+        uint8_t unusedBytes[3]{};
     };
 
     // 4 bytes, always exactly 64 slots read - only ones with

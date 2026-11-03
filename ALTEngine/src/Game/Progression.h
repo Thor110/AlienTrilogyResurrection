@@ -46,7 +46,7 @@ namespace ALTEngine::Game::Progression
         std::array<int, TALLY_SIZE> killed{};
         std::array<int, TALLY_SIZE> total{};
         // Secret areas: cells carry an area number in byte 5 (CollisionNode
-        // unknown6), 0 for none; the level has as many as its highest
+        // area), 0 for none; the level has as many as its highest
         // number, and one is found by standing in any of its cells.
         int secretsFound = 0;
         int secretsTotal = 0;

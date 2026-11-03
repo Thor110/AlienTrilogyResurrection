@@ -44,7 +44,7 @@ TEST_CASE("PlayerMover: a wall stops the player 200 short of it")
     CHECK_EQ(PM::MoveX(r.w, 0x780, 0x700, 0, 0x40), 0x800 - 201);
     // Walls only from the attribute: the old +2/+3 bytes don't stop anything.
     Room open;
-    open.At(4, 3).unknown3 = 255;
+    open.At(4, 3).faceRun2 = 255;
     CHECK_EQ(PM::MoveX(open.w, 0x780, 0x700, 0, 0x40), 0x7c0);
 }
 

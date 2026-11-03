@@ -103,7 +103,7 @@ TEST_CASE("CreatureSight: the drawn zones spread from the player's cell through 
     // zone 1 (bits 1 and 2), and runs on through columns 7-11 on its own. A
     // third (4) is only in column 11. Every cell has faces.
     LevelGeometry level = Room();
-    for (auto& cell : level.collisionGrid) { cell.unknown1 = cell.unknown2 = cell.unknown3 = cell.unknown4 = 0; }
+    for (auto& cell : level.collisionGrid) { cell.faceRun0 = cell.faceRun1 = cell.faceRun2 = cell.faceRun3 = 0; }
     for (int z = 0; z < 5; ++z)
     {
         At(level, 6, z).ceilingFog = 3;
@@ -117,7 +117,7 @@ TEST_CASE("CreatureSight: the drawn zones spread from the player's cell through 
     // Looking the other way, column 6 is behind and outside every window.
     CHECK(CS::DrawnZoneMask(level, 2, 2, 0x400) == 1);
     // A cell with no faces is drawn but adds nothing.
-    for (int z = 0; z < 5; ++z) { auto& c = At(level, 6, z); c.unknown1 = c.unknown2 = c.unknown3 = c.unknown4 = 0xff; }
+    for (int z = 0; z < 5; ++z) { auto& c = At(level, 6, z); c.faceRun0 = c.faceRun1 = c.faceRun2 = c.faceRun3 = 0xff; }
     CHECK(CS::DrawnZoneMask(level, 2, 2, 0xc00) == 1);
 }
 
@@ -188,11 +188,11 @@ TEST_CASE("CreatureSight: the gunners' ray passes over a crate, not a double cra
     LevelGeometry level = Room();
     CHECK(CS::LineOfFire3D(level, Ray()));
 
-    At(level, 5, 2).unknown13 = 0x14;   // a crate raises the floor by 0x200 - under the ray
+    At(level, 5, 2).occupancy = 0x14;   // a crate raises the floor by 0x200 - under the ray
     CHECK(CS::LineOfFire3D(level, Ray()));
-    At(level, 5, 2).unknown13 = 0x19;   // a double crate by 0x400 - over it
+    At(level, 5, 2).occupancy = 0x19;   // a double crate by 0x400 - over it
     CHECK(!CS::LineOfFire3D(level, Ray()));
-    At(level, 5, 2).unknown13 = 0x16;   // anything else in the cell blocks
+    At(level, 5, 2).occupancy = 0x16;   // anything else in the cell blocks
     CHECK(!CS::LineOfFire3D(level, Ray()));
 
     LevelGeometry wall = Room();
@@ -268,7 +268,7 @@ TEST_CASE("CreatureSight: each cell's face run partitions the level's faces")
     for (size_t cell = 0; cell < level.collisionGrid.size(); ++cell)
     {
         const auto& n = level.collisionGrid[cell];
-        const uint32_t start = n.unknown1 | (n.unknown2 << 8) | (n.unknown3 << 16) | (static_cast<uint32_t>(n.unknown4) << 24);
+        const uint32_t start = n.faceRun0 | (n.faceRun1 << 8) | (n.faceRun2 << 16) | (static_cast<uint32_t>(n.faceRun3) << 24);
         if (start == 0xffffffffu || start == 0) { continue; }
         for (size_t q = start - 1; q < level.quads.size(); ++q)
         {
@@ -285,7 +285,7 @@ TEST_CASE("CreatureSight: the drawn cells are the view walk's, widened only for 
 {
     namespace CS = ALTEngine::Game::CreatureSight;
     LevelGeometry level = Room();
-    for (auto& cell : level.collisionGrid) { cell.unknown1 = cell.unknown2 = cell.unknown3 = cell.unknown4 = 0; }
+    for (auto& cell : level.collisionGrid) { cell.faceRun0 = cell.faceRun1 = cell.faceRun2 = cell.faceRun3 = 0; }
     // Looking along +x from (2, 2): the cell ahead is drawn, the one behind
     // (outside ring 1's 0x384 window) is not.
     const auto ahead = CS::DrawnCells(level, 2, 2, 0xc00);

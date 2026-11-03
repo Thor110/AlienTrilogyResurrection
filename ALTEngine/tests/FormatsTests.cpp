@@ -104,9 +104,9 @@ TEST_CASE("Lights: a blink record waits for its switch, then blinks with its dur
 TEST_CASE("Texture animation: a program holds each frame for its speed, then loops")
 {
     LevelGeometry level;
-    level.unknownListA = { 0x00000000u };            // animator 0: program 0, no gate
+    level.textureAnimators = { 0x00000000u };            // animator 0: program 0, no gate
     // Program 0: speed op 3 (2 ticks), frames 100 and 101, loop.
-    for (uint32_t payload : { 0x8003u, 100u, 101u, 0x8001u }) { level.unknownListB.push_back(payload << 16); }
+    for (uint32_t payload : { 0x8003u, 100u, 101u, 0x8001u }) { level.animationFrames.push_back(payload << 16); }
     TextureAnimator anim;
     anim.Reset(level);
     uint16_t tex = 0;
@@ -121,8 +121,8 @@ TEST_CASE("Texture animation: a program holds each frame for its speed, then loo
 TEST_CASE("Texture animation: a gated program waits for ChangeTexture, and op 11 stops it")
 {
     LevelGeometry level;
-    level.unknownListA = { 0x01000000u };            // gate: variantMax 1
-    for (uint32_t payload : { 200u, 201u, 0x800bu }) { level.unknownListB.push_back(payload << 16); }
+    level.textureAnimators = { 0x01000000u };            // gate: variantMax 1
+    for (uint32_t payload : { 200u, 201u, 0x800bu }) { level.animationFrames.push_back(payload << 16); }
     TextureAnimator anim;
     anim.Reset(level);
     uint16_t tex = 0;

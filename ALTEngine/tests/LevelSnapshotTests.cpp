@@ -12,9 +12,9 @@ using ALTEngine::Formats::CollisionNode;
 TEST_CASE("Save Anywhere: the cell grid comes back byte for byte")
 {
     std::vector<CollisionNode> grid(3);
-    grid[0].floorHeight = 12; grid[0].ceilingHeight = 40; grid[0].unknown13 = 0x15;
+    grid[0].floorHeight = 12; grid[0].ceilingHeight = 40; grid[0].occupancy = 0x15;
     grid[1].attribute = 0x19; grid[1].scriptAction = 7; grid[1].lighting = 0xff;
-    grid[2].unknown1 = 0xab; grid[2].floorFog = 3;
+    grid[2].faceRun0 = 0xab; grid[2].floorFog = 3;
     const std::string hex = LS::GridToHex(grid);
     CHECK_EQ(hex.size(), 3u * 32);
 
@@ -22,11 +22,11 @@ TEST_CASE("Save Anywhere: the cell grid comes back byte for byte")
     REQUIRE(LS::GridFromHex(back, hex));
     CHECK_EQ(back[0].floorHeight, 12);
     CHECK_EQ(back[0].ceilingHeight, 40);
-    CHECK_EQ(back[0].unknown13, 0x15);
+    CHECK_EQ(back[0].occupancy, 0x15);
     CHECK_EQ(back[1].attribute, 0x19);
     CHECK_EQ(back[1].scriptAction, 7);
     CHECK_EQ(back[1].lighting, 0xff);
-    CHECK_EQ(back[2].unknown1, 0xab);
+    CHECK_EQ(back[2].faceRun0, 0xab);
     CHECK_EQ(back[2].floorFog, 3);
 
     // Another level's grid is refused, and leaves this one alone.

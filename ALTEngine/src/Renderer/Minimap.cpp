@@ -193,7 +193,7 @@ namespace ALTEngine::Renderer
                 // in the wall (Edward, 2026).
                 //
                 // Byte +7 is runtime-only and always 0 on disc, so its wall bit is
-                // read here from unknown3/unknown4 (confirmed 255 = wall) and its
+                // read here from faceRun2/faceRun3 (255 = no faces: a wall) and its
                 // seen bit from our own visited tracking.
                 const uint8_t* raw = reinterpret_cast<const uint8_t*>(&c);
 

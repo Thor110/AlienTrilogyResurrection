@@ -71,11 +71,11 @@ namespace ALTEngine::Formats
         h.doorCount = ReadUInt16LE(data, pos); pos += 2;
         h.liftCount = ReadUInt16LE(data, pos); pos += 2;
         h.playerStartAngle = ReadUInt16LE(data, pos); pos += 2;
-        h.unknownBlockA = ReadUInt16LE(data, pos); pos += 2;
+        h.animatorCount = ReadUInt16LE(data, pos); pos += 2;
         pos += 2; // action sequence block counts - always 64, not stored (matches MapViewer.cs)
-        h.unknownBlockB = ReadUInt16LE(data, pos); pos += 2;
+        h.frameListCount = ReadUInt16LE(data, pos); pos += 2;
         h.enemyTypes = ReadUInt16LE(data, pos); pos += 2;
-        h.ventTypes = ReadUInt16LE(data, pos); pos += 2;
+        h.unusedVentTypes = ReadUInt16LE(data, pos); pos += 2;
 
         if (pos != HEADER_SIZE)
         {
@@ -158,17 +158,24 @@ namespace ALTEngine::Formats
         for (size_t i = 0; i < collisionCount; ++i)
         {
             CollisionNode n;
-            n.unknown1 = data[pos + 0]; n.unknown2 = data[pos + 1]; n.unknown3 = data[pos + 2]; n.unknown4 = data[pos + 3];
-            n.unknown5 = data[pos + 4]; n.unknown6 = data[pos + 5]; n.unknown7 = data[pos + 6]; n.unknown8 = data[pos + 7];
+            n.faceRun0 = data[pos + 0]; n.faceRun1 = data[pos + 1]; n.faceRun2 = data[pos + 2]; n.faceRun3 = data[pos + 3];
+            n.objectIndex = data[pos + 4]; n.area = data[pos + 5]; n.pathNode = data[pos + 6]; n.runtimeFlags = data[pos + 7];
             n.ceilingFog = data[pos + 8]; n.floorFog = data[pos + 9]; n.attribute = data[pos + 10]; n.floorHeight = data[pos + 11];
-            // unknown13 deliberately NOT read from the file here - Ghidra
+            // occupancy (+12) deliberately NOT read from the file here - Ghidra
             // confirms it's runtime-only occupancy state (occupying
             // monster's type while alive, 0 = free), overwritten during
             // play. Whatever value the file itself carries is stale
             // editor navigation-bake data, not level data - loading it
             // would let leftover editor state leak into actual gameplay
             // (Edward, 2026 - Ghidra deep-dive).
-            n.unknown13 = 0;
+            n.occupancy = 0;
+            // The level start's own pass over the grid (FUN_000282c8): +4 and
+            // +12 cleared, +7 rebuilt - bit 0x80, a wall to the player, on the
+            // wall attributes (1 and 0x14-0x18). Doors add it on their frame
+            // cells (Game::Doors::Build). The values on disc are a saved
+            // running state, never used.
+            n.objectIndex = 0;
+            n.runtimeFlags = (n.attribute == 1 || (n.attribute >= 0x14 && n.attribute <= 0x18)) ? CollisionNode::PLAYER_WALL : 0;
             n.ceilingHeight = data[pos + 13]; n.lighting = data[pos + 14]; n.scriptAction = data[pos + 15];
             // A ceiling of 0 is no ceiling given: the level load puts it 0x30
             // over the floor (0x279a4, a byte add). The ducts behind the wall
@@ -200,14 +207,12 @@ namespace ALTEngine::Formats
             Monster m;
             m.type = data[pos + 0]; m.x = data[pos + 1]; m.y = data[pos + 2]; m.z = data[pos + 3]; m.rotation = data[pos + 4];
             m.health = data[pos + 5]; m.drop = data[pos + 6]; m.triggerCount = data[pos + 7]; m.triggerThreshold = data[pos + 8];
-            m.unk4 = data[pos + 9];
+            m.unusedByte9 = data[pos + 9];
             m.coneHalfWidth = static_cast<uint16_t>(data[pos + 10] | (data[pos + 11] << 8));
             m.wakeRange = static_cast<uint16_t>(data[pos + 12] | (data[pos + 13] << 8));
             m.middleThreshold = static_cast<uint16_t>(data[pos + 16] | (data[pos + 17] << 8));
             m.nearThreshold = static_cast<uint16_t>(data[pos + 18] | (data[pos + 19] << 8));
-            m.unknown4 = data[pos + 9]; m.unknown5 = data[pos + 10]; m.unknown6 = data[pos + 11]; m.unknown7 = data[pos + 12];
-            m.unknown8 = data[pos + 13]; m.speed = data[pos + 14]; m.speedHigh = data[pos + 15]; m.unknown10 = data[pos + 16];
-            m.unknown11 = data[pos + 17]; m.unknown12 = data[pos + 18]; m.unknown13 = data[pos + 19];
+            m.speed = data[pos + 14]; m.speedHigh = data[pos + 15];
             pos += 20;
             result.monsters.push_back(m);
         }
@@ -218,7 +223,7 @@ namespace ALTEngine::Formats
         {
             Pickup p;
             p.x = data[pos + 0]; p.y = data[pos + 1]; p.type = data[pos + 2]; p.amount = data[pos + 3];
-            p.multiplier = data[pos + 4]; p.triggerCount = data[pos + 5]; p.triggerThreshold = data[pos + 6]; p.unknown2 = data[pos + 7];
+            p.multiplier = data[pos + 4]; p.triggerCount = data[pos + 5]; p.triggerThreshold = data[pos + 6]; p.unusedByte7 = data[pos + 7];
             pos += 8;
             result.pickups.push_back(p);
         }
@@ -229,9 +234,11 @@ namespace ALTEngine::Formats
         {
             Crate c;
             c.x = data[pos + 0]; c.y = data[pos + 1]; c.type = data[pos + 2]; c.flags = data[pos + 3];
-            c.healthDiv16 = data[pos + 4]; c.unknown2 = data[pos + 5]; c.drop1 = data[pos + 6]; c.drop2 = data[pos + 7];
-            c.unknown3 = data[pos + 8]; c.unknown4 = data[pos + 9]; c.unknown5 = data[pos + 10]; c.unknown6 = data[pos + 11];
-            c.unknown7 = data[pos + 12]; c.unknown8 = data[pos + 13]; c.rotation = data[pos + 14]; c.unknown10 = data[pos + 15];
+            c.healthDiv16 = data[pos + 4]; c.unusedByte5 = data[pos + 5]; c.drop1 = data[pos + 6]; c.drop2 = data[pos + 7];
+            c.cellsX = data[pos + 8]; c.cellsZ = data[pos + 9];
+            c.textureStepFirst = static_cast<uint16_t>(data[pos + 10] | (data[pos + 11] << 8));
+            c.textureStepCount = static_cast<uint16_t>(data[pos + 12] | (data[pos + 13] << 8));
+            c.rotation = data[pos + 14]; c.rotationHigh = data[pos + 15];
             pos += 16;
             result.crates.push_back(c);
         }
@@ -242,8 +249,8 @@ namespace ALTEngine::Formats
         for (uint16_t i = 0; i < h.doorCount; ++i)
         {
             Door d;
-            d.x = data[pos + 0]; d.y = data[pos + 1]; d.unknown = data[pos + 2]; d.time = data[pos + 3];
-            d.lockState = data[pos + 4]; d.unknown2 = data[pos + 5]; d.rotation = data[pos + 6]; d.modelIndex = data[pos + 7];
+            d.x = data[pos + 0]; d.y = data[pos + 1]; d.flags = data[pos + 2]; d.time = data[pos + 3];
+            d.lockState = data[pos + 4]; d.floorHeight = data[pos + 5]; d.rotation = data[pos + 6]; d.modelIndex = data[pos + 7];
             pos += 8;
             result.doors.push_back(d);
         }
@@ -255,9 +262,9 @@ namespace ALTEngine::Formats
         {
             Lift l;
             l.x = data[pos + 0]; l.y = data[pos + 1]; l.width = data[pos + 2]; l.depth = data[pos + 3];
-            l.low = data[pos + 4]; l.travel = data[pos + 5]; l.unknown6Always1 = data[pos + 6]; l.flags = data[pos + 7];
+            l.low = data[pos + 4]; l.travel = data[pos + 5]; l.unusedByte6 = data[pos + 6]; l.flags = data[pos + 7];
             l.autoDwell = data[pos + 8]; l.dwell = data[pos + 9]; l.threshold = data[pos + 10]; l.counter = data[pos + 11];
-            l.model = data[pos + 12]; l.unknown11 = data[pos + 13]; l.unknown12 = data[pos + 14]; l.unknown13 = data[pos + 15];
+            l.model = data[pos + 12]; l.unusedBytes[0] = data[pos + 13]; l.unusedBytes[1] = data[pos + 14]; l.unusedBytes[2] = data[pos + 15];
             pos += 16;
             result.lifts.push_back(l);
         }
@@ -326,8 +333,8 @@ namespace ALTEngine::Formats
                 pos += 4;
             }
         };
-        readList(result.header.unknownBlockA, result.unknownListA, "unknown list A");
-        readList(result.header.unknownBlockB, result.unknownListB, "unknown list B");
+        readList(result.header.animatorCount, result.textureAnimators, "texture animators");
+        readList(result.header.frameListCount, result.animationFrames, "animation frames");
 
         return result;
     }
@@ -387,7 +394,7 @@ namespace ALTEngine::Formats
         const CollisionNode& cell = level.collisionGrid[cellIndex];
 
         // Bytes +0x02/+0x03: 255 = wall, 0 = traversable.
-        if (cell.unknown3 == 255 || cell.unknown4 == 255) { return true; }
+        if (cell.faceRun2 == 255 || cell.faceRun3 == 255) { return true; }
 
         // A gap SMALLER THAN THE PLAYER blocks, not merely a zero gap.
         //
@@ -405,7 +412,7 @@ namespace ALTEngine::Formats
         // Occupancy (byte 12) blocks: crates, switches and monsters stamp
         // their type here at spawn. 0xFF is the player's own marker and is
         // ignored, otherwise you would be unable to move at all.
-        if (cell.unknown13 != 0 && cell.unknown13 != 0xFF) { return true; }
+        if (cell.occupancy != 0 && cell.occupancy != 0xFF) { return true; }
 
         // Attribute band 0x14-0x2c blocks. 0x2d and above are the stair
         // and ramp attributes, which are walkable - their height change

@@ -7,7 +7,7 @@
 
 namespace ALTEngine::Formats
 {
-    // Animated level textures - the consumer of `unknownListA`/`unknownListB`,
+    // Animated level textures - the consumer of `textureAnimators`/`animationFrames`,
     // and the answer to the long-running "flag 8 renders the wrong texture"
     // problem.
     //
@@ -22,7 +22,7 @@ namespace ALTEngine::Formats
     // at page 0 (0,0)/(32,0)/(64,0), which is what was on screen.
     //
     // EVIDENCE (L111LEV.MAP + 111GFX.B16):
-    //   - The level declares exactly 10 animators (header `unknownBlockA`).
+    //   - The level declares exactly 10 animators (header `animatorCount`).
     //     The 150 flag-8 quads use texIndex 0,1,2,3,4,5,6,9 - every one a
     //     valid animator ordinal, ZERO out of range.
     //   - The animator outputs are the light artwork, confirmed by dumping
@@ -72,8 +72,8 @@ namespace ALTEngine::Formats
         {
             // listA: {int16 listId, uint8 variant, uint8 variantMax}
             animators.clear();
-            animators.reserve(level.unknownListA.size());
-            for (uint32_t word : level.unknownListA)
+            animators.reserve(level.textureAnimators.size());
+            for (uint32_t word : level.textureAnimators)
             {
                 Animator a;
                 a.listId = static_cast<int16_t>(word & 0xffff);
@@ -86,7 +86,7 @@ namespace ALTEngine::Formats
             // control opcode; clear is an output descriptor index. Entries for
             // a group are contiguous and in program order.
             programs.clear();
-            for (uint32_t word : level.unknownListB)
+            for (uint32_t word : level.animationFrames)
             {
                 uint16_t groupId = static_cast<uint16_t>(word & 0xffff);
                 uint16_t payload = static_cast<uint16_t>((word >> 16) & 0xffff);

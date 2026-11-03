@@ -689,3 +689,32 @@ install itself is 102,995,422 bytes: **26,756,496 smaller than the original**, w
 If it is ever wanted smaller still: FFmpeg is about 13 MB, and the videos need only its TrueMotion 1 decoder and AVI
 reader (Duck `DUCK` video, PCM audio), so a cut-down LGPL build would be under 1 MB; once the cleanup is always on,
 the kept copies need not be kept; the music would be about half as FLAC.
+
+## Towards the end of the project: trim the bytes nothing uses (ALTEngine only)
+
+Edward's idea (zip 126). Every byte of MAP0 is now accounted for (Notes/unread-bytes-notes.txt), and some hold
+nothing: data the editor left that the game never reads, and runtime space the level start rebuilds anyway. A last
+patch layer could drop them, run after the Level Cleanup, for ALTEngine's copies only. **Not in ALTViewer**, so its
+fixer keeps producing files the original game can run.
+
+What it would save across the 45 levels, as cleaned (1,930,104 bytes, about 10% of the level files):
+
+| Bytes | What |
+|---|---|
+| 946,018 | vertex +6..7, always 0 |
+| 943,554 | cell +4, +7, +12: runtime, rebuilt at level start (FUN_000282c8) |
+| 23,040 | the pad byte after each light colour (+3/+7/+11/+15) |
+| 5,196 | object +5 (never read) and the always-0 high bytes +11/+13/+15 |
+| 3,974 | pickup +5 (runtime counter) and +7 (never read) |
+| 2,880 | action group +3 |
+| 2,541 | path node +2 (runtime) |
+| 1,554 | monster +9 (never read) |
+| 966 | lift +4 and +11 (runtime), +6 and +13..15 (never read) |
+| 201 | door +5 (runtime) |
+| 180 | header +34 (vent types) and +28 (the fixed 64, 64) |
+
+It changes every record's size, so it is a new, ALTEngine-only layout: the loader would read both (a marker in the
+FORM header, or a chunk name other than MAP0), the runtime fields would be rebuilt at load as they already are
+(LevelLoader zeroes +4 and +12 and rebuilds +7), and every tool that reads or writes offsets (the patches, the Level
+Cleanup, the blanking scan, the Face Index Display's file offsets) would have to run on the original layout first,
+with the trim truly last. Worth doing only once the patching is finished, since it moves every offset after it.

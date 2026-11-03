@@ -45,9 +45,9 @@ namespace ALTEngine::Screens::LevelSnapshot
         out.reserve(grid.size() * 32);
         for (const auto& c : grid)
         {
-            const uint8_t b[16] = { c.unknown1, c.unknown2, c.unknown3, c.unknown4, c.unknown5, c.unknown6,
-                                    c.unknown7, c.unknown8, c.ceilingFog, c.floorFog, c.attribute, c.floorHeight,
-                                    c.unknown13, c.ceilingHeight, c.lighting, c.scriptAction };
+            const uint8_t b[16] = { c.faceRun0, c.faceRun1, c.faceRun2, c.faceRun3, c.objectIndex, c.area,
+                                    c.pathNode, c.runtimeFlags, c.ceilingFog, c.floorFog, c.attribute, c.floorHeight,
+                                    c.occupancy, c.ceilingHeight, c.lighting, c.scriptAction };
             for (uint8_t v : b) { out.push_back(digits[v >> 4]); out.push_back(digits[v & 15]); }
         }
         return out;
@@ -68,10 +68,10 @@ namespace ALTEngine::Screens::LevelSnapshot
         auto next = [&]() { const int v = nibble(hex[pos]) << 4 | nibble(hex[pos + 1]); pos += 2; return static_cast<uint8_t>(v); };
         for (auto& c : grid)
         {
-            c.unknown1 = next(); c.unknown2 = next(); c.unknown3 = next(); c.unknown4 = next();
-            c.unknown5 = next(); c.unknown6 = next(); c.unknown7 = next(); c.unknown8 = next();
+            c.faceRun0 = next(); c.faceRun1 = next(); c.faceRun2 = next(); c.faceRun3 = next();
+            c.objectIndex = next(); c.area = next(); c.pathNode = next(); c.runtimeFlags = next();
             c.ceilingFog = next(); c.floorFog = next(); c.attribute = next(); c.floorHeight = next();
-            c.unknown13 = next(); c.ceilingHeight = next(); c.lighting = next(); c.scriptAction = next();
+            c.occupancy = next(); c.ceilingHeight = next(); c.lighting = next(); c.scriptAction = next();
         }
         return true;
     }

@@ -22,7 +22,7 @@ namespace ALTEngine::Game::TextureUse
         };
         // The frame programs, by group: listB words are { uint16 group, uint16 entry }.
         std::vector<std::vector<uint16_t>> programs;
-        for (uint32_t word : level.unknownListB)
+        for (uint32_t word : level.animationFrames)
         {
             const uint16_t group = uint16_t(word & 0xffff), entry = uint16_t(word >> 16);
             if (group >= programs.size()) { programs.resize(size_t(group) + 1); }
@@ -31,8 +31,8 @@ namespace ALTEngine::Game::TextureUse
         }
         // An animated face's animator: listA words are { int16 program, ... }.
         auto animatorFrames = [&](size_t ordinal, uint8_t why) {
-            if (ordinal >= level.unknownListA.size()) { ++result.outOfRange; return; }
-            const int16_t program = int16_t(level.unknownListA[ordinal] & 0xffff);
+            if (ordinal >= level.textureAnimators.size()) { ++result.outOfRange; return; }
+            const int16_t program = int16_t(level.textureAnimators[ordinal] & 0xffff);
             if (program < 0 || size_t(program) >= programs.size()) { return; }
             for (uint16_t entry : programs[size_t(program)]) { if ((entry & 0x8000) == 0) { mark(entry, why); } }
         };

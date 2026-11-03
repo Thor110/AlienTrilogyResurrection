@@ -1199,8 +1199,8 @@ namespace ALTEngine::Screens
                         size_t crateCell = static_cast<size_t>(crate.y) * level.header.mapLength + static_cast<size_t>(crate.x);
                         if (crateCell < level.collisionGrid.size())
                         {
-                            level.collisionGrid[crateCell].unknown13 = crate.type;
-                            level.collisionGrid[crateCell].unknown5 = static_cast<uint8_t>(&crate - level.crates.data());
+                            level.collisionGrid[crateCell].occupancy = crate.type;
+                            level.collisionGrid[crateCell].objectIndex = static_cast<uint8_t>(&crate - level.crates.data());
                         }
                         // A window, breakable wall or curtain fills a block of
                         // cells (FUN_00037084): record byte 8 along x and byte
@@ -1208,21 +1208,21 @@ namespace ALTEngine::Screens
                         // 2 x 5, which is what makes the whole wall solid.
                         if (invisibleObject)
                         {
-                            for (int dz = 0; dz < crate.unknown4; ++dz)
+                            for (int dz = 0; dz < crate.cellsZ; ++dz)
                             {
-                                for (int dx = 0; dx < crate.unknown3; ++dx)
+                                for (int dx = 0; dx < crate.cellsX; ++dx)
                                 {
                                     const int x = crate.x + dx, z = crate.y + dz;
                                     if (x >= level.header.mapLength || z >= level.header.mapWidth) { continue; }
                                     auto& cell = level.collisionGrid[static_cast<size_t>(z) * level.header.mapLength + static_cast<size_t>(x)];
-                                    cell.unknown13 = crate.type;
-                                    cell.unknown5 = static_cast<uint8_t>(&crate - level.crates.data());
+                                    cell.occupancy = crate.type;
+                                    cell.objectIndex = static_cast<uint8_t>(&crate - level.crates.data());
                                 }
                             }
                             if (!damageTargets.empty() && damageTargets.back().crateIndex == static_cast<int>(ci))
                             {
-                                damageTargets.back().cellsWide = std::max(1, static_cast<int>(crate.unknown3));
-                                damageTargets.back().cellsDeep = std::max(1, static_cast<int>(crate.unknown4));
+                                damageTargets.back().cellsWide = std::max(1, static_cast<int>(crate.cellsX));
+                                damageTargets.back().cellsDeep = std::max(1, static_cast<int>(crate.cellsZ));
                             }
                         }
                     }
@@ -1584,7 +1584,7 @@ namespace ALTEngine::Screens
                         }
                         for (const auto& cell : level.collisionGrid)
                         {
-                            tally.secretsTotal = std::max<int>(tally.secretsTotal, cell.unknown6);
+                            tally.secretsTotal = std::max<int>(tally.secretsTotal, cell.area);
                         }
                         triggers = ALTEngine::Game::Triggers::System(level);
 
@@ -2020,7 +2020,7 @@ namespace ALTEngine::Screens
                     bw.nodes = &level.pathNodes;
                     bw.nodeAt = [&](float x, float z) -> int {
                         const auto* c = ALTEngine::Formats::CellAt(level, ToGridSpaceX(x, originX) >> 9, ToGridSpaceZ(z, originZ) >> 9);
-                        return (c && c->unknown7 < level.pathNodes.size()) ? static_cast<int>(c->unknown7) : -1;
+                        return (c && c->pathNode < level.pathNodes.size()) ? static_cast<int>(c->pathNode) : -1;
                     };
                     bw.nodePosition = [&](int node, float& x, float& z) {
                         int gx = 0, gz = 0;
@@ -2041,7 +2041,7 @@ namespace ALTEngine::Screens
                             const int gx = ToGridSpaceX(x0 + dx * t, originX), gz = ToGridSpaceZ(z0 + dz * t, originZ);
                             const auto* c = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
                             if (!c || PM::WallAttribute(c->attribute) || (c->attribute >= 0x19 && c->attribute <= 0x2c)) { return false; }
-                            if (c->unknown13 >= 0x14 && c->unknown13 != 0xFF) { return false; }
+                            if (c->occupancy >= 0x14 && c->occupancy != 0xFF) { return false; }
                             const float y = y0 + dy * t;
                             if (ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz) > y) { return false; }
                             if (static_cast<float>(c->ceilingHeight) * 32.0f < y) { return false; }
@@ -2058,7 +2058,7 @@ namespace ALTEngine::Screens
                         };
                         mw.occupied = [&](int cx, int cz) {
                             const auto* c = ALTEngine::Formats::CellAt(level, cx >> 9, cz >> 9);
-                            return c && c->unknown13 != 0 && c->unknown13 != 0xFF;
+                            return c && c->occupancy != 0 && c->occupancy != 0xFF;
                         };
                         const int gx = ToGridSpaceX(x, originX), gz = ToGridSpaceZ(z, originZ);
                         const int gy = static_cast<int>(std::lround(feetY));
@@ -2375,7 +2375,7 @@ namespace ALTEngine::Screens
                             cellAttribute = cell->attribute;
                             // A secret area found: the original marks the
                             // camera's cell's area each drawn frame (0x274e1).
-                            if (cell->unknown6 != 0) { secretsSeen[cell->unknown6] = 1; }
+                            if (cell->area != 0) { secretsSeen[cell->area] = 1; }
                         }
                     }
                     // The hazard flag selects which footstep sound plays. The
@@ -2445,7 +2445,7 @@ namespace ALTEngine::Screens
                                 // type into the cell at spawn (+0xc).
                                 if (const auto* c = ALTEngine::Formats::CellAt(level, x >> 9, z >> 9))
                                 {
-                                    if (c->unknown13 != 0 && c->unknown13 != 0xFF) { return true; }
+                                    if (c->occupancy != 0 && c->occupancy != 0xFF) { return true; }
                                 }
                                 for (const auto& other : enemies)
                                 {
@@ -2893,7 +2893,7 @@ namespace ALTEngine::Screens
                         // refuse any non-zero +0x0c).
                         for (size_t c = 0; c < occupancy.size() && c < level.collisionGrid.size(); ++c)
                         {
-                            const uint8_t stamp = level.collisionGrid[c].unknown13;
+                            const uint8_t stamp = level.collisionGrid[c].occupancy;
                             if (stamp >= 0x14 && stamp != 0xFF) { occupancy[c] = stamp; }
                         }
                         mark(occupancyCell(camera.x, camera.z), 0xff);
@@ -2914,7 +2914,7 @@ namespace ALTEngine::Screens
                         {
                             const auto* playerCell = ALTEngine::Formats::CellAt(
                                 level, ToGridSpaceX(camera.x, originX) >> 9, ToGridSpaceZ(camera.z, originZ) >> 9);
-                            if (playerCell) { flowField.Update(playerCell->unknown7); }
+                            if (playerCell) { flowField.Update(playerCell->pathNode); }
                         }
 
                         // What the common creature task asks of the level, in
@@ -2955,7 +2955,7 @@ namespace ALTEngine::Screens
                             const auto* cell = ALTEngine::Formats::CellAt(
                                 level, ToGridSpaceX(static_cast<float>(x), originX) >> 9,
                                 ToGridSpaceZ(static_cast<float>(z), originZ) >> 9);
-                            return cell ? static_cast<int>(cell->unknown7) : -1;
+                            return cell ? static_cast<int>(cell->pathNode) : -1;
                         };
                         aiWorld.nodeToward = [&](int node) { return flowField.Step(node, true); };
                         aiWorld.nodeAway = [&](int node) { return flowField.Step(node, false); };
@@ -3628,8 +3628,8 @@ namespace ALTEngine::Screens
                         auto ClearOccupancy = [&](int cellIdx) {
                             if (cellIdx < 0 || cellIdx >= static_cast<int>(level.collisionGrid.size())) { return; }
                             auto& cell = level.collisionGrid[static_cast<size_t>(cellIdx)];
-                            cell.unknown13 = 0;
-                            cell.unknown5 = 0;
+                            cell.occupancy = 0;
+                            cell.objectIndex = 0;
                         };
 
                         // Depth-limited so a room packed with barrels cannot
@@ -4097,7 +4097,7 @@ namespace ALTEngine::Screens
                                 }
                             };
                             if (cell->attribute == 0x14) { return 2; }
-                            const uint8_t object = cell->unknown13;
+                            const uint8_t object = cell->occupancy;
                             if (object == 0x15 || object == 0x1c || object == 0x1d)
                             {
                                 damageObject();
@@ -4351,11 +4351,11 @@ namespace ALTEngine::Screens
                         // for the only test that reads it.
                         if (lastCellIndex >= 0 && static_cast<size_t>(lastCellIndex) < level.collisionGrid.size())
                         {
-                            level.collisionGrid[static_cast<size_t>(lastCellIndex)].unknown13 = 0;
+                            level.collisionGrid[static_cast<size_t>(lastCellIndex)].occupancy = 0;
                         }
                         if (cellIndex >= 0 && static_cast<size_t>(cellIndex) < level.collisionGrid.size())
                         {
-                            level.collisionGrid[static_cast<size_t>(cellIndex)].unknown13 = 0xFF;
+                            level.collisionGrid[static_cast<size_t>(cellIndex)].occupancy = 0xFF;
                         }
                         lastCellIndex = cellIndex;
                     }

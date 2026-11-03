@@ -33,7 +33,7 @@ namespace ALTEngine::Game::Doors
 
             // Flag 0x40: the door starts open, its ceiling already raised by
             // the full travel and the mesh at that height.
-            const bool startsOpen = (door.unknown & 0x40) != 0;
+            const bool startsOpen = (door.flags & 0x40) != 0;
             const int ceilingUnits = startsOpen ? cellFloor + travel : cellFloor;
 
             DoorState ds;
@@ -59,6 +59,11 @@ namespace ALTEngine::Game::Doors
                 {
                     cell->floorHeight = static_cast<uint8_t>(cellFloor);
                     cell->ceilingHeight = static_cast<uint8_t>(ceilingUnits);
+                    // The frame: the first and last cell stay a wall to the
+                    // player however far the door opens (FUN_00029704 sets
+                    // +7 bit 0x80 on them), so the way through is the middle
+                    // two cells.
+                    if (step == 0 || step == 3) { cell->runtimeFlags |= Formats::CollisionNode::PLAYER_WALL; }
                 }
                 const int ci = Formats::CellIndex(level, cx, cz);
                 if (ci >= 0) { ds.cells[static_cast<size_t>(ds.cellCount++)] = static_cast<size_t>(ci); }
@@ -97,7 +102,7 @@ namespace ALTEngine::Game::Doors
                 const long long c = static_cast<long long>(door.cells[static_cast<size_t>(middle)]);
                 for (long long cell : { c, c - across, c + across })
                 {
-                    if (cell >= 0 && cell < size && level.collisionGrid[static_cast<size_t>(cell)].unknown13 != 0) { return true; }
+                    if (cell >= 0 && cell < size && level.collisionGrid[static_cast<size_t>(cell)].occupancy != 0) { return true; }
                 }
             }
             return false;

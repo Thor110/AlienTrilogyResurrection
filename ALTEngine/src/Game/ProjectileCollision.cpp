@@ -12,13 +12,13 @@ namespace ALTEngine::Game::ProjectileCollision
         if (!cell) { result.blocked = true; return result; }   // off the map: the task frees it
 
         auto hitObject = [&](int damage) {
-            result.objectHit = cell->unknown5;
+            result.objectHit = cell->objectIndex;
             result.damage = damage;
         };
 
         if (cell->attribute == 0x14) { result.blocked = true; return result; }
 
-        const uint8_t occupant = cell->unknown13;
+        const uint8_t occupant = cell->occupancy;
         if (occupant == 0x15)
         {
             if (projectileType == TYPE_SMARTGUN) { hitObject(strength); }
