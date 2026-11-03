@@ -58,6 +58,8 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <set>
+#include <filesystem>
+#include <fstream>
 #include <cmath>
 #include <limits>
 #include <optional>
@@ -169,6 +171,33 @@ namespace ALTEngine::Screens
             SDL_RenderLines(renderer, points.data(), static_cast<int>(points.size()));
             for (auto& p : points) { p.x += 1.0f; p.y += 1.0f; }
             SDL_RenderLines(renderer, points.data(), static_cast<int>(points.size()));
+        }
+
+        // TEMPORARY (Edward, after zip 108): with Face Index Display on, each
+        // Fire 1 press appends the face under the crosshair to FaceLog.txt
+        // beside the executable - the level, the face's vertices as the
+        // display shows them, then its number, texture, routine and corners -
+        // for listing faces by hand (data/LevelCleanupExtra.json). The corners
+        // place a face whether the level was cleaned or not. Take out once the
+        // lists are made.
+        void LogShotFace(const ALTEngine::Formats::LevelGeometry& level, const std::string& digits, int face)
+        {
+            if (face < 0 || static_cast<size_t>(face) >= level.quads.size()) { return; }
+            const auto& q = level.quads[static_cast<size_t>(face)];
+            std::string line = "L" + digits + "LEV " + std::to_string(q.a) + " " + std::to_string(q.b) + " " + std::to_string(q.c) + " "
+                             + std::to_string(q.d) + "    # face " + std::to_string(face) + " tex " + std::to_string(q.texIndex)
+                             + " routine " + std::to_string(q.flags) + " corners";
+            for (int v : { q.a, q.b, q.c, q.d })
+            {
+                if (v < 0 || static_cast<size_t>(v) >= level.vertices.size()) { continue; }
+                const auto& p = level.vertices[static_cast<size_t>(v)];
+                line += " (" + std::to_string(p.x) + " " + std::to_string(p.y) + " " + std::to_string(p.z) + ")";
+            }
+            const char* base = SDL_GetBasePath();
+            const std::filesystem::path path = std::filesystem::path(base ? base : "") / "FaceLog.txt";
+            std::ofstream out(path, std::ios::app);
+            out << line << "\n";
+            SDL_Log("FaceLog: %s", line.c_str());
         }
 
         int ToGridSpaceX(float worldX, float originX) { return static_cast<int>(std::lround(worldX + originX)); }
@@ -2459,6 +2488,7 @@ namespace ALTEngine::Screens
                     const bool fireHeld = keys[keyBindings.GetKey(InputAction::Fire1)] || mouseFire1;
                     const bool firePressed = fireHeld && !firePressedLastTick;
                     firePressedLastTick = fireHeld;
+                    if (firePressed && testingFaceIndex) { LogShotFace(level, digits, pickedFace); }   // TEMPORARY, see LogShotFace
 
                     // The swap happens at the bottom of the lower, out of sight.
                     // On the weapon's own (drawing-pass) rate, like its animation.

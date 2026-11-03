@@ -14,6 +14,9 @@
 //                         with Level Cleanup off; "points" are corners, and a
 //                         face all of whose corners are listed (within 3
 //                         units) goes - corners stay put, cleaned or not.
+//                         "rooms" names a tile (face number) of a sealed
+//                         room's door made of lift-door tiles: everything
+//                         behind it goes, crawled as a lift is but whole.
 //     --remainder <file>  where to list the lift faces kept because a sight
 //                         line reaches them, for checking by hand (default
 //                         ../Notes/level-cleanup-lift-remainder.md)
@@ -158,6 +161,7 @@ int main(int argc, char** argv)
         {
             const auto& e = extra["levels"][key];
             if (e.contains("faces")) { for (const auto& f : e["faces"]) { options.byHand.push_back(f.get<uint32_t>() + 1); } }   // face n is record n + 1
+            if (e.contains("rooms")) { for (const auto& f : e["rooms"]) { options.roomDoors.push_back(f.get<uint32_t>() + 1); } }
             if (e.contains("points"))
             {
                 std::vector<std::array<double, 3>> points;

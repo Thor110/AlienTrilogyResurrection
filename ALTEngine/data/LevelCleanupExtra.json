@@ -28,6 +28,72 @@
     4166
    ],
    "note": "Edward, zip 107: the two inner lifts (behind (32-36,16) and (16,31-36)) and (6,15), checked in play."
+  },
+  "SECT31/L323LEV.MAP": {
+   "faces": [
+    7109,
+    7112,
+    7118,
+    7123,
+    7128,
+    7135
+   ],
+   "note": "Edward, after zip 108: the lift behind the bottom door (cells 31-36,64), checked in play."
+  },
+  "SECT31/L322LEV.MAP": {
+   "faces": [
+    57,
+    83,
+    211,
+    3062,
+    3063,
+    3064,
+    3065,
+    3066,
+    3067,
+    3068,
+    3069,
+    3316,
+    3317,
+    3318,
+    3319,
+    3556,
+    3557,
+    3558,
+    3785,
+    3786,
+    3787,
+    4059,
+    4060,
+    4061,
+    4063,
+    4286,
+    4287,
+    4288,
+    4289,
+    5775,
+    5776,
+    5777,
+    5778,
+    5779,
+    5780,
+    5781,
+    5782,
+    5783,
+    5784,
+    5785,
+    5786,
+    5787,
+    5788,
+    6592,
+    6717,
+    7109,
+    7135
+   ],
+   "rooms": [
+    5864
+   ],
+   "note": "Edward, after zip 109 (FaceLog): the lift faces a sight line reached, and the central room behind the gate at (32-35,50), checked in play."
   }
  }
 }

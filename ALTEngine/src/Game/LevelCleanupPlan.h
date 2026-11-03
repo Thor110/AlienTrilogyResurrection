@@ -55,6 +55,10 @@ namespace ALTEngine::Game::LevelCleanupPlan
         // Face records to take out as well, picked by hand (data/
         // LevelCleanupExtra.json): faces the judging keeps, checked in play.
         std::vector<uint32_t> byHand;
+        // Door tiles (records) of sealed rooms named by hand: everything behind
+        // the door is crawled as a lift's is, with no size limit, and goes
+        // whole - unless the crawl reaches a cell the player can walk to.
+        std::vector<uint32_t> roomDoors;
     };
 
     // What else Make found, for the people checking its work.

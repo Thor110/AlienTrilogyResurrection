@@ -21,7 +21,9 @@ namespace ALTEngine::Game::LevelOcclusion
     //     cut-outs with no clear texel - see `solid`), and only faces one
     //     cell's run lists.
     //   - The eye can be anywhere over a cell the player reaches: over the
-    //     whole square (the walkable half of a diagonal cell), at any height
+    //     whole square (the walkable half of a diagonal cell; no nearer than
+    //     190 to a side that borders a wall cell, as the mover's 200-unit probe
+    //     keeps the player), at any height
     //     from a dying player's lowest (0x180 over the floor, less the bob's
     //     64) to a standing one's 0x300 over the highest floor round it, with
     //     slopes, a lift's whole travel and a Modern jump added.

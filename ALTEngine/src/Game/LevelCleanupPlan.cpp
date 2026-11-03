@@ -217,7 +217,8 @@ namespace ALTEngine::Game::LevelCleanupPlan
 
         // Step 3. Returns the records of every lift that can go.
         std::vector<uint32_t> Lifts(const std::vector<uint8_t>& bytes, const Layout& lay, const std::vector<uint8_t>& reach,
-                                    const std::vector<uint8_t>& solid, const std::vector<uint16_t>& doorTextures)
+                                    const std::vector<uint8_t>& solid, const std::vector<uint16_t>& doorTextures,
+                                    const std::vector<uint32_t>& roomDoors, std::vector<uint32_t>& roomsOut)
         {
             std::vector<uint32_t> out;
             if (doorTextures.empty()) { return out; }
@@ -315,6 +316,9 @@ namespace ALTEngine::Game::LevelCleanupPlan
             {
                 std::vector<size_t> tiles;
                 for (size_t r = 1; r < recordCount; ++r) { if (door[r] == g) { tiles.push_back(r); } }
+                // A door named by hand (a sealed room's): no size limit.
+                bool room = false;
+                for (size_t r : tiles) { room = room || std::find(roomDoors.begin(), roomDoors.end(), uint32_t(r)) != roomDoors.end(); }
                 bool allSolid = true;
                 double nx = 0, ny = 0, nz = 0, cx = 0, cy = 0, cz = 0;
                 int m = 0;
@@ -353,7 +357,7 @@ namespace ALTEngine::Game::LevelCleanupPlan
                     if (tooBig || isDoor(j) || got.count(j) || !behind(j)) { return; }
                     got.insert(j);
                     stack.push_back(j);
-                    if (got.size() > MOST_FACES) { tooBig = true; }
+                    if (!room && got.size() > MOST_FACES) { tooBig = true; }
                 };
                 for (size_t r : tiles) { touching(r, take); }
                 while (!stack.empty() && !tooBig)
@@ -367,10 +371,10 @@ namespace ALTEngine::Game::LevelCleanupPlan
                 for (size_t r : got)
                 {
                     if (owner[r] >= 0 && reach[size_t(owner[r])]) { ok = false; break; }
-                    for (const V3& p : corners[r]) { if (-side(p) > DEEPEST) { ok = false; } }
+                    for (const V3& p : corners[r]) { if (!room && -side(p) > DEEPEST) { ok = false; } }
                 }
                 if (!ok) { continue; }
-                for (size_t r : got) { out.push_back(uint32_t(r)); }
+                for (size_t r : got) { (room ? roomsOut : out).push_back(uint32_t(r)); }
             }
             std::sort(out.begin(), out.end());
             out.erase(std::unique(out.begin(), out.end()), out.end());
@@ -433,7 +437,14 @@ namespace ALTEngine::Game::LevelCleanupPlan
         // (a low eye can see in under a door's bottom edge in places). The
         // sight lines alone decide here, not the walk's cones.
         std::set<uint32_t> lift;
-        for (uint32_t r : Lifts(bytes, lay, reach, options.solid, options.liftDoorTextures)) { if (!remove.count(r)) { lift.insert(r); } }
+        std::vector<uint32_t> rooms;
+        for (uint32_t r : Lifts(bytes, lay, reach, options.solid, options.liftDoorTextures, options.roomDoors, rooms))
+        {
+            if (!remove.count(r)) { lift.insert(r); }
+        }
+        // Sealed rooms named by hand go whole: their doors were checked in play.
+        for (uint32_t r : rooms) { if (remove.insert(r).second) { ++plan.byHand; } }
+        plan.remove.assign(remove.begin(), remove.end());
         if (!lift.empty())
         {
             std::vector<uint32_t> found;

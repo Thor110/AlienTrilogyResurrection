@@ -1,6 +1,7 @@
 #include "LevelOcclusion.h"
 
 #include "CreatureSight.h"
+#include "PlayerMover.h"
 #include "../Formats/RenderMesh.h"
 
 #include <algorithm>
@@ -59,6 +60,7 @@ namespace ALTEngine::Game::LevelOcclusion
         constexpr uint8_t RUN_END = 0x80;
         constexpr double CELL = 512.0;
         constexpr double EDGE = 8.0;              // how near a cell's edge the eye is taken
+        constexpr double WALL_CLEARANCE = 190.0;  // how near a wall cell's edge (PlayerMover::PROBE_LEAD, 200, less some)
         constexpr double IN_FRONT = 1.0;          // a face is seen from a point this far in front of it
         // The strict pass counts a sight line as blocked only this far inside
         // a blocker's open edges: lines between the points tried could pass
@@ -350,6 +352,17 @@ namespace ALTEngine::Game::LevelOcclusion
             const int sx = int(s % size_t(L)), sz = int(s / size_t(L));
             const double cx0 = (sx - L / 2.0) * CELL, cz0 = (sz - W / 2.0) * CELL;
             e.x0 = cx0 + EDGE; e.x1 = cx0 + CELL - EDGE; e.z0 = cz0 + EDGE; e.z1 = cz0 + CELL - EDGE;
+            // The mover keeps the player's centre PROBE_LEAD (200) clear of a
+            // wall cell (it probes that far ahead and to each side), so the eye
+            // stays that far from a side of the cell that borders one.
+            auto wall = [&](int dx, int dz) {
+                const int j = Formats::CellIndex(level, sx + dx, sz + dz);
+                return j >= 0 && PlayerMover::WallAttribute(level.collisionGrid[size_t(j)].attribute);
+            };
+            if (wall(-1, 0)) { e.x0 = std::max(e.x0, cx0 + WALL_CLEARANCE); }
+            if (wall(1, 0)) { e.x1 = std::min(e.x1, cx0 + CELL - WALL_CLEARANCE); }
+            if (wall(0, -1)) { e.z0 = std::max(e.z0, cz0 + WALL_CLEARANCE); }
+            if (wall(0, 1)) { e.z1 = std::min(e.z1, cz0 + CELL - WALL_CLEARANCE); }
             const auto& g = level.collisionGrid[s];
             int lo = g.floorHeight, hi = g.floorHeight;
             static constexpr int STEP[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };

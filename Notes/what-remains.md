@@ -1,4 +1,4 @@
-# What remains (after zip 107)
+# What remains (after zip 110)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -17,6 +17,21 @@ Cleanup off (the vertex lists were taken with it on or off as marked; matched to
   27 the list named, 2961, 2962, 4163 and 4164 were not among them: still to look at.
 - **Texture to check, fix unsure** (vertices taken with the cleanup off): 6080 and 6081 (cell 36,52) and 6061 and
   6062 (cell 31,52), triangles with texture 126, routine 1.
+- **L322 and L323** have the same badly textured faces (Edward). L323: the lift behind the bottom door (cells
+  31-36,64), faces 7109, 7112, 7118, 7123, 7128 and 7135, taken out by hand too. L322 (Edward's FaceLog, zip
+  110): 57, 83, 211, 3062-3069, 3316-3319, 3556-3558, 3785-3787, 4059-4061, 4063, 4286-4289, 5775-5788, 6592,
+  6717, 7109 and 7135 by hand, and the central room behind the gate at (31-36, 50) (gate tiles 5864-5866,
+  5870-5872, 5876-5878, 5883-5885, z = 7936) as a `rooms` entry: every face crawled from the gate tile 5864
+  goes, about 1117 of them. Checked by dense sight lines from every reachable cell: none of them can be seen.
+- **The eye keeps clear of walls** (zip 110): the mover holds the player's centre PROBE_LEAD (200) short of a
+  wall cell, ahead and to each side, so the sight-line test now takes the eye no nearer than 190 to a side of
+  its cell that borders a wall cell (8 elsewhere). Before, an eye 49 units from the wall beside L322's gate saw
+  into the room through the gap at its left. It also lets a few more lift faces go on L322-L325 (14218 faces in
+  all, from 14158).
+- **Face logger (TEMPORARY):** with Testing > Face Index Display on, every Fire 1 press appends the face under the
+  crosshair to `FaceLog.txt` beside the executable: the level, the face's vertices as the display shows them, then
+  its number, texture, routine and corners (GameplayScreen's LogShotFace). The corners place a face whether the
+  level was cleaned or not. Take it out once the lists are made.
 - **Faces with no texture**, to look at once the other levels are checked: the triangles with texture 183 at the
   lift doors - 2949 (14,31), 2954 (15,31), 4151 (14,36), 4156 (15,36), 955 (31,14), 1118 (31,15), 976 (36,14),
   1131 (36,15), 4302 (53,36), 4297 (52,36), 3079 (53,31), 3074 (52,31). Routine 1, except 4151 and 4156 (5).
@@ -530,6 +545,32 @@ run start (bytes 0-3) and every face's vertex indices; set the dropped cells' ru
 the header counts and the MAP0 and FORM sizes; and renumber every Patches.json entry and review-log note that
 names a face of that level (the L321-L325 and L902 texture fixes do). Best done as one tool pass after the
 section 7 insertions, since both renumber the same lists. NOT done: Edward's call.
+
+## 6b2. Finishing the geometry cleanup (Edward's plan)
+
+1. Finish the list: the faces judged by ALTLevelCleanupList plus those picked by hand in play
+   (data/LevelCleanupExtra.json, logged with the temporary face logger).
+2. When the list is complete, ship it through Patches.json like every other fix: the face (and vertex) removals,
+   run starts and first-cell fixes written as Patches.json entries, applied with the fixes. Then
+   data/LevelCleanupList.json, data/LevelCleanupExtra.json, Bootstrap's ApplyLevelCleanup, the .untrimmed/.cleaned
+   swapping and the Testing > Level Cleanup option go.
+3. Do away with the working-out code once the list is compiled: Game/LevelCleanupPlan, Game/LevelOcclusion,
+   src/Tools/LevelCleanupListMain.cpp (ALTLevelCleanupList), CreatureSight::DrawnCellList if nothing else uses it,
+   and GameplayScreen's LogShotFace. Keep the record of how the list was made in these notes.
+4. Then bring the README.md, the patch folder's notes and ALTViewer up to date with it. Patches.json entries and
+   review-log notes that name a face or vertex of a trimmed level by number must be renumbered to match.
+
+## 6c. After the geometry cleanup: blank the texture space nothing uses (Edward)
+
+Once the level trimming is finished, every texture-page area that no face, model or sprite of that level (or of
+anything else that loads the same sheet) uses any more is to be filled with that sheet's background colour - as
+Edward already did for one texture, to stop purple edge bleed on some faces. Two gains: no bleed from unused
+neighbours at the edges of a face's rectangle, and long runs of one repeated byte, which the planned fork into a
+sieve cache loading engine (a compression engine that turns long repeats into instructions) will shrink to almost
+nothing. To work out: which pages each level's faces, animated textures (the animator's frame lists) and models
+reach, through their BX rectangles; which sheets are shared between levels or with the models and HUD; what each
+sheet's background colour is; and whether it is done as a tool writing patches into Patches.json (as the fixes
+are) or as part of the Level Cleanup's plan.
 
 ## 7. The final step: missing faces, then a triple check of the textures
 
