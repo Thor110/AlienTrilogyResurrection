@@ -1,0 +1,8 @@
+L162LEV - patches made by ALTEngine and ALTViewer. Why each one was made is in its note below; the screenshots are in README.md (Before And After Screenshots).
+
+==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
+Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
+
+Patch 6: L162LEV.MAP - D001 - incorrect texture index
+  0x3205C: 69 -> 67

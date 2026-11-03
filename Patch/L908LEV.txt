@@ -11,3 +11,12 @@ unchanged.
 Face	Offset		Scan	Change	Was					Now
 7758	0x3FA14	908-1	a half-turn	1990, 2001, 2000, 1989	->	2000, 1989, 1990, 2001
 11010	0x4F824	908-12	a half-turn	910, 933, 942, 909	->	942, 909, 910, 933
+
+
+==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
+Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
+
+Patch 38: L908LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L908LEV.txt) (Claude, 2026)
+  0x3FA14: C6 07 00 00 D1 07 00 00 D0 07 00 00 C5 07 00 00 -> D0 07 00 00 C5 07 00 00 C6 07 00 00 D1 07 00 00
+  0x4F824: 8E 03 00 00 A5 03 00 00 AE 03 00 00 8D 03 00 00 -> AE 03 00 00 8D 03 00 00 8E 03 00 00 A5 03 00 00

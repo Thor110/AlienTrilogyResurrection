@@ -11,3 +11,12 @@ unchanged.
 Face	Offset		Scan	Change	Was					Now
 1798	0x1291C	352-1	a half-turn	886, 876, 877, 867	->	877, 867, 886, 876
 1846	0x12CDC	352-2	a half-turn	725, 716, 717, 726	->	717, 726, 725, 716
+
+
+==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
+Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
+
+Patch 32: L352LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L352LEV.txt) (Claude, 2026)
+  0x1291C: 76 03 00 00 6C 03 00 00 6D 03 00 00 63 03 00 00 -> 6D 03 00 00 63 03 00 00 76 03 00 00 6C 03 00 00
+  0x12CDC: D5 02 00 00 CC 02 00 00 CD 02 00 00 D6 02 00 00 -> CD 02 00 00 D6 02 00 00 D5 02 00 00 CC 02 00 00

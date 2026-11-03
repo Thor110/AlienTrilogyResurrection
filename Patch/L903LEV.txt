@@ -38,3 +38,64 @@ The end room's floor, as L141's (Claude, 2026)
 L903 is made from L141 and has the same room with the same faces, vertices and offsets: its floor is
 laid the same way, and 903GFX.B16 gets the same two slices - see Patch/L141LEV.txt, "The end room's floor", for
 the faces, slots and bytes.
+
+
+==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
+Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
+
+Patch 42: L903LEV.MAP - four cells lost their wall attribute when the level was made from L141LEV: two pillars at (11,43) and (11,48) could be walked into; restored to L141's values (Claude, 2026)
+  0x69002: 00 -> 14
+  0x69502: 00 -> 14
+  0x6AE52: 00 -> 14
+  0x6E862: 00 -> 15
+
+Patch 46: L903LEV.MAP - 10 Weyland-Yutani and grey crate faces (the same faces as L141LEV) with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L903LEV.txt) (Edward, 2026; Claude, 2026)
+  0x28B94: DB 00 -> DC 00
+  0x3117C: DA 00 -> D9 00
+  0x31190: C1 00 -> 7F 00
+  0x397B4: D9 00 -> FF 00
+  0x397C8: D9 00 -> FF 00
+  0x3990C: DE 23 00 00 B4 2A 00 00 B8 23 00 00 B7 23 00 00 -> B7 23 00 00 DE 23 00 00 B4 2A 00 00 B8 23 00 00
+  0x3F8E8: 2E 23 00 00 2F 23 00 00 65 23 00 00 68 23 00 00 -> 2F 23 00 00 65 23 00 00 68 23 00 00 2E 23 00 00
+  0x42F34: 36 28 00 00 5E 21 00 00 3A 28 00 00 39 28 00 00 -> 39 28 00 00 36 28 00 00 5E 21 00 00 3A 28 00 00
+  0x42F44: E2 00 -> E0 00
+  0x42F70: 39 28 00 00 3A 28 00 00 3B 28 00 00 38 28 00 00 -> 3A 28 00 00 3B 28 00 00 38 28 00 00 39 28 00 00
+  0x42F80: E1 00 -> E0 00
+  0x42F94: 55 00 -> E1 00
+
+Patch 56: L903LEV.MAP - the same three faces as L141LEV.MAP (2735, 2736, 2196), same geometry at the same offsets. Tracked in Notes/uv-review-log.md
+  0x28B80: DF 00 -> D9 00
+  0x28B84: F8 09 00 00 00 0A 00 00 E2 09 00 00 ED 08 00 00 -> E2 09 00 00 ED 08 00 00 F8 09 00 00 00 0A 00 00
+  0x28B96: 00 -> 02
+  0x26164: 00 00 -> E1 00
+
+Patch 64: L903LEV.MAP - the same room's floor as L141's (L903 is made from L141, the same faces and vertices) laid as the pattern its first row shows and as L111's spawn floor is laid (Edward, FaceLog, 2026): the floor is a strip picture 128 x 32 cut into four 32-texel slices - an end, two different middles, the other end - used in order and unturned (L111: textures 299, 300, 301, 302). L141's sheet held only the first two (221, 222), so the room repeated one middle and turned the ends about, and the weave broke at every join. The two missing slices are now in 141GFX/903GFX's unused slots 223 and 246 (see the GFX entries); each of the first four rows becomes 221, 222, 223, 246 across the room, each tile's corners turned (a rotation, so it still faces up) to run as row 1's do. The last row (faces 67, 97, 112, 127) becomes texture 73. See Patch/L141LEV.txt and Patch/L903LEV.txt (Claude, 2026)
+  0x1B6C4: DE 00 -> DF 00
+  0x1B718: AA 2B 00 00 A6 2B 00 00 A9 2B 00 00 AB 2B 00 00 -> A6 2B 00 00 A9 2B 00 00 AB 2B 00 00 AA 2B 00 00
+  0x1B728: DD 00 -> F6 00
+  0x1B7B8: B2 2B 00 00 B1 2B 00 00 B7 2B 00 00 B8 2B 00 00 -> B8 2B 00 00 B2 2B 00 00 B1 2B 00 00 B7 2B 00 00
+  0x1B7C8: DE 00 -> DD 00
+  0x1B81C: B0 2B 00 00 B3 2B 00 00 B1 2B 00 00 B2 2B 00 00 -> B2 2B 00 00 B0 2B 00 00 B3 2B 00 00 B1 2B 00 00
+  0x1B844: B3 2B 00 00 B0 2B 00 00 A7 2B 00 00 A6 2B 00 00 -> B0 2B 00 00 A7 2B 00 00 A6 2B 00 00 B3 2B 00 00
+  0x1B854: DE 00 -> DF 00
+  0x1B86C: A6 2B 00 00 A7 2B 00 00 A8 2B 00 00 A9 2B 00 00 -> A7 2B 00 00 A8 2B 00 00 A9 2B 00 00 A6 2B 00 00
+  0x1B87C: DE 00 -> F6 00
+  0x1B8D0: AC 2B 00 00 B2 2B 00 00 B8 2B 00 00 B9 2B 00 00 -> B9 2B 00 00 AC 2B 00 00 B2 2B 00 00 B8 2B 00 00
+  0x1B8E0: DE 00 -> DD 00
+  0x1B934: AF 2B 00 00 B0 2B 00 00 B2 2B 00 00 AC 2B 00 00 -> AC 2B 00 00 AF 2B 00 00 B0 2B 00 00 B2 2B 00 00
+  0x1B95C: B0 2B 00 00 AF 2B 00 00 A2 2B 00 00 A7 2B 00 00 -> AF 2B 00 00 A2 2B 00 00 A7 2B 00 00 B0 2B 00 00
+  0x1B96C: DE 00 -> DF 00
+  0x1B984: A7 2B 00 00 A2 2B 00 00 A5 2B 00 00 A8 2B 00 00 -> A2 2B 00 00 A5 2B 00 00 A8 2B 00 00 A7 2B 00 00
+  0x1B994: DE 00 -> F6 00
+  0x1B9E8: AD 2B 00 00 AC 2B 00 00 B9 2B 00 00 BA 2B 00 00 -> BA 2B 00 00 AD 2B 00 00 AC 2B 00 00 B9 2B 00 00
+  0x1B9F8: DE 00 -> DD 00
+  0x1BA4C: AE 2B 00 00 AF 2B 00 00 AC 2B 00 00 AD 2B 00 00 -> AD 2B 00 00 AE 2B 00 00 AF 2B 00 00 AC 2B 00 00
+  0x1BA74: AF 2B 00 00 AE 2B 00 00 A3 2B 00 00 A2 2B 00 00 -> AE 2B 00 00 A3 2B 00 00 A2 2B 00 00 AF 2B 00 00
+  0x1BA84: DE 00 -> DF 00
+  0x1BA9C: A2 2B 00 00 A3 2B 00 00 A4 2B 00 00 A5 2B 00 00 -> A3 2B 00 00 A4 2B 00 00 A5 2B 00 00 A2 2B 00 00
+  0x1BAAC: DE 00 -> F6 00
+  0x1BB10: DD 00 -> 49 00
+  0x1BD68: DE 00 -> 49 00
+  0x1BE94: DE 00 -> 49 00
+  0x1BFC0: DD 00 -> 49 00

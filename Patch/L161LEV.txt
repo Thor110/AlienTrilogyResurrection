@@ -24,3 +24,28 @@ stays on record: "face N's UVs as a,b,c,d" means corner k took corner p[k] of fa
 
 Face	Offset		Old export remap		Change				Was						Now
 3505	0x28A58		face 3315's UVs as 2,3,0,1		texture of face 3315 and a half-turn		325, 324, 327, 331 tex 213 flag 0	->	327, 331, 325, 324 tex 214 flag 0
+
+
+==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
+Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
+
+Patch 7: L161LEV.MAP - D002 - incorrect texture index
+  0x72800: 4F -> D3
+  0x72801: 01 -> 00
+  0x72802: 0B -> 00
+
+Patch 21: L161LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L161LEV.txt) (Claude, 2026)
+  0x19A1C: 1D 0E 00 00 16 0E 00 00 17 0E 00 00 1C 0E 00 00 -> 17 0E 00 00 1C 0E 00 00 1D 0E 00 00 16 0E 00 00
+  0x19A2E: 02 -> 00
+  0x327EC: 68 27 00 00 69 27 00 00 0F 28 00 00 67 27 00 00 -> 67 27 00 00 68 27 00 00 69 27 00 00 0F 28 00 00
+
+Patch 47: L161LEV.MAP - 1 the secretion-covered wall with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L161LEV.txt) (Edward, 2026; Claude, 2026)
+  0x28A58: 45 01 00 00 44 01 00 00 47 01 00 00 4B 01 00 00 -> 47 01 00 00 4B 01 00 00 45 01 00 00 44 01 00 00
+  0x28A68: D5 00 -> D6 00
+
+Patch 57: L161LEV.MAP - face 3758 as shipped: (8645, 8646, 8655, -1), texture 1, routine 1, light 0x08 - the triangle of face 3757 drawn a second time. An earlier patch gave it over to the missing quad between faces 0, 29, 36 and 40; that quad is record 0, the first face of the first cell's run, which the Level Cleanup now gives back with the cell, so this sets 3758 back (on a fresh install it is already so) and the Level Cleanup takes it out as a duplicate. Tracked in Notes/uv-review-log.md
+  0x29E1C: C5 21 00 00 C6 21 00 00 CF 21 00 00 FF FF FF FF -> C5 21 00 00 C6 21 00 00 CF 21 00 00 FF FF FF FF
+  0x29E2C: 01 00 -> 01 00
+  0x29E2E: 01 -> 01
+  0x29E2F: 08 -> 08

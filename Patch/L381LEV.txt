@@ -10,3 +10,11 @@ unchanged.
 
 Face	Offset		Scan	Change	Was					Now
 100	0x15E2C	381-1	three quarter-turns	7351, 8834, 7453, 7449	->	7449, 7351, 8834, 7453
+
+
+==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
+Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
+
+Patch 35: L381LEV.MAP - texture orientation: 1 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L381LEV.txt) (Claude, 2026)
+  0x15E2C: B7 1C 00 00 82 22 00 00 1D 1D 00 00 19 1D 00 00 -> 19 1D 00 00 B7 1C 00 00 82 22 00 00 1D 1D 00 00

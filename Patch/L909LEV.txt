@@ -49,3 +49,28 @@ Cell		Offset		Was	Now
 (80,40)		0x51E8E		00	01
 
 Applied by ALTEngine (data/Patches.json) and by ALTViewer's patch button.
+
+
+==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
+Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
+
+Patch 39: L909LEV.MAP - the start room stays sealed: the four cells past its doorway, (5,37)-(5,40), are attribute 1 again, a solid wall at load (0x282f5), as shipped. An earlier patch opened them for testing; the room is the multiplayer players' holding room (its lift carries developer graffiti, "RIPLEY WOZ ERE" and the like), and multiplayer starts and Level Select on a multiplayer map now put the player at a path node. This sets back an install the earlier patch changed; on a fresh one it is already in place - see Patch/L909LEV.txt (Claude, 2026)
+  0x5083E: 01 -> 01
+  0x50E1E: 01 -> 01
+  0x513FE: 01 -> 01
+  0x519DE: 01 -> 01
+
+Patch 40: L909LEV.MAP - the second holding room, the start room's mirror at the corridor's east end (82-84, 37-40), is sealed as the first is: the four cells in front of its painted lift door, (80,37)-(80,40), had attribute 0, so a player could walk through the painted door, open the real door behind it (door 0 at (81,38)) and into a room the level never uses. Attribute 1, a solid wall at load, as (5,37)-(5,40) are at the other end. Both rooms are then trimmed by the Level Cleanup - see Patch/L909LEV.txt (Claude, 2026)
+  0x50CEE: 00 -> 01
+  0x512CE: 00 -> 01
+  0x518AE: 00 -> 01
+  0x51E8E: 00 -> 01
+
+Patch 41: L909LEV.MAP - texture orientation: 5 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L909LEV.txt) (Claude, 2026)
+  0x1AE0A: 00 -> 02
+  0x26090: 38 03 00 00 35 03 00 00 37 03 00 00 36 03 00 00 -> 37 03 00 00 36 03 00 00 38 03 00 00 35 03 00 00
+  0x29150: B2 16 00 00 BB 16 00 00 BA 16 00 00 AD 16 00 00 -> AD 16 00 00 B2 16 00 00 BB 16 00 00 BA 16 00 00
+  0x29162: 00 -> 02
+  0x30504: 9F 1A 00 00 AB 1A 00 00 AA 1A 00 00 9D 1A 00 00 -> AA 1A 00 00 9D 1A 00 00 9F 1A 00 00 AB 1A 00 00
+  0x42524: C9 19 00 00 34 17 00 00 33 17 00 00 C5 19 00 00 -> 34 17 00 00 33 17 00 00 C5 19 00 00 C9 19 00 00

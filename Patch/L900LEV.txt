@@ -28,3 +28,50 @@ Face	Offset		Old export remap		Change				Was						Now
 6527	0x37C38		its own UVs as 1,2,3,0		three quarter-turns		11640, 11632, 11669, 11653 tex 194 flag 0	->	11653, 11640, 11632, 11669 tex 194 flag 0
 3622	0x29944		its own UVs as 2,3,0,1		a half-turn		5659, 5818, 5657, 5656 tex 193 flag 0	->	5657, 5656, 5659, 5818 tex 193 flag 0
 7780	0x3DE1C		its own UVs as 2,3,0,1		a half-turn		2002, 1995, 2016, 2015 tex 193 flag 0	->	2016, 2015, 2002, 1995 tex 193 flag 0
+
+
+==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
+Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
+
+Patch 3: L111LEV.MAP - incorrect texture flags
+  0x2E33E: 04 -> 00
+  0x2F3E2: 04 -> 00
+  0x2F40A: 04 -> 00
+  0x2F432: 04 -> 00
+  0x307BA: 04 -> 00
+  0x307E2: 04 -> 00
+  0x3080A: 04 -> 00
+  0x2EE92: 04 -> 00
+  0x38D7A: 04 -> 00
+  0x38D66: 04 -> 00
+  0x30936: 04 -> 00
+  0x30922: 04 -> 00
+
+Patch 5: L111LEV.MAP - incorrect texture flags
+  0x3054E: 04 -> 02
+  0x3053A: 04 -> 02
+  0x391DA: 04 -> 02
+  0x391C6: 04 -> 02
+
+Patch 12: L900LEV.MAP - misplaced vertex coordinate (lift), same bug as L111LEV.MAP at the identical offset - Edward, 2026
+  0x14EFA: 1E 00 -> 00 00
+
+Patch 14: L900LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38), and the face's texture turned a quarter-turn counter-clockwise by rotating its vertex list (8052, 8049, 8113 -> 8049, 8113, 8052), same bug as L111LEV.MAP at the identical offset - see Patch/another-fix.txt Turned once more counter-clockwise in the UV review (Edward, 2026): now (8113, 8052, 8049), the one rotation not tried before - the original (8052, 8049, 8113) and the earlier quarter-turn (8049, 8113, 8052) both left the texture streaked.
+  0x46DB4: 74 1F 00 00 71 1F 00 00 B1 1F 00 00 FF FF FF FF -> B1 1F 00 00 74 1F 00 00 71 1F 00 00 FF FF FF FF
+  0x46DC4: F1 -> 38
+
+Patch 17: L900LEV.MAP - starting lift panel (face 10208, vertices 10759, 10760, 10756, 10755) mirrored the wrong way: flag byte 0x00 -> 0x02, its mirrored partner (Edward, 2026), same bug as L111LEV.MAP at the identical offset - see Patch/L900LEV.txt
+  0x49BCA: 00 -> 02
+
+Patch 44: L900LEV.MAP - 4 crate faces (the same faces as L111LEV) with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L900LEV.txt) (Edward, 2026; Claude, 2026)
+  0x1D154: C1 00 -> C2 00
+  0x37C38: 78 2D 00 00 70 2D 00 00 95 2D 00 00 85 2D 00 00 -> 85 2D 00 00 78 2D 00 00 70 2D 00 00 95 2D 00 00
+  0x29944: 1B 16 00 00 BA 16 00 00 19 16 00 00 18 16 00 00 -> 19 16 00 00 18 16 00 00 1B 16 00 00 BA 16 00 00
+  0x3DE1C: D2 07 00 00 CB 07 00 00 E0 07 00 00 DF 07 00 00 -> E0 07 00 00 DF 07 00 00 D2 07 00 00 CB 07 00 00
+
+Patch 60: L900LEV.MAP - the same two faces as L111LEV.MAP at the identical offsets: face 4150 flipped vertically ((c, d, a, b), routine 0 -> 2), face 6528 texture 194 turned a quarter-turn counter-clockwise - Edward, 2026
+  0x2C284: 6A 16 00 00 93 16 00 00 FD 15 00 00 FC 15 00 00 -> FD 15 00 00 FC 15 00 00 6A 16 00 00 93 16 00 00
+  0x2C296: 00 -> 02
+  0x37C4C: 88 2D 00 00 84 2D 00 00 85 2D 00 00 95 2D 00 00 -> 84 2D 00 00 85 2D 00 00 95 2D 00 00 88 2D 00 00
+  0x37C5C: C6 00 -> C2 00

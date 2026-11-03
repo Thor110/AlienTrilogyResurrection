@@ -19,3 +19,12 @@ Offset		Was						Now
 
 Only L112LEV has these faces.
 Applied by ALTEngine (data/Patches.json) and by ALTViewer's patch button.
+
+
+==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
+Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
+
+Patch 15: L112LEV.MAP - a corner of the sloped base under the hanging sign was covered twice: triangle 5843 (985, 981, 920) and, over exactly the same area, a tex 0 triangle 5849 (13158, 985, 13159) and a strip 5850 (13158, 13159, 981, 920). The two fought for the same pixels, showing pale tex 0 slivers. 5849 and 5850 are made zero-area by pointing every corner at vertex 985, leaving 5843 - see Patch/L112LEV.txt
+  0x3AFA8: 66 33 00 00 D9 03 00 00 67 33 00 00 FF FF FF FF -> D9 03 00 00 D9 03 00 00 D9 03 00 00 FF FF FF FF
+  0x3AFBC: 66 33 00 00 67 33 00 00 D5 03 00 00 98 03 00 00 -> D9 03 00 00 D9 03 00 00 D9 03 00 00 D9 03 00 00

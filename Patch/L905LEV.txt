@@ -65,3 +65,67 @@ unchanged.
 Face	Offset		Scan	Change	Was					Now
 None	0x23858	905-1	mirrored	6639, 6636, 6641, 6642	->	6639, 6636, 6641, 6642	flag 2 (0x02)		flag 0 (0x00)
 1673	0x238D0	905-1	mirrored	6649, 6642, 6643, 6650	->	6649, 6642, 6643, 6650	flag 2 (0x02)		flag 0 (0x00)
+
+
+==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
+Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
+
+Patch 1: L905LEV.MAP
+  0x56ADA: 02 -> 00
+  0x57A8E: 02 -> 00
+  0x41356: 02 -> 00
+  0x4645A: 02 -> 00
+  0x46432: 02 -> 00
+  0x4A8F2: 02 -> 00
+  0x50F4A: 02 -> 00
+  0x5186E: 02 -> 00
+  0x5211A: 02 -> 00
+  0x50FC2: 02 -> 00
+  0x51896: 02 -> 00
+  0x52142: 02 -> 00
+  0x51012: 02 -> 00
+  0x518BE: 02 -> 00
+  0x5216A: 02 -> 00
+  0x5103A: 02 -> 00
+  0x518E6: 02 -> 00
+  0x52192: 02 -> 00
+  0x42C42: 02 -> 00
+  0x4434E: 02 -> 00
+  0x44222: 02 -> 00
+  0x44236: 02 -> 00
+  0x42B2A: 02 -> 00
+  0x4410A: 02 -> 00
+  0x42B66: 02 -> 00
+  0x42B7A: 02 -> 00
+  0x42B8E: 02 -> 00
+  0x442AE: 02 -> 00
+  0x42BCA: 02 -> 00
+  0x42BF2: 02 -> 00
+  0x462B6: 02 -> 00
+  0x4619E: 02 -> 00
+  0x461DA: 02 -> 00
+  0x461EE: 02 -> 00
+  0x46216: 02 -> 00
+  0x4622A: 02 -> 00
+  0x46266: 02 -> 00
+  0x48796: 02 -> 00
+  0x4867E: 02 -> 00
+  0x48692: 02 -> 00
+  0x49E52: 02 -> 00
+  0x49D3A: 02 -> 00
+  0x49D76: 02 -> 00
+  0x49D8A: 02 -> 00
+  0x49D9E: 02 -> 00
+  0x49DDA: 02 -> 00
+  0x49E16: 02 -> 00
+  0x488C2: 02 -> 00
+  0x487AA: 02 -> 00
+  0x487D2: 02 -> 00
+  0x462F2: 02 -> 00
+  0x4632E: 02 -> 00
+  0x4637E: 02 -> 00
+
+Patch 37: L905LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L905LEV.txt) (Claude, 2026)
+  0x2386A: 02 -> 00
+  0x238E2: 02 -> 00

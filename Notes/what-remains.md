@@ -653,5 +653,11 @@ smaller (LZMA 19.1%). Report: `Notes/texture-use.md`. The whole routine, in orde
    the review log, and ALTViewer's fixer.
 4. **Triple check the textures:** every level once more with the Face Index Display after the insertions, the
    texture scan run again on the patched files, and the multiplayer copies checked against their campaign levels.
-5. **Bring the rest up to date in one pass:** `Patch/LxxxLEV.txt`, the README, and ALTViewer's fixer (none of the
-   UV review's fixes are in it yet).
+5. **Bring the rest up to date in one pass - done (zip 121).** Every `Patch/LxxxLEV.txt` (and new 141GFX, 371GFX,
+   903GFX, L131LEV, L162LEV and L232LEV files) ends with every patch to that file in bytes, shipped -> patched, made
+   from Patches.json. ALTViewer's fixer has patches 49-64 (the UV reviews, L161's face 3758 put back, L141/L903's end
+   room floor and its sheet slices) and patch 13/14's second quarter-turn, and shows its button until L903's floor is
+   in. The README has before and after screenshots of every patch, the cleanup and the blanking
+   (`Images/<level>/`), made by ALTEngine's renderer from an untouched copy of the shipped levels. The byte counts
+   (`Notes/patching-byte-counts.md`) were measured again from that copy: the first level set used had 13 files that
+   already carried patches 0-19.

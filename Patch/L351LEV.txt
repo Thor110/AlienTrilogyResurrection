@@ -34,3 +34,33 @@ Face	Offset		Scan	Change	Was					Now
 8713	0x43D30	351-13	mirrored and a half-turn	9847, 9845, 9869, 9875	->	9869, 9875, 9847, 9845	flag 2 (0x02)		flag 0 (0x00)
 10389	0x4C020	351-4	a half-turn	7024, 7019, 7017, 7023	->	7017, 7023, 7024, 7019
 11998	0x53DD4	351-7	mirrored and a half-turn	7403, 7397, 7400, 7404	->	7400, 7404, 7403, 7397	flag 2 (0x02)		flag 0 (0x00)
+
+
+==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
+Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
+
+Patch 18: L351LEV.MAP - resin wall top row: two corner faces rotated, two centre faces mirrored the wrong way (Claude, 2026)
+  0x1A264: 0C 0B 00 00 09 0B 00 00 0D 07 00 00 0D 0B 00 00 -> 09 0B 00 00 0D 07 00 00 0D 0B 00 00 0C 0B 00 00
+  0x1A276: 1E -> 20
+  0x1A2EE: 1E -> 20
+  0x1A366: 20 -> 1E
+  0x1A3F4: 07 0B 00 00 0A 0B 00 00 EB 06 00 00 EA 06 00 00 -> EA 06 00 00 07 0B 00 00 0A 0B 00 00 EB 06 00 00
+  0x1A406: 20 -> 1E
+
+Patch 31: L351LEV.MAP - texture orientation: 10 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L351LEV.txt) (Claude, 2026)
+  0x27144: D9 17 00 00 EA 17 00 00 D4 17 00 00 CF 17 00 00 -> EA 17 00 00 D4 17 00 00 CF 17 00 00 D9 17 00 00
+  0x29944: 1F 09 00 00 1E 09 00 00 10 09 00 00 12 09 00 00 -> 1E 09 00 00 10 09 00 00 12 09 00 00 1F 09 00 00
+  0x2CDB0: B5 17 00 00 93 16 00 00 91 16 00 00 B2 17 00 00 -> 91 16 00 00 B2 17 00 00 B5 17 00 00 93 16 00 00
+  0x2CDC2: 00 -> 02
+  0x2DC10: 93 16 00 00 8D 16 00 00 8B 16 00 00 91 16 00 00 -> 8B 16 00 00 91 16 00 00 93 16 00 00 8D 16 00 00
+  0x2DC22: 02 -> 00
+  0x2EF82: 02 -> 00
+  0x319A0: B8 00 00 00 BE 00 00 00 CC 00 00 00 BA 00 00 00 -> CC 00 00 00 BA 00 00 00 B8 00 00 00 BE 00 00 00
+  0x319B2: 00 -> 02
+  0x43BC8: 09 12 00 00 0A 12 00 00 B7 11 00 00 B8 11 00 00 -> B8 11 00 00 09 12 00 00 0A 12 00 00 B7 11 00 00
+  0x43D30: 77 26 00 00 75 26 00 00 8D 26 00 00 93 26 00 00 -> 8D 26 00 00 93 26 00 00 77 26 00 00 75 26 00 00
+  0x43D42: 02 -> 00
+  0x4C020: 70 1B 00 00 6B 1B 00 00 69 1B 00 00 6F 1B 00 00 -> 69 1B 00 00 6F 1B 00 00 70 1B 00 00 6B 1B 00 00
+  0x53DD4: EB 1C 00 00 E5 1C 00 00 E8 1C 00 00 EC 1C 00 00 -> E8 1C 00 00 EC 1C 00 00 EB 1C 00 00 E5 1C 00 00
+  0x53DE6: 02 -> 00
