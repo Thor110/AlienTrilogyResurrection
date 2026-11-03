@@ -739,3 +739,18 @@ and CD folders: it crashed, the SELECT button could not be clicked, and the path
 - **Repackaged releases are not supported** (Edward, 2026). Tested on the Collection Chamber release (zip 128): no
   crash, but its copy under HDD\TRILOGY lacks some of the disc's files (SFX/SYNHIT8.RAW and others), so the install
   stops. The message now says so and names what does work: the disc, a mounted image of it, or a full copy of its files.
+
+## The boot on the MU/TH/UR screen (zip 129)
+
+Everything the boot prints - the locator, the install from a disc or an installation, the music rip, the model
+removals, the patches, the Level Cleanup and the texture blanking - is traced out on the game window in the MU/TH/UR
+style (Bootstrap/MuthurConsole: std::cout teed, so the command window still gets every line, behind - to be hidden or
+removed later). Headline lines type out a character at a time; the per-file lines (indented) show dim and at once,
+so a full install is not slowed. Any key or click skips the typing. After an install it waits for a key ("PRESS ANY
+KEY TO CONTINUE."); an ordinary start holds for under a second (about 2.3 s in all, the six summary lines typed).
+Closing the window during it ends the boot.
+- **Later: make the readout easier to read** (Edward, 2026). Its lines are the command window's, written for
+  debugging and too verbose for players: e.g. "[cleaned] SECT90/L906LEV.MAP: 76 faces (28 out of view, 44 facing
+  away, 0 in sealed lifts, 4 hidden) and 87 vertices taken out, first cell's 8 faces restored". Give the MU/TH/UR
+  screen its own short wording (one line per step, the counts that matter), and keep the long form for the log.
+  Rows wrap after the last comma that fits (zip 130), so a count stays with its word.

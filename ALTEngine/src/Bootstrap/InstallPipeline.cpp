@@ -2,6 +2,7 @@
 #include "Config.h"
 #include "PlatformPaths.h"
 #include "TestingSettings.h"
+#include "MuthurConsole.h"
 
 #include "../Game/LevelCleanup.h"
 #include "../Game/TextureBlank.h"
@@ -460,6 +461,8 @@ namespace ALTEngine::Bootstrap
 
     bool InstallFromDisc(const std::filesystem::path& discRoot, const std::filesystem::path& destination)
     {
+        // An install is read on the MU/TH/UR readout to the end, so it waits for a key.
+        MuthurConsole::WaitForKeyAtEnd();
         std::cout << "Installing from disc (" << discRoot.string() << ") to " << destination.string() << "...\n";
 
         std::filesystem::path manifestPath = ExecutableDirectory() / "data" / "DiscFileManifest.json";

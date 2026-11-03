@@ -349,6 +349,7 @@ add_executable(ALTEngine
     ${ALTENGINE_MANIFEST_RC}
     src/main.cpp
     src/Bootstrap/DirectoryBrowser.cpp
+    src/Bootstrap/MuthurConsole.cpp
     src/Bootstrap/GameLocator.cpp
     src/Bootstrap/Config.cpp
     src/Bootstrap/ImageDisplay.cpp

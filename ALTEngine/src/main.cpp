@@ -3,6 +3,7 @@
 
 #include "Audio/SfxPlayer.h"
 #include "Bootstrap/FsUtil.h"
+#include "Bootstrap/MuthurConsole.h"
 #include "Bootstrap/ModernSettings.h"
 #include "Bootstrap/AppWindow.h"
 #include "Bootstrap/Config.h"
@@ -172,6 +173,11 @@ int main(int, char**)
 #ifndef ALTENGINE_VERSION
 #define ALTENGINE_VERSION "unknown"
 #endif
+    // The boot's readout, on the game window (MU/TH/UR style) as well as the
+    // command window: finding the game, installing it, the patches. Ends,
+    // and gives the window back, after RunPatches below.
+    std::optional<ALTEngine::Bootstrap::MuthurConsole> muthur;
+    muthur.emplace("MU/TH/UR 9000 - ALTENGINE " ALTENGINE_VERSION);
     std::cout << "ALTEngine " ALTENGINE_VERSION " boot starting...\n";
 
     Config config;
@@ -198,6 +204,8 @@ int main(int, char**)
     if (!result.success)
     {
         std::cout << "No install directory selected. Aborting.\n";
+        ALTEngine::Bootstrap::MuthurConsole::WaitForKeyAtEnd();
+        muthur.reset();
         ALTEngine::Renderer::ModelRenderer::Shutdown();
         AppWindow::Instance().Shutdown();
         PauseBeforeExit();
@@ -214,6 +222,13 @@ int main(int, char**)
     // bytes first, so one already in place is left alone ("already applied")
     // and the pass costs a few file reads.
     RunPatches(cdDirectory);
+    muthur.reset();
+    if (ALTEngine::Bootstrap::MuthurConsole::QuitRequested())
+    {
+        ALTEngine::Renderer::ModelRenderer::Shutdown();
+        AppWindow::Instance().Shutdown();
+        return 0;
+    }
 
     // The player's loadout, owned here so it can persist across levels.
     ALTEngine::Screens::PlayerInventoryState playerInventory;
