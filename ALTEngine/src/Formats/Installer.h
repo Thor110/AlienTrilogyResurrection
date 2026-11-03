@@ -20,6 +20,7 @@ namespace ALTEngine::Formats
     {
         bool success = true;
         std::vector<std::string> failedFiles; // relative paths that failed to copy
+        std::vector<std::string> skippedFiles; // optional files not found (the root readme)
     };
 
     // Copies README.TXT and CD/* per `manifest` from discRoot to

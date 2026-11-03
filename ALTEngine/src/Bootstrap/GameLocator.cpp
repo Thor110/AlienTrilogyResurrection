@@ -2,6 +2,9 @@
 #include "DirectoryBrowser.h"
 #include "PlatformPaths.h"
 #include "FsUtil.h"
+#include "InstallPipeline.h"
+
+#include <iostream>
 
 #include <string>
 
@@ -54,12 +57,30 @@ namespace ALTEngine::Bootstrap
         return HasEntry(*gfxDir, "LEGAL.BND");
     }
 
+    std::optional<std::filesystem::path> GameLocator::SourceRoot(const std::filesystem::path& chosen) const
+    {
+        if (chosen.empty()) { return std::nullopt; }
+        if (Validate(chosen)) { return chosen; }
+        const std::filesystem::path parent = chosen.parent_path();
+        if (parent.empty() || parent == chosen) { return std::nullopt; }
+        // Its CD folder (GFX directly inside), or a folder beside it (HDD).
+        if (auto gfx = FindEntry(chosen, "GFX"); gfx && HasEntry(*gfx, "LEGAL.BND") && Validate(parent)) { return parent; }
+        if (Validate(parent)) { return parent; }
+        return std::nullopt;
+    }
+
+    bool GameLocator::IsEngineInstall(const std::filesystem::path& directory) const
+    {
+        auto cdDir = FindEntry(directory, "CD");
+        return cdDir.has_value() && HasEntry(*cdDir, "LevelCleanup.json");
+    }
+
     std::optional<std::filesystem::path> GameLocator::TryConfigPath() const
     {
         auto saved = config.Get(CONFIG_KEY_GAME_DIR);
         if (!saved.has_value()) { return std::nullopt; }
 
-        std::filesystem::path path(*saved);
+        const std::filesystem::path path = PathFromText(*saved);
         if (Validate(path)) { return path; }
         return std::nullopt;
     }
@@ -87,7 +108,7 @@ namespace ALTEngine::Bootstrap
 
         if (auto fromExeDir = TryExecutableDirectory())
         {
-            config.Set(CONFIG_KEY_GAME_DIR, fromExeDir->string());
+            config.Set(CONFIG_KEY_GAME_DIR, PathText(*fromExeDir));
             return { true, *fromExeDir };
         }
 
@@ -95,14 +116,40 @@ namespace ALTEngine::Bootstrap
         auto located = browser.Run(
             "SEARCHING FOR MU/TH/UR 9000 DIRECTORY",
             "SELECT ALIEN TRILOGY INSTALL LOCATION",
-            [this](const std::filesystem::path& path) { return Validate(path); });
+            [this](const std::filesystem::path& path) { return SourceRoot(path).has_value(); });
 
         if (!located.has_value())
         {
             return { false, {} };
         }
+        located = SourceRoot(*located);
+        if (!located.has_value()) { return { false, {} }; }
 
-        config.Set(CONFIG_KEY_GAME_DIR, located->string());
+        // An existing installation of the original game (or a copy of the
+        // disc) is installed from, into ALTEngine's own GameData, as a disc
+        // is: the patches change the files, which must never happen to the
+        // original game's own install - and it may sit somewhere unwritable,
+        // such as Program Files.
+        if (!IsEngineInstall(*located))
+        {
+            const std::filesystem::path destination = ExecutableDirectory() / "GameData";
+            std::cout << "Installing from the existing installation at " << PathText(*located) << "\n";
+            if (!InstallFromDisc(*located, destination) || !Validate(destination))
+            {
+                // Most likely a repackaged release (the Collection Chamber one,
+                // for instance) that keeps the game in its own layout and has
+                // left some of the disc's files out: not supported - ALTEngine
+                // installs from the disc, or a full copy of its files.
+                std::cout << "The install from " << PathText(*located) << " did not complete: the files listed above are\n"
+                          << "missing there. ALTEngine installs from the original disc (or a mounted image of it), or from\n"
+                          << "a complete copy of the disc's files; repackaged releases such as Collection Chamber's keep the\n"
+                          << "game in their own layout and are not supported.\n";
+                return { false, {} };
+            }
+            located = destination;
+        }
+
+        config.Set(CONFIG_KEY_GAME_DIR, PathText(*located));
         return { true, *located };
     }
 }

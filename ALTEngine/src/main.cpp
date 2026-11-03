@@ -2,6 +2,7 @@
 #include <optional>
 
 #include "Audio/SfxPlayer.h"
+#include "Bootstrap/FsUtil.h"
 #include "Bootstrap/ModernSettings.h"
 #include "Bootstrap/AppWindow.h"
 #include "Bootstrap/Config.h"
@@ -101,13 +102,13 @@ namespace
         auto bndPath = ResolveGfxFile(gfxDir, "LEGAL");
         if (!bndPath.has_value())
         {
-            std::cout << "Could not find LEGAL graphics file under " << gfxDir.string() << " - skipping splash.\n";
+            std::cout << "Could not find LEGAL graphics file under " << ALTEngine::Bootstrap::PathText(gfxDir) << " - skipping splash.\n";
             return true;
         }
         std::error_code ec;
         if (!std::filesystem::exists(palPath, ec))
         {
-            std::cout << "Could not find " << palPath.string() << " - skipping splash.\n";
+            std::cout << "Could not find " << ALTEngine::Bootstrap::PathText(palPath) << " - skipping splash.\n";
             return true;
         }
 
@@ -152,7 +153,7 @@ namespace
             std::error_code ec;
             if (!std::filesystem::exists(path, ec))
             {
-                std::cout << "Could not find " << path.string() << " - skipping.\n";
+                std::cout << "Could not find " << ALTEngine::Bootstrap::PathText(path) << " - skipping.\n";
                 continue;
             }
 
@@ -174,7 +175,7 @@ int main(int, char**)
     std::cout << "ALTEngine " ALTENGINE_VERSION " boot starting...\n";
 
     Config config;
-    std::cout << "Config file: " << config.FilePath().string() << "\n";
+    std::cout << "Config file: " << ALTEngine::Bootstrap::PathText(config.FilePath()) << "\n";
 
     GameLocator locator(config);
     std::cout << "Locating install directory...\n";
@@ -185,10 +186,10 @@ int main(int, char**)
         if (disc.found)
         {
             std::filesystem::path destination = ExecutableDirectory() / "GameData";
-            std::cout << "Found disc at " << disc.discRoot.string() << "\n";
+            std::cout << "Found disc at " << ALTEngine::Bootstrap::PathText(disc.discRoot) << "\n";
             if (InstallFromDisc(disc.discRoot, destination))
             {
-                config.Set("GameDirectory", destination.string());
+                config.Set("GameDirectory", ALTEngine::Bootstrap::PathText(destination));
             }
         }
     }
@@ -203,7 +204,7 @@ int main(int, char**)
         return 1;
     }
 
-    std::cout << "Installation directory: " << result.gameDirectory.string() << "\n";
+    std::cout << "Installation directory: " << ALTEngine::Bootstrap::PathText(result.gameDirectory) << "\n";
 
     std::filesystem::path cdDirectory = result.gameDirectory / "CD";
 

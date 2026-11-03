@@ -79,9 +79,11 @@ namespace ALTEngine::Formats
                 if (sourceFolder.has_value())
                 {
                     std::error_code ec;
-                    for (const auto& entry : std::filesystem::directory_iterator(*sourceFolder, ec))
+                    std::filesystem::directory_iterator it(*sourceFolder, std::filesystem::directory_options::skip_permission_denied, ec);
+                    for (const std::filesystem::directory_iterator end; !ec && it != end; it.increment(ec))
                     {
-                        if (entry.is_regular_file() && !folder.IsExcluded(entry.path())) { ++totalFiles; }
+                        std::error_code fileEc;
+                        if (it->is_regular_file(fileEc) && !folder.IsExcluded(it->path())) { ++totalFiles; }
                     }
                 }
             }
@@ -97,11 +99,14 @@ namespace ALTEngine::Formats
             if (onProgress) { onProgress({ file, completed, totalFiles }); }
         };
 
+        // The root files (README.TXT) are the disc's readme: an install
+        // made from an existing installation may not have kept it, and
+        // nothing reads it, so a missing one does not fail the install.
         for (const auto& rootFile : manifest.rootFiles)
         {
             if (!CopyOneFile(discRoot, destinationRoot, rootFile))
             {
-                result.failedFiles.push_back(rootFile);
+                result.skippedFiles.push_back(rootFile);
             }
             reportProgress(rootFile);
         }
@@ -128,9 +133,12 @@ namespace ALTEngine::Formats
             {
                 std::error_code ec;
                 std::filesystem::create_directories(destFolder, ec);
-                for (const auto& entry : std::filesystem::directory_iterator(*sourceFolder, ec))
+                std::filesystem::directory_iterator it(*sourceFolder, std::filesystem::directory_options::skip_permission_denied, ec);
+                for (const std::filesystem::directory_iterator end; !ec && it != end; it.increment(ec))
                 {
-                    if (!entry.is_regular_file()) { continue; }
+                    const auto& entry = *it;
+                    std::error_code fileEc;
+                    if (!entry.is_regular_file(fileEc)) { continue; }
 
                     // Skipped by extension - see DiscFolder::excludeExtensions.
                     // LANGUAGE uses this for *.BIN: the folder still has to be
@@ -138,9 +146,9 @@ namespace ALTEngine::Formats
                     // binaries are redundant now their text is in the packs.
                     if (folder.IsExcluded(entry.path())) { continue; }
 
-                    std::string filename = entry.path().filename().string();
+                    const std::string filename = ALTEngine::Bootstrap::PathText(entry.path().filename());
 
-                    bool copied = CopyFileWithRetry(entry.path(), destFolder / filename);
+                    bool copied = CopyFileWithRetry(entry.path(), destFolder / entry.path().filename());
                     if (!copied) { result.failedFiles.push_back(folderName + "/" + filename); }
                     reportProgress(folderName + "/" + filename);
                 }

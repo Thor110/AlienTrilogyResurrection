@@ -718,3 +718,24 @@ FORM header, or a chunk name other than MAP0), the runtime fields would be rebui
 (LevelLoader zeroes +4 and +12 and rebuilds +7), and every tool that reads or writes offsets (the patches, the Level
 Cleanup, the blanking scan, the Face Index Display's file offsets) would have to run on the original layout first,
 with the trim truly last. Worth doing only once the patching is finished, since it moves every offset after it.
+
+## The MU/TH/UR folder picker (zip 127)
+
+Edward pointed it at an installed copy (C:\Program Files (x86)\Collection Chamber\Alien Trilogy), and at its HDD
+and CD folders: it crashed, the SELECT button could not be clicked, and the path drew over the button.
+- **Crash:** folder names went through path::string(), which on Windows throws on a name outside the code page, and
+  the folder loops used range-for, which throws if a folder stops being readable part way. Both are now safe
+  (FsUtil::PathText / PathFromText, iterators stepped with an error code) in the picker, the locator, the
+  installer and main.cpp.
+- **SELECT:** the layout is in the renderer's pixels but mouse events came in window units, which differ under
+  Windows display scaling; events are converted (SDL_ConvertEventToRenderCoordinates).
+- **The path box:** its own box left of SELECT, clipped (the end of a long path shows); click it or press Tab to
+  type, Ctrl+V to paste, Enter to go there.
+- **An existing installation** (its folder, its CD folder or its HDD folder) is now installed from, into
+  ALTEngine's own GameData, as a disc is - never patched where it is, which would change the original game's files
+  and fails in Program Files anyway. An ALTEngine install is told apart by the CD\LevelCleanup.json every start
+  writes. A missing README.TXT no longer fails an install. Its music: only a disc's audio tracks can be ripped, so an
+  installed copy without them installs silent (CD\MUSIC\trackNN.wav can be added by hand).
+- **Repackaged releases are not supported** (Edward, 2026). Tested on the Collection Chamber release (zip 128): no
+  crash, but its copy under HDD\TRILOGY lacks some of the disc's files (SFX/SYNHIT8.RAW and others), so the install
+  stops. The message now says so and names what does work: the disc, a mounted image of it, or a full copy of its files.

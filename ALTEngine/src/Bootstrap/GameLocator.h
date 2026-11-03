@@ -34,6 +34,18 @@ namespace ALTEngine::Bootstrap
 
         bool Validate(const std::filesystem::path& directory) const;
 
+        // The folder an existing installation's game files can be installed
+        // from - one holding CD\GFX\LEGAL.BND, the layout of the disc itself -
+        // when `chosen` is that folder, its CD folder, or a folder beside its
+        // CD folder (an install's HDD folder). Empty if it is none of these.
+        std::optional<std::filesystem::path> SourceRoot(const std::filesystem::path& chosen) const;
+
+        // An install ALTEngine made (and patches): its CD folder carries the
+        // patcher's LevelCleanup.json, written every start. Anything else -
+        // the original game installed, a copy of the disc - is copied into
+        // ALTEngine's own GameData rather than patched where it is.
+        bool IsEngineInstall(const std::filesystem::path& directory) const;
+
     private:
         Config& config;
 

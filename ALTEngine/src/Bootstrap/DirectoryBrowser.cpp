@@ -2,6 +2,7 @@
 #include "Font8x8.h"
 #include "AppWindow.h"
 #include "PlatformPaths.h"
+#include "FsUtil.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -51,6 +52,23 @@ namespace ALTEngine::Bootstrap
         {
             SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
             SDL_RenderFillRect(renderer, &rect);
+        }
+
+        // Text cut to `room` pixels: from the left ("...tail") when `keepEnd`,
+        // else from the right ("head..."), so nothing draws past its box.
+        std::string FitRight(const std::string& text, int room, int scale, bool keepEnd)
+        {
+            if (room <= 0) { return std::string(); }
+            if (TextWidth(text, scale) <= room) { return text; }
+            const std::string dots = "...";
+            std::string out = text;
+            if (keepEnd)
+            {
+                while (!out.empty() && TextWidth(dots + out, scale) > room) { out.erase(out.begin()); }
+                return dots + out;
+            }
+            while (!out.empty() && TextWidth(out + dots, scale) > room) { out.pop_back(); }
+            return out + dots;
         }
 
         // Small filled folder glyph (body + tab), sized to fit in `box`.
@@ -105,18 +123,24 @@ namespace ALTEngine::Bootstrap
 
         entries.push_back({ "..", "", true });
 
-        std::error_code ec;
-        std::filesystem::directory_iterator it(currentPath, std::filesystem::directory_options::skip_permission_denied, ec);
-        std::filesystem::directory_iterator end;
+        // Never throws: a folder that cannot be read lists nothing, one that
+        // stops being readable part way lists what came before, and a name
+        // outside the Windows code page is shown as UTF-8 (PathText).
         std::vector<Entry> subdirs;
-        for (; it != end && !ec; it.increment(ec))
+        try
         {
-            std::error_code isDirEc;
-            if (std::filesystem::is_directory(it->path(), isDirEc) && !isDirEc)
+            std::error_code ec;
+            std::filesystem::directory_iterator it(currentPath, std::filesystem::directory_options::skip_permission_denied, ec);
+            for (const std::filesystem::directory_iterator end; !ec && it != end; it.increment(ec))
             {
-                subdirs.push_back({ it->path().filename().string(), it->path(), false });
+                std::error_code isDirEc;
+                if (it->is_directory(isDirEc) && !isDirEc)
+                {
+                    subdirs.push_back({ PathText(it->path().filename()), it->path(), false });
+                }
             }
         }
+        catch (...) {}
 
         std::sort(subdirs.begin(), subdirs.end(), [](const Entry& a, const Entry& b) {
             return ToLower(a.displayName) < ToLower(b.displayName);
@@ -180,6 +204,64 @@ namespace ALTEngine::Bootstrap
         std::optional<std::filesystem::path> result;
         bool running = true;
 
+        // THE PATH BOX: the current folder, editable. Click it (or press Tab)
+        // to type or paste a path (Ctrl+V); Enter goes there, Escape gives up
+        // the edit. Drawn in its own box left of SELECT, clipped to it.
+        bool editing = false;
+        std::string typed;
+        SDL_Window* window = app.Window();
+        auto beginEdit = [&] {
+            if (editing) { return; }
+            editing = true;
+            typed = PathText(currentPath);
+            SDL_StartTextInput(window);
+        };
+        auto endEdit = [&] {
+            if (!editing) { return; }
+            editing = false;
+            SDL_StopTextInput(window);
+        };
+        auto showError = [&](const std::string& text) {
+            errorMessage = text;
+            errorUntilTicks = SDL_GetTicks() + 3000;
+        };
+        auto goToTyped = [&] {
+            std::string text = typed;
+            while (!text.empty() && (text.back() == ' ' || text.back() == '"')) { text.pop_back(); }
+            while (!text.empty() && (text.front() == ' ' || text.front() == '"')) { text.erase(text.begin()); }
+            const std::filesystem::path target = PathFromText(text);
+            std::error_code ec;
+            if (text.empty() || !std::filesystem::is_directory(target, ec))
+            {
+                showError("NO SUCH FOLDER.");
+                return false;
+            }
+            endEdit();
+            currentPath = target;
+            entries = BuildEntries(currentPath);
+            selectedIndex = -1;
+            hoveredIndex = -1;
+            scrollOffset = 0;
+            return true;
+        };
+        auto trySelect = [&] {
+            if (editing && !goToTyped()) { return; }
+            if (!currentPath.empty() && validate(currentPath))
+            {
+                result = currentPath;
+                running = false;
+            }
+            else
+            {
+                showError(currentPath.empty()
+                    ? "SELECT A FOLDER FIRST."
+                    : "DIRECTORY DOES NOT CONTAIN A RECOGNISED ALIEN TRILOGY INSTALLATION.");
+            }
+        };
+        auto inside = [](const SDL_FRect& r, float x, float y) {
+            return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+        };
+
         while (running)
         {
             int windowW = 0, windowH = 0;
@@ -202,9 +284,12 @@ namespace ALTEngine::Bootstrap
 
             int selectButtonW = TextWidth("SELECT", scale) + scale * 12;
             SDL_FRect selectButton = ToFRect(
-                static_cast<int>(buttonArea.x + buttonArea.w) - selectButtonW,
+                static_cast<int>(buttonArea.x + buttonArea.w) - selectButtonW - scale * 2,
                 static_cast<int>(buttonArea.y) + scale * 2,
                 selectButtonW, rowHeight);
+            SDL_FRect pathBox = ToFRect(
+                static_cast<int>(buttonArea.x) + scale * 2, static_cast<int>(buttonArea.y) + scale * 2,
+                std::max(0, static_cast<int>(selectButton.x - buttonArea.x) - scale * 6), rowHeight);
 
             int visibleRows = std::max(1, static_cast<int>(listBox.h) / rowHeight);
             int maxScroll = std::max(0, static_cast<int>(entries.size()) - visibleRows);
@@ -213,16 +298,63 @@ namespace ALTEngine::Bootstrap
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
+                // Mouse positions come in window units; the layout is in the
+                // renderer's pixels, which differ under display scaling - so
+                // without this the button and rows sat elsewhere from where
+                // they were drawn.
+                SDL_ConvertEventToRenderCoordinates(renderer, &event);
+
                 if (event.type == SDL_EVENT_QUIT)
                 {
                     running = false;
                 }
+                else if (editing && event.type == SDL_EVENT_TEXT_INPUT)
+                {
+                    typed += event.text.text;
+                }
                 else if (event.type == SDL_EVENT_KEY_DOWN)
                 {
+                    const bool ctrl = (event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
+                    if (editing)
+                    {
+                        switch (event.key.key)
+                        {
+                        case SDLK_ESCAPE: endEdit(); break;
+                        case SDLK_TAB: endEdit(); break;
+                        case SDLK_RETURN:
+                        case SDLK_KP_ENTER: goToTyped(); break;
+                        case SDLK_BACKSPACE:
+                            // Whole UTF-8 characters.
+                            while (!typed.empty() && (static_cast<unsigned char>(typed.back()) & 0xC0) == 0x80) { typed.pop_back(); }
+                            if (!typed.empty()) { typed.pop_back(); }
+                            break;
+                        case SDLK_V:
+                            if (ctrl)
+                            {
+                                if (char* clip = SDL_GetClipboardText())
+                                {
+                                    std::string text(clip);
+                                    SDL_free(clip);
+                                    text.erase(std::remove_if(text.begin(), text.end(), [](char c) { return c == '\r' || c == '\n'; }), text.end());
+                                    typed += text;
+                                }
+                            }
+                            break;
+                        default:
+                            break;
+                        }
+                        continue;
+                    }
                     switch (event.key.key)
                     {
                     case SDLK_ESCAPE:
                         running = false;
+                        break;
+                    case SDLK_TAB:
+                        beginEdit();
+                        break;
+                    case SDLK_V:
+                        if (ctrl) { beginEdit(); typed.clear(); if (char* clip = SDL_GetClipboardText()) { typed = clip; SDL_free(clip); } }
                         break;
                     case SDLK_UP:
                         if (!entries.empty())
@@ -245,6 +377,7 @@ namespace ALTEngine::Bootstrap
                         {
                             navigateInto(entries[selectedIndex]);
                         }
+                        else { trySelect(); }
                         break;
                     case SDLK_BACKSPACE:
                         navigateInto(Entry{ "..", "", true });
@@ -261,7 +394,7 @@ namespace ALTEngine::Bootstrap
                 {
                     float mx = event.motion.x, my = event.motion.y;
                     hoveredIndex = -1;
-                    if (mx >= listBox.x && mx < listBox.x + listBox.w && my >= listBox.y && my < listBox.y + listBox.h)
+                    if (inside(listBox, mx, my))
                     {
                         int rowIndex = scrollOffset + static_cast<int>(my - listBox.y) / rowHeight;
                         if (rowIndex >= 0 && rowIndex < static_cast<int>(entries.size())) { hoveredIndex = rowIndex; }
@@ -271,30 +404,27 @@ namespace ALTEngine::Bootstrap
                 {
                     float mx = event.button.x, my = event.button.y;
 
-                    if (mx >= selectButton.x && mx < selectButton.x + selectButton.w &&
-                        my >= selectButton.y && my < selectButton.y + selectButton.h)
+                    if (inside(selectButton, mx, my))
                     {
-                        if (!currentPath.empty() && validate(currentPath))
-                        {
-                            result = currentPath;
-                            running = false;
-                        }
-                        else
-                        {
-                            errorMessage = currentPath.empty()
-                                ? "SELECT A FOLDER FIRST."
-                                : "DIRECTORY DOES NOT CONTAIN A RECOGNISED ALIEN TRILOGY INSTALLATION.";
-                            errorUntilTicks = SDL_GetTicks() + 3000;
-                        }
+                        trySelect();
                     }
-                    else if (hoveredIndex >= 0)
+                    else if (inside(pathBox, mx, my))
                     {
-                        selectedIndex = hoveredIndex;
-                        // SDL3 reports multi-clicks natively via `clicks`
-                        // (OS double-click timing/distance thresholds).
-                        if (event.button.clicks >= 2)
+                        beginEdit();
+                    }
+                    else
+                    {
+                        endEdit();
+                        if (inside(listBox, mx, my))
                         {
-                            navigateInto(entries[hoveredIndex]);
+                            const int rowIndex = scrollOffset + static_cast<int>(my - listBox.y) / rowHeight;
+                            if (rowIndex >= 0 && rowIndex < static_cast<int>(entries.size()))
+                            {
+                                selectedIndex = rowIndex;
+                                // SDL3 reports multi-clicks natively via `clicks`
+                                // (OS double-click timing/distance thresholds).
+                                if (event.button.clicks >= 2) { navigateInto(entries[static_cast<size_t>(rowIndex)]); }
+                            }
                         }
                     }
                 }
@@ -311,6 +441,7 @@ namespace ALTEngine::Bootstrap
             DrawBitmapText(renderer, panelTitle, static_cast<int>(titleBar.x) + scale * 4, static_cast<int>(titleBar.y) + scale * 3, scale, COLOR_GREEN);
 
             DrawOutlineRect(renderer, listBox, COLOR_GREEN);
+            const int textRoom = static_cast<int>(listBox.w) - TextHeight(scale) - scale * 12;
             for (int row = 0; row < visibleRows; ++row)
             {
                 int index = scrollOffset + row;
@@ -329,7 +460,7 @@ namespace ALTEngine::Bootstrap
                                              TextHeight(scale), TextHeight(scale));
                 DrawFolderIcon(renderer, iconBox, isSelected ? COLOR_GREEN : COLOR_GREEN_DIM);
 
-                DrawBitmapText(renderer, entries[index].displayName,
+                DrawBitmapText(renderer, FitRight(entries[index].displayName, textRoom, scale, false),
                          static_cast<int>(iconBox.x + iconBox.w) + scale * 4, static_cast<int>(rowRect.y) + scale * 3,
                          scale, isSelected ? COLOR_GREEN : COLOR_GREEN_DIM);
             }
@@ -338,10 +469,18 @@ namespace ALTEngine::Bootstrap
             DrawOutlineRect(renderer, selectButton, COLOR_GREEN);
             DrawBitmapText(renderer, "SELECT", static_cast<int>(selectButton.x) + scale * 6, static_cast<int>(selectButton.y) + scale * 3, scale, COLOR_GREEN);
 
-            if (!currentPath.empty())
+            // The path box: what is typed while editing (with a caret), else
+            // the current folder. Its end shows when it is too long - the
+            // part that names the folder.
+            DrawOutlineRect(renderer, pathBox, editing ? COLOR_GREEN : COLOR_GREEN_DIM, 1);
             {
-                std::string pathLabel = currentPath.string();
-                DrawBitmapText(renderer, pathLabel, static_cast<int>(buttonArea.x) + scale * 4, static_cast<int>(buttonArea.y) + scale * 3, scale, COLOR_GREEN_DIM);
+                const int room = static_cast<int>(pathBox.w) - scale * 6;
+                const bool caret = editing && (SDL_GetTicks() / 500) % 2 == 0;
+                std::string shown = editing ? typed : (currentPath.empty() ? std::string("CLICK HERE TO TYPE A PATH") : PathText(currentPath));
+                shown = FitRight(shown + (editing ? "_" : ""), room, scale, true);
+                if (editing && !caret && !shown.empty() && shown.back() == '_') { shown.back() = ' '; }
+                DrawBitmapText(renderer, shown, static_cast<int>(pathBox.x) + scale * 3, static_cast<int>(pathBox.y) + scale * 3, scale,
+                               editing ? COLOR_GREEN : COLOR_GREEN_DIM);
             }
 
             if (!errorMessage.empty() && SDL_GetTicks() < errorUntilTicks)
@@ -351,6 +490,7 @@ namespace ALTEngine::Bootstrap
 
             SDL_RenderPresent(renderer);
         }
+        endEdit();
 
         return result;
     }
