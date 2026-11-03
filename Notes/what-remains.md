@@ -683,13 +683,9 @@ smaller (LZMA 19.1%). Report: `Notes/texture-use.md`. The whole routine, in orde
 ## Install size (v0.9.4, Edward's measurements)
 
 The original installed: 129,751,918 bytes (its music streams off the disc). ALTEngine: 548,430,318, of which the ripped
-music is 413,606,960, leaving 134,823,358 - 5,071,440 bytes more than the original. Ways to get below it:
+music is 413,606,960 and the Level Cleanup's kept copies (`.untrimmed` levels, `.unblanked` sheets) 31,827,936. The
+install itself is 102,995,422 bytes: **26,756,496 smaller than the original**, with no trimming needed.
 
-- **FFmpeg (about 13 MB).** The game's videos are Duck TrueMotion 1 (FourCC `DUCK`) with plain PCM audio in AVI, so
-  all ALTEngine needs is one decoder and the AVI demuxer. An FFmpeg built with only those (`--disable-everything
-  --enable-decoder=truemotion1,pcm_u8,pcm_s16le --enable-demuxer=avi --enable-protocol=file`, still LGPL) is well
-  under 1 MB; our own TrueMotion 1 decoder would drop FFmpeg altogether, but OVERRIDE videos (any codec) need it.
-- **The kept copies.** With Level Cleanup on, each cleaned level keeps its `.untrimmed` copy and each blanked sheet
-  its `.unblanked` one (about 18 MB and 15 MB), so the fixes can be re-run against the files they were written for.
-  Once the cleanup is always on, the install can write the final files once and keep only what a reinstall needs.
-- **Music** (not in the comparison): 413 MB of WAV would be about half as FLAC, lossless.
+If it is ever wanted smaller still: FFmpeg is about 13 MB, and the videos need only its TrueMotion 1 decoder and AVI
+reader (Duck `DUCK` video, PCM audio), so a cut-down LGPL build would be under 1 MB; once the cleanup is always on,
+the kept copies need not be kept; the music would be about half as FLAC.

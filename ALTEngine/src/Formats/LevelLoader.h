@@ -35,7 +35,7 @@ namespace ALTEngine::Formats
         uint16_t unknownBlockA = 0;       // unknownListA size = this * 4
         uint16_t unknownBlockB = 0;       // unknownListB size = this * 4
         uint16_t enemyTypes = 0;          // bitmask - which enemy types are loaded into memory for this level
-        uint16_t ventTypes = 0;           // bitmask - per MapViewer.cs, likely unused leftover editor metadata
+        uint16_t ventTypes = 0;           // never read by the game (nothing touches 0x000b0c56): editor data - Notes/unread-bytes-notes.txt
     };
 
     // 28 bytes, indexed directly by a quad's flags byte (& 0x7f) - a
@@ -194,7 +194,7 @@ namespace ALTEngine::Formats
         // tests the bearing against. Usually exactly 512.
         // Bytes 12/13 go to +0x50: the range within which the creature
         // notices the player (CreatureAI::Notices, FUN_00033a70).
-        uint8_t unk4 = 0;              // byte 9, constant 0 across L111
+        uint8_t unk4 = 0;              // byte 9: never read by the game (0, 2 or 4 on 36 monsters) - editor data
         uint16_t coneHalfWidth = 0;    // bytes 10,11 (was unknownA)
         uint16_t wakeRange = 0;        // bytes 12,13 (was unknownB)
         uint8_t unknown4 = 0;
@@ -222,7 +222,7 @@ namespace ALTEngine::Formats
         uint8_t multiplier = 0;
         uint8_t triggerCount = 0;     // was unknown1: always 0 on disc, counts up to the threshold (FUN_0003bb14)
         uint8_t triggerThreshold = 0; // was z: 0 = there from the start, else waits on a trigger or a crate
-        uint8_t unknown2 = 0; // "always the same as amount for ammunition" (Edward, 2026)
+        uint8_t unknown2 = 0; // never read by the game (FUN_0003b93c and the trigger paths stop at byte 6): editor data, often a copy of the amount (Edward, 2026)
     };
 
     // 16 bytes. count = header.objectCount ("boxCount" in the C#
@@ -235,11 +235,11 @@ namespace ALTEngine::Formats
         uint8_t type = 0;
         uint8_t flags = 0;    // was drop: bit 1 indestructible, 2 = holds an enemy rather than pickups
         uint8_t healthDiv16 = 0; // was unknown1: the object's health / 16 (ProjectileCollision::ObjectHealth)
-        uint8_t unknown2 = 0; // confirmed only ever 0 or 10
+        uint8_t unknown2 = 0; // never read by the game (FUN_00037184 does not copy it): 10 on the crate types 20, 25, 29, 32, else 0
         uint8_t drop1 = 0;    // index of first pickup dropped
         uint8_t drop2 = 0;    // index of second pickup dropped
-        uint8_t unknown3 = 0;
-        uint8_t unknown4 = 0;
+        uint8_t unknown3 = 0;  // the cells the object fills along x (to +0x20; FUN_00037084) - 1 for most, a breakable wall 1-4
+        uint8_t unknown4 = 0;  // ... and along z (+0x21)
         // +10/+12, two u16s: the first texture animator, and how many, that
         // step on when the object is destroyed (FUN_00037184 copies them to
         // +0x24/+0x26; FUN_00037ff8 steps each by one). A window's glass, a
@@ -262,10 +262,10 @@ namespace ALTEngine::Formats
     {
         uint8_t x = 0;
         uint8_t y = 0;
-        uint8_t unknown = 0;    // confirmed only ever 64 or 0
+        uint8_t unknown = 0;    // flags (runtime +0x18): 0x40 = starts open (FUN_00029704; Game/Doors.cpp)
         uint8_t time = 0;       // open time - 0 means manually closed at the collider
         uint8_t lockState = 0;  // 1=unlocked, 2=locked, shootable = number of shots
-        uint8_t unknown2 = 0;   // confirmed always 0
+        uint8_t unknown2 = 0;   // runtime: the door cell's floor height, written at level start (FUN_00028e70); 0 on disc
         uint8_t rotation = 0;   // 4-direction: 0=N,2=E,4=S,6=W, same scheme as Crate
         uint8_t modelIndex = 0; // index into the door model BND
     };
@@ -289,7 +289,7 @@ namespace ALTEngine::Formats
         uint8_t threshold = 0;       // trigger count it needs to set off
         uint8_t counter = 0;         // that count, always 0 on disc
         uint8_t model = 0;           // its platform mesh ("L0" sections)
-        uint8_t unknown11 = 0; // confirmed always matches unknown12/unknown13
+        uint8_t unknown11 = 0; // bytes 13-15 never read by the game (FUN_00041b30 copies 0-12): all three equal, 0 or an old copy of `model`
         uint8_t unknown12 = 0;
         uint8_t unknown13 = 0;
     };

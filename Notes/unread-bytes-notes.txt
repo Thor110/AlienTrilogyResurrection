@@ -1,15 +1,62 @@
-Still around ~4kb per level file left to decode as well as numerous unknown bytes already parsed.
+The MAP0 section of a level file - what every byte is
+=====================================================
 
-Level Name = Remainder Offset / Unread Bytes
+Nothing is left unread. On all 45 shipped levels LevelLoader reads MAP0 to its last byte (checked against the
+untouched disc copies). The "~4 KB per level left to decode" this note used to list came from reading the light
+records 24 bytes apart instead of 28 (128 x 4 = 512 bytes) and from the tables after them not yet being read; both
+were fixed long ago.
 
-L111LEV.MAP = 479832 / 4216
+What was still open was the bytes that are read but were not understood. Each is settled below from TRILOGY.EXE's
+own code (Ghidra), by finding every place the game touches the record and every place it copies the byte to.
+"Never read" means no code reads that byte, in the loader or anywhere after it: it is data the level editor left
+in the file, and the game ignores it.
 
-512
-map? 3,448
-256
+Header (36 bytes; the game keeps it at 0x000b0c34)
+  +24  player start angle
+  +26  texture animator count (list A)          +28  0x40 0x40, the action and logic table sizes (fixed at 64 in code)
+  +30  animation frame list count (list B)      +32  enemy types: a bitmask of which creature sprite sets to load
+                                                     (FUN at 0x7817 tests it bit by bit and loads each set)
+  +34  "vent types": NEVER READ (nothing touches 0x000b0c56). Values 0, 4, 20, 44, 48, 52.
 
-L141LEV.MAP = 516068 / 4376
+Cells (16 bytes)
+  +0..3  first face record of the cell's run (0xffffffff: none - the "wall" the 255s mark)
+  +4     runtime: index of the object in the cell. Cleared for every cell at level start (FUN_000282c8).
+  +5     area (map reveal) number          +6  nearest path node (the flow field's)
+  +7     runtime: bit 0x80 set at level start for attribute 1 and 0x14-0x18, bit 0x80 by doors (FUN_000282c8, FUN_00029704)
+  +8,+9  ceiling / floor fog                +10 attribute   +11 floor height   +13 ceiling height
+  +12    runtime occupancy (the type of the object or creature standing there, 0xff the player). Cleared for every
+         cell at level start (FUN_000282c8), so the values on disc - 0, 255 and object types - are a saved running
+         state from the editor and never used. LevelLoader zeroes it, as the game does.
+  +14    lighting   +15 action (trigger) index
 
-512
-map? 3,608
-256
+Monsters (20 bytes)
+  +9     NEVER READ. The spawn (FUN_0002e638), the table setup (FUN_0002f3b0) and the trigger counters
+         (FUN_0002f288 and the two others that index the table) read bytes 0-8 and 10-19 only. Values 0, 2, 4
+         on 36 of 1554 monsters.
+  +5     health: (byte + the difficulty step) << 4, << 6 for type 7, at least 16 (FUN_0002e52c).
+
+Pickups (8 bytes)
+  +7     NEVER READ. The setup (FUN_0003b93c) and the three trigger paths read bytes 0-6 only. (It often equals the
+         amount for ammunition, as Edward noticed: an editor copy.)
+
+Objects - crates, switches, walls (16 bytes)
+  +5     NEVER READ: FUN_00037184 does not copy it and the record table's pointer is never read again. 10 on
+         exactly the crate types (20, 25, 29, 32), 0 on every other.
+  +8,+9  the block of cells the object fills, along x and along z (to +0x20/+0x21): 1 x 1 for most; a breakable
+         wall (type 21) 4 x 2, 2 x 4, 1 x 4 ...; type 28 up to 5 cells. Already used by ALTEngine (FUN_00037084;
+         GameplayScreen fills the cells), only the field names (Crate::unknown3/unknown4) were left over.
+  +11, +13, +15  high bytes of the u16s at +10 (first texture animator), +12 (how many) and +14 (rotation).
+
+Doors (8 bytes)
+  +2     flags (to the runtime door's +0x18): bit 0x40 the door starts open, its cells' ceiling already raised
+         (FUN_00029704's second branch); bit 2 is set by the game itself for an east/west door. Already used
+         (Game/Doors.cpp, Door::unknown).
+  +5     runtime: the door cell's floor height, written at level start (FUN_00028e70). 0 on disc.
+
+Lifts (16 bytes)
+  +6     copied to the runtime lift's +0x14 and never read again. Always 1.
+  +13..15  NEVER READ (FUN_00041b30's setup copies bytes 0-12 only). All three always equal: 0, or a copy of the
+         model index at +12 on some levels - an older form of the model field.
+
+Vertices +6,7 (always 0), path nodes +2 (always 0, the flow field's runtime value), light records +3/+7/+11/+15
+(the pad byte after each RGB, always 0) and action groups +3 (always 0) are padding or runtime space.
