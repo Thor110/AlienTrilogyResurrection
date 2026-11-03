@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -36,14 +37,34 @@ namespace ALTEngine::Game::LevelCleanup
     // names them.
     // What Apply makes of a plan, by version: raised whenever the same plan
     // comes to give a different file (2: record 0's copy heads the first
-    // cell's run), so cleaned copies made by an older Apply are made again.
-    inline constexpr int APPLY_VERSION = 2;
+    // cell's run; 3: faces added after the removals, and record 0's copy only
+    // where the plan says), so cleaned copies made by an older Apply are made
+    // again.
+    inline constexpr int APPLY_VERSION = 3;   // 3: faces added (Addition), record 0 judged
+
+    // A face the level lacks, put in AFTER the removals (so the removals can
+    // always be read against the file as the fixes leave it, and undone in
+    // the same order). Named by its corners' coordinates, not vertex numbers,
+    // which the removals change: each corner takes the vertex at exactly that
+    // point, or a new vertex there. The new record goes at the head of
+    // `cell`'s run, so the walk draws it with that cell (the cell keeps its
+    // start; every other run start at or past it moves up one).
+    struct Addition
+    {
+        std::vector<std::array<int, 3>> corners;   // 3 or 4, in winding order
+        int texture = 0;
+        int routine = 0;
+        int light = 0;                  // the 0x80 run-end bit is never set
+        int cellX = 0, cellZ = 0;
+    };
 
     struct Plan
     {
         std::vector<uint32_t> remove;   // face records to take out, as the file numbers them
         std::vector<uint32_t> clear;    // cells the walk never takes in: FF FF FF FF once empty
-        int firstCell = -1;             // the cell whose run (records 1..) is given back, or -1
+        int firstCell = -1;             // the cell whose run (record 0 on) is given back, or -1
+        bool recordZero = false;        // and with it a copy of record 0, its first face
+        std::vector<Addition> add;      // faces put in after the removals
 
         // What the faces are, for the report only.
         int outOfView = 0;              // in cells the walk never takes in
@@ -53,15 +74,22 @@ namespace ALTEngine::Game::LevelCleanup
         int byHand = 0;                 // named in data/LevelCleanupExtra.json
     };
 
+    // Additions as the list files hold them: a JSON array of
+    // { "corners": [[x, y, z], ...], "texture", "routine", "light", "cell": [x, z] }.
+    std::string WriteAdditions(const std::vector<Addition>& add);
+    bool ReadAdditions(const std::string& json, std::vector<Addition>& add, std::string& error);
+
     struct Report
     {
         int facesRemoved = 0;
         int verticesRemoved = 0;
         bool firstCellRestored = false;
         int firstCellFaces = 0;
+        int facesAdded = 0;
+        int verticesAdded = 0;
         size_t bytesBefore = 0;
         size_t bytesAfter = 0;
-        bool Changed() const { return facesRemoved > 0 || verticesRemoved > 0 || firstCellRestored; }
+        bool Changed() const { return facesRemoved > 0 || verticesRemoved > 0 || firstCellRestored || facesAdded > 0; }
     };
 
     // Applies `plan` to one level file's whole image in place. With

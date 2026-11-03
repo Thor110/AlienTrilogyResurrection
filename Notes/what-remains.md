@@ -1,4 +1,4 @@
-# What remains (after zip 117)
+# What remains (after zip 118)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -621,17 +621,25 @@ are) or as part of the Level Cleanup's plan.
 
 ## 7. The final step: missing faces, then a triple check of the textures
 
-1. **Insert the missing faces** listed in `uv-review-log.md`: L161, L211, L212, L242, L243. Each goes into its
-   cell's face run; the face count, later run starts, and the MAP0 and FORM sizes move up. L161's interim
-   duplicate (3758) goes back to its original triangle.
-2. **The level's first cell, every level:** its run start is 0 (the blank record) instead of its own run, so the
-   original never draws that cell's faces, and its floor (often its ceiling too) is missing. Checked in zip 103
-   (a probe over every level): in **35 levels the faces are already in the file** - faces 0 to n at the very
-   start of the list, in that cell, the run ending in its 0x80 flag - and only the run start is wrong, so a
-   ONE-BYTE patch (start 0 -> 1) restores them, with no insertion and nothing renumbered: L112, L122, L131,
-   L141, L154, L161, L211-L213, L222, L231, L232, L242, L243, L262, L263, L321-L325, L351-L353, L371, L381,
-   L391, L901-L907, L909. Only **10 levels lack them** and need the faces inserted: L111, L113-L115, L155, L162,
-   L311, L331, L900, L908 (L900 and L908 share their geometry with L111 and L311).
+1. **Missing faces - done in zip 118**, as the Level Cleanup's last step, after the removals (so the work reads
+   back in order: the fixes, then the removals, then the additions, each against the file the step before leaves):
+   - **L212, L242, L243 and L161** were record 0 all along - the first face of the first cell's run, which the
+     cell's start of 0 hides. Record 0's copy at the head of the run (zip 116) puts them in. L161's interim
+     (face 3758 given over to the hole) is set back to its shipped triangle in Patches.json and taken out by the
+     cleanup, as the same triangle 3757 draws (3758 differs only in its light, 0x08 against 0x0F).
+   - **L211** is the one real insertion: the floor over face 990 (990 is the same quad wound the other way,
+     facing down). `data/LevelCleanupExtra.json` names it by corners, texture 264, routine 0, light 0x0B, in
+     cell (49, 19); the tool copies it into the list (`"add"`), and Apply puts it at the head of that cell's
+     run: the cell keeps its start, every later run start moves up one, a corner with no vertex at its point
+     gets a new vertex, and the header counts, MAP0 and FORM sizes follow.
+2. **The level's first cell, every level - done (zips 116 and 118).** Its run is the file's first, from record
+   0. On 35 levels it goes on into records 1 to n; on the other 10 (L111, L113-L115, L155, L162, L311, L331,
+   L900, L908) record 0 is the cell's one face, its run bit set - nothing is missing from the file, only hidden.
+   The plan now judges record 0 like every other face (in view, facing a place the eye can be) and gives it back
+   as a copy only if it is seen. L111 and L900: out of view. L113-L115: record 0 is the fourth of the black
+   (texture 0) strips at the map's end whose other three Edward took out by hand, so `"recordZero": false` keeps
+   it out, as for the texture 0 faces of L162, L311, L331 and L908 (to look at in play: flip to true to give
+   one back). L155's (texture 280) is given back.
 3. **Renumber everything that names a face after an insertion:** later Patches.json entries for the same level,
    the review log, and ALTViewer's fixer.
 4. **Triple check the textures:** every level once more with the Face Index Display after the insertions, the

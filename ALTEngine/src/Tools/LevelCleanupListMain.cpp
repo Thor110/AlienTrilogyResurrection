@@ -162,6 +162,7 @@ int main(int argc, char** argv)
         {
             const auto& e = extra["levels"][key];
             if (e.contains("faces")) { for (const auto& f : e["faces"]) { options.byHand.push_back(f.get<uint32_t>() + 1); } }   // face n is record n + 1
+            if (e.contains("recordZero") && e["recordZero"].is_boolean()) { options.recordZero = e["recordZero"].get<bool>(); }
             if (e.contains("rooms")) { for (const auto& f : e["rooms"]) { options.roomDoors.push_back(f.get<uint32_t>() + 1); } }
             if (e.contains("points"))
             {
@@ -187,11 +188,23 @@ int main(int argc, char** argv)
             }
         }
 
+        // Faces to add, after the removals: passed through as they are.
+        std::vector<G::LevelCleanup::Addition> additions;
+        if (extra.contains("levels") && extra["levels"].contains(key) && extra["levels"][key].contains("add")
+            && !G::LevelCleanup::ReadAdditions(extra["levels"][key]["add"].dump(), additions, error))
+        {
+            std::printf("%s: FAILED - %s\n", relative.generic_string().c_str(), error.c_str());
+            ++failed;
+            continue;
+        }
+
         G::LevelCleanup::Plan plan;
         G::LevelCleanupPlan::Details details;
         G::LevelCleanup::Report report;
         std::vector<uint8_t> check = bytes;
-        if (!G::LevelCleanupPlan::Make(bytes, options, plan, error, &details) || !G::LevelCleanup::Apply(check, plan, report, error))
+        const bool planned = G::LevelCleanupPlan::Make(bytes, options, plan, error, &details);
+        plan.add = additions;
+        if (!planned || !G::LevelCleanup::Apply(check, plan, report, error))
         {
             std::printf("%s: FAILED - %s\n", relative.generic_string().c_str(), error.c_str());
             ++failed;
@@ -228,9 +241,12 @@ int main(int argc, char** argv)
                            + std::to_string(lay.Routine(bytes, r)) + " | " + corners + " |\n";
             }
         }
-        std::printf("%s: %d faces (%d out of view, %d facing away, %d in lifts, %d hidden, %d by hand), %d vertices%s - %.1fs\n",
+        std::printf("%s: %d faces (%d out of view, %d facing away, %d in lifts, %d hidden, %d by hand), %d vertices%s%s - %.1fs\n",
                     relative.generic_string().c_str(), report.facesRemoved, plan.outOfView, plan.facingAway, plan.inLifts, plan.hidden, plan.byHand,
-                    report.verticesRemoved, report.firstCellRestored ? (", first cell's " + std::to_string(report.firstCellFaces) + " given back").c_str() : "",
+                    report.verticesRemoved,
+                    report.firstCellRestored ? (", first cell's " + std::to_string(report.firstCellFaces) + " given back"
+                                                + (plan.recordZero ? " (record 0's among them)" : "")).c_str() : "",
+                    report.facesAdded ? (", " + std::to_string(report.facesAdded) + " added").c_str() : "",
                     seconds);
         removed += size_t(report.facesRemoved);
 
@@ -239,6 +255,8 @@ int main(int argc, char** argv)
         entry["remove"] = G::LevelCleanup::EncodeList(plan.remove);
         entry["clear"] = G::LevelCleanup::EncodeList(plan.clear);
         if (plan.firstCell >= 0) { entry["firstCell"] = plan.firstCell; }
+        if (plan.recordZero) { entry["recordZero"] = true; }
+        if (!plan.add.empty()) { entry["add"] = nlohmann::ordered_json::parse(G::LevelCleanup::WriteAdditions(plan.add)); }
         entry["outOfView"] = plan.outOfView;
         entry["facingAway"] = plan.facingAway;
         entry["inLifts"] = plan.inLifts;

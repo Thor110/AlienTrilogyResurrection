@@ -47,6 +47,10 @@ namespace ALTEngine::Game::LevelCleanupPlan
     {
         bool multiplayer = false;      // started at its path nodes, not the header's start
         bool skipFirstNode = false;    // L909: the spawn never uses node 0
+        // Record 0, the first cell's first face, may be given back (when it
+        // is seen); false keeps it out, for a level where it is a stray named
+        // by hand ("recordZero": false in data/LevelCleanupExtra.json).
+        bool recordZero = true;
         // One flag per face record of the file: a cut-out face (routines 4, 5,
         // 6, 12, 13, 34 drawn as a cut-out) whose texture has no clear texel.
         // It blocks as an opaque face does. Empty: none.

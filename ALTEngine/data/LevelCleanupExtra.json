@@ -1,5 +1,5 @@
 {
- "about": "Faces to take out by hand, on top of what ALTLevelCleanupList works out. Per level: faces (numbers as the Face Index Display shows them with Level Cleanup off) and/or points (corners [x, y, z]; a face all of whose corners are listed, within 3 units, goes). Run ALTLevelCleanupList again after changing this. Example: \"SECT31/L321LEV.MAP\": { \"faces\": [ 1203 ], \"points\": [ [ -1280, 1024, -8960 ] ] }",
+ "about": "Faces to take out by hand, on top of what ALTLevelCleanupList works out. Per level: faces (numbers as the Face Index Display shows them with Level Cleanup off) and/or points (corners [x, y, z]; a face all of whose corners are listed, within 3 units, goes). Run ALTLevelCleanupList again after changing this. Example: \"SECT31/L321LEV.MAP\": { \"faces\": [ 1203 ], \"points\": [ [ -1280, 1024, -8960 ] ] } \"recordZero\": false keeps a level's record 0 (its first cell's first face) out. \"add\": faces to put in after the removals, by corners: [{ \"corners\": [[x, y, z], ...], \"texture\": n, \"routine\": n, \"light\": n, \"cell\": [x, z] }].",
  "levels": {
   "SECT11/L112LEV.MAP": {
    "faces": [
@@ -18,7 +18,8 @@
     8830,
     8831,
     8832
-   ]
+   ],
+   "recordZero": false
   },
   "SECT11/L114LEV.MAP": {
    "faces": [
@@ -29,7 +30,8 @@
     8830,
     8831,
     8832
-   ]
+   ],
+   "recordZero": false
   },
   "SECT11/L115LEV.MAP": {
    "faces": [
@@ -40,7 +42,8 @@
     8830,
     8831,
     8832
-   ]
+   ],
+   "recordZero": false
   },
   "SECT11/L122LEV.MAP": {
    "faces": [
@@ -57,6 +60,52 @@
     13346,
     13347
    ]
+  },
+  "SECT12/L161LEV.MAP": {
+   "faces": [
+    3758
+   ]
+  },
+  "SECT12/L162LEV.MAP": {
+   "recordZero": false
+  },
+  "SECT21/L211LEV.MAP": {
+   "add": [
+    {
+     "corners": [
+      [
+       3072,
+       2562,
+       -12288
+      ],
+      [
+       3072,
+       2562,
+       -11776
+      ],
+      [
+       3584,
+       2818,
+       -11776
+      ],
+      [
+       3584,
+       2818,
+       -12544
+      ]
+     ],
+     "texture": 264,
+     "routine": 0,
+     "light": 11,
+     "cell": [
+      49,
+      19
+     ]
+    }
+   ]
+  },
+  "SECT31/L311LEV.MAP": {
+   "recordZero": false
   },
   "SECT31/L321LEV.MAP": {
    "faces": [
@@ -314,6 +363,12 @@
     7129,
     7135
    ]
+  },
+  "SECT31/L331LEV.MAP": {
+   "recordZero": false
+  },
+  "SECT90/L908LEV.MAP": {
+   "recordZero": false
   },
   "SECT90/L909LEV.MAP": {
    "faces": [

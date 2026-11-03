@@ -183,6 +183,13 @@ namespace ALTEngine::Bootstrap
                     continue;
                 }
                 plan.firstCell = entry.contains("firstCell") && entry["firstCell"].is_number_integer() ? entry["firstCell"].get<int>() : -1;
+                plan.recordZero = entry.contains("recordZero") && entry["recordZero"].is_boolean() && entry["recordZero"].get<bool>();
+                std::string addError;
+                if (entry.contains("add") && !ALTEngine::Game::LevelCleanup::ReadAdditions(entry["add"].dump(), plan.add, addError))
+                {
+                    std::cout << "  [FAILED]   " << key << " - " << addError << "\n";
+                    continue;
+                }
                 ALTEngine::Game::LevelCleanup::Report report;
                 std::string error;
                 std::vector<uint8_t> original = bytes;
@@ -200,11 +207,12 @@ namespace ALTEngine::Bootstrap
                 }
                 state[key] = source;
                 ++cleaned;
-                saved += report.bytesBefore - report.bytesAfter;
+                if (report.bytesBefore > report.bytesAfter) { saved += report.bytesBefore - report.bytesAfter; }
                 std::cout << "  [cleaned]  " << key << ": " << report.facesRemoved << " faces (" << count("outOfView") << " out of view, "
                           << count("facingAway") << " facing away, " << count("inLifts") << " in sealed lifts, " << count("hidden")
                           << " hidden" << (count("byHand") ? ", " + std::to_string(count("byHand")) + " by hand" : std::string()) << ") and " << report.verticesRemoved << " vertices taken out"
                           << (report.firstCellRestored ? ", first cell's " + std::to_string(report.firstCellFaces) + " faces restored" : std::string())
+                          << (report.facesAdded ? ", " + std::to_string(report.facesAdded) + " missing faces added" : std::string())
                           << "\n";
             }
             std::ofstream out(statePath, std::ios::trunc);

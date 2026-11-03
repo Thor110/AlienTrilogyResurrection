@@ -185,6 +185,8 @@ Pillar faces drawn with textures that have see-through gaps, given the solid pil
 
 ## Missing faces - to add in the final pass
 
+**Done in zip 118** (see what-remains.md, section 7): L161, L212, L242 and L243 are record 0, the first cell's first face, given back with the cell; L211's floor is added by the Level Cleanup after its removals (data/LevelCleanupExtra.json, "add"); L161's interim 3758 is set back.
+
 Holes in the levels where a face is missing. They are added once every other fix is in, because inserting a face renumbers every later face in its level (see engine-remaining-work.md, "How the original finds a cell's faces"). Each new record goes into the face run of the cell it sits in, so the original draws it with that cell; then the level's face count, the cells' run starts past it, and the MAP0 and FORM sizes all move up. None of this is patched yet, except L161's interim.
 
 | Level | Hole between faces | Corners (vertices) | New record | Texture | Routine | Light | Cell, and its run |

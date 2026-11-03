@@ -196,3 +196,97 @@ TEST_CASE("Level cleanup: anything not a level is refused untouched")
     CHECK(!error.empty());
     CHECK(junk == copy);
 }
+
+TEST_CASE("Level cleanup: a face added after the removals heads its cell's run")
+{
+    const auto shipped = ReadDemo("SECT11/L112LEV.MAP");
+    std::string error;
+    Game::LevelFileLayout::Layout lay;
+    REQUIRE(Game::LevelFileLayout::Read(shipped, lay, error));
+    // A cell with a run, and a face of it to lay the new one over (its
+    // corners in reverse, so it faces the other way), plus one corner moved
+    // off every vertex so a vertex has to be added.
+    size_t cell = lay.cells;
+    uint32_t start = 0;
+    for (size_t c = lay.cells / 2; c < lay.cells; ++c)
+    {
+        const uint32_t s = lay.CellStart(shipped, c);
+        if (s != Game::LevelFileLayout::NO_RUN && s > 1 && s < lay.recordCount && lay.Corner(shipped, s, 3) >= 0) { cell = c; start = s; break; }
+    }
+    REQUIRE(cell < lay.cells);
+    Game::LevelCleanup::Addition add;
+    for (int k = 3; k >= 0; --k)
+    {
+        const size_t v = size_t(lay.Corner(shipped, start, k));
+        add.corners.push_back({ lay.Coordinate(shipped, v, 0), lay.Coordinate(shipped, v, 1), lay.Coordinate(shipped, v, 2) });
+    }
+    add.corners[0][1] += 7;   // off the vertex there
+    add.texture = 12; add.routine = 0; add.light = 0x8b;   // the run-end bit is never written
+    add.cellX = int(cell % size_t(lay.mapLength)); add.cellZ = int(cell / size_t(lay.mapLength));
+
+    // Through the list file's form and back.
+    Game::LevelCleanup::Plan plan;
+    REQUIRE(Game::LevelCleanup::ReadAdditions(Game::LevelCleanup::WriteAdditions({ add }), plan.add, error));
+    REQUIRE(plan.add.size() == 1);
+    CHECK(plan.add[0].corners == add.corners);
+
+    auto bytes = shipped;
+    Game::LevelCleanup::Report report;
+    REQUIRE(Game::LevelCleanup::Apply(bytes, plan, report, error));
+    CHECK_EQ(report.facesAdded, 1);
+    CHECK_EQ(report.verticesAdded, 1);
+    Game::LevelFileLayout::Layout after;
+    REQUIRE(Game::LevelFileLayout::Read(bytes, after, error));
+    CHECK_EQ(int(after.recordCount), int(lay.recordCount) + 1);
+    CHECK_EQ(int(after.vertexCount), int(lay.vertexCount) + 1);
+    CHECK_EQ(bytes.size(), shipped.size() + 20 + 8);
+    // The cell still starts where it did - at the new face - and the face it
+    // started with comes next; every later run start moved up one.
+    CHECK_EQ(after.CellStart(bytes, cell), start);
+    CHECK_EQ(int(after.Texture(bytes, start)), 12);
+    CHECK_EQ(int(after.Light(bytes, start)), 0x0b);
+    for (int k = 0; k < 4; ++k)
+    {
+        const size_t v = size_t(after.Corner(bytes, start, k));
+        REQUIRE(v < after.vertexCount);
+        CHECK_EQ(int(after.Coordinate(bytes, v, 1)), add.corners[size_t(k)][1]);
+    }
+    CHECK_EQ(after.Texture(bytes, start + 1), lay.Texture(shipped, start));
+    for (size_t c = 0; c < lay.cells; ++c)
+    {
+        const uint32_t was = lay.CellStart(shipped, c), now = after.CellStart(bytes, c);
+        if (c == cell || was == Game::LevelFileLayout::NO_RUN || was == 0 || was < start) { CHECK_EQ(now, was); }
+        else { CHECK_EQ(now, was + 1); }
+    }
+    // The walk takes in the same cells.
+    const auto before = Formats::LevelLoader::Parse(shipped, "before");
+    const auto level = Formats::LevelLoader::Parse(bytes, "after");
+    CHECK(Game::CreatureSight::DrawnCells(before, add.cellX, add.cellZ, 0, 0x800)
+          == Game::CreatureSight::DrawnCells(level, add.cellX, add.cellZ, 0, 0x800));
+}
+
+TEST_CASE("Level cleanup: faces to add that cannot be placed are refused")
+{
+    std::vector<Game::LevelCleanup::Addition> add;
+    std::string error;
+    CHECK(!Game::LevelCleanup::ReadAdditions("[{\"corners\": [[0, 0, 0], [1, 0, 0]], \"cell\": [1, 1]}]", add, error));
+    CHECK(!Game::LevelCleanup::ReadAdditions("[{\"corners\": [[0, 0, 0], [1, 0, 0], [1, 1]], \"cell\": [1, 1]}]", add, error));
+    CHECK(!Game::LevelCleanup::ReadAdditions("{}", add, error));
+
+    // A cell with no run to join: the file is left as it was.
+    const auto shipped = ReadDemo("SECT11/L112LEV.MAP");
+    Game::LevelFileLayout::Layout lay;
+    REQUIRE(Game::LevelFileLayout::Read(shipped, lay, error));
+    size_t empty = lay.cells;
+    for (size_t c = 0; c < lay.cells; ++c) { if (lay.CellStart(shipped, c) == Game::LevelFileLayout::NO_RUN) { empty = c; break; } }
+    REQUIRE(empty < lay.cells);
+    Game::LevelCleanup::Plan plan;
+    Game::LevelCleanup::Addition a;
+    a.corners = { { 0, 0, 0 }, { 512, 0, 0 }, { 512, 0, 512 } };
+    a.cellX = int(empty % size_t(lay.mapLength)); a.cellZ = int(empty / size_t(lay.mapLength));
+    plan.add.push_back(a);
+    auto bytes = shipped;
+    Game::LevelCleanup::Report report;
+    CHECK(!Game::LevelCleanup::Apply(bytes, plan, report, error));
+    CHECK(bytes == shipped);
+}

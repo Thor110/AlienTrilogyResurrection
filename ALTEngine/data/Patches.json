@@ -33312,46 +33312,46 @@
     },
     {
       "target": "SECT12/L161LEV.MAP",
-      "note": "L161LEV.MAP - UV review (TESTING, Edward with the Face Index Display, 2026): a missing face, the quad between faces 0, 29, 36 and 40 (vertices 4178, 4177, 4148, 4149), filled with texture 109, routine 0 and light 13 like its neighbours. A face cannot be added without moving everything after it, so face 3758, an exact duplicate of 3757 (the same triangle drawn twice), is given over to it; 3757 still draws that triangle. Its end-of-run bit is kept. In the port this is exact; the original draws faces in per-cell runs and 3758's run is elsewhere in the level, so in DOS the new face may only show when that part of the level is drawn. Tracked in Notes/uv-review-log.md",
+      "note": "L161LEV.MAP - face 3758 as shipped: (8645, 8646, 8655, -1), texture 1, routine 1, light 0x08 - the triangle of face 3757 drawn a second time. An earlier patch gave it over to the missing quad between faces 0, 29, 36 and 40; that quad is record 0, the first face of the first cell's run, which the Level Cleanup now gives back with the cell, so this sets 3758 back (on a fresh install it is already so) and the Level Cleanup takes it out as a duplicate. Tracked in Notes/uv-review-log.md",
       "edits": [
         {
           "offset": "0x29E1C",
           "bytes": [
-            "0x52",
-            "0x10",
+            "0xC5",
+            "0x21",
             "0x00",
             "0x00",
-            "0x51",
-            "0x10",
+            "0xC6",
+            "0x21",
             "0x00",
             "0x00",
-            "0x34",
-            "0x10",
+            "0xCF",
+            "0x21",
             "0x00",
             "0x00",
-            "0x35",
-            "0x10",
-            "0x00",
-            "0x00"
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
           ]
         },
         {
           "offset": "0x29E2C",
           "bytes": [
-            "0x6D",
+            "0x01",
             "0x00"
           ]
         },
         {
           "offset": "0x29E2E",
           "bytes": [
-            "0x00"
+            "0x01"
           ]
         },
         {
           "offset": "0x29E2F",
           "bytes": [
-            "0x0D"
+            "0x08"
           ]
         }
       ]

@@ -63,7 +63,7 @@ namespace ALTEngine::Game::LevelCleanupPlan
 
         // Steps 1, 2 and 5.
         bool OutOfViewAndFacingAway(const std::vector<uint8_t>& bytes, const Layout& lay, const Formats::LevelGeometry& level,
-                                    const std::vector<uint8_t>& reach, LevelCleanup::Plan& plan)
+                                    const std::vector<uint8_t>& reach, bool recordZeroAllowed, LevelCleanup::Plan& plan)
         {
             const size_t recordCount = lay.recordCount, cells = lay.cells;
             const int mapLength = lay.mapLength, mapWidth = lay.mapWidth;
@@ -87,7 +87,7 @@ namespace ALTEngine::Game::LevelCleanupPlan
             struct Plane { double nx = 0, ny = 0, nz = 0, d = 0; };
             struct Planes { std::array<Plane, 4> p{}; int count = 0; bool culled = false; };
             std::vector<Planes> planes(recordCount);
-            for (size_t r = 1; r < recordCount; ++r)
+            for (size_t r = 0; r < recordCount; ++r)   // record 0 too: the first cell's first face
             {
                 if (recordA(r) == -1 || !Formats::ClassifyDrawRoutine(lay.Routine(bytes, r)).culled) { continue; }
                 const int n = lay.Corner(bytes, r, 3) < 0 ? 3 : 4;
@@ -156,6 +156,11 @@ namespace ALTEngine::Game::LevelCleanupPlan
                 return false;
             };
 
+            // The first cell: the first with start 0. Its run is the file's
+            // first, from record 0 - which that start hides.
+            size_t firstCell = cells;
+            for (size_t c = 0; c < cells; ++c) { if (cellStart(c) == 0) { firstCell = c; break; } }
+
             // Each reachable cell's view walk: the cells it draws are
             // drawable, and each face of theirs that faces the eye's cell is seen.
             std::vector<uint8_t> drawable(cells, 0), seen(recordCount, 0);
@@ -169,7 +174,7 @@ namespace ALTEngine::Game::LevelCleanupPlan
                     drawable[k] = 1;
                     const uint32_t start = cellStart(k);
                     if (start == NO_RUN || start >= recordCount) { continue; }
-                    forRun(start == 0 ? 1 : start, [&](size_t r) {
+                    forRun(start == 0 ? (k == firstCell ? 0 : 1) : start, [&](size_t r) {
                         if (!seen[r] && (!planes[r].culled || seesFront(planes[r], i))) { seen[r] = 1; }
                     });
                 }
@@ -184,12 +189,12 @@ namespace ALTEngine::Game::LevelCleanupPlan
                 forRun(start, [&](size_t r) { ++owners[r]; if (drawable[c]) { inView[r] = 1; } });
             }
 
-            // The first cell: the first cell with start 0, when records 1..
-            // are unlisted and end in the run bit.
-            size_t firstCell = cells;
-            for (size_t c = 0; c < cells; ++c) { if (cellStart(c) == 0) { firstCell = c; break; } }
+            // The first cell's run: record 0, and on 35 levels records 1.. too
+            // (unlisted by any cell, ending in the run bit); on the other 10
+            // record 0 ends it alone.
             int firstRun = 0;
-            if (firstCell < cells && recordCount > 1 && owners[1] == 0 && recordA(1) != -1)
+            const bool zeroAlone = recordCount > 0 && recordA(0) != -1 && (lay.Light(bytes, 0) & RUN_END) != 0;
+            if (firstCell < cells && !zeroAlone && recordCount > 1 && owners[1] == 0 && recordA(1) != -1)
             {
                 bool ended = false;
                 for (size_t r = 1; r < recordCount && !ended; ++r)
@@ -208,9 +213,14 @@ namespace ALTEngine::Game::LevelCleanupPlan
                 if (!inView[r]) { remove.insert(uint32_t(r)); ++plan.outOfView; }
                 else if (!seen[r]) { remove.insert(uint32_t(r)); ++plan.facingAway; }
             }
-            if (firstRun > 0)
+            // Record 0 is given back (as a copy at the head of the run, see
+            // LevelCleanup::Apply) when the cell is drawn and it is seen.
+            const bool zeroKept = recordZeroAllowed && firstCell < cells && recordCount > 0 && recordA(0) != -1
+                                  && (zeroAlone || firstRun > 0) && drawable[firstCell] && seen[0];
+            if (firstRun > 0 || zeroKept)
             {
                 plan.firstCell = int(firstCell);
+                plan.recordZero = zeroKept;
                 for (int k = 1; k <= firstRun; ++k)
                 {
                     if (!drawable[firstCell]) { remove.insert(uint32_t(k)); ++plan.outOfView; }
@@ -405,7 +415,7 @@ namespace ALTEngine::Game::LevelCleanupPlan
         if (level.collisionGrid.size() != lay.cells) { error = "the cell grid is not where the header puts it"; return false; }
 
         const auto reach = Reachable(level, options.multiplayer, options.skipFirstNode);
-        if (!OutOfViewAndFacingAway(bytes, lay, level, reach, plan)) { error = "could not judge the faces"; return false; }
+        if (!OutOfViewAndFacingAway(bytes, lay, level, reach, options.recordZero, plan)) { error = "could not judge the faces"; return false; }
 
         std::set<uint32_t> remove(plan.remove.begin(), plan.remove.end());
 
