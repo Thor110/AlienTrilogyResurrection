@@ -107,6 +107,11 @@ namespace ALTEngine::Game::CreatureSight
     std::vector<uint8_t> DrawnCells(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ,
                                     int viewYaw, int minHalfWidth = 0, uint16_t* zoneMask = nullptr);
 
+    // The same walk's cells as a list, in the order it takes them (the
+    // player's own first); for callers that run it many times.
+    std::vector<int> DrawnCellList(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ,
+                                   int viewYaw, int minHalfWidth);
+
     // Which cell each level face belongs to: a cell's bytes 0-3 give the
     // first face of its run, counting from 1 (record 0 is the blank before
     // face 0), and the run ends at the face whose light byte (+0x13) has bit

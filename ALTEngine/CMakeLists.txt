@@ -91,6 +91,8 @@ add_library(ALTGame STATIC
     src/Game/SaveGame.cpp
     src/Game/Triggers.cpp
     src/Game/LevelCleanup.cpp
+    src/Game/LevelCleanupPlan.cpp
+    src/Game/LevelOcclusion.cpp
     src/Net/UdpSocket.cpp
     src/Net/Protocol.cpp
     src/Net/Session.cpp
@@ -106,10 +108,15 @@ endif()
 # ALTLevelScan - a command-line check of every level's texture orientation
 # (src/Tools/LevelScanMain.cpp). SDL-free, like the tests.
 # ---------------------------------------------------------------------------
-option(ALTENGINE_BUILD_TOOLS "Build the ALTLevelScan command-line tool" ON)
+option(ALTENGINE_BUILD_TOOLS "Build the ALTLevelScan and ALTLevelCleanupList command-line tools" ON)
 if (ALTENGINE_BUILD_TOOLS)
     add_executable(ALTLevelScan src/Tools/LevelScanMain.cpp)
     target_link_libraries(ALTLevelScan PRIVATE ALTFormats alt_warnings nlohmann_json::nlohmann_json)
+
+    # ALTLevelCleanupList - works out data/LevelCleanupList.json, the Level
+    # Cleanup's per-level plans (src/Tools/LevelCleanupListMain.cpp).
+    add_executable(ALTLevelCleanupList src/Tools/LevelCleanupListMain.cpp)
+    target_link_libraries(ALTLevelCleanupList PRIVATE ALTGame ALTFormats alt_warnings nlohmann_json::nlohmann_json)
 endif()
 
 # ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 #include "Formats/LevelLoader.h"
 #include "Game/CreatureSight.h"
 #include "Game/LevelCleanup.h"
+#include "Game/LevelCleanupPlan.h"
 
 #include <fstream>
 #include <iterator>
@@ -17,6 +18,19 @@ namespace
     {
         std::ifstream in(AltTest::RequireDemoFile(relative), std::ios::binary);
         return std::vector<uint8_t>(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+
+    // Works out the plan and applies it, as ALTLevelCleanupList and the
+    // install do between them (no textures: no cut-out counts as solid).
+    bool Clean(std::vector<uint8_t>& bytes, bool multiplayer, Game::LevelCleanup::Report& report, std::string& error,
+               Game::LevelCleanup::Plan* planOut = nullptr)
+    {
+        Game::LevelCleanupPlan::Options options;
+        options.multiplayer = multiplayer;
+        Game::LevelCleanup::Plan plan;
+        if (!Game::LevelCleanupPlan::Make(bytes, options, plan, error)) { return false; }
+        if (planOut) { *planOut = plan; }
+        return Game::LevelCleanup::Apply(bytes, plan, report, error);
     }
 
     // Every cell's faces as drawn: texture, routine, light and the corners' coordinates.
@@ -47,7 +61,7 @@ TEST_CASE("Level cleanup: L111 loses the faces it never draws and nothing else")
     auto bytes = shipped;
     Game::LevelCleanup::Report report;
     std::string error;
-    REQUIRE(Game::LevelCleanup::Clean(bytes, false, report, error));
+    REQUIRE(Clean(bytes, false, report, error));
     CHECK_EQ(report.facesRemoved, 7);         // four behind the start, three on the map's top edge
     CHECK(report.verticesRemoved > 0);
     CHECK(!report.firstCellRestored);         // L111's first cell has no faces in the file
@@ -67,10 +81,10 @@ TEST_CASE("Level cleanup: L111 loses the faces it never draws and nothing else")
     CHECK_EQ(after.monsters.size(), before.monsters.size());
     CHECK_EQ(after.doors.size(), before.doors.size());
 
-    // Again: nothing more to do.
+    // Planned again from the cleaned file: nothing more to do.
     auto again = bytes;
     Game::LevelCleanup::Report second;
-    REQUIRE(Game::LevelCleanup::Clean(again, false, second, error));
+    REQUIRE(Clean(again, false, second, error));
     CHECK(!second.Changed());
     CHECK(again == bytes);
 }
@@ -81,7 +95,7 @@ TEST_CASE("Level cleanup: L112's first cell gets its own face back")
     const auto before = Formats::LevelLoader::Parse(bytes, "before");
     Game::LevelCleanup::Report report;
     std::string error;
-    REQUIRE(Game::LevelCleanup::Clean(bytes, false, report, error));
+    REQUIRE(Clean(bytes, false, report, error));
     CHECK(report.firstCellRestored);
     CHECK_EQ(report.firstCellFaces, 1);
     const auto after = Formats::LevelLoader::Parse(bytes, "after");
@@ -91,13 +105,71 @@ TEST_CASE("Level cleanup: L112's first cell gets its own face back")
     CHECK(ownerAfter[0] >= 0);                 // now its cell's run
 }
 
+TEST_CASE("Level cleanup: the view walk takes in the same cells after it")
+{
+    // The walk spreads through a cell's zones only while the cell has a run
+    // start, so a drawn cell must keep one even when it loses every face.
+    for (const char* name : { "SECT11/L111LEV.MAP", "SECT11/L112LEV.MAP" })
+    {
+        const auto shipped = ReadDemo(name);
+        auto bytes = shipped;
+        Game::LevelCleanup::Report report;
+        std::string error;
+        REQUIRE(Clean(bytes, false, report, error));
+        const auto before = Formats::LevelLoader::Parse(shipped, "before");
+        const auto after = Formats::LevelLoader::Parse(bytes, "after");
+        const int length = before.header.mapLength;
+        int compared = 0;
+        for (size_t cell = 0; cell < before.collisionGrid.size(); cell += 37)
+        {
+            const int x = int(cell % size_t(length)), z = int(cell / size_t(length));
+            for (int yaw = 0; yaw < 4096; yaw += 512)
+            {
+                for (int width : { 0, 0x2a0 })
+                {
+                    CHECK(Game::CreatureSight::DrawnCells(before, x, z, yaw, width) == Game::CreatureSight::DrawnCells(after, x, z, yaw, width));
+                    ++compared;
+                }
+            }
+        }
+        CHECK(compared > 0);
+    }
+}
+
+TEST_CASE("Level cleanup: plans name faces the way the list file writes them")
+{
+    std::vector<uint32_t> values;
+    CHECK(Game::LevelCleanup::EncodeList({ 9, 1, 2, 3, 4, 5, 12, 13, 40, 9 }) == "1-5,9,12-13,40");
+    REQUIRE(Game::LevelCleanup::DecodeList("1-5,9,12-13,40", values));
+    CHECK(values == std::vector<uint32_t>({ 1, 2, 3, 4, 5, 9, 12, 13, 40 }));
+    REQUIRE(Game::LevelCleanup::DecodeList("", values));
+    CHECK(values.empty());
+    CHECK(!Game::LevelCleanup::DecodeList("1-", values));
+    CHECK(!Game::LevelCleanup::DecodeList("5-2", values));
+    CHECK(!Game::LevelCleanup::DecodeList("1,,2", values));
+    CHECK(!Game::LevelCleanup::DecodeList("x", values));
+}
+
+TEST_CASE("Level cleanup: a plan naming faces the file does not have is refused")
+{
+    auto bytes = ReadDemo("SECT11/L111LEV.MAP");
+    const auto copy = bytes;
+    Game::LevelCleanup::Plan plan;
+    plan.remove = { 60000 };
+    Game::LevelCleanup::Report report;
+    std::string error;
+    CHECK(!Game::LevelCleanup::Apply(bytes, plan, report, error));
+    CHECK(!error.empty());
+    CHECK(bytes == copy);
+}
+
 TEST_CASE("Level cleanup: anything not a level is refused untouched")
 {
     std::vector<uint8_t> junk{ 'F', 'O', 'R', 'M', 0, 0, 0, 4, 'J', 'U', 'N', 'K' };
     const auto copy = junk;
     Game::LevelCleanup::Report report;
     std::string error;
-    CHECK(!Game::LevelCleanup::Clean(junk, false, report, error));
+    CHECK(!Clean(junk, false, report, error));
     CHECK(!error.empty());
     CHECK(junk == copy);
 }

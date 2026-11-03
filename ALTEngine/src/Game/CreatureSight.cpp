@@ -223,6 +223,15 @@ namespace ALTEngine::Game::CreatureSight
         return drawn;
     }
 
+    std::vector<int> DrawnCellList(const Formats::LevelGeometry& level, int playerCellX, int playerCellZ,
+                                   int viewYaw, int minHalfWidth)
+    {
+        std::vector<int> list;
+        list.reserve(256);
+        WalkView(level, playerCellX, playerCellZ, viewYaw, [&](int i) { list.push_back(i); }, minHalfWidth);
+        return list;
+    }
+
     std::vector<int32_t> FaceCells(const Formats::LevelGeometry& level)
     {
         std::vector<int32_t> owner(level.quads.size(), -1);

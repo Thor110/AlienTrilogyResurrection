@@ -42,10 +42,11 @@ namespace ALTEngine::Bootstrap
         // left it. The order every start: put the untrimmed file back (the
         // cleaned one set aside as <file>.cleaned), run the fixes against it
         // as they were written, then - with the option on - put the cleaned
-        // copy back if it was made from exactly this file (its CRC is kept in
-        // LevelCleanup.json), or clean it again; with it off, the untrimmed
-        // file stays and the cleaned copy goes. Only renames, unless a fix
-        // changed the level.
+        // copy back if it was made from exactly this file and list (their
+        // CRCs are kept in LevelCleanup.json), or apply the level's plan from
+        // data/LevelCleanupList.json again (worked out beforehand by
+        // ALTLevelCleanupList; nothing is judged here); with it off, the
+        // untrimmed file stays and the cleaned copy goes.
         std::filesystem::path With(const std::filesystem::path& p, const char* suffix)
         {
             auto out = p;
@@ -100,7 +101,37 @@ namespace ALTEngine::Bootstrap
                 if (in) { try { in >> state; } catch (...) { state = nlohmann::json::object(); } }
                 if (!state.is_object()) { state = nlohmann::json::object(); }
             }
-            int cleaned = 0, kept = 0, restored = 0;
+            // The plans, worked out once by ALTLevelCleanupList: nothing is
+            // judged here, only applied.
+            nlohmann::json list;
+            uint32_t listCrc = 0;
+            if (enabled)
+            {
+                const auto listPath = ExecutableDirectory() / "data" / "LevelCleanupList.json";
+                std::vector<uint8_t> raw;
+                if (!ReadAll(listPath, raw))
+                {
+                    std::cout << "Level cleanup: " << listPath.string() << " is missing - levels left as the fixes leave them.\n";
+                    enabled = false;
+                }
+                else
+                {
+                    listCrc = ALTEngine::Formats::Crc32(raw.data(), raw.size());
+                    try { list = nlohmann::json::parse(raw.begin(), raw.end()); }
+                    catch (...) { list = nlohmann::json(); }
+                    if (!list.is_object() || !list.contains("levels") || !list["levels"].is_object())
+                    {
+                        std::cout << "Level cleanup: " << listPath.string() << " cannot be read - levels left as the fixes leave them.\n";
+                        enabled = false;
+                    }
+                }
+            }
+            // Cleaned copies made from another list are made again.
+            const bool current = state.contains("list") && state["list"].is_number_unsigned() && state["list"].get<uint32_t>() == listCrc;
+            state.erase("version");
+            if (enabled) { state["list"] = listCrc; } else { state.erase("list"); }
+
+            int cleaned = 0, kept = 0, restored = 0, skipped = 0;
             size_t saved = 0;
             std::error_code ec;
             for (const auto& relative : ALTEngine::Game::LevelCleanup::LevelFiles(cdDirectory))
@@ -117,7 +148,8 @@ namespace ALTEngine::Bootstrap
                 std::vector<uint8_t> bytes;
                 if (!ReadAll(file, bytes)) { continue; }
                 const uint32_t source = ALTEngine::Formats::Crc32(bytes.data(), bytes.size());
-                if (std::filesystem::exists(cleanedCopy, ec) && state.contains(key) && state[key].get<uint32_t>() == source)
+                if (current && std::filesystem::exists(cleanedCopy, ec) && state.contains(key) && state[key].is_number_unsigned()
+                    && state[key].get<uint32_t>() == source)
                 {
                     std::filesystem::rename(file, With(file, ".untrimmed"), ec);
                     if (!ec) { std::filesystem::rename(cleanedCopy, file, ec); }
@@ -126,15 +158,36 @@ namespace ALTEngine::Bootstrap
                     continue;
                 }
                 std::filesystem::remove(cleanedCopy, ec);
+                state.erase(key);
+                const auto& levels = list["levels"];
+                if (!levels.contains(key)) { continue; }
+                const auto& entry = levels[key];
+                if (!entry.is_object() || !entry.contains("crc") || !entry["crc"].is_number_unsigned() || entry["crc"].get<uint32_t>() != source)
+                {
+                    std::cout << "  [skipped]  " << key << " - its plan was made for another version of the file (a fix changed it?);"
+                              << " remake data/LevelCleanupList.json with ALTLevelCleanupList\n";
+                    ++skipped;
+                    continue;
+                }
+                ALTEngine::Game::LevelCleanup::Plan plan;
+                auto text = [&](const char* name) { return entry.contains(name) && entry[name].is_string() ? entry[name].get<std::string>() : std::string(); };
+                auto count = [&](const char* name) { return entry.contains(name) && entry[name].is_number_integer() ? entry[name].get<int>() : 0; };
+                if (!ALTEngine::Game::LevelCleanup::DecodeList(text("remove"), plan.remove)
+                    || !ALTEngine::Game::LevelCleanup::DecodeList(text("clear"), plan.clear))
+                {
+                    std::cout << "  [FAILED]   " << key << " - its plan cannot be read\n";
+                    continue;
+                }
+                plan.firstCell = entry.contains("firstCell") && entry["firstCell"].is_number_integer() ? entry["firstCell"].get<int>() : -1;
                 ALTEngine::Game::LevelCleanup::Report report;
                 std::string error;
                 std::vector<uint8_t> original = bytes;
-                if (!ALTEngine::Game::LevelCleanup::Clean(bytes, key.find("/L9") != std::string::npos, report, error))
+                if (!ALTEngine::Game::LevelCleanup::Apply(bytes, plan, report, error))
                 {
                     std::cout << "  [FAILED]   " << key << " - " << error << "\n";
                     continue;
                 }
-                if (!report.Changed()) { state.erase(key); continue; }
+                if (!report.Changed()) { continue; }
                 if (!WriteAll(With(file, ".untrimmed"), original) || !WriteAll(file, bytes))
                 {
                     std::cout << "  [FAILED]   " << key << " - could not write the cleaned level\n";
@@ -144,14 +197,19 @@ namespace ALTEngine::Bootstrap
                 state[key] = source;
                 ++cleaned;
                 saved += report.bytesBefore - report.bytesAfter;
-                std::cout << "  [cleaned]  " << key << ": " << report.facesRemoved << " faces and "
-                          << report.verticesRemoved << " vertices never drawn taken out"
+                std::cout << "  [cleaned]  " << key << ": " << report.facesRemoved << " faces (" << count("outOfView") << " out of view, "
+                          << count("facingAway") << " facing away, " << count("inLifts") << " in sealed lifts, " << count("hidden")
+                          << " hidden" << (count("byHand") ? ", " + std::to_string(count("byHand")) + " by hand" : std::string()) << ") and " << report.verticesRemoved << " vertices taken out"
                           << (report.firstCellRestored ? ", first cell's " + std::to_string(report.firstCellFaces) + " faces restored" : std::string())
                           << "\n";
             }
             std::ofstream out(statePath, std::ios::trunc);
             out << state.dump(1);
-            if (enabled) { std::cout << "Level cleanup: " << cleaned << " cleaned (" << saved << " bytes), " << kept << " already clean.\n"; }
+            if (enabled)
+            {
+                std::cout << "Level cleanup: " << cleaned << " cleaned (" << saved << " bytes), " << kept << " already clean"
+                          << (skipped ? ", " + std::to_string(skipped) + " skipped" : std::string()) << ".\n";
+            }
             else if (restored) { std::cout << "Level cleanup off: " << restored << " levels back as the fixes left them.\n"; }
         }
     }

@@ -1,4 +1,4 @@
-# What remains (after zip 104)
+# What remains (after zip 107)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -9,6 +9,56 @@ textures, done once everything else is in.
 Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
+
+Changed in zips 106-107, to check: **Level Cleanup is worked out once, not at install, and trims face by face**
+(Edward: L321's trim left the faces behind the door walls; then "we shouldn't be putting all this work in client
+side", and the lift crawl).
+- **Worked out once:** `ALTLevelCleanupList <CD folder>` (src/Tools/LevelCleanupListMain.cpp,
+  Game/LevelCleanupPlan) judges every level as the fixes leave it and writes `data/LevelCleanupList.json`: per
+  level, the CRC32 of the file it judged, the face records to take out, the cells that become FF FF FF FF and the
+  first cell to give back. The install only applies that (Game/LevelCleanup::Apply, a few milliseconds a level),
+  and only to a file with that CRC; another file is reported `[skipped]` and left as the fixes leave it. **Remake
+  the list whenever a Patches.json fix changes a level** (run the install with the option off, then the tool on
+  its CD folder; about two minutes). A cleaned copy made from an older list is made again.
+- **Facing away:** a one-sided face (routines 0, 1, 2, 8, 10) whose front no place the eye can be in a cell that
+  draws it ever looks at goes. A quad is judged by all four of its triangles (bent quads show two sides).
+- **Sealed lifts (L321-L325):** from each lift door (its six tiles, textures 254/255, 262/263, 270/271) the faces
+  behind it are crawled corner to shared corner (within 3 units - the corners are often a unit or two apart),
+  staying behind the door's plane. A crawl that stays lift-sized (at most 120 faces, 2600 units deep; a lift is 74
+  and 2048), touches no cell the player can reach and sits behind a door with no clear texel is a sealed lift; its
+  faces go where no sight line reaches them (sight lines alone, not the walk's cones - that takes the slanted faces
+  just behind each door's corners that zip 106 could not). Taking them whole was tried first: on L321 it got all
+  of them, but on L322-L325 it took 50 lift-floor faces just inside doors that a low eye (a dying player's) sees
+  under the door's bottom edge. A lift a level uses is reached, and a door that opens onto more than a lift crawls
+  far more than 120 faces: both are left.
+- **What a sight line still reaches** is listed, lift by lift, in `Notes/level-cleanup-lift-remainder.md` (face
+  numbers as the Face Index Display shows them with the cleanup off, and corners). Any that should go after all:
+  name them in `data/LevelCleanupExtra.json` (by face number, or by corners, which do not move when the cleanup
+  renumbers) and run ALTLevelCleanupList again.
+- **Cut-outs that are solid:** every cut-out texture on L321-L325 (the lift doors drawn with routines 4 and 6
+  among them) has no clear texel, so they hide what is behind them; they now count as opaque, from both sides,
+  in the hidden-face test and for the lift doors (cut-outs elsewhere, the vents and grilles of L111 say, have
+  hundreds of clear texels and still count as see-through).
+- **Hidden:** an opaque face in a cell the player cannot walk into goes if, from every reachable cell whose walk
+  draws it, sight lines from points over the whole cell (the walkable half of a diagonal cell; every eye height
+  from dying to a Modern jump; slopes and lifts) to points over the face all hit opaque faces facing the eye
+  (`Game/LevelOcclusion`, now only run by the tool). A blocker counts only when its cell is drawn at every facing
+  and screen width (a 4:3 window up to all round, as Free Look's steep pitches give) at which the face's cell is
+  drawn with that line on screen; a line must pass 8 units inside a blocker's open edges (wall tops, door sides);
+  and a face with any see-through face between it and the eye's cell is kept. Doors, lifts, windows and crates are
+  objects, never counted as blocking; nothing in a level file that blocks can move.
+- **The walk is untouched:** a drawn cell left with no faces starts at 0 (the blank record, which draws nothing -
+  the first cell's own trick) rather than FF FF FF FF, because the walk only spreads through a cell's zones while it
+  has a start. Checked: from every reachable cell of all 45 levels, at 16 facings and four cone widths, the cleaned
+  levels draw exactly the cells the fixed ones do.
+- **Checked independently:** every face removed from a drawn cell was either confirmed facing away, or re-tested
+  with about six times the sight lines against the cleaned level's own faces (solid cut-outs blocking). For zip
+  107's list, two faces are reached that way, both on L323, just inside a lift door, from 13 cells away under
+  the door's bottom edge; the port's walk never draws their cell with that line on screen, so it never shows them
+  (the check ignores the walk's cones). Everything else removed is out of every sight line. (The check caught two
+  faces on L113's top edge in zip 106, seen over a wall top only by a jumping player nine cells away - the 8-unit
+  margin fixed it - and the 50 lift-floor faces of the lifts-whole try.)
+- Per level: `Notes/level-cleanup-test-list.md`.
 
 Changed in zip 104, to check: **Level Cleanup** (Options > Modern > Testing > Level Cleanup, off by default;
 `Game/LevelCleanup`, run from `Bootstrap/InstallPipeline`). At the next start, in this order: Update Fixes ->
