@@ -1,4 +1,4 @@
-# What remains (after zip 110)
+# What remains (after zip 115)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -23,6 +23,36 @@ Cleanup off (the vertex lists were taken with it on or off as marked; matched to
   6717, 7109 and 7135 by hand, and the central room behind the gate at (31-36, 50) (gate tiles 5864-5866,
   5870-5872, 5876-5878, 5883-5885, z = 7936) as a `rooms` entry: every face crawled from the gate tile 5864
   goes, about 1117 of them. Checked by dense sight lines from every reachable cell: none of them can be seen.
+- **L323-L325** (Edward's second FaceLog, zip 111), all by hand in data/LevelCleanupExtra.json, matched to the
+  fixed files by corners and texture: 40 more on L323 (46 in all: the lifts at (31-36, 64) and round (-6400,
+  -7000) and (-1000, -8700), and the gate's doorway at z 6912-7936), 50 on L324 and 38 on L325 (the same
+  lifts, the side lifts at x = +-15616 and the corner lifts). 14346 faces in all; the view walk is unchanged in
+  every level. Next: Edward flies round every level for strays.
+- **Strays** (Edward's third FaceLog, zip 112), by hand: the black (texture 0) strips at the map's far ends on
+  L112 (4), L113, L114 and L115 (7 each: 0-2 and 8829-8832), L122 (4) and L131 (4), and 24 more on L323 and 2
+  on L325 (the lifts at x = +-15616, round (-11800, 13800), (5600, 5600) and the top lift). 14405 faces in all;
+  the view walk is unchanged in every level. Edward thinks that is all of them.
+- **L361 is off the level list** (zip 112): the unused, unfinished copy of another level, which does not load. Its
+  map was never copied at install, but data/LevelManifest.json still listed it, so Level Select showed it. It is
+  not in the original's campaign (Progression's CAMPAIGN_ORDER), so nothing else changes; 361GFX.B16 is no
+  longer copied either (DiscFileManifest.json). MusicPlayer's ORDER keeps "361", as that is the original's table.
+- **L325's twin ceiling face** (zips 114-115): face 4253 (texture 103, at y 5630 over (1280-1792, 768-1280),
+  routine 0) is wound like a floor, facing up; face 4251 lies on the same four corners wound the other way, as
+  every ceiling face round it is. Zip 114 took out 4251, which left only the wrong-facing one (Edward: "facing
+  the wrong way"); zip 115 takes out 4253 instead, which leaves one ceiling face facing down.
+- **L909's holding rooms taken out by hand** (Edward's FaceLog, zip 115): 163 faces, the floors, walls,
+  ceilings and lift-door dressing of both rooms behind the corridor's doorways (the doorway faces themselves,
+  textures 26 and 0-5, stay as the corridor's wall). 14581 faces in all.
+- **L909's holding rooms** (zip 114), dressed as lifts that do not work: the start room (1-3, 37-40) and its
+  mirror at the corridor's east end (82-84, 37-40). The start room is sealed again (the testing patch that
+  opened (5,37)-(5,40) is undone: Patches.json now sets them back to 01, which also puts back an install the
+  old patch changed). The east room was open: (80,37)-(80,40), in front of its painted lift door, had
+  attribute 0 where the start room's have 1, so a player could walk through the paint, open door 0 at (81,38)
+  and walk in. They are set to 1 too. Edward picks the rooms' faces by hand.
+- **Level Select on a multiplayer map** starts at a random path node as a multiplayer game does
+  (GameplayScreen, MultiplayerSpawn; node 0 skipped on L909 by its digits, not the session's). The cleanup
+  tool's reachable cells on a multiplayer map now start from those path nodes only, not the header's start.
+- **Next, from Edward:** textures that do not match their neighbours, faces drawn two-sided that need not be.
 - **The eye keeps clear of walls** (zip 110): the mover holds the player's centre PROBE_LEAD (200) short of a
   wall cell, ahead and to each side, so the sight-line test now takes the eye no nearer than 190 to a side of
   its cell that borders a wall cell (8 elsewhere). Before, an eye 49 units from the wall beside L322's gate saw
@@ -444,10 +474,8 @@ seen shots and F2-F9 chat in zip 94, the original's starts (a random path node) 
 1. **The score table and the end of a game:** "Minimum game length", the frag table, and what ends a round.
 2. **Pickups, doors and lifts kept the same on every machine** - each machine runs its own level for now
    (seen shots do break the same glass everywhere).
-3. **L909's sealed start room.** Players start at a random path node, and the original skips node 0 on
-   L909 only, so the room is not used in a multiplayer game; the temporary patch (Patch/L909LEV.txt) can be
-   undone. Not done yet: installs that already have it would need the four bytes set back, so it is
-   Edward's call.
+3. **L909's sealed start room.** Done in zip 114: the testing patch is undone and both holding rooms
+   are sealed (see section 1).
 4. **Over the internet:** works by address if the host's UDP port 27960 is open (firewall allowed, and
    forwarded on the router); there is no NAT help. The README has a boxed note on this ("Multiplayer: the
    port to open"), and the Start Multiplayer Game screen says it under its options.

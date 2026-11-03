@@ -922,16 +922,27 @@ namespace ALTViewer
                 Tuple.Create(0x6E862L, new byte[] { 0x15 })
             };
             BinaryUtility.ReplaceBytes(replacements, patchDirectory);
-            // L909LEV.MAP - the start room was sealed by four attribute-1 (wall) cells past its doorway with nothing drawn there;
-            //   they are set to 0, open floor, as on L391 (see Patch/L909LEV.txt). TEMPORARY, for testing: the room is most
-            //   likely the multiplayer holding room, sealed on purpose; undo this once multiplayer spawns are in.
+            // L909LEV.MAP - the start room stays sealed: the four cells past its doorway are set back to 1 (wall), as shipped.
+            //   An earlier patch opened them for testing; the room is the multiplayer holding room (see Patch/L909LEV.txt).
+            //   This sets back a copy the earlier patch changed; on an unpatched one it changes nothing.
             patchDirectory = gameDirectory + "SECT90\\L909LEV.MAP";
             replacements = new List<Tuple<long, byte[]>>()
             {
-                Tuple.Create(0x5083EL, new byte[] { 0x00 }),
-                Tuple.Create(0x50E1EL, new byte[] { 0x00 }),
-                Tuple.Create(0x513FEL, new byte[] { 0x00 }),
-                Tuple.Create(0x519DEL, new byte[] { 0x00 })
+                Tuple.Create(0x5083EL, new byte[] { 0x01 }),
+                Tuple.Create(0x50E1EL, new byte[] { 0x01 }),
+                Tuple.Create(0x513FEL, new byte[] { 0x01 }),
+                Tuple.Create(0x519DEL, new byte[] { 0x01 })
+            };
+            BinaryUtility.ReplaceBytes(replacements, patchDirectory);
+            // L909LEV.MAP - the second holding room (the start room's mirror at the corridor's east end) is sealed the same
+            //   way: the four cells in front of its painted lift door, (80,37)-(80,40), are set to 1 (wall), as
+            //   (5,37)-(5,40) are (see Patch/L909LEV.txt).
+            replacements = new List<Tuple<long, byte[]>>()
+            {
+                Tuple.Create(0x50CEEL, new byte[] { 0x01 }),
+                Tuple.Create(0x512CEL, new byte[] { 0x01 }),
+                Tuple.Create(0x518AEL, new byte[] { 0x01 }),
+                Tuple.Create(0x51E8EL, new byte[] { 0x01 })
             };
             BinaryUtility.ReplaceBytes(replacements, patchDirectory);
             // L112LEV.MAP - a corner under the hanging sign was covered twice: faces 5849 and 5850 lay over triangle 5843

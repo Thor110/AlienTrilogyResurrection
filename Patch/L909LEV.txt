@@ -15,26 +15,37 @@ Face	Offset		Scan	Change	Was					Now
 6022	0x30504	909-15	a half-turn	6815, 6827, 6826, 6813	->	6826, 6813, 6815, 6827
 9710	0x42524	909-20	a quarter-turn	6601, 5940, 5939, 6597	->	5940, 5939, 6597, 6601
 
-The start room's way out (Claude, 2026)
+The start room stays sealed (Claude, 2026)
 
-The player starts in a small room at (1,38) whose doorway (the attribute 6 cells at x = 4) leads to
-the corridor. The four cells just past it, (5,37) to (5,40), have attribute 1, which the level load
-makes a solid wall (0x282f5 sets +7 to 0x80), though nothing is drawn there: the corridor is open to
-look at and impossible to enter, so a game started on this map could not leave the room. The same
-room on L391 has attribute 0 there. Each cell's attribute byte (+0x0a of its 16-byte record) is set
-to 0, open floor; the floor and ceiling heights are unchanged.
+The player's header start is in a small room at (1,38) whose doorway (the attribute 6 cells at x = 4) leads to
+the corridor. The four cells just past it, (5,37) to (5,40), have attribute 1, which the level load makes a
+solid wall (0x282f5 sets +7 to 0x80), though nothing is drawn there. An earlier patch set them to 0 so the
+level could be looked round from the header's start; that is undone. The room is the multiplayer players'
+holding room, sealed on purpose: its lift carries developer graffiti ("RIPLEY WOZ ERE" and the like) in
+colourful textures that match nothing else in the level (Edward, 2026), and the original starts a
+multiplayer player at a random path node, skipping node 0 on this level. ALTEngine now does the same in
+Level Select on a multiplayer map. Each cell's attribute byte (+0x0a of its 16-byte record) is set back to
+01; on a file as shipped this is already so, and only a copy the earlier patch changed is altered.
+
+Cell		Offset		Was (earlier patch)	Now (as shipped)
+(5,37)		0x5083E		00			01
+(5,38)		0x50E1E		00			01
+(5,39)		0x513FE		00			01
+(5,40)		0x519DE		00			01
+
+The second holding room (Claude, 2026)
+
+The same room, mirrored, is at the corridor's east end (82-84, 37-40), behind a lift door painted on the
+corridor's wall (faces with textures 0-5 at x = 17408) and a real door (door 0, at (81,38), unlocked). The
+four cells in front of the painted door, (80,37) to (80,40), have attribute 0 where the start room's have 1,
+so a player could walk through the painted door, open the real one and walk in. They are set to 1, a solid
+wall at load, as at the other end; nothing drawn changes. Neither room is used: both are taken out by the
+Level Cleanup (data/LevelCleanupExtra.json, "rooms").
 
 Cell		Offset		Was	Now
-(5,37)		0x5083E		01	00
-(5,38)		0x50E1E		01	00
-(5,39)		0x513FE		01	00
-(5,40)		0x519DE		01	00
-
-TEMPORARY. This is most likely meant to be sealed: on a multiplayer map the players do not start at
-the header's start, and the room looks like a holding area - its lift carries developer graffiti
-("RIPLEY WOZ ERE" and the like) in colourful textures that match nothing else in the level (Edward,
-2026). It is kept for now so the level can be looked round quickly when testing, and should be undone
-once multiplayer spawns are in: remove this entry from data/Patches.json and ALTViewer's fixer, and set
-the four bytes back to 01.
+(80,37)		0x50CEE		00	01
+(80,38)		0x512CE		00	01
+(80,39)		0x518AE		00	01
+(80,40)		0x51E8E		00	01
 
 Applied by ALTEngine (data/Patches.json) and by ALTViewer's patch button.

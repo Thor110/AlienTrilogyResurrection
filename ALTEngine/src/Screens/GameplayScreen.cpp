@@ -629,7 +629,7 @@ namespace ALTEngine::Screens
             {
                 node = ALTEngine::Game::MultiplayerSpawn::PickNode(
                     static_cast<int>(level.pathNodes.size()), levelStart,
-                    session && session->Level() == "909", [&]() { return static_cast<int>(spawnRandom() & 0x7fffffff); });
+                    digits == "909", [&]() { return static_cast<int>(spawnRandom() & 0x7fffffff); });
                 if (node < 0) { return false; }
                 const auto& pn = level.pathNodes[static_cast<size_t>(node)];
                 const auto* cell = ALTEngine::Formats::CellAt(level, pn.x, pn.y);
@@ -898,8 +898,11 @@ namespace ALTEngine::Screens
                     // spawned facing the wrong way in another level).
                     camera.yaw = static_cast<float>(level.header.playerStartAngle) * (3.14159265f / 4.0f);
                     // Multiplayer: a random path node, not the level's start
-                    // (Game::MultiplayerSpawn, the original's 0x402fc).
-                    if (session && session->Connected())
+                    // (Game::MultiplayerSpawn, the original's 0x402fc). OURS:
+                    // a multiplayer map started on its own (Level Select)
+                    // starts the same way - its header start can be a sealed
+                    // holding room, as L909's is.
+                    if ((session && session->Connected()) || (!digits.empty() && digits[0] == '9'))
                     {
                         float sx = 0, sz = 0, sy = 0;
                         if (spawnAtNode(true, sx, sz, sy))

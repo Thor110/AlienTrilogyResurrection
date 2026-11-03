@@ -13,7 +13,8 @@ namespace ALTEngine::Game::LevelCleanupPlan
     // level file as the fixes leave it:
     //
     //  1. OUT OF VIEW. Every cell the player can walk to is found (from the
-    //     level's start, and every path node on a multiplayer map, through
+    //     level's start, or on a multiplayer map from the path nodes a player
+    //     is started at instead, through
     //     anything that is not a wall to the player; doors all counted open and
     //     heights ignored, so this over-counts), the view walk (0x2745b,
     //     CreatureSight::DrawnCells) is run from each with its cones opened to
@@ -44,7 +45,8 @@ namespace ALTEngine::Game::LevelCleanupPlan
     //  6. BY HAND. Whatever Options::byHand names goes too.
     struct Options
     {
-        bool multiplayer = false;
+        bool multiplayer = false;      // started at its path nodes, not the header's start
+        bool skipFirstNode = false;    // L909: the spawn never uses node 0
         // One flag per face record of the file: a cut-out face (routines 4, 5,
         // 6, 12, 13, 34 drawn as a cut-out) whose texture has no clear texel.
         // It blocks as an opaque face does. Empty: none.

@@ -29147,30 +29147,60 @@
     },
     {
       "target": "SECT90/L909LEV.MAP",
-      "note": "L909LEV.MAP - the start room was sealed: the four cells past its doorway, (5,37)-(5,40), have attribute 1, a solid wall at load (0x282f5), with nothing drawn there, so a player starting at the header's start could never leave. Attribute 0, open floor, as the same doorway is on L391. TEMPORARY, for testing: the room is most likely the multiplayer players' holding room (its lift carries developer graffiti, \"RIPLEY WOZ ERE\" and the like, in textures that do not match the level), sealed on purpose, and this should be undone once multiplayer spawns are in - see Patch/L909LEV.txt (Claude, 2026)",
+      "note": "L909LEV.MAP - the start room stays sealed: the four cells past its doorway, (5,37)-(5,40), are attribute 1 again, a solid wall at load (0x282f5), as shipped. An earlier patch opened them for testing; the room is the multiplayer players' holding room (its lift carries developer graffiti, \"RIPLEY WOZ ERE\" and the like), and multiplayer starts and Level Select on a multiplayer map now put the player at a path node. This sets back an install the earlier patch changed; on a fresh one it is already in place - see Patch/L909LEV.txt (Claude, 2026)",
       "edits": [
         {
           "offset": "0x5083E",
           "bytes": [
-            "0x00"
+            "0x01"
           ]
         },
         {
           "offset": "0x50E1E",
           "bytes": [
-            "0x00"
+            "0x01"
           ]
         },
         {
           "offset": "0x513FE",
           "bytes": [
-            "0x00"
+            "0x01"
           ]
         },
         {
           "offset": "0x519DE",
           "bytes": [
-            "0x00"
+            "0x01"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L909LEV.MAP",
+      "note": "L909LEV.MAP - the second holding room, the start room's mirror at the corridor's east end (82-84, 37-40), is sealed as the first is: the four cells in front of its painted lift door, (80,37)-(80,40), had attribute 0, so a player could walk through the painted door, open the real door behind it (door 0 at (81,38)) and into a room the level never uses. Attribute 1, a solid wall at load, as (5,37)-(5,40) are at the other end. Both rooms are then trimmed by the Level Cleanup - see Patch/L909LEV.txt (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x50CEE",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x512CE",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x518AE",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x51E8E",
+          "bytes": [
+            "0x01"
           ]
         }
       ]

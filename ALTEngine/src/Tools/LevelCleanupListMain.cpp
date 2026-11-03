@@ -143,6 +143,7 @@ int main(int argc, char** argv)
 
         G::LevelCleanupPlan::Options options;
         options.multiplayer = digits[0] == '9';
+        options.skipFirstNode = digits == "909";
         options.solid = SolidCutouts(bytes, cd / relative.parent_path() / (digits + "GFX.B16"));
         if (digits >= "321" && digits <= "325") { options.liftDoorTextures = LIFT_DOOR; }
 

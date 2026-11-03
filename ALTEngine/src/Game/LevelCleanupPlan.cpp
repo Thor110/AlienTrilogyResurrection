@@ -23,7 +23,7 @@ namespace ALTEngine::Game::LevelCleanupPlan
         struct V3 { double x, y, z; };
 
         // Every cell the player can walk to.
-        std::vector<uint8_t> Reachable(const Formats::LevelGeometry& level, bool multiplayer)
+        std::vector<uint8_t> Reachable(const Formats::LevelGeometry& level, bool multiplayer, bool skipFirstNode)
         {
             const int length = level.header.mapLength;
             std::vector<uint8_t> reach(level.collisionGrid.size(), 0);
@@ -32,8 +32,19 @@ namespace ALTEngine::Game::LevelCleanupPlan
                 const int i = Formats::CellIndex(level, x, z);
                 if (i >= 0 && !reach[size_t(i)]) { reach[size_t(i)] = 1; queue.push_back(i); }
             };
-            seed(level.header.playerStartX, level.header.playerStartY);
-            if (multiplayer) { for (const auto& n : level.pathNodes) { seed(n.x, n.y); } }
+            // A multiplayer map is started at a path node, never at the
+            // header's start (MultiplayerSpawn; Level Select does the same):
+            // not node 0 on L909, nor a node in a wall cell, which the spawn
+            // draws again. L909's header start is a sealed holding room.
+            if (!multiplayer) { seed(level.header.playerStartX, level.header.playerStartY); }
+            for (size_t k = 0; multiplayer && k < level.pathNodes.size(); ++k)
+            {
+                if (k == 0 && skipFirstNode && level.pathNodes.size() > 1) { continue; }
+                const auto& n = level.pathNodes[k];
+                const int i = Formats::CellIndex(level, n.x, n.y);
+                if (i >= 0 && PlayerMover::WallAttribute(level.collisionGrid[size_t(i)].attribute)) { continue; }
+                seed(n.x, n.y);
+            }
             for (size_t head = 0; head < queue.size(); ++head)
             {
                 const int i = queue[head], x = i % length, z = i / length;
@@ -309,7 +320,6 @@ namespace ALTEngine::Game::LevelCleanupPlan
                 }
                 ++doors;
             }
-
             constexpr size_t MOST_FACES = 120;      // a lift is 74 (L321-L325); anything bigger is not one
             constexpr double DEEPEST = 2600.0;      // and runs 2048 behind its door
             for (int g = 0; g < doors; ++g)
@@ -394,7 +404,7 @@ namespace ALTEngine::Game::LevelCleanupPlan
         catch (const std::exception& e) { error = e.what(); return false; }
         if (level.collisionGrid.size() != lay.cells) { error = "the cell grid is not where the header puts it"; return false; }
 
-        const auto reach = Reachable(level, options.multiplayer);
+        const auto reach = Reachable(level, options.multiplayer, options.skipFirstNode);
         if (!OutOfViewAndFacingAway(bytes, lay, level, reach, plan)) { error = "could not judge the faces"; return false; }
 
         std::set<uint32_t> remove(plan.remove.begin(), plan.remove.end());

@@ -221,11 +221,6 @@
                             "gfxFile": "353GFX.B16"
                         },
                         {
-                            "code": "361",
-                            "mapFile": "L361LEV.MAP",
-                            "gfxFile": "361GFX.B16"
-                        },
-                        {
                             "code": "371",
                             "mapFile": "L371LEV.MAP",
                             "gfxFile": "371GFX.B16"
