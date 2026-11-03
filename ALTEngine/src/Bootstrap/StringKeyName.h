@@ -169,6 +169,8 @@ namespace ALTEngine::Bootstrap
         case StringId::DescGhostMode: return "DescGhostMode";
         case StringId::DisableResupplyTimer: return "DisableResupplyTimer";
         case StringId::DescDisableResupplyTimer: return "DescDisableResupplyTimer";
+        case StringId::LevelCleanup: return "LevelCleanup";
+        case StringId::DescLevelCleanup: return "DescLevelCleanup";
         case StringId::AllTestingOptions: return "AllTestingOptions";
         case StringId::DescAllTestingOptions: return "DescAllTestingOptions";
         case StringId::GsOptions: return "GsOptions";
@@ -514,6 +516,8 @@ namespace ALTEngine::Bootstrap
         if (name == "DescGhostMode") { return StringId::DescGhostMode; }
         if (name == "DisableResupplyTimer") { return StringId::DisableResupplyTimer; }
         if (name == "DescDisableResupplyTimer") { return StringId::DescDisableResupplyTimer; }
+        if (name == "LevelCleanup") { return StringId::LevelCleanup; }
+        if (name == "DescLevelCleanup") { return StringId::DescLevelCleanup; }
         if (name == "AllTestingOptions") { return StringId::AllTestingOptions; }
         if (name == "DescAllTestingOptions") { return StringId::DescAllTestingOptions; }
         if (name == "GsOptions") { return StringId::GsOptions; }

@@ -1,5 +1,6 @@
 #include "Protocol.h"
 
+#include <cmath>
 #include <cstring>
 
 namespace ALTEngine::Net
@@ -44,10 +45,36 @@ namespace ALTEngine::Net
             }
         };
 
-        Skin SkinFrom(uint8_t v) { return v < static_cast<uint8_t>(Skin::Count) ? static_cast<Skin>(v) : Skin::Synthetic; }
-
         template <class... Ts> struct Overloaded : Ts... { using Ts::operator()...; };
         template <class... Ts> Overloaded(Ts...) -> Overloaded<Ts...>;
+
+        bool Coordinate(float v) { return std::isfinite(v) && std::fabs(v) < MAX_COORDINATE; }
+        bool Slot(uint8_t v) { return v < MAX_PLAYERS; }
+
+        // What a peer sends goes straight into the game's arrays and its
+        // cell lookups: a slot past the roster, a position that is not a
+        // number (std::lround on it is undefined) or a round of a kind no
+        // player fires is refused here rather than everywhere it is used.
+        bool Sane(const Message& message)
+        {
+            return std::visit(Overloaded{
+                [](const Welcome& m) { return Slot(m.slot); },
+                [](const State& m) { return Slot(m.slot) && Coordinate(m.x) && Coordinate(m.y) && Coordinate(m.z); },
+                [](const Shot& m) {
+                    return Slot(m.slot) && m.type <= MAX_SHOT_TYPE && Coordinate(m.x) && Coordinate(m.y) && Coordinate(m.z)
+                        && Coordinate(m.vx) && Coordinate(m.vy) && Coordinate(m.vz);
+                },
+                [](const Hit& m) { return Slot(m.attacker) && Slot(m.target); },
+                [](const Frag& m) { return Slot(m.killer) && Slot(m.victim); },
+                [](const Chat& m) { return Slot(m.slot); },
+                [](const Leave& m) { return Slot(m.slot); },
+                [](const Ping& m) { return Slot(m.slot); },
+                [](const auto&) { return true; },
+            }, message);
+        }
+
+        Skin SkinFrom(uint8_t v) { return v < static_cast<uint8_t>(Skin::Count) ? static_cast<Skin>(v) : Skin::Synthetic; }
+
     }
 
     std::vector<uint8_t> Encode(const Message& message)
@@ -127,7 +154,7 @@ namespace ALTEngine::Net
         case MessageType::Ping: { Ping m; m.slot = r.U8(); result = m; break; }
         default: return std::nullopt;
         }
-        if (!r.ok) { return std::nullopt; }
+        if (!r.ok || !result || !Sane(*result)) { return std::nullopt; }
         return result;
     }
 }

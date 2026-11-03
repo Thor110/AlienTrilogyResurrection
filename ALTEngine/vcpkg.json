@@ -1,6 +1,6 @@
 {
     "name": "altengine",
-    "version": "0.9.3",
+    "version": "0.9.4",
     "builtin-baseline": "4bca8fd8654e5ba76f92661db7bfe954768ad8ef",
     "dependencies": [
         "sdl3",

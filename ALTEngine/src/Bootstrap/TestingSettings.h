@@ -19,6 +19,12 @@ namespace ALTEngine::Bootstrap
     //   climbs or dives along the view's pitch (the look keys or free look).
     // Disable Resupply Timer - the resupply levels' countdown stops and is
     //   hidden, so the level does not end when it would have run out.
+    // Level Cleanup       - changes the level FILES, at the next start, after
+    //   every fix: faces that can never be seen are taken out and each level's
+    //   missing first-cell faces put back (Game::LevelCleanup). Off restores
+    //   the files as the fixes left them (the copy kept beside each, .untrimmed),
+    //   for working with the original face and vertex numbers. Not part of
+    //   "All Testing Options", since it rewrites files.
     //
     // The menu's "All Testing Options" row sets every one of them at once
     // (SetAll); it shows On only when they all are (AllOn).
@@ -28,6 +34,7 @@ namespace ALTEngine::Bootstrap
         FaceIndexDisplay,
         GhostMode,
         DisableResupplyTimer,
+        LevelCleanup,
     };
 
     class TestingSettings
@@ -73,6 +80,7 @@ namespace ALTEngine::Bootstrap
             case TestingOption::FaceIndexDisplay: return "Face Index Display";
             case TestingOption::GhostMode: return "Ghost Mode";
             case TestingOption::DisableResupplyTimer: return "Disable Resupply Timer";
+            case TestingOption::LevelCleanup: return "Level Cleanup";
             }
             return "";
         }
@@ -83,6 +91,7 @@ namespace ALTEngine::Bootstrap
             {
                 if (label == MenuLabel(option)) { out = option; return true; }
             }
+            if (label == MenuLabel(TestingOption::LevelCleanup)) { out = TestingOption::LevelCleanup; return true; }
             return false;
         }
 
@@ -95,6 +104,7 @@ namespace ALTEngine::Bootstrap
             case TestingOption::FaceIndexDisplay: return "TestingFaceIndexDisplay";
             case TestingOption::GhostMode: return "TestingGhostMode";
             case TestingOption::DisableResupplyTimer: return "TestingDisableResupplyTimer";
+            case TestingOption::LevelCleanup: return "TestingLevelCleanup";
             }
             return "";
         }

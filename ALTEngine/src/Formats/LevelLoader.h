@@ -368,6 +368,9 @@ namespace ALTEngine::Formats
     {
     public:
         static LevelGeometry Load(const std::filesystem::path& mapPath);
+        // The same from a whole file image already in memory; `sourceName`
+        // is only for the error messages.
+        static LevelGeometry Parse(const std::vector<uint8_t>& file, const std::string& sourceName);
     };
 
     // Floor height at grid cell (gridX, gridZ), confirmed via Ghidra

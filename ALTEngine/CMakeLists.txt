@@ -90,6 +90,7 @@ add_library(ALTGame STATIC
     src/Game/Progression.cpp
     src/Game/SaveGame.cpp
     src/Game/Triggers.cpp
+    src/Game/LevelCleanup.cpp
     src/Net/UdpSocket.cpp
     src/Net/Protocol.cpp
     src/Net/Session.cpp
@@ -153,6 +154,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/FacePickTests.cpp
         tests/NetTests.cpp
         tests/BotTests.cpp
+        tests/LevelCleanupTests.cpp
     )
     target_include_directories(ALTEngineTests PRIVATE src tests)
     target_link_libraries(ALTEngineTests PRIVATE ALTGame ALTFormats alt_warnings nlohmann_json::nlohmann_json)

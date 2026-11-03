@@ -385,8 +385,7 @@ namespace ALTEngine::Screens
             int n = settings.botCount;
             if (delta > 0) { n = (n == 0) ? 3 : n + 1; }
             else { n = (n <= 3) ? 0 : n - 1; }
-            settings.botCount = std::clamp(n, 0, most);
-            if (settings.botCount > 0 && settings.botCount < 3) { settings.botCount = 0; }
+            settings.botCount = std::clamp(n, 0, most);   // most is at least 3 (the limit is at least 4)
         };
         TextFieldEditor editor;
         MultiplayerStartResult result;

@@ -111,7 +111,8 @@ namespace ALTEngine::Game
             // it, so the next tick tries again - a door that is still moving,
             // say, unlocks as soon as it stops.
             bool OnPlayerTick(int& latch, int cellIndex, bool useKey, const Handlers& handlers);
-            // OnPlayerTick without the use key.
+            // OnPlayerTick without the use key: walking on. Like it, a chain
+            // that fails is tried again on the next call while still on the cell.
             bool OnEnterCell(int& lastId, int cellIndex, const Handlers& handlers);
 
             // The same for a round in flight, with the round's own latch

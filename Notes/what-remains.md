@@ -1,4 +1,4 @@
-# What remains (after zip 102)
+# What remains (after zip 104)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -9,6 +9,43 @@ textures, done once everything else is in.
 Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older list (3.5.1, the resupply
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
+
+Changed in zip 104, to check: **Level Cleanup** (Options > Modern > Testing > Level Cleanup, off by default;
+`Game/LevelCleanup`, run from `Bootstrap/InstallPipeline`). At the next start, in this order: Update Fixes ->
+the option -> Trim -> Add Faces.
+- **Update Fixes:** a level cleaned before is put back as the fixes left it first (`<file>.untrimmed`, the
+  cleaned copy set aside as `<file>.cleaned`), so every model removal and byte patch runs against the layout it
+  was written for.
+- **Trim:** faces the original can never draw are taken out, with the vertices only they use (section 6b's
+  survey, now in code): 311 KB over the 45 levels, most of it L321-L324 (the walled-off core) and L902 (the
+  outer rings).
+- **Add Faces:** the first cell's faces are put back where they are already in the file (31 levels; L321-L324
+  and L902's first cells can never be seen, so theirs are trimmed instead). The 10 levels whose first cell has
+  no faces in the file are left for the insertion step.
+- Every face of every cell that can be drawn is checked identical before and after (texture, routine, light,
+  corners); cleaning a cleaned file changes nothing; on -> on -> off leaves the files byte for byte as a run
+  with the option off. A cleaned copy is reused while the level it was made from is unchanged (its CRC is kept
+  in `CD/LevelCleanup.json`); a fix that changes a level makes it cleaned again.
+- **Off** puts the files back as the fixes left them, so the original face and vertex numbers (the ones
+  Patches.json, the review log and the Face Index Display use) are there to work with.
+- ALTViewer's patch button does not know about it.
+- **What to test, level by level:** `Notes/level-cleanup-test-list.md`.
+- To trim out later (Edward): the .untrimmed backups and the menu option (a plain boolean was meant).
+- **L321's elevator** (Edward asked about the red cell in it): the room at (18-23, 42-45) is L323's way out (its
+  end-of-level trigger covers (18-23, 43-44)); in L321 it is walled in, (23,44) is one of its wall cells, and no
+  cell the player can reach ever takes it in. A check of the method: the original's own cones, at 64 facings
+  from every reachable cell, never draw a cell the full-circle walk does not, so the trim is if anything short.
+
+Changed in zip 103: **a review of the network, bot and trigger code** (no change to play):
+- Every message from another machine is checked before use: a player slot past the roster (a Welcome naming
+  slot 200 would have indexed past it), a position or velocity that is not a finite number, or a shot of a
+  kind no player fires (acid blood, vent jets) is refused (`Net::Protocol`, `Sane`).
+- The Join list counts players only: a game whose places are bots no longer shows as full.
+- Bots look for a target nearest first and stop at the first clear line (one ray most ticks, not one per
+  player), and their path search reuses its buffers.
+- Bot settings are reset with each hosted game; small tidy-ups.
+- The Doom-style marine (green armour, helmet and visor) made from the Synthetic's frames: a separate
+  download, not in the repo.
 
 Changed in zip 102, to check: **no motion tracker in multiplayer**, as in the original (Edward). Its tracker
 routine (FUN_0003a1d0) runs only with both network flags clear (DAT_000ae0a4 and DAT_000ae0a5), so neither
@@ -264,8 +301,9 @@ library, the sound and video drivers and the DOS extender) was looked at to see 
 ### Inferred, or the port's own on purpose
 1. **HUD:** some icon artwork and the message presentation are the port's; which action prints which message
    is inferred from the text; a one-shot gate's reset isn't traced.
-2. **Creature sound cues** are cut past 0x1400 or out of sight (the original only quietens them), and a
-   creature let out of a sealed wall vent comes out alerted - both asked for in play.
+2. **Creature sound cues** are cut past 0x1400 or out of sight (the original only quietens them) - asked for
+   in play. (A creature in a wall vent's duct now notices the player as the original does, zip 97, instead of
+   coming out alerted.)
 3. **Casings** vanish at the floor; the original's fall through it out of sight.
 4. The assessment bars' colours, routine 14 on level faces, L371's lifts 6-9, the weapon noise value, the
    shatter launch speed, mouse sensitivity and two settings defaults; open question A (pistol rounds against a
@@ -325,8 +363,8 @@ frees the sprite buffers and sheets, which a later Initialize would otherwise ha
 
 ## 4b. Multiplayer: what is still to do
 
-The networking, menus, joining, positions, hits and frags are in (zip 93); the players' looks, the
-original's four starts, seen shots and F2-F9 chat in zip 94. Still to come, roughly in order:
+The networking, menus, joining, positions, hits and frags are in (zip 93); the players' looks,
+seen shots and F2-F9 chat in zip 94, the original's starts (a random path node) in zip 100. Still to come, roughly in order:
 1. **The score table and the end of a game:** "Minimum game length", the frag table, and what ends a round.
 2. **Pickups, doors and lifts kept the same on every machine** - each machine runs its own level for now
    (seen shots do break the same glass everywhere).
@@ -405,14 +443,46 @@ L243, L262, L371, and L321-L325 (scratched for now). No entries yet for:
   are understood.
 - **Optional:** L212's three unreachable pickups (7, 10, 18) can be made inert with a byte each.
 
+## 6b. Geometry that is never drawn (zip 103 survey)
+
+Method (a probe, not in the repo): every cell the player can walk to, flooded from the level's start through
+anything that is not a wall to the player (attribute 1, 0x14-0x18; every door counted open, heights ignored, so
+it over-counts what can be reached); from each, the original's own view walk (CreatureSight::DrawnCells, the
+ring walk of 0x2745b) in every direction at once; and every face whose cell's run is never taken in. On the
+multiplayer maps every path node is a start too. Treating doors that no trigger opens as shut finds nothing
+more: every unreachable area is walled off, not just locked.
+
+| What | Faces | Bytes (faces 20, vertices 8) |
+|---|---|---|
+| L321-L325 (the chapter-3 level met several times; its central core is walled off in all but L325) | 672-2706 each, 10024 in all | about 274 KB |
+| L902 (rings outside the arena's wall) | 1200 | 35 KB |
+| L906 | 28 | 1.1 KB |
+| L111 and L900: the four faces just behind the start (cells (36,98)-(36,101), start (39,100)) and three at the map's top edge | 7 each | 300 bytes each |
+| L213 2, L371 1 | 3 | - |
+| All 45 levels | 11273 faces, 10740 vertices freed | 314 KB of the 18.8 MB of level files (1.7%) |
+
+The 153 faces no cell lists are NOT junk: they are each level's first cell's own faces (section 7, item 2), to
+be restored, not trimmed.
+
+Trimming them would mean, per level: drop the faces and the vertices only they use; renumber every cell's
+run start (bytes 0-3) and every face's vertex indices; set the dropped cells' run start to FF FF FF FF; move
+the header counts and the MAP0 and FORM sizes; and renumber every Patches.json entry and review-log note that
+names a face of that level (the L321-L325 and L902 texture fixes do). Best done as one tool pass after the
+section 7 insertions, since both renumber the same lists. NOT done: Edward's call.
+
 ## 7. The final step: missing faces, then a triple check of the textures
 
 1. **Insert the missing faces** listed in `uv-review-log.md`: L161, L211, L212, L242, L243. Each goes into its
    cell's face run; the face count, later run starts, and the MAP0 and FORM sizes move up. L161's interim
    duplicate (3758) goes back to its original triangle.
 2. **The level's first cell, every level:** its run start is 0 (the blank record) instead of its own run, so the
-   original never draws that cell's faces, and its floor (often its ceiling too) is missing. Insert those faces
-   at the start of the first run and set the run start to 1.
+   original never draws that cell's faces, and its floor (often its ceiling too) is missing. Checked in zip 103
+   (a probe over every level): in **35 levels the faces are already in the file** - faces 0 to n at the very
+   start of the list, in that cell, the run ending in its 0x80 flag - and only the run start is wrong, so a
+   ONE-BYTE patch (start 0 -> 1) restores them, with no insertion and nothing renumbered: L112, L122, L131,
+   L141, L154, L161, L211-L213, L222, L231, L232, L242, L243, L262, L263, L321-L325, L351-L353, L371, L381,
+   L391, L901-L907, L909. Only **10 levels lack them** and need the faces inserted: L111, L113-L115, L155, L162,
+   L311, L331, L900, L908 (L900 and L908 share their geometry with L111 and L311).
 3. **Renumber everything that names a face after an insertion:** later Patches.json entries for the same level,
    the review log, and ALTViewer's fixer.
 4. **Triple check the textures:** every level once more with the Face Index Display after the insertions, the

@@ -14,6 +14,8 @@ namespace ALTEngine::Net
         level = levelDigits;
         playerName = player;
         playerLimit = ORIGINAL_PLAYERS;
+        botsWanted = 0;
+        botSkill = 3;
         localSlot = 0;
         welcomed = true;
         roster = {};
@@ -154,8 +156,10 @@ namespace ALTEngine::Net
     {
         if (std::holds_alternative<DiscoverQuery>(message))
         {
+            // Players only: a joining player takes a bot's place, so a game
+            // whose places are all bots is not shown as full.
             uint8_t count = 0;
-            for (const auto& p : roster.players) { count = static_cast<uint8_t>(count + (p.used ? 1 : 0)); }
+            for (const auto& p : roster.players) { count = static_cast<uint8_t>(count + (p.used && !p.bot ? 1 : 0)); }
             Send(from, DiscoverReply{ gameName, level, count, static_cast<uint8_t>(playerLimit) });
             return;
         }

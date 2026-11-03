@@ -150,8 +150,11 @@ namespace ALTEngine::Game::Bots
         const int n = static_cast<int>(nodes.size());
         if (from < 0 || to < 0 || from >= n || to >= n) { return -1; }
         if (from == to) { return to; }
-        std::vector<int> parent(static_cast<size_t>(n), -2);
-        std::vector<int> queue{ to };
+        // Reused between calls: this runs for every bot on most ticks.
+        thread_local std::vector<int> parent, queue;
+        parent.assign(static_cast<size_t>(n), -2);
+        queue.clear();
+        queue.push_back(to);
         parent[static_cast<size_t>(to)] = -1;
         for (size_t head = 0; head < queue.size(); ++head)
         {
@@ -177,20 +180,28 @@ namespace ALTEngine::Game::Bots
         if (bot.dead) { return out; }
         if (bot.cooldown > 0) { bot.cooldown--; }
 
-        // The target: nearest seen; else nearest.
-        const Target* best = nullptr;
-        bool bestSeen = false;
-        float bestDist = 0;
+        // The target: the nearest it can see; failing that, the nearest.
+        // Sight is tested nearest first and stops at the first clear line,
+        // so most ticks cast one ray rather than one per player.
+        thread_local std::vector<std::pair<float, const Target*>> byDistance;
+        byDistance.clear();
         for (const Target& t : targets)
         {
             if (!t.alive || t.slot == bot.slot) { continue; }
-            const float dx = t.x - bot.x, dz = t.z - bot.z;
-            const float dist = std::sqrt(dx * dx + dz * dz);
-            const bool seen = dist <= SIGHT_RANGE && world.clearShot
-                && world.clearShot(bot.x, bot.feetY + 0x240, bot.z, t.x, t.feetY + 0x280, t.z);
-            if (!best || (seen && !bestSeen) || (seen == bestSeen && dist < bestDist))
+            byDistance.push_back({ std::hypot(t.x - bot.x, t.z - bot.z), &t });
+        }
+        std::sort(byDistance.begin(), byDistance.end(),
+                  [](const auto& a, const auto& b) { return a.first < b.first; });
+        const Target* best = byDistance.empty() ? nullptr : byDistance.front().second;
+        float bestDist = byDistance.empty() ? 0.0f : byDistance.front().first;
+        bool bestSeen = false;
+        for (const auto& [dist, t] : byDistance)
+        {
+            if (dist > SIGHT_RANGE || !world.clearShot) { break; }
+            if (world.clearShot(bot.x, bot.feetY + 0x240, bot.z, t->x, t->feetY + 0x280, t->z))
             {
-                best = &t; bestSeen = seen; bestDist = dist;
+                best = t; bestDist = dist; bestSeen = true;
+                break;
             }
         }
         if (!best)
@@ -205,7 +216,6 @@ namespace ALTEngine::Game::Bots
         // Where to walk: straight at a target in view (strafing once close),
         // otherwise along the path network.
         float goalX = best->x, goalZ = best->z;
-        bool walk = true;
         if (!bestSeen && world.nodes && world.nodeAt && world.nodePosition)
         {
             const int here = world.nodeAt(bot.x, bot.z);
@@ -237,7 +247,7 @@ namespace ALTEngine::Game::Bots
         const int faceYaw = bestSeen ? AngleTo(bot.x, bot.z, best->x, best->z) : moveYaw;
         bot.yaw = TurnToward(bot.yaw, faceYaw, skill.turnRate);
 
-        if (walk && world.move)
+        if (world.move)
         {
             const int speed = sidestepping ? skill.walkSpeed / 2 : skill.walkSpeed;
             const float sx = static_cast<float>(speed) * static_cast<float>(std::sin(moveYaw * 6.283185307179586 / 4096.0));

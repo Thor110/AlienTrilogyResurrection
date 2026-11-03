@@ -35,18 +35,22 @@ namespace ALTEngine::Formats
 
     LevelGeometry LevelLoader::Load(const std::filesystem::path& mapPath)
     {
-        std::vector<uint8_t> file = ReadFile(mapPath);
+        return Parse(ReadFile(mapPath), mapPath.string());
+    }
+
+    LevelGeometry LevelLoader::Parse(const std::vector<uint8_t>& file, const std::string& sourceName)
+    {
         std::vector<BndSection> mapSections = BndParser::ParseFormSections(file, "MAP0");
         if (mapSections.empty())
         {
-            throw std::runtime_error("LevelLoader: no MAP0 section found in " + mapPath.string());
+            throw std::runtime_error("LevelLoader: no MAP0 section found in " + sourceName);
         }
         const std::vector<uint8_t>& data = mapSections[0].data;
 
         constexpr size_t HEADER_SIZE = 36;
         if (data.size() < HEADER_SIZE)
         {
-            throw std::runtime_error("LevelLoader: MAP0 section too small for its header in " + mapPath.string());
+            throw std::runtime_error("LevelLoader: MAP0 section too small for its header in " + sourceName);
         }
 
         LevelGeometry result;
@@ -87,7 +91,7 @@ namespace ALTEngine::Formats
         size_t quadsSize = static_cast<size_t>(h.quadCount) * 20; // includes the skipped sentinel quad's own 20 bytes
         if (pos + verticesSize + quadsSize > data.size())
         {
-            throw std::runtime_error("LevelLoader: MAP0 section declares more vertex/quad data than it contains in " + mapPath.string());
+            throw std::runtime_error("LevelLoader: MAP0 section declares more vertex/quad data than it contains in " + sourceName);
         }
 
         result.vertices.reserve(h.vertCount);
@@ -144,7 +148,7 @@ namespace ALTEngine::Formats
         auto needBytes = [&](size_t n, const char* what) {
             if (pos + n > data.size())
             {
-                throw std::runtime_error("LevelLoader: not enough data for " + std::string(what) + " in " + mapPath.string());
+                throw std::runtime_error("LevelLoader: not enough data for " + std::string(what) + " in " + sourceName);
             }
         };
 

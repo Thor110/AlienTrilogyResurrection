@@ -187,6 +187,8 @@ namespace ALTEngine::Bootstrap
         DescGhostMode,
         DisableResupplyTimer,
         DescDisableResupplyTimer,
+        LevelCleanup,
+        DescLevelCleanup,
         AllTestingOptions,
         DescAllTestingOptions,
 

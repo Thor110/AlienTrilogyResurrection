@@ -4,6 +4,7 @@
 #include "Net/Session.h"
 
 #include <chrono>
+#include <cmath>
 #include <thread>
 
 namespace N = ALTEngine::Net;
@@ -264,4 +265,26 @@ TEST_CASE("Net: the game browser finds a game on this machine")
     CHECK(browser.Games()[0].info.gameName == "Hadley's Hope");
     CHECK(browser.Games()[0].info.level == "905");
     CHECK(browser.Games()[0].info.players == 1);
+}
+
+TEST_CASE("Net: a message with a slot past the roster, a non-number or a foreign round is refused")
+{
+    N::State s; s.slot = 1; s.x = 10.0f;
+    CHECK(N::Decode(N::Encode(s)).has_value());
+    s.slot = N::MAX_PLAYERS;
+    CHECK(!N::Decode(N::Encode(s)).has_value());
+    s.slot = 1; s.x = std::nanf("");
+    CHECK(!N::Decode(N::Encode(s)).has_value());
+    s.x = 1.0e9f;
+    CHECK(!N::Decode(N::Encode(s)).has_value());
+
+    N::Shot shot; shot.slot = 2; shot.type = 2;
+    CHECK(N::Decode(N::Encode(shot)).has_value());
+    shot.type = 9;   // acid blood
+    CHECK(!N::Decode(N::Encode(shot)).has_value());
+
+    N::Welcome w; w.slot = 200; w.level = "900";
+    CHECK(!N::Decode(N::Encode(w)).has_value());
+    N::Hit h; h.attacker = 1; h.target = 9;
+    CHECK(!N::Decode(N::Encode(h)).has_value());
 }

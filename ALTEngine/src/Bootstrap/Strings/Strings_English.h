@@ -172,6 +172,8 @@ namespace ALTEngine::Bootstrap
             "Fly through walls; move forward while looking up or down to climb or dive",
             "Disable Resupply Timer",
             "The resupply countdown stops and is hidden, so the level does not end",
+            "Level Cleanup",
+            "From the next start: faces never seen are trimmed and missing first-cell faces restored (Off restores)",
             "All Testing Options",
             "Turns every testing option on or off at once",
         };

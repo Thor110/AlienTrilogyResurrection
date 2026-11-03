@@ -413,6 +413,7 @@ namespace ALTEngine::Menu
                     testingNode(TestingOption::FaceIndexDisplay, StringId::FaceIndexDisplay, StringId::DescFaceIndexDisplay),
                     testingNode(TestingOption::GhostMode, StringId::GhostMode, StringId::DescGhostMode),
                     testingNode(TestingOption::DisableResupplyTimer, StringId::DisableResupplyTimer, StringId::DescDisableResupplyTimer),
+                    testingNode(TestingOption::LevelCleanup, StringId::LevelCleanup, StringId::DescLevelCleanup),
                 });
                 testingList.descriptionStringId = static_cast<int>(StringId::DescTesting);
                 entries.push_back(std::move(testingList));

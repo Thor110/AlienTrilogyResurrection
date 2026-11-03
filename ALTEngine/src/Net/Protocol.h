@@ -28,6 +28,11 @@ namespace ALTEngine::Net
     inline constexpr size_t MAX_NAME = 16;
     inline constexpr size_t MAX_GAME_NAME = 24;
     inline constexpr size_t MAX_CHAT = 64;
+    // A shot carries one of the player's five rounds (Particles TYPE_PISTOL
+    // 0 to TYPE_SMARTGUN 4) - nothing else (blood, vent jets) is accepted.
+    inline constexpr uint8_t MAX_SHOT_TYPE = 4;
+    // Positions and velocities beyond this are not from a level.
+    inline constexpr float MAX_COORDINATE = 1.0e6f;
 
     enum class MessageType : uint8_t
     {
