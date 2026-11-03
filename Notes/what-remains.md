@@ -10,6 +10,17 @@ Confirmed by Edward: doors, pickups, the window glass, the cryopods, the older l
 countdown, Save Anywhere, the assessment, music per level, the vent jets), the thrown seismic charge (zip 83)
 and its explosion (zip 84).
 
+Noted in play on L321 (Edward, after zip 107), face numbers as the Face Index Display shows them with Level
+Cleanup off (the vertex lists were taken with it on or off as marked; matched to the fixed file):
+- **Taken out by hand** (data/LevelCleanupExtra.json): the lift faces a sight line still reached in the two inner
+  lifts and at (6,15) - 1052, 1053, 1319, 1320, 1322-1332, 3169, 3170, 3408, 3646, 3876, 3878, 4165, 4166. Of the
+  27 the list named, 2961, 2962, 4163 and 4164 were not among them: still to look at.
+- **Texture to check, fix unsure** (vertices taken with the cleanup off): 6080 and 6081 (cell 36,52) and 6061 and
+  6062 (cell 31,52), triangles with texture 126, routine 1.
+- **Faces with no texture**, to look at once the other levels are checked: the triangles with texture 183 at the
+  lift doors - 2949 (14,31), 2954 (15,31), 4151 (14,36), 4156 (15,36), 955 (31,14), 1118 (31,15), 976 (36,14),
+  1131 (36,15), 4302 (53,36), 4297 (52,36), 3079 (53,31), 3074 (52,31). Routine 1, except 4151 and 4156 (5).
+
 Changed in zips 106-107, to check: **Level Cleanup is worked out once, not at install, and trims face by face**
 (Edward: L321's trim left the faces behind the door walls; then "we shouldn't be putting all this work in client
 side", and the lift crawl).

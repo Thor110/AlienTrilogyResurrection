@@ -1,4 +1,33 @@
 {
  "about": "Faces to take out by hand, on top of what ALTLevelCleanupList works out. Per level: faces (numbers as the Face Index Display shows them with Level Cleanup off) and/or points (corners [x, y, z]; a face all of whose corners are listed, within 3 units, goes). Run ALTLevelCleanupList again after changing this. Example: \"SECT31/L321LEV.MAP\": { \"faces\": [ 1203 ], \"points\": [ [ -1280, 1024, -8960 ] ] }",
- "levels": {}
+ "levels": {
+  "SECT31/L321LEV.MAP": {
+   "faces": [
+    1052,
+    1053,
+    1319,
+    1320,
+    1322,
+    1323,
+    1324,
+    1325,
+    1326,
+    1327,
+    1328,
+    1329,
+    1330,
+    1331,
+    1332,
+    3169,
+    3170,
+    3408,
+    3646,
+    3876,
+    3878,
+    4165,
+    4166
+   ],
+   "note": "Edward, zip 107: the two inner lifts (behind (32-36,16) and (16,31-36)) and (6,15), checked in play."
+  }
+ }
 }
