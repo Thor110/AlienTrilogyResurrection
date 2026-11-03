@@ -1,4 +1,4 @@
-# What remains (after zip 115)
+# What remains (after zip 116)
 
 Everything still to do, gathered from `engine-remaining-work.md`, `review-and-plan.md`, `uv-review-log.md` and
 what came up in zips 71-79. The last section is the final step: the missing faces and a triple check of the
@@ -40,6 +40,17 @@ Cleanup off (the vertex lists were taken with it on or off as marked; matched to
   routine 0) is wound like a floor, facing up; face 4251 lies on the same four corners wound the other way, as
   every ceiling face round it is. Zip 114 took out 4251, which left only the wrong-facing one (Edward: "facing
   the wrong way"); zip 115 takes out 4253 instead, which leaves one ceiling face facing down.
+- **The first cell's first face** (zip 116; Edward, L325: a face missing between 0, 2, 3 and 23). Record 0 is
+  not a blank in any level: it is the first face of the first cell's run, which the cell's start of 0 hides
+  with the rest. Giving the cell back from record 1 left it out, so every given-back first cell lacked one face
+  (L325's diagonal wall at (-1792..-1280, 1536..2048, -17152..-17664), texture 307). Apply now puts a copy of
+  record 0 at the head of the run (record 0 stays, as the start of the cells left empty, its corners now kept
+  valid too). The list does not change; installs remake their cleaned copies (the state file's "apply", now 2).
+  Header counts (vertices, faces), MAP0 and FORM sizes are written for every cleaned file, as before.
+  The 10 levels said below to lack their first cell's faces (L111, L113-L115, L155, L162, L311, L331, L900,
+  L908) do not: in each, record 0 lies in the first cell and ends its run (0x80 set) - the cell's one face, a
+  texture 0 strip on the map's first row (texture 280 on L155). Giving them back is the same copy, with a
+  judgement of whether it is ever seen; to do with the face additions, after the removals.
 - **L909's holding rooms taken out by hand** (Edward's FaceLog, zip 115): 163 faces, the floors, walls,
   ceilings and lift-door dressing of both rooms behind the corridor's doorways (the doorway faces themselves,
   textures 26 and 0-5, stay as the corridor's wall). 14581 faces in all.

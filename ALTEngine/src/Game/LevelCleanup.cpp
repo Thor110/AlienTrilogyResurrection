@@ -9,24 +9,77 @@ namespace ALTEngine::Game::LevelCleanup
 {
     using namespace LevelFileLayout;
 
-    bool Apply(std::vector<uint8_t>& bytes, const Plan& plan, Report& report, std::string& error,
+    namespace
+    {
+        // The first cell's run begins at record 0: the face the file holds
+        // there is the cell's first, though the cell's start of 0 - which the
+        // walk and the drawing both take as "no faces" - hides it with the rest
+        // of the run. Record 0 has to stay where it is, as the record the cells
+        // left empty start at, so a copy of it goes in at 1, at the head of the
+        // run the plan gives back, its end bit as it was (clear in the 35 levels
+        // whose run goes on into record 1; set in the 10 whose first cell has
+        // record 0 alone). Every face record after it moves up one;
+        // nothing else changes. False if there is nothing to copy: no first
+        // cell given back, a blank record 0, or every face of the run removed.
+        bool CopyRecordZero(std::vector<uint8_t>& bytes, const Layout& lay, const Plan& plan)
+        {
+            if (plan.firstCell < 0 || size_t(plan.firstCell) >= lay.cells || lay.recordCount < 2 || lay.recordCount == 0xffff) { return false; }
+            if (lay.CellStart(bytes, size_t(plan.firstCell)) != 0 || lay.RecordA(bytes, 0) == -1 || lay.RecordA(bytes, 1) == -1) { return false; }
+            bool kept = false;
+            for (size_t r = 1; r < lay.recordCount && lay.RecordA(bytes, r) != -1; ++r)
+            {
+                kept = kept || std::find(plan.remove.begin(), plan.remove.end(), uint32_t(r)) == plan.remove.end();
+                if (lay.Light(bytes, r) & RUN_END) { break; }
+            }
+            if (!kept) { return false; }
+
+            std::vector<uint8_t> out(bytes.begin(), bytes.begin() + std::ptrdiff_t(lay.records + RECORD_SIZE));
+            out.insert(out.end(), bytes.begin() + std::ptrdiff_t(lay.records), bytes.begin() + std::ptrdiff_t(lay.records + RECORD_SIZE));
+            out.insert(out.end(), bytes.begin() + std::ptrdiff_t(lay.records + RECORD_SIZE), bytes.end());
+            PutLe16(out, lay.data + 2, uint16_t(lay.recordCount + 1));
+            const size_t grid = lay.grid + RECORD_SIZE;
+            for (size_t c = 0; c < lay.cells; ++c)
+            {
+                const uint32_t start = Le32(out, grid + c * CELL_SIZE);
+                if (start != NO_RUN && start != 0) { PutLe32(out, grid + c * CELL_SIZE, start + 1); }
+            }
+            PutBe32(out, lay.map0 + 4, uint32_t(lay.map0Size + RECORD_SIZE));
+            PutBe32(out, 4, uint32_t(out.size() - 8));
+            bytes = std::move(out);
+            return true;
+        }
+    }
+
+    bool Apply(std::vector<uint8_t>& bytes, const Plan& planIn, Report& report, std::string& error,
                std::vector<uint32_t>* oldRecordOfNew)
     {
         report = {};
         report.bytesBefore = report.bytesAfter = bytes.size();
         Layout lay;
         if (!Read(bytes, lay, error)) { return false; }
-        const size_t recordCount = lay.recordCount, cells = lay.cells;
-        const uint16_t vertexCount = lay.vertexCount;
-        for (uint32_t r : plan.remove)
+        const size_t cells = lay.cells;
+        for (uint32_t r : planIn.remove)
         {
-            if (r == 0 || r >= recordCount) { error = "the plan names face record " + std::to_string(r) + ", which the file does not have"; return false; }
+            if (r == 0 || r >= lay.recordCount) { error = "the plan names face record " + std::to_string(r) + ", which the file does not have"; return false; }
         }
-        for (uint32_t c : plan.clear)
+        for (uint32_t c : planIn.clear)
         {
             if (c >= cells) { error = "the plan names cell " + std::to_string(c) + ", which the file does not have"; return false; }
         }
-        if (plan.firstCell >= int(cells)) { error = "the plan's first cell is past the map"; return false; }
+        if (planIn.firstCell >= int(cells)) { error = "the plan's first cell is past the map"; return false; }
+
+        // Record 0's copy, when the first cell is given back (CopyRecordZero):
+        // the plan's records from 1 on move up one with it.
+        std::vector<uint8_t> original = bytes;
+        Plan plan = planIn;
+        const bool copied = CopyRecordZero(bytes, lay, planIn);
+        if (copied)
+        {
+            for (uint32_t& r : plan.remove) { ++r; }
+            if (!Read(bytes, lay, error)) { bytes = std::move(original); return false; }
+        }
+        const size_t recordCount = lay.recordCount;
+        const uint16_t vertexCount = lay.vertexCount;
 
         // Each cell's start, the first cell's taken as 1 when it is given back.
         std::vector<uint32_t> start(cells);
@@ -87,7 +140,8 @@ namespace ALTEngine::Game::LevelCleanup
         uint32_t nextRecord = 0;
         for (size_t r = 0; r < recordCount; ++r) { if (keep[r]) { newRecord[r] = nextRecord++; } }
         std::vector<uint8_t> vertexUsed(vertexCount, 0);
-        for (size_t r = 1; r < recordCount; ++r)
+        // Record 0 too: it draws nothing, but its corners stay valid.
+        for (size_t r = 0; r < recordCount; ++r)
         {
             if (!keep[r] || recordA(r) == -1) { continue; }
             for (int k = 0; k < 4; ++k)
@@ -135,7 +189,11 @@ namespace ALTEngine::Game::LevelCleanup
         if (oldRecordOfNew)
         {
             oldRecordOfNew->clear();
-            for (size_t r = 0; r < recordCount; ++r) { if (keep[r]) { oldRecordOfNew->push_back(uint32_t(r)); } }
+            // As the input numbered them: the copy came from record 0.
+            for (size_t r = 0; r < recordCount; ++r)
+            {
+                if (keep[r]) { oldRecordOfNew->push_back(uint32_t(copied && r > 0 ? r - 1 : r)); }
+            }
         }
         if (!report.Changed() && !endsMoved && !startsMoved) { return true; }
 
@@ -156,8 +214,8 @@ namespace ALTEngine::Game::LevelCleanup
             const size_t at = out.size();
             out.insert(out.end(), bytes.begin() + std::ptrdiff_t(lay.records + r * RECORD_SIZE),
                        bytes.begin() + std::ptrdiff_t(lay.records + (r + 1) * RECORD_SIZE));
-            if (r == 0 || recordA(r) == -1) { continue; }
-            if (runEnd[r] != NO_RUN) { out[at + 19] = uint8_t((out[at + 19] & ~RUN_END) | (endHere[r] ? RUN_END : 0)); }
+            if (recordA(r) == -1) { continue; }
+            if (r > 0 && runEnd[r] != NO_RUN) { out[at + 19] = uint8_t((out[at + 19] & ~RUN_END) | (endHere[r] ? RUN_END : 0)); }
             for (int k = 0; k < 4; ++k)
             {
                 const int32_t v = static_cast<int32_t>(Le32(out, at + size_t(k) * 4));
@@ -179,7 +237,7 @@ namespace ALTEngine::Game::LevelCleanup
         // Every start written names a kept record; check rather than trust it.
         for (size_t c = 0; c < cells; ++c)
         {
-            if (now[c] != NO_RUN && now[c] >= nextRecord) { error = "internal: a cell's run start names no record"; return false; }
+            if (now[c] != NO_RUN && now[c] >= nextRecord) { error = "internal: a cell's run start names no record"; bytes = std::move(original); return false; }
         }
 
         report.bytesAfter = out.size();

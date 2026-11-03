@@ -126,10 +126,14 @@ namespace ALTEngine::Bootstrap
                     }
                 }
             }
-            // Cleaned copies made from another list are made again.
-            const bool current = state.contains("list") && state["list"].is_number_unsigned() && state["list"].get<uint32_t>() == listCrc;
+            // Cleaned copies made from another list, or by another Apply, are
+            // made again.
+            const bool current = state.contains("list") && state["list"].is_number_unsigned() && state["list"].get<uint32_t>() == listCrc
+                                 && state.contains("apply") && state["apply"].is_number_integer()
+                                 && state["apply"].get<int>() == ALTEngine::Game::LevelCleanup::APPLY_VERSION;
             state.erase("version");
-            if (enabled) { state["list"] = listCrc; } else { state.erase("list"); }
+            if (enabled) { state["list"] = listCrc; state["apply"] = ALTEngine::Game::LevelCleanup::APPLY_VERSION; }
+            else { state.erase("list"); state.erase("apply"); }
 
             int cleaned = 0, kept = 0, restored = 0, skipped = 0;
             size_t saved = 0;

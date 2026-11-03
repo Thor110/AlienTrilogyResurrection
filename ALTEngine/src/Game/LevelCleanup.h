@@ -22,7 +22,10 @@ namespace ALTEngine::Game::LevelCleanup
     //
     // Applying a plan: the faces it names go; a run that loses its last faces
     // ends at its last kept one (the 0x80 bit, +0x13, moves there); a cell
-    // whose run loses its first faces starts at its first kept one. A cell
+    // whose run loses its first faces starts at its first kept one. The first
+    // cell's run begins at record 0, which its start of 0 hides; when the cell
+    // is given back, a copy of record 0 goes in at its head (record 0 stays,
+    // as the start of the cells left empty). A cell
     // left with no faces starts at FF FF FF FF if the plan says the view walk
     // never takes it in, and at 0 otherwise - the blank record, which draws
     // nothing (as the first cell's 0 does): the walk spreads through a cell's
@@ -31,6 +34,11 @@ namespace ALTEngine::Game::LevelCleanup
     // is renumbered: the cells' run starts, the faces' vertex indices, the
     // header's counts, and the MAP0 and FORM sizes. Nothing else in a level
     // names them.
+    // What Apply makes of a plan, by version: raised whenever the same plan
+    // comes to give a different file (2: record 0's copy heads the first
+    // cell's run), so cleaned copies made by an older Apply are made again.
+    inline constexpr int APPLY_VERSION = 2;
+
     struct Plan
     {
         std::vector<uint32_t> remove;   // face records to take out, as the file numbers them

@@ -4,6 +4,7 @@
 #include "Game/CreatureSight.h"
 #include "Game/LevelCleanup.h"
 #include "Game/LevelCleanupPlan.h"
+#include "Game/LevelFileLayout.h"
 
 #include <fstream>
 #include <iterator>
@@ -89,20 +90,42 @@ TEST_CASE("Level cleanup: L111 loses the faces it never draws and nothing else")
     CHECK(again == bytes);
 }
 
-TEST_CASE("Level cleanup: L112's first cell gets its own face back")
+TEST_CASE("Level cleanup: L112's first cell gets its own faces back, record 0's among them")
 {
     auto bytes = ReadDemo("SECT11/L112LEV.MAP");
+    const auto shipped = bytes;   // record 0 as the file has it
     const auto before = Formats::LevelLoader::Parse(bytes, "before");
     Game::LevelCleanup::Report report;
     std::string error;
     REQUIRE(Clean(bytes, false, report, error));
     CHECK(report.firstCellRestored);
-    CHECK_EQ(report.firstCellFaces, 1);
+    // Its run begins at record 0 (the face the cell's start of 0 hid along
+    // with record 1): a copy of it heads the run, then record 1.
+    CHECK_EQ(report.firstCellFaces, 2);
     const auto after = Formats::LevelLoader::Parse(bytes, "after");
     const auto ownerBefore = Game::CreatureSight::FaceCells(before);
     const auto ownerAfter = Game::CreatureSight::FaceCells(after);
     CHECK_EQ(ownerBefore[0], -1);              // listed by no cell as shipped
-    CHECK(ownerAfter[0] >= 0);                 // now its cell's run
+    CHECK(ownerAfter[0] >= 0);                 // record 0's copy, now its cell's run
+    CHECK(ownerAfter[1] >= 0);                 // and record 1
+    CHECK_EQ(ownerAfter[0], ownerAfter[1]);
+    // The copy is record 0: the same texture and the same corners.
+    Game::LevelFileLayout::Layout lay;
+    REQUIRE(Game::LevelFileLayout::Read(shipped, lay, error));
+    REQUIRE(!after.quads.empty());
+    const auto& copy = after.quads[0];
+    CHECK_EQ(int(copy.texIndex), int(lay.Texture(shipped, 0)));
+    const int corners[4] = { copy.a, copy.b, copy.c, copy.d };
+    for (int k = 0; k < 4; ++k)
+    {
+        const int32_t was = lay.Corner(shipped, 0, k);
+        if (was < 0) { CHECK(corners[k] < 0); continue; }
+        REQUIRE(corners[k] >= 0 && size_t(corners[k]) < after.vertices.size());
+        const auto& v = after.vertices[size_t(corners[k])];
+        CHECK_EQ(int(v.x), int(lay.Coordinate(shipped, size_t(was), 0)));
+        CHECK_EQ(int(v.y), int(lay.Coordinate(shipped, size_t(was), 1)));
+        CHECK_EQ(int(v.z), int(lay.Coordinate(shipped, size_t(was), 2)));
+    }
 }
 
 TEST_CASE("Level cleanup: the view walk takes in the same cells after it")
