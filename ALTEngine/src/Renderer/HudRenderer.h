@@ -124,8 +124,13 @@ namespace ALTEngine::Renderer
             int state = 0;
             bool moving = false;
         };
-        void DrawTracker(SDL_Renderer* renderer, const std::vector<Contact>& contacts,
-                         float playerYaw, int outputWidth, int outputHeight) const;
+        // Returns how many contacts it drew (FUN_0003a008's count).
+        int DrawTracker(SDL_Renderer* renderer, const std::vector<Contact>& contacts,
+                        float playerYaw, int outputWidth, int outputHeight) const;
+
+        // True once after each sweep has come round (FUN_00039f8c raises
+        // DAT_00247f6c as the frame wraps to 0): the moment for the pulse.
+        bool TakeTrackerSweep() { const bool swept = trackerSwept; trackerSwept = false; return swept; }
 
         // The half-rate counter FUN_00039f8c keeps. Drives both the sweep and the
         // blip blink.
@@ -196,6 +201,7 @@ namespace ALTEngine::Renderer
         int trackerTimer = 0;
         int trackerPause = 0;
         int trackerTick = 0;
+        bool trackerSwept = false;
 
         Frame healthFrame;
         Frame ammoFrame;

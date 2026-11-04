@@ -91,7 +91,10 @@ namespace ALTEngine::Formats
         inline constexpr int SHOTGUN_RELOAD = 0x11;     // 0705clip
         inline constexpr int SMARTGUN_FIRE = 0x12;      // 0901smar
         inline constexpr int SMARTGUN_RELOAD = 0x14;    // 0905clip
+        // The tracker's pulse at the end of each sweep (FUN_0003a1d0): 0x15
+        // when the sweep found nothing, 0x16 when it drew a contact.
         inline constexpr int MOTION_TRACKER = 0x15;     // 1002moti
+        inline constexpr int MOTION_TRACKER_CONTACT = 0x16;   // 1003moti
         inline constexpr int BARREL_EXPLODE = 0x21;     // 5001barr
         inline constexpr int SEISMIC = 0x22;            // 5002seis
         inline constexpr int TEXT_BEEP = 0x27;          // 5005text

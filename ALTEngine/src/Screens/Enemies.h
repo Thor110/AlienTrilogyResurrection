@@ -254,6 +254,16 @@ namespace ALTEngine::Screens
             // animation's last frame.
             bool bodyRemoved = false;
 
+            // OURS, co-operative. The host: the player this creature is
+            // after (their slot), and a hug on another machine's player timed
+            // here, as that player's crawl runs there. A guest: where the
+            // host last had it, which it is moved toward each frame.
+            int netTarget = 0;
+            int netHugTicks = 0;
+            int netSound = -1;   // host: a cue the guests have not been sent yet
+            float netX = 0, netY = 0, netZ = 0;
+            bool netPlaced = false;
+
             // The two per-creature distance thresholds the mode banding uses
             // (+0x4a and +0x48), from the monster record's bytes 18/19 and 16/17
             // (FUN_0002e638) - see Build(). These are only the defaults.

@@ -72,6 +72,25 @@ namespace ALTEngine::Net
                 [](const AtExit& m) { return Slot(m.slot); },
                 [](const DiscoverReply& m) { return m.mode < GameMode::Count; },
                 [](const LevelStart& m) { return m.level.size() <= 8; },
+                [](const WorldEvent& m) {
+                    return Slot(m.origin) && m.kind >= WorldKind::Trigger && m.kind < WorldKind::Count
+                        && Coordinate(m.x) && Coordinate(m.y) && Coordinate(m.z)
+                        && Coordinate(m.vx) && Coordinate(m.vy) && Coordinate(m.vz);
+                },
+                [](const Creatures& m) {
+                    if (m.entries.size() > MAX_CREATURES_PER_MESSAGE) { return false; }
+                    for (const auto& e : m.entries)
+                    {
+                        if (!Coordinate(e.x) || !Coordinate(e.y) || !Coordinate(e.z)) { return false; }
+                    }
+                    return true;
+                },
+                [](const CreatureDamage& m) { return Slot(m.slot); },
+                [](const CreatureHit& m) { return Slot(m.target); },
+                [](const CreatureShot& m) {
+                    return m.kind <= 1 && Coordinate(m.x) && Coordinate(m.y) && Coordinate(m.z)
+                        && Coordinate(m.vx) && Coordinate(m.vy) && Coordinate(m.vz);
+                },
                 [](const auto&) { return true; },
             }, message);
         }
@@ -123,6 +142,38 @@ namespace ALTEngine::Net
             [&](const AtExit& m) { w.U8(static_cast<uint8_t>(MessageType::AtExit)); w.U8(m.slot); },
             [&](const LevelEnd& m) { w.U8(static_cast<uint8_t>(MessageType::LevelEnd)); w.U16(m.levelSerial); },
             [&](const LevelStart& m) { w.U8(static_cast<uint8_t>(MessageType::LevelStart)); w.U16(m.levelSerial); w.Str(m.level, 8); },
+            [&](const WorldEvent& m) {
+                w.U8(static_cast<uint8_t>(MessageType::WorldEvent));
+                w.U16(m.levelSerial); w.U32(m.seq); w.U8(m.origin); w.U8(static_cast<uint8_t>(m.kind));
+                w.I16(m.a); w.I16(m.b); w.U8(m.flags);
+                w.F32(m.x); w.F32(m.y); w.F32(m.z); w.F32(m.vx); w.F32(m.vy); w.F32(m.vz);
+            },
+            [&](const WorldAck& m) { w.U8(static_cast<uint8_t>(MessageType::WorldAck)); w.U16(m.levelSerial); w.U32(m.seq); },
+            [&](const Creatures& m) {
+                w.U8(static_cast<uint8_t>(MessageType::Creatures));
+                w.U16(m.levelSerial);
+                const size_t n = m.entries.size() < MAX_CREATURES_PER_MESSAGE ? m.entries.size() : MAX_CREATURES_PER_MESSAGE;
+                w.U8(static_cast<uint8_t>(n));
+                for (size_t i = 0; i < n; ++i)
+                {
+                    const auto& e = m.entries[i];
+                    w.U16(e.index); w.U16(e.flags); w.F32(e.x); w.F32(e.y); w.F32(e.z);
+                    w.U16(e.facing); w.I16(e.animation); w.U8(e.frame); w.U8(e.state); w.I16(e.health); w.U8(e.sound);
+                }
+            },
+            [&](const CreatureDamage& m) {
+                w.U8(static_cast<uint8_t>(MessageType::CreatureDamage));
+                w.U16(m.levelSerial); w.U8(m.slot); w.U16(m.index); w.I16(m.damage);
+            },
+            [&](const CreatureHit& m) {
+                w.U8(static_cast<uint8_t>(MessageType::CreatureHit));
+                w.U8(m.target); w.I16(m.damage); w.U8(m.cause); w.U8(m.knock); w.I16(m.yaw);
+            },
+            [&](const CreatureShot& m) {
+                w.U8(static_cast<uint8_t>(MessageType::CreatureShot));
+                w.U16(m.levelSerial); w.U8(m.kind);
+                w.F32(m.x); w.F32(m.y); w.F32(m.z); w.F32(m.vx); w.F32(m.vy); w.F32(m.vz);
+            },
         }, message);
         return w.out;
     }
@@ -179,6 +230,43 @@ namespace ALTEngine::Net
         case MessageType::AtExit: { AtExit m; m.slot = r.U8(); result = m; break; }
         case MessageType::LevelEnd: { LevelEnd m; m.levelSerial = r.U16(); result = m; break; }
         case MessageType::LevelStart: { LevelStart m; m.levelSerial = r.U16(); m.level = r.Str(8); result = m; break; }
+        case MessageType::WorldEvent:
+        {
+            WorldEvent m; m.levelSerial = r.U16(); m.seq = r.U32(); m.origin = r.U8(); m.kind = static_cast<WorldKind>(r.U8());
+            m.a = r.I16(); m.b = r.I16(); m.flags = r.U8();
+            m.x = r.F32(); m.y = r.F32(); m.z = r.F32(); m.vx = r.F32(); m.vy = r.F32(); m.vz = r.F32();
+            result = m; break;
+        }
+        case MessageType::WorldAck: { WorldAck m; m.levelSerial = r.U16(); m.seq = r.U32(); result = m; break; }
+        case MessageType::Creatures:
+        {
+            Creatures m; m.levelSerial = r.U16();
+            const size_t n = r.U8();
+            if (n > MAX_CREATURES_PER_MESSAGE) { return std::nullopt; }
+            m.entries.resize(n);
+            for (auto& e : m.entries)
+            {
+                e.index = r.U16(); e.flags = r.U16(); e.x = r.F32(); e.y = r.F32(); e.z = r.F32();
+                e.facing = r.U16(); e.animation = r.I16(); e.frame = r.U8(); e.state = r.U8(); e.health = r.I16(); e.sound = r.U8();
+            }
+            result = m; break;
+        }
+        case MessageType::CreatureDamage:
+        {
+            CreatureDamage m; m.levelSerial = r.U16(); m.slot = r.U8(); m.index = r.U16(); m.damage = r.I16();
+            result = m; break;
+        }
+        case MessageType::CreatureHit:
+        {
+            CreatureHit m; m.target = r.U8(); m.damage = r.I16(); m.cause = r.U8(); m.knock = r.U8(); m.yaw = r.I16();
+            result = m; break;
+        }
+        case MessageType::CreatureShot:
+        {
+            CreatureShot m; m.levelSerial = r.U16(); m.kind = r.U8();
+            m.x = r.F32(); m.y = r.F32(); m.z = r.F32(); m.vx = r.F32(); m.vy = r.F32(); m.vz = r.F32();
+            result = m; break;
+        }
         default: return std::nullopt;
         }
         if (!r.ok || !result || !Sane(*result)) { return std::nullopt; }

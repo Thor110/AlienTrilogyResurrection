@@ -114,6 +114,13 @@ namespace ALTEngine::Screens
 
         void End() { active = false; }
 
+        // How many ticks the crawl takes from Begin to Finished: up, held, down.
+        static constexpr int DurationTicks()
+        {
+            const int travel = START_Y - REST_Y;
+            return (travel + CLIMB_STEP - 1) / CLIMB_STEP + HOLD_TICKS + (travel + FALL_STEP - 1) / FALL_STEP + 1;
+        }
+
         // One logic tick. Advances both halves together - they are one sprite cut
         // in two, so they must never drift apart.
         void Tick()

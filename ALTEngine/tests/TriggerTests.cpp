@@ -468,3 +468,49 @@ TEST_CASE("Triggers: a switch thrown with the key unlocks its door")
     CHECK(rec.log[1] == "unlock 3+1 switch");
     CHECK_EQ(system.UsesRemaining(3), 0);
 }
+
+TEST_CASE("Triggers: co-operative - every chain run is reported, and a replay does the same and is not")
+{
+    // Unlock door 2, then light 5: two uses.
+    LevelGeometry level = SyntheticLevel({ LogicGroup{ Triggers::UNLOCK_DOOR, 0, 1, 2 },
+                                           LogicGroup{ Triggers::TOGGLE_LIGHT, 0, 1, 5 } }, 2);
+    Triggers::System here(level), there(level);
+    struct Fired { int id, start; Source source; bool fresh, useKey; };
+    std::vector<Fired> reported, reportedThere;
+    here.SetOnFired([&](int id, int start, Source source, bool fresh, bool useKey) {
+        reported.push_back({ id, start, source, fresh, useKey });
+    });
+    there.SetOnFired([&](int id, int start, Source source, bool fresh, bool useKey) {
+        reportedThere.push_back({ id, start, source, fresh, useKey });
+    });
+    Recorder recHere, recThere;
+    const auto hHere = recHere.Handlers();
+    const auto hThere = recThere.Handlers();
+
+    int latch = 0;
+    CHECK(here.OnEnterCell(latch, 1, hHere));
+    REQUIRE(reported.size() == 1);
+    CHECK(reported[0].id == 1); CHECK(reported[0].start == 0);
+    CHECK(reported[0].source == Source::WalkOn); CHECK(reported[0].fresh); CHECK(!reported[0].useKey);
+
+    // The other machine runs the same chain and counts the same use down,
+    // without reporting it back out.
+    CHECK(there.Replay(reported[0].id, reported[0].start, reported[0].source, reported[0].fresh, reported[0].useKey, hThere));
+    CHECK(recThere.log == recHere.log);
+    CHECK_EQ(there.UsesRemaining(1), here.UsesRemaining(1));
+    CHECK(reportedThere.empty());
+
+    // A bare command chain (a creature's death chain) is reported as trigger 0.
+    CHECK(here.RunCommands(1, hHere));
+    REQUIRE(reported.size() == 2);
+    CHECK(reported[1].id == 0); CHECK(reported[1].start == 1);
+    CHECK(there.Replay(0, 1, Source::Interact, true, true, hThere));
+    CHECK(recThere.log == recHere.log);
+
+    // A spent trigger replays as nothing.
+    int latch2 = 0;
+    CHECK(here.OnEnterCell(latch2, 1, hHere));
+    CHECK(there.Replay(1, 0, Source::WalkOn, true, false, hThere));
+    CHECK_EQ(here.UsesRemaining(1), 0);
+    CHECK(!there.Replay(1, 0, Source::WalkOn, true, false, hThere));
+}

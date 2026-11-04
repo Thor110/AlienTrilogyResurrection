@@ -883,20 +883,23 @@ namespace ALTEngine::Renderer
         // on the low bit, so the sweep and its pause both run at half rate.
         trackerTick++;
         if ((trackerTick & 1) == 0) { return; }
+        const int before = trackerFrame;
         HudTrackerAdvance(trackerFrame, trackerTimer, trackerPause);
+        if (before != 0 && trackerFrame == 0) { trackerSwept = true; }
     }
 
-    void HudRenderer::DrawTracker(SDL_Renderer* renderer, const std::vector<Contact>& contacts,
-                                  float playerYaw, int outputWidth, int outputHeight) const
+    int HudRenderer::DrawTracker(SDL_Renderer* renderer, const std::vector<Contact>& contacts,
+                                 float playerYaw, int outputWidth, int outputHeight) const
     {
-        if (!sheet || rects.empty()) { return; }
-        if (outputWidth <= 0 || outputHeight <= 0) { return; }
+        if (!sheet || rects.empty()) { return 0; }
+        if (outputWidth <= 0 || outputHeight <= 0) { return 0; }
+        int drawn = 0;
 
         float scaleX = static_cast<float>(outputWidth) / static_cast<float>(HUD_VIRTUAL_WIDTH);
         float scaleY = static_cast<float>(outputHeight) / static_cast<float>(HUD_VIRTUAL_HEIGHT);
 
         int tile = HUD_TRACKER_FIRST_DESCRIPTOR + trackerFrame;
-        if (static_cast<size_t>(tile) >= rects.size()) { return; }
+        if (static_cast<size_t>(tile) >= rects.size()) { return 0; }
         const ALTEngine::Formats::BxRectangle& r = rects[static_cast<size_t>(tile)];
 
         SDL_FRect src{ static_cast<float>(r.x), static_cast<float>(r.y),
@@ -980,6 +983,9 @@ namespace ALTEngine::Renderer
             if (c.state >= TRACKER_MAX_STATE || c.type >= TRACKER_MAX_TYPE) { continue; }
 
             if (std::fabs(c.dx) > HUD_TRACKER_RANGE || std::fabs(c.dz) > HUD_TRACKER_RANGE) { continue; }
+            // Counted here, inside the range gate, as FUN_0003a008 counts
+            // what it puts out; the dish's own clip comes later.
+            drawn++;
 
             // >> 9 is the world-to-cell shift; the dish is 32 cells across its
             // 64-pixel height, so a cell is two pixels.
@@ -1006,5 +1012,6 @@ namespace ALTEngine::Renderer
                                           HUD_TRACKER_BLIP_SIZE * scaleY);
             SDL_RenderFillRect(renderer, &blip);
         }
+        return drawn;
     }
 }

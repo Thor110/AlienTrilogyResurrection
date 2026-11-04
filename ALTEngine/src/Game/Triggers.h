@@ -142,11 +142,27 @@ namespace ALTEngine::Game
             // no uses. A dying queen runs the one its record's byte 6 names.
             bool RunCommands(int commandStart, const Handlers& handlers);
 
+            // OURS, co-operative play: every chain that runs here is reported,
+            // so the other machines can run the same one (Replay) and their
+            // doors, lifts, lights and pickups follow. `triggerId` is 0 for
+            // a bare command chain (RunCommands - a creature's death chain).
+            // Replay does not report, and counts the trigger's uses down as
+            // the run it repeats did.
+            using FiredFn = std::function<void(int triggerId, int commandStart, Source source, bool fresh, bool useKey)>;
+            void SetOnFired(FiredFn fn) { onFired_ = std::move(fn); }
+            bool Replay(int triggerId, int commandStart, Source source, bool fresh, bool useKey, const Handlers& handlers);
+
         private:
             bool RunChain(int commandStart, Source source, const Handlers& handlers, bool fresh, bool useKey);
 
+            void Fired(int triggerId, int commandStart, Source source, bool fresh, bool useKey) const
+            {
+                if (onFired_) { onFired_(triggerId, commandStart, source, fresh, useKey); }
+            }
+
             const Formats::LevelGeometry* level_ = nullptr;
             std::vector<uint8_t> uses_;
+            FiredFn onFired_;
         };
     }
 }

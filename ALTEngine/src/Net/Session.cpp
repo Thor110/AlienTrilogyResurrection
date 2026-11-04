@@ -25,6 +25,7 @@ namespace ALTEngine::Net
         roster = {};
         skin = chosen;
         roster.players[0] = RosterEntry{ true, player.substr(0, MAX_NAME), 0, chosen };
+        ClearWorld();
         return true;
     }
 
@@ -44,6 +45,7 @@ namespace ALTEngine::Net
         atExitWanted = false;
         lastAtExitTry = -1.0;
         lastJoinTry = -1.0;
+        ClearWorld();
         joinStarted = -1.0;
         return true;
     }
@@ -59,6 +61,90 @@ namespace ALTEngine::Net
         peers = {};
         remote = {};
         roster = {};
+        ClearWorld();
+    }
+
+    void Session::ClearWorld()
+    {
+        worldLog.clear();
+        worldApplied = 0;
+        outSeq = 0;
+        outbox.clear();
+        lastWorldResend = -1.0;
+        for (auto& p : peers) { p.worldAcked = 0; p.worldApplied = 0; }
+    }
+
+    void Session::SendWorldEvent(WorldEvent event)
+    {
+        if (!Connected() || !Coop()) { return; }
+        event.levelSerial = levelSerial;
+        event.origin = static_cast<uint8_t>(localSlot);
+        if (role == Role::Host)
+        {
+            event.seq = static_cast<uint32_t>(worldLog.size() + 1);
+            worldLog.push_back(event);
+            Broadcast(event);
+            return;
+        }
+        event.seq = ++outSeq;
+        outbox.push_back(event);
+        SendToHost(event);
+    }
+
+    void Session::ResendWorld(double now)
+    {
+        if (lastWorldResend >= 0.0 && now - lastWorldResend < WORLD_RESEND_SECONDS) { return; }
+        lastWorldResend = now;
+        if (role == Role::Host)
+        {
+            for (int i = 1; i < MAX_PLAYERS; ++i)
+            {
+                const Peer& peer = peers[static_cast<size_t>(i)];
+                if (!peer.used) { continue; }
+                const size_t from = peer.worldAcked;
+                const size_t to = std::min(worldLog.size(), from + WORLD_RESEND_BATCH);
+                for (size_t k = from; k < to; ++k) { Send(peer.address, worldLog[k]); }
+            }
+            return;
+        }
+        size_t sent = 0;
+        for (const auto& e : outbox)
+        {
+            if (sent++ >= WORLD_RESEND_BATCH) { break; }
+            SendToHost(e);
+        }
+    }
+
+    void Session::SendCreatures(const std::vector<CreatureEntry>& entries)
+    {
+        if (role != Role::Host || !Coop()) { return; }
+        for (size_t i = 0; i < entries.size(); i += MAX_CREATURES_PER_MESSAGE)
+        {
+            Creatures m;
+            m.levelSerial = levelSerial;
+            const size_t end = std::min(entries.size(), i + MAX_CREATURES_PER_MESSAGE);
+            m.entries.assign(entries.begin() + static_cast<std::ptrdiff_t>(i), entries.begin() + static_cast<std::ptrdiff_t>(end));
+            Broadcast(m);
+        }
+    }
+
+    void Session::SendCreatureDamage(uint16_t index, int16_t damage)
+    {
+        if (role != Role::Client || !welcomed || !Coop()) { return; }
+        SendToHost(CreatureDamage{ levelSerial, static_cast<uint8_t>(localSlot), index, damage });
+    }
+
+    void Session::SendCreatureHit(uint8_t target, int16_t damage, uint8_t cause, bool knock, int16_t yaw)
+    {
+        if (role != Role::Host || !Coop() || target == 0 || target >= MAX_PLAYERS || !peers[target].used) { return; }
+        Send(peers[target].address, CreatureHit{ target, damage, cause, static_cast<uint8_t>(knock ? 1 : 0), yaw });
+    }
+
+    void Session::SendCreatureShot(CreatureShot shot)
+    {
+        if (role != Role::Host || !Coop()) { return; }
+        shot.levelSerial = levelSerial;
+        Broadcast(shot);
     }
 
     void Session::Send(const Address& to, const Message& message) { socket.SendTo(to, Encode(message)); }
@@ -128,6 +214,7 @@ namespace ALTEngine::Net
             {
                 if (peers[static_cast<size_t>(i)].used && now - peers[static_cast<size_t>(i)].lastHeard > TIMEOUT_SECONDS) { DropPeer(i); }
             }
+            if (Coop()) { ResendWorld(now); }
             if (now - lastPing >= PING_SECONDS)
             {
                 lastPing = now;
@@ -170,6 +257,7 @@ namespace ALTEngine::Net
             return;
         }
         if (now - lastPing >= PING_SECONDS) { lastPing = now; SendToHost(Ping{ static_cast<uint8_t>(localSlot) }); }
+        if (Coop()) { ResendWorld(now); }
         // Said again until the host's roster shows it.
         if (atExitWanted && !levelEnded && localSlot >= 0
             && !roster.players[static_cast<size_t>(localSlot)].atExit
@@ -262,6 +350,35 @@ namespace ALTEngine::Net
         {
             DropPeer(slot);
         }
+        else if (const auto* world = std::get_if<WorldEvent>(&message))
+        {
+            if (!Coop() || world->levelSerial != levelSerial) { return; }
+            Peer& peer = peers[static_cast<size_t>(slot)];
+            if (world->seq == peer.worldApplied + 1)
+            {
+                peer.worldApplied = world->seq;
+                WorldEvent entry = *world;
+                entry.origin = s;
+                entry.seq = static_cast<uint32_t>(worldLog.size() + 1);
+                worldLog.push_back(entry);
+                Broadcast(entry);
+                Event e; e.kind = Event::Kind::World; e.slot = s; e.world = entry; events.push_back(e);
+            }
+            Send(from, WorldAck{ levelSerial, peer.worldApplied });
+        }
+        else if (const auto* ack = std::get_if<WorldAck>(&message))
+        {
+            if (ack->levelSerial != levelSerial) { return; }
+            Peer& peer = peers[static_cast<size_t>(slot)];
+            peer.worldAcked = std::max(peer.worldAcked, std::min(ack->seq, static_cast<uint32_t>(worldLog.size())));
+        }
+        else if (const auto* damage = std::get_if<CreatureDamage>(&message))
+        {
+            if (!Coop() || damage->levelSerial != levelSerial) { return; }
+            Event e; e.kind = Event::Kind::CreatureDamage; e.slot = s; e.creatureDamage = *damage;
+            e.creatureDamage.slot = s;
+            events.push_back(e);
+        }
         else if (std::holds_alternative<AtExit>(message))
         {
             if (Coop() && !levelEnded && !roster.players[static_cast<size_t>(slot)].atExit)
@@ -336,6 +453,38 @@ namespace ALTEngine::Net
         else if (const auto* chat = std::get_if<Chat>(&message))
         {
             Event e; e.kind = Event::Kind::Chat; e.slot = chat->slot; e.chat = *chat; events.push_back(e);
+        }
+        else if (const auto* world = std::get_if<WorldEvent>(&message))
+        {
+            if (world->levelSerial != levelSerial) { return; }
+            if (world->seq == worldApplied + 1)
+            {
+                worldApplied = world->seq;
+                // Our own come back numbered too; they are already done here.
+                if (world->origin != localSlot) { Event e; e.kind = Event::Kind::World; e.slot = world->origin; e.world = *world; events.push_back(e); }
+            }
+            SendToHost(WorldAck{ levelSerial, worldApplied });
+        }
+        else if (const auto* ack = std::get_if<WorldAck>(&message))
+        {
+            if (ack->levelSerial != levelSerial) { return; }
+            outbox.erase(std::remove_if(outbox.begin(), outbox.end(), [&](const WorldEvent& e) { return e.seq <= ack->seq; }),
+                         outbox.end());
+        }
+        else if (const auto* creatures = std::get_if<Creatures>(&message))
+        {
+            if (creatures->levelSerial != levelSerial) { return; }
+            Event e; e.kind = Event::Kind::Creatures; e.creatures = *creatures; events.push_back(e);
+        }
+        else if (const auto* hit = std::get_if<CreatureHit>(&message))
+        {
+            if (hit->target != localSlot) { return; }
+            Event e; e.kind = Event::Kind::CreatureHit; e.creatureHit = *hit; events.push_back(e);
+        }
+        else if (const auto* shot = std::get_if<CreatureShot>(&message))
+        {
+            if (shot->levelSerial != levelSerial) { return; }
+            Event e; e.kind = Event::Kind::CreatureShot; e.creatureShot = *shot; events.push_back(e);
         }
         else if (const auto* end = std::get_if<LevelEnd>(&message))
         {
@@ -441,6 +590,7 @@ namespace ALTEngine::Net
         for (auto& p : roster.players) { p.atExit = false; }
         // What the players did on the last level is no guide to where they are.
         remote = {};
+        ClearWorld();
         Event e; e.kind = Event::Kind::LevelStarted; events.push_back(e);
     }
 

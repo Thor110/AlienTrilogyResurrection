@@ -332,6 +332,12 @@ namespace ALTEngine::Screens
         // The level's scripted triggers - see Game/Triggers.h. One system for
         // walking onto a cell and for the use key.
         ALTEngine::Game::Triggers::System triggers;
+        // Co-operative: running a change another machine made (a WorldEvent),
+        // which is not reported back out.
+        bool replayingWorld = false;
+        // Co-operative: objects another machine destroyed, for the tick to
+        // take down (DestroyTarget lives there).
+        std::vector<int> remoteDestroys;
         // Pickups spin in place. The original advances their angle by 0x10
         // per tick in a 4096-step space.
         std::vector<size_t> pickupPlaced;
@@ -486,6 +492,13 @@ namespace ALTEngine::Screens
 
         // The path network's flow field, rebuilt as the player changes node.
         ALTEngine::Game::FlowField flowField;
+        // Co-operative host: one for each other player, so a creature can
+        // find its way to whichever is nearest.
+        std::array<ALTEngine::Game::FlowField, ALTEngine::Net::MAX_PLAYERS> netFlowFields;
+        // Co-operative host: when the creatures were last sent, and how each
+        // last went out (so a change is sent at once).
+        double lastCreaturesSent = -1.0, lastCreaturesFull = -1.0;
+        std::vector<uint16_t> creatureFlagsSent;
         uint32_t creatureRandom = 0x1234567u;   // FUN_000100ec stands in
         ALTEngine::Screens::Particles::Pool particles;
         ALTEngine::Screens::Particles::Rng dropRng;
@@ -1609,6 +1622,7 @@ namespace ALTEngine::Screens
                         }
                         ALTEngine::Screens::Enemies::ResetLevelState();
                         flowField.Reset(level);
+                        for (auto& field : netFlowFields) { field.Reset(level); }
                     }
                 }
                 catch (const std::exception& e)
@@ -1697,6 +1711,8 @@ namespace ALTEngine::Screens
             SDL_Log("GameplayScreen: ChangeTexture animator=%d delta=%d", animator, delta);
         };
         triggerHandlers.spawnMonster = [&](int monster, int amount) {
+            // A co-operative guest's creatures are the host's: it lets them out.
+            if (session && session->CoopGuest()) { return; }
             if (ALTEngine::Screens::Enemies::TriggerSpawn(enemies, monster, amount))
             {
                 // A creature let out into a duct behind a wall vent is not
@@ -1737,7 +1753,8 @@ namespace ALTEngine::Screens
             if (objectState[oi] != 0) { return false; }
             // Types 22 and 26 need a battery and consume one; type 24 is exempt.
             const uint8_t type = level.crates[oi].type;
-            if (type == 22 || type == 26)
+            // Thrown on another machine: its battery was spent there.
+            if ((type == 22 || type == 26) && !replayingWorld)
             {
                 if (!inventory.HasBatteries())
                 {
@@ -1772,8 +1789,100 @@ namespace ALTEngine::Screens
             hudMessages.Show("AT THE EXIT - WAITING FOR THE OTHER PLAYERS");
         };
         triggerHandlers.endLevel = [&]() {
+            // Another player's exit is theirs: each player reaches it.
+            if (replayingWorld) { return; }
             SDL_Log("GameplayScreen: End Level trigger fired");
             reachedExit();
+        };
+
+        // THE SHARED WORLD (co-operative; Net/Protocol.h). The host runs the
+        // creatures and sends where they are; every machine runs the rest of
+        // the level and passes on what changed it - each trigger chain that
+        // runs here (doors, lifts, lights, switches, pickups let out, the
+        // creatures' own), each pickup taken, each object destroyed - for the
+        // others to run the same.
+        const bool coopGame = session && session->Coop();
+        const bool coopGuest = session && session->CoopGuest();
+        const bool coopHost = session && session->CoopHost();
+        if (coopGame)
+        {
+            triggers.SetOnFired([&](int id, int start, ALTEngine::Game::Triggers::Source source, bool fresh, bool useKey) {
+                if (replayingWorld) { return; }
+                ALTEngine::Net::WorldEvent e;
+                e.kind = ALTEngine::Net::WorldKind::Trigger;
+                e.a = static_cast<int16_t>(id);
+                e.b = static_cast<int16_t>(start);
+                e.flags = static_cast<uint8_t>((static_cast<uint8_t>(source) & 7)
+                                               | (fresh ? ALTEngine::Net::WORLD_TRIGGER_FRESH : 0)
+                                               | (useKey ? ALTEngine::Net::WORLD_TRIGGER_USE_KEY : 0));
+                session->SendWorldEvent(e);
+            });
+        }
+        auto sendWorld = [&](ALTEngine::Net::WorldKind kind, int a, int b = 0) {
+            if (!coopGame || replayingWorld) { return; }
+            ALTEngine::Net::WorldEvent e;
+            e.kind = kind;
+            e.a = static_cast<int16_t>(a);
+            e.b = static_cast<int16_t>(b);
+            session->SendWorldEvent(e);
+        };
+        // Damage to a creature from this machine's player. A co-operative
+        // guest's creatures are the host's: the hit goes there, and comes
+        // back in the creature's next state.
+        auto damageCreature = [&](ALTEngine::Screens::Enemies::Enemy& enemy, int damage) {
+            if (coopGuest)
+            {
+                const auto index = static_cast<uint16_t>(&enemy - enemies.data());
+                session->SendCreatureDamage(index, static_cast<int16_t>(std::clamp(damage, 0, 32767)));
+                return;
+            }
+            ALTEngine::Screens::Enemies::ApplyHit(enemy, damage, ignoreStun);
+        };
+        // A change from another machine, made here.
+        auto applyWorldEvent = [&](const ALTEngine::Net::WorldEvent& w) {
+            namespace NT = ALTEngine::Net;
+            replayingWorld = true;
+            switch (w.kind)
+            {
+            case NT::WorldKind::Trigger:
+                triggers.Replay(w.a, w.b, static_cast<ALTEngine::Game::Triggers::Source>(w.flags & 7),
+                                (w.flags & NT::WORLD_TRIGGER_FRESH) != 0, (w.flags & NT::WORLD_TRIGGER_USE_KEY) != 0,
+                                triggerHandlers);
+                break;
+            case NT::WorldKind::PickupTaken:
+                if (w.a >= 0 && static_cast<size_t>(w.a) < livePickups.size())
+                {
+                    auto& live = livePickups[static_cast<size_t>(w.a)];
+                    live.collected = true;
+                    live.falling = false;
+                    if (live.placedIndex < placedObjects.size()) { placedObjects[live.placedIndex].visible = false; }
+                }
+                break;
+            case NT::WorldKind::ObjectDestroyed:
+                remoteDestroys.push_back(w.a);
+                break;
+            case NT::WorldKind::PickupDropped:
+                if (w.a >= 0 && static_cast<size_t>(w.a) < livePickups.size())
+                {
+                    auto& live = livePickups[static_cast<size_t>(w.a)];
+                    if (live.collected) { break; }
+                    live.waitingOnTrigger = false;
+                    live.contained = false;
+                    if (w.b >= 0) { live.cellIndex = w.b; }
+                    live.vx = w.vx; live.vy = w.vy; live.vz = w.vz;
+                    live.falling = true;
+                    if (live.placedIndex < placedObjects.size())
+                    {
+                        auto& placed = placedObjects[live.placedIndex];
+                        placed.x = w.x; placed.y = w.y; placed.z = w.z;
+                        placed.visible = true;
+                    }
+                }
+                break;
+            default:
+                break;
+            }
+            replayingWorld = false;
         };
         Uint64 lastTicks = SDL_GetTicks();
 
@@ -1993,6 +2102,110 @@ namespace ALTEngine::Screens
                                              + std::to_string(session->PlayersPlaying()) + " AT THE EXIT");
                         }
                         break;
+                    case K::World:
+                        if (levelReady) { applyWorldEvent(e.world); }
+                        break;
+                    case K::CreatureDamage:
+                    {
+                        // A guest's round, run here where the creatures are.
+                        const size_t index = e.creatureDamage.index;
+                        if (levelReady && index < enemies.size())
+                        {
+                            auto& enemy = enemies[index];
+                            if (enemy.active && enemy.alive)
+                            {
+                                ALTEngine::Screens::Enemies::ApplyHit(enemy, e.creatureDamage.damage, ignoreStun);
+                            }
+                        }
+                        break;
+                    }
+                    case K::Creatures:
+                        // The host's creatures, as it has them now.
+                        if (!levelReady) { break; }
+                        for (const auto& c : e.creatures.entries)
+                        {
+                            if (c.index >= enemies.size()) { continue; }
+                            namespace NT = ALTEngine::Net;
+                            namespace EN = ALTEngine::Screens::Enemies;
+                            auto& enemy = enemies[c.index];
+                            // A vent's jet is run here, from the host's word
+                            // on whether it is on and how much it has left.
+                            if (ALTEngine::Screens::IsVent(enemy.type))
+                            {
+                                enemy.active = (c.flags & NT::CREATURE_ACTIVE) != 0;
+                                enemy.alive = (c.flags & NT::CREATURE_ALIVE) != 0;
+                                enemy.health = c.health;
+                                continue;
+                            }
+                            enemy.active = (c.flags & NT::CREATURE_ACTIVE) != 0;
+                            enemy.alive = (c.flags & NT::CREATURE_ALIVE) != 0;
+                            enemy.bodyRemoved = (c.flags & NT::CREATURE_BODY_REMOVED) != 0;
+                            enemy.onCeiling = (c.flags & NT::CREATURE_ON_CEILING) != 0;
+                            enemy.velocityActive = (c.flags & NT::CREATURE_MOVING) != 0;
+                            enemy.pouncing = (c.flags & NT::CREATURE_POUNCING) != 0;
+                            enemy.holdAnimation = (c.flags & NT::CREATURE_HOLD) != 0;
+                            enemy.facing = c.facing;
+                            enemy.state = c.state;
+                            enemy.health = c.health;
+                            // A jump of a cell or more (a spawn, a drop from the
+                            // ceiling) is taken at once; anything less is closed
+                            // over the next frames.
+                            const bool jumped = std::fabs(c.x - enemy.x) + std::fabs(c.z - enemy.z) + std::fabs(c.y - enemy.y) > 512.0f;
+                            if (!enemy.netPlaced || jumped) { enemy.x = c.x; enemy.y = c.y; enemy.z = c.z; }
+                            enemy.netX = c.x; enemy.netY = c.y; enemy.netZ = c.z;
+                            enemy.netPlaced = true;
+                            if (c.flags & NT::CREATURE_WALKING)
+                            {
+                                EN::PlayWalkByView(enemy, EN::BearingTo(enemy, camera.x, camera.z));
+                            }
+                            else
+                            {
+                                enemy.animation = c.animation;
+                                enemy.mirrored = (c.flags & NT::CREATURE_MIRRORED) != 0;
+                            }
+                            enemy.animationFrame = c.frame;
+                            // Its cue, heard from here (0x1400 is where the
+                            // creature volume bottoms out).
+                            if (c.sound != 0xff
+                                && std::fabs(enemy.x - camera.x) + std::fabs(enemy.z - camera.z) < 0x1400 * 1.5f)
+                            {
+                                ALTEngine::Audio::SfxPlayer::PlaySlotAtVolume(
+                                    c.sound,
+                                    ALTEngine::Audio::SfxPlayer::CreatureVolume(enemy.x - camera.x, enemy.z - camera.z),
+                                    digits.c_str(), cdDirectory);
+                            }
+                        }
+                        break;
+                    case K::CreatureHit:
+                    {
+                        // A creature on the host's machine reached us.
+                        const int healthBefore = hudState.health;
+                        hudState.ApplyDamage(e.creatureHit.damage, e.creatureHit.cause);
+                        if (e.creatureHit.knock && hudState.health != healthBefore)
+                        {
+                            knockbackStrength = ALTEngine::Game::PlayerMover::KNOCKBACK_HIT;
+                            knockbackYaw = e.creatureHit.yaw & 0xfff;
+                        }
+                        checkPlayerDeath();
+                        break;
+                    }
+                    case K::CreatureShot:
+                        // A creature fired on the host's machine: the round (or
+                        // grenade) flies here too, and hurts us if it reaches us.
+                        if (!levelReady) { break; }
+                        if (e.creatureShot.kind == 0)
+                        {
+                            particles.SpawnEnemyRound(e.creatureShot.x, e.creatureShot.y, e.creatureShot.z,
+                                                      e.creatureShot.vx, e.creatureShot.vy, e.creatureShot.vz);
+                        }
+                        else
+                        {
+                            EnemyGrenade g;
+                            g.x = e.creatureShot.x; g.y = e.creatureShot.y; g.z = e.creatureShot.z;
+                            g.vx = e.creatureShot.vx; g.vy = e.creatureShot.vy; g.vz = e.creatureShot.vz;
+                            enemyGrenades.push_back(g);
+                        }
+                        break;
                     case K::LevelEnded:
                     case K::LevelStarted:
                         // Every player is at the exit (or the host has moved on
@@ -2021,6 +2234,61 @@ namespace ALTEngine::Screens
                     state.flags = static_cast<uint8_t>((hudState.dead ? 1 : 0) | (playerCam.speed != 0 ? 4 : 0)
                                                        | (exitWaiting ? 8 : 0));
                     session->SendState(state);
+                }
+
+                // Co-operative host: the creatures, twenty times a second -
+                // those in play and any that changed (one let out, one
+                // killed), and every one once a second.
+                if (coopHost && levelReady && (lastCreaturesSent < 0.0 || netNow - lastCreaturesSent >= 1.0 / 20.0))
+                {
+                    namespace NT = ALTEngine::Net;
+                    namespace EN = ALTEngine::Screens::Enemies;
+                    lastCreaturesSent = netNow;
+                    const bool full = lastCreaturesFull < 0.0 || netNow - lastCreaturesFull >= 1.0;
+                    if (full) { lastCreaturesFull = netNow; }
+                    creatureFlagsSent.resize(enemies.size(), 0xffff);
+                    std::vector<NT::CreatureEntry> entries;
+                    for (size_t i = 0; i < enemies.size(); ++i)
+                    {
+                        const auto& en = enemies[i];
+                        const bool walking = EN::WalksByView(en) && en.animation >= 0 && en.animation < 8
+                            && en.animation == en.walkView;
+                        const uint16_t flags = static_cast<uint16_t>(
+                            (en.active ? NT::CREATURE_ACTIVE : 0) | (en.alive ? NT::CREATURE_ALIVE : 0)
+                            | (en.bodyRemoved ? NT::CREATURE_BODY_REMOVED : 0) | (en.onCeiling ? NT::CREATURE_ON_CEILING : 0)
+                            | (en.velocityActive ? NT::CREATURE_MOVING : 0) | (en.pouncing ? NT::CREATURE_POUNCING : 0)
+                            | (walking ? NT::CREATURE_WALKING : 0) | (en.mirrored ? NT::CREATURE_MIRRORED : 0)
+                            | (en.holdAnimation ? NT::CREATURE_HOLD : 0));
+                        if (!full && !en.active && flags == creatureFlagsSent[i] && en.netSound < 0) { continue; }
+                        creatureFlagsSent[i] = flags;
+                        NT::CreatureEntry c;
+                        c.index = static_cast<uint16_t>(i);
+                        c.flags = flags;
+                        c.x = en.x; c.y = en.y; c.z = en.z;
+                        c.facing = static_cast<uint16_t>(en.facing & 0xfff);
+                        c.animation = static_cast<int16_t>(en.animation);
+                        c.frame = static_cast<uint8_t>(std::clamp(en.animationFrame, 0, 255));
+                        c.state = static_cast<uint8_t>(en.state);
+                        c.health = static_cast<int16_t>(std::clamp(en.health, -32768, 32767));
+                        if (en.netSound >= 0 && en.netSound < 0xff) { c.sound = static_cast<uint8_t>(en.netSound); }
+                        enemies[i].netSound = -1;
+                        entries.push_back(c);
+                    }
+                    if (!entries.empty()) { session->SendCreatures(entries); }
+                }
+
+                // Co-operative guest: the creatures close on where the host has
+                // them, rather than jumping twenty times a second.
+                if (coopGuest && levelReady)
+                {
+                    const float k = std::min(1.0f, dt * 12.0f);
+                    for (auto& en : enemies)
+                    {
+                        if (!en.netPlaced) { continue; }
+                        en.x += (en.netX - en.x) * k;
+                        en.y += (en.netY - en.y) * k;
+                        en.z += (en.netZ - en.z) * k;
+                    }
                 }
 
                 // The host's bots (Game::Bots): as many as asked for, less any
@@ -2996,8 +3264,10 @@ namespace ALTEngine::Screens
                                 ToGridSpaceZ(static_cast<float>(z), originZ) >> 9);
                             return cell ? static_cast<int>(cell->pathNode) : -1;
                         };
-                        aiWorld.nodeToward = [&](int node) { return flowField.Step(node, true); };
-                        aiWorld.nodeAway = [&](int node) { return flowField.Step(node, false); };
+                        // The field to the creature's own target (co-operative), else the player's.
+                        ALTEngine::Game::FlowField* aiFlow = &flowField;
+                        aiWorld.nodeToward = [&](int node) { return aiFlow->Step(node, true); };
+                        aiWorld.nodeAway = [&](int node) { return aiFlow->Step(node, false); };
                         aiWorld.nodePosition = [&](int node, int& x, int& z) {
                             int gx = 0, gz = 0;
                             if (!flowField.Position(node, gx, gz)) { return false; }
@@ -3098,10 +3368,57 @@ namespace ALTEngine::Screens
                         const uint16_t drawnZones = ALTEngine::Game::CreatureSight::DrawnZoneMask(level,
                             ToGridSpaceX(camera.x, originX) >> 9, ToGridSpaceZ(camera.z, originZ) >> 9,
                             (playerCam.viewYaw + 0x800) & PC::ANGLE_MASK);
+                        // CO-OPERATIVE HOST: the players a creature can go after -
+                        // this one and every other still in play - each with
+                        // what they can see and a flow field to them. Each
+                        // creature goes after the nearest (OURS: the original
+                        // had one player).
+                        struct AiTarget { int slot; float x, feetY, z; uint16_t zones; ALTEngine::Game::FlowField* flow; };
+                        std::vector<AiTarget> aiTargets;
+                        const int localSlot = session ? std::max(0, session->LocalSlot()) : 0;
+                        if (!(coopHost && exitWaiting))
+                        {
+                            aiTargets.push_back({ localSlot, camera.x, playerFeetY, camera.z, drawnZones, &flowField });
+                        }
+                        if (coopHost && creaturePass)
+                        {
+                            const auto& states = session->RemoteStates();
+                            for (size_t slot = 0; slot < states.size(); ++slot)
+                            {
+                                if (!states[slot] || (states[slot]->flags & (1 | 8)) || session->IsBot(static_cast<int>(slot))) { continue; }
+                                const auto& st = *states[slot];
+                                const int sgx = ToGridSpaceX(st.x, originX) >> 9;
+                                const int sgz = ToGridSpaceZ(st.z, originZ) >> 9;
+                                const auto* cell = ALTEngine::Formats::CellAt(level, sgx, sgz);
+                                if (!cell) { continue; }
+                                netFlowFields[slot].Update(cell->pathNode);
+                                const uint16_t zones = ALTEngine::Game::CreatureSight::DrawnZoneMask(
+                                    level, sgx, sgz, (st.yaw + 0x800) & PC::ANGLE_MASK);
+                                aiTargets.push_back({ static_cast<int>(slot), st.x, st.y, st.z, zones, &netFlowFields[slot] });
+                            }
+                        }
+                        if (aiTargets.empty())
+                        {
+                            aiTargets.push_back({ localSlot, camera.x, playerFeetY, camera.z, drawnZones, &flowField });
+                        }
                         if (creaturePass)
                         for (auto& enemy : enemies)
                         {
                             if (!halfPass && !ALTEngine::Screens::IsXenomorph(enemy.type)) { continue; }
+                            // A co-operative guest's creatures are the host's,
+                            // and come by Creatures messages; the vents, which
+                            // never move, it runs itself.
+                            if (coopGuest && !ALTEngine::Screens::IsVent(enemy.type)) { continue; }
+                            const AiTarget* aiTarget = &aiTargets[0];
+                            for (const AiTarget& t : aiTargets)
+                            {
+                                if (std::fabs(t.x - enemy.x) + std::fabs(t.z - enemy.z)
+                                    < std::fabs(aiTarget->x - enemy.x) + std::fabs(aiTarget->z - enemy.z)) { aiTarget = &t; }
+                            }
+                            enemy.netTarget = aiTarget->slot;
+                            aiFlow = aiTarget->flow;
+                            const float aiX = aiTarget->x, aiFeet = aiTarget->feetY, aiZ = aiTarget->z;
+                            const bool aiLocal = aiTarget->slot == localSlot;
                             // The player's FEET, not the eye: FUN_00032154 measures
                             // the vertical separation from DAT_000b0a4a.
                             // What the creature can see of the player, for its attack
@@ -3116,10 +3433,10 @@ namespace ALTEngine::Screens
                                 namespace CS = ALTEngine::Game::CreatureSight;
                                 const int egx = ToGridSpaceX(enemy.x, originX);
                                 const int egz = ToGridSpaceZ(enemy.z, originZ);
-                                const int pgx = ToGridSpaceX(camera.x, originX);
-                                const int pgz = ToGridSpaceZ(camera.z, originZ);
+                                const int pgx = ToGridSpaceX(aiX, originX);
+                                const int pgz = ToGridSpaceZ(aiZ, originZ);
                                 enemy.zoneVisible = CS::ZoneVisible(level,
-                                    ALTEngine::Formats::CellIndex(level, egx >> 9, egz >> 9), drawnZones);
+                                    ALTEngine::Formats::CellIndex(level, egx >> 9, egz >> 9), aiTarget->zones);
                                 enemy.inDuct = CS::CellHasNoFace(level, ALTEngine::Formats::CellIndex(level, egx >> 9, egz >> 9));
                                 // The gunners and the egg look along a ray
                                 // (FUN_00032aec, to 0x1555); everything else
@@ -3155,7 +3472,7 @@ namespace ALTEngine::Screens
                                     q.heading = ALTEngine::Game::OriginalMath::Bearing(egx - pgx, egz - pgz);
                                     q.targetX = static_cast<float>(pgx);
                                     q.targetZ = static_cast<float>(pgz);
-                                    q.targetFloorY = playerFeetY;
+                                    q.targetFloorY = aiFeet;
                                     q.distance = enemy.distance;
                                     q.occupancy = &occupancy;
                                     enemy.lineOfFire = CS::LineOfFire3D(level, q);
@@ -3169,7 +3486,7 @@ namespace ALTEngine::Screens
                             }
                             enemy.animationFrames = enemySprites.FrameCount(enemy.type, enemy.animation);
                             const bool wasAlive = enemy.alive;
-                            ALTEngine::Screens::Enemies::Tick(enemy, camera.x, playerFeetY, camera.z,
+                            ALTEngine::Screens::Enemies::Tick(enemy, aiX, aiFeet, aiZ,
                                                               aiWorld, weaponRuntime.noise > 0);
                             // A creature's death counts toward the assessment
                             // (FUN_00030b04), whatever killed it.
@@ -3186,7 +3503,7 @@ namespace ALTEngine::Screens
                                 const bool colonist = enemy.type == 10;
                                 auto* released = ALTEngine::Screens::Enemies::ReleaseFromEgg(
                                     enemies, enemy.releaseMonster, enemy.x, enemy.y, enemy.z,
-                                    ALTEngine::Screens::Enemies::BearingTo(enemy, camera.x, camera.z),
+                                    ALTEngine::Screens::Enemies::BearingTo(enemy, aiX, aiZ),
                                     colonist ? CT::Colonist::BURSTER_SPEED : CT::EggRelease::SPEED,
                                     colonist ? CT::Colonist::BURSTER_LIFT : CT::EggRelease::LIFT);
                                 if (released && colonist)
@@ -3252,6 +3569,16 @@ namespace ALTEngine::Screens
                                                  + 0x200;
                                         placed.z = enemy.z;
                                         placed.visible = true;
+                                        if (coopHost)
+                                        {
+                                            ALTEngine::Net::WorldEvent drop;
+                                            drop.kind = ALTEngine::Net::WorldKind::PickupDropped;
+                                            drop.a = static_cast<int16_t>(&live - livePickups.data());
+                                            drop.b = static_cast<int16_t>(live.cellIndex);
+                                            drop.x = placed.x; drop.y = placed.y; drop.z = placed.z;
+                                            drop.vx = live.vx; drop.vy = live.vy; drop.vz = live.vz;
+                                            session->SendWorldEvent(drop);
+                                        }
                                     }
                                     break;
                                 }
@@ -3266,13 +3593,17 @@ namespace ALTEngine::Screens
                                 namespace PCm = ALTEngine::Screens::PlayerCamera;
                                 enemy.fireShot = false;
                                 const float sy = enemy.y + static_cast<float>(GN::LaunchHeight(enemy.type));
-                                const float flat = std::max(1.0f, std::hypot(camera.x - enemy.x, camera.z - enemy.z));
-                                const float pitch = std::atan2(playerFeetY + GN::AIM_HEIGHT - sy, flat);
+                                const float flat = std::max(1.0f, std::hypot(aiX - enemy.x, aiZ - enemy.z));
+                                const float pitch = std::atan2(aiFeet + GN::AIM_HEIGHT - sy, flat);
                                 const float along = std::cos(pitch) * GN::SPEED;
-                                particles.SpawnEnemyRound(enemy.x, sy, enemy.z,
-                                                          PCm::Sin(enemy.facing) / 4096.0f * along,
-                                                          std::sin(pitch) * GN::SPEED,
-                                                          -PCm::Cos(enemy.facing) / 4096.0f * along);
+                                ALTEngine::Net::CreatureShot shot;
+                                shot.kind = 0;
+                                shot.x = enemy.x; shot.y = sy; shot.z = enemy.z;
+                                shot.vx = PCm::Sin(enemy.facing) / 4096.0f * along;
+                                shot.vy = std::sin(pitch) * GN::SPEED;
+                                shot.vz = -PCm::Cos(enemy.facing) / 4096.0f * along;
+                                particles.SpawnEnemyRound(shot.x, shot.y, shot.z, shot.vx, shot.vy, shot.vz);
+                                if (coopHost) { session->SendCreatureShot(shot); }
                             }
 
                             // A handler's grenade (FUN_0002b240): thrown from 0x180
@@ -3287,12 +3618,20 @@ namespace ALTEngine::Screens
                                 g.x = enemy.x;
                                 g.y = enemy.y + 0x180;
                                 g.z = enemy.z;
-                                const float flat = std::fabs(playerFeetY - (enemy.y - ALTEngine::Screens::EnemyBehaviour::STAND_CLEARANCE)) > 1.0f
+                                const float flat = std::fabs(aiFeet - (enemy.y - ALTEngine::Screens::EnemyBehaviour::STAND_CLEARANCE)) > 1.0f
                                     ? 0x80 * 0.70710678f : 0x80;
                                 g.vx = PCm::Sin(enemy.facing) / 4096.0f * flat;
                                 g.vz = -PCm::Cos(enemy.facing) / 4096.0f * flat;
                                 g.vy = 0x20;
                                 enemyGrenades.push_back(g);
+                                if (coopHost)
+                                {
+                                    ALTEngine::Net::CreatureShot shot;
+                                    shot.kind = 1;
+                                    shot.x = g.x; shot.y = g.y; shot.z = g.z;
+                                    shot.vx = g.vx; shot.vy = g.vy; shot.vz = g.vz;
+                                    session->SendCreatureShot(shot);
+                                }
                             }
 
                             // The animation script's sound cue (FUN_00040d44).
@@ -3303,6 +3642,9 @@ namespace ALTEngine::Screens
                             // cues, at the level's start (Edward, 2026: "I can
                             // hear facehuggers all over the place from the
                             // moment I spawn").
+                            // Co-operative: the guests hear it too, by their
+                            // own distance (sent with the creature's state).
+                            if (coopHost && enemy.animSound >= 0 && enemy.ticks > 1) { enemy.netSound = enemy.animSound; }
                             if (enemy.animSound >= 0
                                 && (enemy.zoneVisible || enemy.distance < 0x1400)
                                 && enemy.ticks > 1)
@@ -3461,7 +3803,17 @@ namespace ALTEngine::Screens
                                     ALTEngine::Game::ProjectileCollision::CreatureExtents(enemy.type).y);
                                 ALTEngine::Screens::Enemies::SettleVertical(enemy, floorY, ceilingY, halfHeight);
                             }
-                            if (enemy.pendingDamage > 0)
+                            if (enemy.pendingDamage > 0 && !aiLocal)
+                            {
+                                // Co-operative: another machine's player. They
+                                // take it there, through the same routine.
+                                const auto& attack = ALTEngine::Screens::EnemyBehaviour::AttackForSubtype(enemy.type);
+                                session->SendCreatureHit(static_cast<uint8_t>(enemy.netTarget),
+                                                         static_cast<int16_t>(enemy.pendingDamage),
+                                                         static_cast<uint8_t>(attack.cause), !attack.melee,
+                                                         static_cast<int16_t>(enemy.facing & 0xfff));
+                            }
+                            else if (enemy.pendingDamage > 0)
                             {
                                 // Through the one damage routine, so the cooldown,
                                 // the terrain shield and armour all apply - this
@@ -3577,10 +3929,22 @@ namespace ALTEngine::Screens
                             // then runs on its own - it must NOT be ended when the
                             // creature finishes, because the crawl outlasts it. That
                             // is what made the two drift out of time.
+                            // Co-operative: only a hug on this player crawls
+                            // here. The host times one on another player itself,
+                            // as long as that player's crawl runs there; a guest
+                            // sees one on itself as a pouncing creature on top of it.
+                            const int hugSlot = session ? std::max(0, session->LocalSlot()) : 0;
+                            auto onUs = [&](const ALTEngine::Screens::Enemies::Enemy& enemy) {
+                                if (coopGuest)
+                                {
+                                    return std::fabs(enemy.x - camera.x) < 0x300 && std::fabs(enemy.z - camera.z) < 0x300;
+                                }
+                                return !coopHost || enemy.netTarget == hugSlot;
+                            };
                             bool anyPouncing = false;
                             for (const auto& enemy : enemies)
                             {
-                                if (enemy.pouncing) { anyPouncing = true; break; }
+                                if (enemy.pouncing && onUs(enemy)) { anyPouncing = true; break; }
                             }
                             if (anyPouncing && !faceHug.Active()) { faceHug.Begin(); }
 
@@ -3590,7 +3954,18 @@ namespace ALTEngine::Screens
                             {
                                 for (auto& enemy : enemies)
                                 {
-                                    if (enemy.pouncing) { enemy.overlayFinished = true; }
+                                    if (enemy.pouncing && onUs(enemy)) { enemy.overlayFinished = true; }
+                                }
+                            }
+                            if (coopHost && halfPass)
+                            {
+                                for (auto& enemy : enemies)
+                                {
+                                    if (!enemy.pouncing || onUs(enemy)) { enemy.netHugTicks = 0; continue; }
+                                    if (++enemy.netHugTicks >= ALTEngine::Screens::FaceHugOverlay::DurationTicks())
+                                    {
+                                        enemy.overlayFinished = true;
+                                    }
                                 }
                             }
                         }
@@ -3710,6 +4085,11 @@ namespace ALTEngine::Screens
                         };
 
                         auto DestroyTarget = [&](D::Target& target) {
+                            // Once, whether it went here or on another machine.
+                            if (target.removed) { return; }
+                            target.removed = true;
+                            sendWorld(ALTEngine::Net::WorldKind::ObjectDestroyed,
+                                      static_cast<int>(&target - damageTargets.data()));
                             // A window (object type 0x1c) has its own arm in the
                             // modelless objects' handler (0x38097): its glass
                             // flies out (FUN_00045fe4), sound 0x6c, its cells
@@ -3839,7 +4219,7 @@ namespace ALTEngine::Screens
                                 if (!creature.active) { return; }
                                 if (creature.type != Blast::IMMUNE_CREATURE_TYPE && creature.alive)
                                 {
-                                    ALTEngine::Screens::Enemies::ApplyHit(creature, creature.health, ignoreStun);
+                                    damageCreature(creature, creature.health);
                                 }
                                 explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE,
                                                  creature.x, creature.y + 0x100, creature.z);
@@ -3877,6 +4257,20 @@ namespace ALTEngine::Screens
                         // Objects counting down to breaking or exploding
                         // (Damage::Target::fuse), on the objects' pass. A
                         // barrel's blast can light more fuses.
+                        // Co-operative: what another machine destroyed goes here too.
+                        for (int index : remoteDestroys)
+                        {
+                            if (index < 0 || static_cast<size_t>(index) >= damageTargets.size()) { continue; }
+                            D::Target& target = damageTargets[static_cast<size_t>(index)];
+                            if (target.removed) { continue; }
+                            target.destroyed = true;
+                            target.state = D::STATE_DYING;
+                            target.fuse = 0;
+                            replayingWorld = true;
+                            DestroyTarget(target);
+                            replayingWorld = false;
+                        }
+                        remoteDestroys.clear();
                         if (halfPass)
                         {
                             for (D::Target& target : damageTargets)
@@ -4023,6 +4417,11 @@ namespace ALTEngine::Screens
                             // and only if the two cells share a zone.
                             const int roundCell = ALTEngine::Formats::CellIndex(level, gx >> 9, gz >> 9);
                             bool hitAny = false;
+                            // Another player's round, seen here: it stops on a
+                            // creature and draws blood, but the damage is
+                            // dealt by the machine that fired it.
+                            const P::Particle* hitter = particles.Ticking();
+                            const bool remoteRound = hitter && hitter->remote;
                             for (auto& enemy : enemies)
                             {
                                 // From the hit reaction on, rounds pass straight
@@ -4041,8 +4440,7 @@ namespace ALTEngine::Screens
                                 // Double damage while the round is fresh (FUN_0002a628).
                                 // ApplyHit leaves a dying creature alive for one
                                 // more tick, so its own arm runs the death.
-                                ALTEngine::Screens::Enemies::ApplyHit(
-                                    enemy, D::HitDamage(def.speed, hitLife, def.strength), ignoreStun);
+                                if (!remoteRound) { damageCreature(enemy, D::HitDamage(def.speed, hitLife, def.strength)); }
                                 const int blood = PCol::BloodTypeForCreature(enemy.type);
                                 if (blood >= 0) { particles.SpawnBlood(blood, px, py, pz); }
                                 hitAny = true;
@@ -4083,8 +4481,10 @@ namespace ALTEngine::Screens
                                 }
                             }
 
-                            // 3. Triggers a round can set off (flag 0x02).
-                            triggers.OnShotEnterCell(roundLatch, roundCell, triggerHandlers);
+                            // 3. Triggers a round can set off (flag 0x02). Not
+                            // another player's in a co-operative game: their
+                            // machine runs it and passes it on.
+                            if (!(coopGame && remoteRound)) { triggers.OnShotEnterCell(roundLatch, roundCell, triggerHandlers); }
                             return 0;
                         });
 
@@ -4201,7 +4601,10 @@ namespace ALTEngine::Screens
                                 }
                                 else
                                 {
-                                    // Its cell's triggers, flag 8 (FUN_00041784).
+                                    // Its cell's triggers, flag 8 (FUN_00041784) -
+                                    // the host's, in a co-operative game, which
+                                    // threw it and passes the run on.
+                                    if (!coopGuest)
                                     triggers.OnShotEnterCell(g.triggerLatch,
                                         ALTEngine::Formats::CellIndex(level, gx >> 9, gz >> 9), triggerHandlers,
                                         ALTEngine::Game::Triggers::Source::EnemyThrow);
@@ -4276,7 +4679,7 @@ namespace ALTEngine::Screens
                                                                     enemy.type, ALTEngine::Screens::Particles::TYPE_PULSE)) { continue; }
                                         const int damage = (enemy.type == ALTEngine::Game::Blast::IMMUNE_CREATURE_TYPE)
                                             ? EXPLOSIVE_HIT_DAMAGE * 2 : enemy.health;
-                                        ALTEngine::Screens::Enemies::ApplyHit(enemy, damage, ignoreStun);
+                                        damageCreature(enemy, damage);
                                         const int blood = PCol::BloodTypeForCreature(enemy.type);
                                         if (blood >= 0) { particles.SpawnBlood(blood, e.x, e.y, e.z, true); }
                                         return true;
@@ -4423,6 +4826,7 @@ namespace ALTEngine::Screens
                         if (!ALTEngine::Screens::Pickups::Wanted(live.type, static_cast<int>(live.amount), inventory, hudState)) { continue; }
                         live.collected = true;
                         if (live.placedIndex < placedObjects.size()) { placedObjects[live.placedIndex].visible = false; }
+                        sendWorld(ALTEngine::Net::WorldKind::PickupTaken, static_cast<int>(&live - livePickups.data()));
 
                         int amount = static_cast<int>(live.amount) * (live.multiplier == 0 ? 1 : live.multiplier);
 
@@ -5339,7 +5743,17 @@ namespace ALTEngine::Screens
                             c.moving = enemy.velocityActive;
                             contacts.push_back(c);
                         }
-                        hud.DrawTracker(renderer, contacts, camera.yaw, windowW, windowH);
+                        const int blips = hud.DrawTracker(renderer, contacts, camera.yaw, windowW, windowH);
+                        // The pulse as each sweep comes round (FUN_0003a1d0),
+                        // on the player's channel: one note for an empty dish,
+                        // another when it drew a contact. It was never played.
+                        if (hud.TakeTrackerSweep())
+                        {
+                            ALTEngine::Audio::SfxPlayer::PlayPlayerSlot(
+                                blips < 1 ? ALTEngine::Formats::SoundIds::MOTION_TRACKER
+                                          : ALTEngine::Formats::SoundIds::MOTION_TRACKER_CONTACT,
+                                digits.c_str(), cdDirectory);
+                        }
                         }
 
                         // Live Minimap (Modern option). Drawn over the

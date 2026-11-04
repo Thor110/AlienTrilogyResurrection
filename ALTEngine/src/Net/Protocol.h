@@ -18,7 +18,7 @@ namespace ALTEngine::Net
     // Every datagram: "ALT" + a version byte, a type byte, then the fields,
     // little-endian. A datagram that doesn't start so, or whose fields run
     // short, is dropped.
-    inline constexpr uint8_t PROTOCOL_VERSION = 4;   // 4: game modes, co-operative level ends
+    inline constexpr uint8_t PROTOCOL_VERSION = 5;   // 4: game modes, co-operative level ends; 5: the shared world
     // The original's four records are its limit; the port allows a host to
     // take up to eight (MIN_PLAYER_LIMIT - MAX_PLAYERS, bots included).
     inline constexpr int MAX_PLAYERS = 8;
@@ -52,6 +52,12 @@ namespace ALTEngine::Net
         AtExit = 14,         // client -> host: I reached the End Level trigger and am waiting
         LevelEnd = 15,       // host -> everyone: every player is at the exit, the level is over
         LevelStart = 16,     // host -> everyone: the level now being played, by number
+        WorldEvent = 17,     // co-operative: something that changed the level (see WorldEvent)
+        WorldAck = 18,       // co-operative: world events received, up to `seq`
+        Creatures = 19,      // co-operative, host -> everyone: where the creatures are
+        CreatureDamage = 20, // co-operative, client -> host: my round hit creature `index`
+        CreatureHit = 21,    // co-operative, host -> client: a creature hurt you
+        CreatureShot = 22,   // co-operative, host -> everyone: a creature fired
     };
 
     // THE PORT'S GAME MODES. The original's network game is a deathmatch on
@@ -139,8 +145,77 @@ namespace ALTEngine::Net
     // An empty level: the campaign is over.
     struct LevelStart { uint16_t levelSerial = 0; std::string level; };
 
+    // ---- THE SHARED WORLD (co-operative) -----------------------------------
+    //
+    // The host runs the creatures; every machine runs the level - doors,
+    // lifts, lights, pickups, objects - and keeps it the same as the others'
+    // by passing on what changed it, as WorldEvents. Those must all arrive,
+    // in order: each carries a sequence number and is sent again until it is
+    // acknowledged (WorldAck). A guest's own go to the host first, which
+    // numbers them into the level's one list and passes them on; a player
+    // joining late is sent the whole list and so catches up.
+    enum class WorldKind : uint8_t
+    {
+        Trigger = 1,         // a trigger's chain ran: a = trigger (0: a bare chain), b = its first command, flags below
+        PickupTaken = 2,     // a = pickup record: someone picked it up
+        ObjectDestroyed = 3, // a = damage target: it was destroyed
+        PickupDropped = 4,   // host: a = pickup record, b = cell; at x,y,z flying at vx,vy,vz (a creature's drop)
+        Count,
+    };
+    // Trigger flags: the source (Game::Triggers::Source) in the low three
+    // bits, then fresh and the use key.
+    inline constexpr uint8_t WORLD_TRIGGER_FRESH = 0x08;
+    inline constexpr uint8_t WORLD_TRIGGER_USE_KEY = 0x10;
+    struct WorldEvent
+    {
+        uint16_t levelSerial = 0;
+        uint32_t seq = 0;        // the sender's (guest -> host) or the level's (host -> guest)
+        uint8_t origin = 0;      // the player whose machine it happened on
+        WorldKind kind = WorldKind::Trigger;
+        int16_t a = 0, b = 0;
+        uint8_t flags = 0;
+        float x = 0, y = 0, z = 0, vx = 0, vy = 0, vz = 0;
+    };
+    struct WorldAck { uint16_t levelSerial = 0; uint32_t seq = 0; };
+
+    // One creature as the host has it, for the others to draw. Sent many
+    // times a second and never repeated, so a lost one is just replaced.
+    inline constexpr uint16_t CREATURE_ACTIVE = 0x01;
+    inline constexpr uint16_t CREATURE_ALIVE = 0x02;
+    inline constexpr uint16_t CREATURE_BODY_REMOVED = 0x04;
+    inline constexpr uint16_t CREATURE_ON_CEILING = 0x08;
+    inline constexpr uint16_t CREATURE_MOVING = 0x10;
+    inline constexpr uint16_t CREATURE_POUNCING = 0x20;
+    // Walking: each machine picks the walk's view from where it sees the
+    // creature (Enemies::PlayWalkByView), so only the fact is sent.
+    inline constexpr uint16_t CREATURE_WALKING = 0x40;
+    inline constexpr uint16_t CREATURE_MIRRORED = 0x80;
+    inline constexpr uint16_t CREATURE_HOLD = 0x100;   // holds its last frame
+    struct CreatureEntry
+    {
+        uint16_t index = 0;
+        uint16_t flags = 0;
+        float x = 0, y = 0, z = 0;
+        uint16_t facing = 0;
+        int16_t animation = -1;
+        uint8_t frame = 0;
+        uint8_t state = 0;
+        int16_t health = 0;
+        // The sound its animation cued since the last message, or 0xff.
+        uint8_t sound = 0xff;
+    };
+    // Up to this many a datagram, so one stays well inside a network packet.
+    inline constexpr size_t MAX_CREATURES_PER_MESSAGE = 48;
+    struct Creatures { uint16_t levelSerial = 0; std::vector<CreatureEntry> entries; };
+    struct CreatureDamage { uint16_t levelSerial = 0; uint8_t slot = 0; uint16_t index = 0; int16_t damage = 0; };
+    // `knock`: a directed hit that throws the player along `yaw`.
+    struct CreatureHit { uint8_t target = 0; int16_t damage = 0; uint8_t cause = 0; uint8_t knock = 0; int16_t yaw = 0; };
+    // kind 0 a gunner's round, 1 a handler's grenade.
+    struct CreatureShot { uint16_t levelSerial = 0; uint8_t kind = 0; float x = 0, y = 0, z = 0, vx = 0, vy = 0, vz = 0; };
+
     using Message = std::variant<DiscoverQuery, DiscoverReply, Join, Welcome, Reject, Roster, State, Shot, Hit,
-                                 Frag, Chat, Leave, Ping, AtExit, LevelEnd, LevelStart>;
+                                 Frag, Chat, Leave, Ping, AtExit, LevelEnd, LevelStart,
+                                 WorldEvent, WorldAck, Creatures, CreatureDamage, CreatureHit, CreatureShot>;
 
     std::vector<uint8_t> Encode(const Message& message);
     std::optional<Message> Decode(const std::vector<uint8_t>& bytes);

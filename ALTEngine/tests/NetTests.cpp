@@ -391,3 +391,126 @@ TEST_CASE("Net: deathmatch has no level end to wait for")
     CHECK(!host.LevelOver());
     CHECK(host.PlayersAtExit() == 0);
 }
+
+TEST_CASE("Net: co-operative world events reach every machine, in one order, and a late joiner catches up")
+{
+    N::Session host, a, b;
+    REQUIRE(host.StartHost("Coop", "111", "Ripley", 0));
+    host.SetGameMode(N::GameMode::Coop);
+    const auto address = N::Address::Loopback(host.Port());
+    REQUIRE(a.StartJoin(address, "Hicks"));
+    double now = 0.0;
+    Pump({ &host, &a }, now);
+    REQUIRE(a.Connected());
+    host.TakeEvents(); a.TakeEvents();
+
+    auto worldOf = [](N::Session& s) {
+        std::vector<N::WorldEvent> out;
+        for (const auto& e : s.TakeEvents()) { if (e.kind == N::Event::Kind::World) { out.push_back(e.world); } }
+        return out;
+    };
+
+    // The host's own go straight out; a guest's go through the host.
+    N::WorldEvent door; door.kind = N::WorldKind::Trigger; door.a = 7; door.b = 3; door.flags = 0x08;
+    host.SendWorldEvent(door);
+    N::WorldEvent pickup; pickup.kind = N::WorldKind::PickupTaken; pickup.a = 12;
+    a.SendWorldEvent(pickup);
+    Pump({ &host, &a }, now);
+    const auto atHost = worldOf(host);
+    REQUIRE(atHost.size() == 1);
+    CHECK(atHost[0].kind == N::WorldKind::PickupTaken);
+    CHECK(atHost[0].a == 12);
+    CHECK(atHost[0].origin == a.LocalSlot());
+    const auto atA = worldOf(a);
+    REQUIRE(atA.size() == 1);            // its own is not handed back
+    CHECK(atA[0].kind == N::WorldKind::Trigger);
+    CHECK(atA[0].a == 7); CHECK(atA[0].b == 3); CHECK(atA[0].flags == 0x08);
+
+    // A player joining now is sent both, in the host's order.
+    REQUIRE(b.StartJoin(address, "Hudson"));
+    Pump({ &host, &a, &b }, now, 40);
+    REQUIRE(b.Connected());
+    const auto atB = worldOf(b);
+    REQUIRE(atB.size() == 2);
+    CHECK(atB[0].kind == N::WorldKind::Trigger);
+    CHECK(atB[1].kind == N::WorldKind::PickupTaken);
+    CHECK(atB[1].origin == a.LocalSlot());
+    CHECK(worldOf(a).empty());          // nothing again for the others
+
+    // A new level starts a new list.
+    host.AdvanceLevel("112");
+    Pump({ &host, &a, &b }, now);
+    N::WorldEvent second; second.kind = N::WorldKind::ObjectDestroyed; second.a = 4;
+    b.SendWorldEvent(second);
+    Pump({ &host, &a, &b }, now);
+    const auto atA2 = worldOf(a);
+    REQUIRE(atA2.size() == 1);
+    CHECK(atA2[0].kind == N::WorldKind::ObjectDestroyed);
+    CHECK(atA2[0].seq == 1);
+}
+
+TEST_CASE("Net: co-operative creatures - the host's state out, a guest's hits in, a creature's hits and rounds")
+{
+    N::Session host, a;
+    REQUIRE(host.StartHost("Coop", "111", "Ripley", 0));
+    host.SetGameMode(N::GameMode::Coop);
+    REQUIRE(a.StartJoin(N::Address::Loopback(host.Port()), "Hicks"));
+    double now = 0.0;
+    Pump({ &host, &a }, now);
+    REQUIRE(a.Connected());
+    CHECK(a.CoopGuest()); CHECK(host.CoopHost());
+    host.TakeEvents(); a.TakeEvents();
+
+    // More than one message's worth.
+    std::vector<N::CreatureEntry> entries;
+    for (int i = 0; i < 60; ++i)
+    {
+        N::CreatureEntry c; c.index = static_cast<uint16_t>(i); c.flags = N::CREATURE_ACTIVE | N::CREATURE_ALIVE;
+        c.x = static_cast<float>(i * 10); c.animation = 3; c.frame = 2; c.health = 40; c.sound = i == 5 ? 0x2c : 0xff;
+        entries.push_back(c);
+    }
+    host.SendCreatures(entries);
+    a.SendCreatureDamage(17, 0x40);
+    host.SendCreatureHit(static_cast<uint8_t>(a.LocalSlot()), 9, 2, true, 0x400);
+    N::CreatureShot shot; shot.kind = 1; shot.x = 5; shot.vz = -12;
+    host.SendCreatureShot(shot);
+    Pump({ &host, &a }, now);
+
+    size_t seen = 0;
+    bool sawSound = false, sawHit = false, sawShot = false;
+    for (const auto& e : a.TakeEvents())
+    {
+        if (e.kind == N::Event::Kind::Creatures)
+        {
+            for (const auto& c : e.creatures.entries)
+            {
+                seen++;
+                if (c.index == 5) { sawSound = c.sound == 0x2c; CHECK(c.x == 50.0f); }
+            }
+        }
+        if (e.kind == N::Event::Kind::CreatureHit)
+        {
+            sawHit = true;
+            CHECK(e.creatureHit.damage == 9); CHECK(e.creatureHit.cause == 2); CHECK(e.creatureHit.knock == 1);
+            CHECK(e.creatureHit.yaw == 0x400);
+        }
+        if (e.kind == N::Event::Kind::CreatureShot) { sawShot = true; CHECK(e.creatureShot.kind == 1); CHECK(e.creatureShot.vz == -12.0f); }
+    }
+    CHECK(seen == 60);
+    CHECK(sawSound); CHECK(sawHit); CHECK(sawShot);
+
+    bool sawDamage = false;
+    for (const auto& e : host.TakeEvents())
+    {
+        if (e.kind != N::Event::Kind::CreatureDamage) { continue; }
+        sawDamage = true;
+        CHECK(e.creatureDamage.index == 17); CHECK(e.creatureDamage.damage == 0x40);
+        CHECK(e.creatureDamage.slot == a.LocalSlot());
+    }
+    CHECK(sawDamage);
+
+    // A deathmatch has none of it.
+    N::Session dm;
+    REQUIRE(dm.StartHost("DM", "900", "R", 0));
+    CHECK(!dm.CoopHost());
+}

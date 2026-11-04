@@ -32,6 +32,20 @@ namespace ALTEngine::Game::Triggers
         if ((trigger.activationMask & needed) == 0 || uses == 0) { return false; }
         if (!RunChain(trigger.commandStart, source, handlers, true, source == Source::Interact)) { return false; }
         if (uses != USES_UNLIMITED) { uses--; }
+        Fired(triggerId, trigger.commandStart, source, true, source == Source::Interact);
+        return true;
+    }
+
+    bool System::Replay(int triggerId, int commandStart, Source source, bool fresh, bool useKey, const Handlers& handlers)
+    {
+        if (!level_) { return false; }
+        if (triggerId <= 0) { return RunChain(commandStart, source, handlers, fresh, useKey); }
+        if (static_cast<size_t>(triggerId) >= level_->actions.size()) { return false; }
+        const auto& trigger = level_->actions[static_cast<size_t>(triggerId)];
+        uint8_t& uses = uses_[static_cast<size_t>(triggerId)];
+        if (uses == 0) { return false; }
+        if (!RunChain(trigger.commandStart, source, handlers, fresh, useKey)) { return false; }
+        if (uses != USES_UNLIMITED) { uses--; }
         return true;
     }
 
@@ -40,7 +54,9 @@ namespace ALTEngine::Game::Triggers
         if (!level_) { return false; }
         // FUN_00040e2c runs every command, the switch (with 1) and the door's
         // final opening included.
-        return RunChain(commandStart, Source::Interact, handlers, true, true);
+        const bool ran = RunChain(commandStart, Source::Interact, handlers, true, true);
+        if (ran) { Fired(0, commandStart, Source::Interact, true, true); }
+        return ran;
     }
 
     bool System::RunChain(int commandStart, Source source, const Handlers& handlers, bool fresh, bool useKey)
@@ -184,6 +200,7 @@ namespace ALTEngine::Game::Triggers
         {
             if (uses != USES_UNLIMITED) { uses--; }
             latch = id;
+            Fired(id, trigger.commandStart, useKey ? Source::Interact : Source::WalkOn, fresh, useKey);
             return true;
         }
         if (fresh) { latch = 0; }

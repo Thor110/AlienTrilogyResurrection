@@ -239,6 +239,10 @@ namespace ALTEngine::Screens
             int health = 0;
             int state = STATE_NORMAL;
             int hitCooldown = 0;   // ticks left in the hit reaction
+            // OURS: DestroyTarget has run for it. In a co-operative game a
+            // destruction can arrive from another machine as well as happen
+            // here; this keeps it to once.
+            bool removed = false;
             bool destroyed = false;
             bool indestructible = false;   // FUN_00037184's flag - rounds stop, nothing breaks
             int placedObjectIndex = -1;

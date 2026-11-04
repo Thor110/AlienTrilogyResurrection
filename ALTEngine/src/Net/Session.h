@@ -28,6 +28,11 @@ namespace ALTEngine::Net
             BotHit,         // host: our bot in `hit.target` was hit by `hit.attacker`
             LevelEnded,     // co-operative: every player reached the exit
             LevelStarted,   // co-operative: the host moved on to Level() (empty: the campaign is over)
+            World,          // co-operative: another machine changed the level - `world`
+            Creatures,      // co-operative guest: the host's creatures - `creatures`
+            CreatureDamage, // co-operative host: a guest's round hit a creature - `creatureDamage`
+            CreatureHit,    // co-operative guest: a creature hurt us - `creatureHit`
+            CreatureShot,   // co-operative guest: a creature fired - `creatureShot`
         };
         Kind kind = Kind::RosterChanged;
         uint8_t slot = 0;
@@ -36,6 +41,11 @@ namespace ALTEngine::Net
         Frag frag{};
         Chat chat{};
         RejectReason reason = RejectReason::Full;
+        WorldEvent world{};
+        Net::Creatures creatures{};
+        Net::CreatureDamage creatureDamage{};
+        Net::CreatureHit creatureHit{};
+        Net::CreatureShot creatureShot{};
     };
 
     // A game in progress: one host (slot 0) and up to seven more (the host's
@@ -116,6 +126,24 @@ namespace ALTEngine::Net
         // Goes up by one with each level the game moves on to.
         uint16_t LevelSerial() const { return levelSerial; }
 
+        // THE SHARED WORLD (co-operative; see Protocol.h). Something this
+        // machine did to the level, for the others: it reaches every one,
+        // in the order the host took them, however many datagrams are lost.
+        void SendWorldEvent(WorldEvent event);
+        static constexpr double WORLD_RESEND_SECONDS = 0.2;
+        static constexpr size_t WORLD_RESEND_BATCH = 32;
+        // Host: the creatures as they are now, to every guest.
+        void SendCreatures(const std::vector<CreatureEntry>& entries);
+        // Guest: our round hit the host's creature `index`.
+        void SendCreatureDamage(uint16_t index, int16_t damage);
+        // Host: a creature hurt the player in `target`.
+        void SendCreatureHit(uint8_t target, int16_t damage, uint8_t cause, bool knock, int16_t yaw);
+        // Host: a creature fired; every guest sees the round.
+        void SendCreatureShot(CreatureShot shot);
+        // Co-operative and not the host: the creatures are the host's to run.
+        bool CoopGuest() const { return Coop() && role == Role::Client; }
+        bool CoopHost() const { return Coop() && role == Role::Host; }
+
         // The F2-F9 messages (Multiplayer Options), sent from play by key.
         void SetQuickChat(const std::array<std::string, 8>& messages) { quickChat = messages; }
         const std::string& QuickChat(int index) const { return quickChat[static_cast<size_t>(index & 7)]; }
@@ -147,7 +175,18 @@ namespace ALTEngine::Net
         int botSkill = 3;
         // Host: a hit for one of the bots becomes a BotHit event.
         void HitBot(uint8_t attacker, uint8_t target, int16_t damage);
-        struct Peer { bool used = false; Address address; double lastHeard = 0.0; };
+        // `worldAcked`: the level's events this guest has; `worldApplied`:
+        // the guest's own events taken into the level's list.
+        struct Peer { bool used = false; Address address; double lastHeard = 0.0; uint32_t worldAcked = 0; uint32_t worldApplied = 0; };
+        // Host: the level's events, in order (an event's seq is its place + 1).
+        std::vector<WorldEvent> worldLog;
+        // Guest: the level's events applied, and our own not yet taken.
+        uint32_t worldApplied = 0;
+        uint32_t outSeq = 0;
+        std::vector<WorldEvent> outbox;
+        double lastWorldResend = -1.0;
+        void ResendWorld(double now);
+        void ClearWorld();
 
         void Send(const Address& to, const Message& message);
         void SendToHost(const Message& message) { Send(hostAddress, message); }
