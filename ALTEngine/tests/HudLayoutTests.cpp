@@ -2,6 +2,8 @@
 
 #include "Renderer/HudLayout.h"
 
+#include <string>
+
 namespace R = ALTEngine::Renderer;
 using ALTEngine::Screens::PlayerHudState;
 
@@ -56,4 +58,27 @@ TEST_CASE("HUD left side: the messages never start inside the item stack")
     CHECK(R::HudItemCount(s) == 1);
     s.grenades = 0;
     CHECK(R::HudItemCount(s) == 0);
+}
+
+TEST_CASE("HUD items: the boxes are wide enough that the count never runs into the label")
+{
+    for (int count : { 1, 9, 10, 99, 100, 999, 1000, 9999, 32767 })
+    {
+        PlayerHudState s;
+        s.seismicCharges = static_cast<int16_t>(count);
+        s.armourItem = static_cast<int16_t>(count);
+        s.terrainSpeed = static_cast<int16_t>(count);
+        s.terrainShield = static_cast<int16_t>(count);
+        const R::HudItems shown = R::ShownHudItems(s);
+        const int width = R::HudItemWidth(shown);
+        CHECK(width >= R::HUD_ITEM_WIDTH);
+        for (int i = 0; i < shown.count; ++i)
+        {
+            const std::string label = shown.items[static_cast<size_t>(i)].label;
+            const std::string text = std::to_string(shown.items[static_cast<size_t>(i)].count);
+            const int labelRight = R::HUD_ITEM_X + R::HUD_ITEM_PADDING + R::HudItemTextWidth(static_cast<int>(label.size()));
+            const int countLeft = R::HUD_ITEM_X + width - R::HUD_ITEM_PADDING - R::HudItemTextWidth(static_cast<int>(text.size()));
+            CHECK(countLeft - labelRight >= R::HUD_ITEM_LABEL_GAP);
+        }
+    }
 }

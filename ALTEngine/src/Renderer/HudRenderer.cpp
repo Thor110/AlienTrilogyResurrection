@@ -717,11 +717,13 @@ namespace ALTEngine::Renderer
         // 2026). Positions and the stacking rule are the original's; the look is
         // not.
         {
+            const HudItems shown = ShownHudItems(state);
+            const int itemWidth = HudItemWidth(shown);
             int itemY = leftColumn.itemTop;
             auto drawItem = [&](const char* label, int count) {
                 const SDL_FRect box{ static_cast<float>(HUD_ITEM_X),
                                      static_cast<float>(itemY),
-                                     static_cast<float>(HUD_ITEM_WIDTH),
+                                     static_cast<float>(itemWidth),
                                      static_cast<float>(HUD_ITEM_HEIGHT) };
                 ALTEngine::Bootstrap::DrawRoundedRect(renderer, box, HUD_ITEM_CORNER, HUD_ITEM_BACKGROUND);
 
@@ -730,13 +732,12 @@ namespace ALTEngine::Renderer
                                                      HUD_ITEM_X + HUD_ITEM_PADDING,
                                                      itemY + HUD_ITEM_TEXT_INSET, 1, HUD_ITEM_LABEL);
                 ALTEngine::Bootstrap::DrawBitmapText(renderer, text,
-                                                     HUD_ITEM_X + HUD_ITEM_WIDTH - HUD_ITEM_PADDING
+                                                     HUD_ITEM_X + itemWidth - HUD_ITEM_PADDING
                                                          - ALTEngine::Bootstrap::TextWidth(text, 1),
                                                      itemY + HUD_ITEM_TEXT_INSET, 1, HUD_ITEM_COUNT);
                 itemY += HUD_ITEM_ROW_STEP;
             };
 
-            const HudItems shown = ShownHudItems(state);
             for (int i = 0; i < shown.count; ++i) { drawItem(shown.items[static_cast<size_t>(i)].label, shown.items[static_cast<size_t>(i)].count); }
         }
 

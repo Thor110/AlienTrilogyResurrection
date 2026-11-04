@@ -49,6 +49,43 @@ namespace ALTEngine::Renderer
 
     inline int HudItemCount(const ALTEngine::Screens::PlayerHudState& state) { return ShownHudItems(state).count; }
 
+    // How wide the item boxes are drawn. The label sits at the left and the
+    // count at the right, so a box must hold both with a gap between them;
+    // 54 left a four-letter label and one digit 3 pixels apart, and a longer
+    // count ran into the label (Edward, 2026). Every box in the stack takes the width of
+    // the widest one, so the column stays straight, and never goes below 54.
+    // Text is the 8x8 font at scale 1: 9 pixels a character less the last
+    // pixel of spacing (Bootstrap::TextWidth, which pulls in SDL).
+    inline constexpr int HUD_ITEM_GLYPH_ADVANCE = 9;
+    inline constexpr int HUD_ITEM_LABEL_GAP = 5;
+
+    inline int HudItemTextWidth(int characters)
+    {
+        return characters > 0 ? characters * HUD_ITEM_GLYPH_ADVANCE - 1 : 0;
+    }
+
+    inline int HudItemDigits(int count)
+    {
+        int digits = count < 0 ? 2 : 1;   // a minus sign counts as one
+        for (int v = count < 0 ? -count : count; v >= 10; v /= 10) { ++digits; }
+        return digits;
+    }
+
+    inline int HudItemWidth(const HudItems& shown)
+    {
+        int width = HUD_ITEM_WIDTH;
+        for (int i = 0; i < shown.count; ++i)
+        {
+            const HudItem& item = shown.items[static_cast<size_t>(i)];
+            int labelLength = 0;
+            while (item.label && item.label[labelLength] != '\0') { ++labelLength; }
+            const int needed = HUD_ITEM_PADDING + HudItemTextWidth(labelLength) + HUD_ITEM_LABEL_GAP
+                             + HudItemTextWidth(HudItemDigits(item.count)) + HUD_ITEM_PADDING;
+            width = std::max(width, needed);
+        }
+        return width;
+    }
+
     inline HudLeftColumn LayoutHudLeftColumn(const ALTEngine::Screens::PlayerHudState& state,
                                              bool minimapShown, bool resupplyShown)
     {
