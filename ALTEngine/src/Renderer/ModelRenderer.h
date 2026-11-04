@@ -139,6 +139,13 @@ namespace ALTEngine::Renderer
         // FUN_000429f0), so the shader's fog is left off for it.
         bool ownFade = false;
 
+        // Drawn half over what is behind it: (screen + texel) / 2, the
+        // texel's own colour with r, g and b ignored, and no distance fade -
+        // the original's fill 0x4b5cc and span 0x5db67. The flamethrower's
+        // flames and the vents' steam are drawn this way. Back to front, after
+        // the solid sprites.
+        bool halfBlend = false;
+
         bool visible = true;
     };
 

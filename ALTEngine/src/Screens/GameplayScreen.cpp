@@ -4708,7 +4708,9 @@ namespace ALTEngine::Screens
                             if (!explosions.UseRecord(look.record, spark, steam)) { continue; }
                             spark.halfWidth = look.halfWidth;
                             spark.halfHeight = look.halfHeight;
-                            spark.r = spark.g = spark.b = look.grey;
+                            spark.halfBlend = look.halfBlend;
+                            const float grey = look.halfBlend ? 1.0f : look.grey;
+                            spark.r = spark.g = spark.b = grey;
                         }
                         else if (P::IsBlood(particle.type))
                         {
@@ -4738,7 +4740,7 @@ namespace ALTEngine::Screens
                             const FS::Look look = FS::For(particle.life, static_cast<int>(ventFlicker >> 16));
                             if (!explosions.UseRecord(look.record, spark)) { continue; }
                             spark.halfWidth = spark.halfHeight = look.halfSize;
-                            spark.r = spark.g = spark.b = FS::SHADE;
+                            spark.halfBlend = true;   // fill 0x4b5cc: unshaded, half over the scene
                         }
                         else
                         {

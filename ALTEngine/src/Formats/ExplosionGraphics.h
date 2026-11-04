@@ -118,9 +118,11 @@ namespace ALTEngine::Formats
         //          0xac2d4 (x 8000 across a horizontal jet, 12000 a vertical);
         //          horizontal: length across, breadth up; vertical: the other way.
         // The flame draws through LAB_0004b400 while life is 0x1c or more and
-        // LAB_0004b5cc after; the steam always through LAB_0004b5cc. Both are
-        // drawn here as cut-out billboards (the blend of those two fills is not
-        // settled).
+        // LAB_0004b5cc after; the steam always through LAB_0004b5cc.
+        //   0x4b400 is solid: span mode 3 (texel times the shade) or mode 1.
+        //   0x4b5cc is span mode 4 (0x5db67): (screen + texel) / 2, the
+        //   texel's own colour. It works out a tint from the shade and stores
+        //   it, but the span never reads it, so the grey has no effect there.
         namespace VentSprites
         {
             inline constexpr int16_t STEAM_FRAMES[36] = {
@@ -142,7 +144,7 @@ namespace ALTEngine::Formats
             inline constexpr int FLAME_GREY = 0x69;
             inline constexpr float WHITE = 0x80;
 
-            struct Look { int record; float halfWidth, halfHeight, grey; };
+            struct Look { int record; float halfWidth, halfHeight, grey; bool halfBlend; };
 
             // `steam` and `vertical` from the jet's type; `random` any value.
             inline Look For(bool steam, bool vertical, int life, int random)
@@ -158,6 +160,7 @@ namespace ALTEngine::Formats
                     look.halfWidth = vertical ? h : w;
                     look.halfHeight = vertical ? w : h;
                     look.grey = static_cast<float>(STEAM_GREY_BASE + l) / WHITE;
+                    look.halfBlend = true;
                 }
                 else
                 {
@@ -174,6 +177,7 @@ namespace ALTEngine::Formats
                         look.halfHeight = FLAME_BREADTH[l] * 8000.0f / FOCAL;
                     }
                     look.grey = static_cast<float>(FLAME_GREY) / WHITE;
+                    look.halfBlend = l < 0x1c;
                 }
                 return look;
             }
@@ -185,14 +189,15 @@ namespace ALTEngine::Formats
         // same rect table at 0x2405a0 the vents use), so it flickers. Its
         // half-size on screen is k / distance with k = (0x10 - life) * 0x600,
         // or * 0xa00 once life is under 4, so a flame starts as a point at the
-        // muzzle and swells as it flies, fastest in its last ticks. Its shade
-        // byte is 0xfa (over the 0x80 that leaves a texel as it is).
+        // muzzle and swells as it flies, fastest in its last ticks.
         // The world size is k / FOCAL, the same conversion as the vents.
         // It is drawn from 0x10 away, not the 0x200 the rounds keep.
+        // Drawn through 0x4b5cc, so half over what is behind it, in the
+        // texel's own colour: the shade byte it sets (0xfa) is never read
+        // there, so it is not kept here.
         namespace FlameSprites
         {
             inline constexpr int NEAR_CUTOFF = 0x10;
-            inline constexpr float SHADE = static_cast<float>(0xfa) / VentSprites::WHITE;
 
             struct Look { int record; float halfSize; };
 

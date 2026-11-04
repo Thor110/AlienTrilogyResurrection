@@ -191,6 +191,8 @@ namespace ALTEngine::Renderer
         // 0x5db67 does - a constant blend of one half. No depth write, so it
         // never hides what is drawn behind it afterwards.
         SDL_GPUGraphicsPipeline* translucentPipeline = nullptr;
+        // The same half blend for sprites, which are not culled.
+        SDL_GPUGraphicsPipeline* translucentSpritePipeline = nullptr;
         // Two samplers, chosen by the Graphics > Quality option. `sampler`
         // points at whichever is active; every binding site uses it, so
         // switching is a single pointer assignment with no pipeline rebuild.
@@ -887,6 +889,12 @@ namespace ALTEngine::Renderer
                 // Not fatal: the see-through faces are then drawn as cut-outs.
                 SDL_Log("ModelRenderer::Initialize: the see-through pipeline failed: %s", SDL_GetError());
             }
+            blendInfo.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+            translucentSpritePipeline = SDL_CreateGPUGraphicsPipeline(device, &blendInfo);
+            if (!translucentSpritePipeline)
+            {
+                SDL_Log("ModelRenderer::Initialize: the half-blend sprite pipeline failed: %s", SDL_GetError());
+            }
         }
 
         SDL_ReleaseGPUShader(device, vertexShader);
@@ -1049,6 +1057,7 @@ namespace ALTEngine::Renderer
         if (pipeline) { SDL_ReleaseGPUGraphicsPipeline(device, pipeline); pipeline = nullptr; }
         if (doubleSidedPipeline) { SDL_ReleaseGPUGraphicsPipeline(device, doubleSidedPipeline); doubleSidedPipeline = nullptr; }
         if (translucentPipeline) { SDL_ReleaseGPUGraphicsPipeline(device, translucentPipeline); translucentPipeline = nullptr; }
+        if (translucentSpritePipeline) { SDL_ReleaseGPUGraphicsPipeline(device, translucentSpritePipeline); translucentSpritePipeline = nullptr; }
 
         SDL_DestroyGPUDevice(device);
         device = nullptr;
@@ -2575,8 +2584,86 @@ namespace ALTEngine::Renderer
                     verts.reserve(drawable * 4);
                     indices.reserve(drawable * 6);
 
-                    struct SpriteBatch { SDL_GPUTexture* texture; uint32_t first; uint32_t count; bool ownFade; };
+                    struct SpriteBatch { SDL_GPUTexture* texture; uint32_t first; uint32_t count; bool ownFade; bool halfBlend; };
                     std::vector<SpriteBatch> batches;
+
+                    // One sprite's quad onto the shared buffers.
+                    auto appendQuad = [&](const PlacedSprite& sprite) {
+                        const uint32_t base = static_cast<uint32_t>(verts.size());
+                        float px[4], py[4], pz[4];
+
+                        if (sprite.billboard)
+                        {
+                            const float dx = rightX * sprite.halfWidth;
+                            const float dz = rightZ * sprite.halfWidth;
+                            const float dy = sprite.halfHeight;
+                            // top-left, top-right, bottom-right, bottom-left
+                            px[0] = sprite.x - dx; px[1] = sprite.x + dx; px[2] = sprite.x + dx; px[3] = sprite.x - dx;
+                            py[0] = sprite.y + dy; py[1] = sprite.y + dy; py[2] = sprite.y - dy; py[3] = sprite.y - dy;
+                            pz[0] = sprite.z - dz; pz[1] = sprite.z + dz; pz[2] = sprite.z + dz; pz[3] = sprite.z - dz;
+                        }
+                        else
+                        {
+                            // World-oriented: build the quad flat on XY and
+                            // turn it by the sprite's own angles. A tumbling
+                            // shard needs this - a billboard would keep it
+                            // permanently face-on and it would never look
+                            // like it was spinning.
+                            const float cxr = std::cos(sprite.rotX), sxr = std::sin(sprite.rotX);
+                            const float cyr = std::cos(sprite.rotY), syr = std::sin(sprite.rotY);
+                            const float czr = std::cos(sprite.rotZ), szr = std::sin(sprite.rotZ);
+
+                            float lx[4] = { -sprite.halfWidth,  sprite.halfWidth,
+                                             sprite.halfWidth, -sprite.halfWidth };
+                            float ly[4] = {  sprite.halfHeight, sprite.halfHeight,
+                                            -sprite.halfHeight, -sprite.halfHeight };
+                            float lz[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                            if (sprite.corners)
+                            {
+                                for (int corner = 0; corner < 4; ++corner)
+                                {
+                                    lx[corner] = sprite.cornerX[corner];
+                                    ly[corner] = sprite.cornerY[corner];
+                                    lz[corner] = sprite.cornerZ[corner];
+                                }
+                            }
+
+                            for (int corner = 0; corner < 4; ++corner)
+                            {
+                                // Z, then Y, then X.
+                                float ax = lx[corner] * czr - ly[corner] * szr;
+                                float ay = lx[corner] * szr + ly[corner] * czr;
+                                float az = lz[corner];
+
+                                float bx = ax * cyr + az * syr;
+                                float bz = -ax * syr + az * cyr;
+
+                                float cy2 = ay * cxr - bz * sxr;
+                                float cz2 = ay * sxr + bz * cxr;
+
+                                px[corner] = sprite.x + bx;
+                                py[corner] = sprite.y + cy2;
+                                pz[corner] = sprite.z + cz2;
+                            }
+                        }
+                        float u[4] = { sprite.u0, sprite.u1, sprite.u1, sprite.u0 };
+                        float v[4] = { sprite.v0, sprite.v0, sprite.v1, sprite.v1 };
+                        if (sprite.corners && !sprite.billboard)
+                        {
+                            for (int corner = 0; corner < 4; ++corner) { u[corner] = sprite.cornerU[corner]; v[corner] = sprite.cornerV[corner]; }
+                        }
+
+                        for (int corner = 0; corner < 4; ++corner)
+                        {
+                            ALTEngine::Formats::RenderVertex vertex{};
+                            vertex.x = px[corner]; vertex.y = py[corner]; vertex.z = pz[corner];
+                            vertex.u = u[corner];  vertex.v = v[corner];
+                            vertex.r = sprite.r;   vertex.g = sprite.g;  vertex.b = sprite.b;
+                            verts.push_back(vertex);
+                        }
+                        indices.push_back(base + 0); indices.push_back(base + 1); indices.push_back(base + 2);
+                        indices.push_back(base + 0); indices.push_back(base + 2); indices.push_back(base + 3);
+                    };
 
                     // Batched by sheet, and by whether the sprite fades itself.
                     for (int fadePass = 0; fadePass < 2; ++fadePass)
@@ -2587,84 +2674,42 @@ namespace ALTEngine::Renderer
                         {
                             if (!sprite.visible || sprite.textureKey != sheetEntry.first) { continue; }
                             if (sprite.ownFade != (fadePass == 1)) { continue; }
+                            if (sprite.halfBlend) { continue; }
 
-                            const uint32_t base = static_cast<uint32_t>(verts.size());
-                            float px[4], py[4], pz[4];
-
-                            if (sprite.billboard)
-                            {
-                                const float dx = rightX * sprite.halfWidth;
-                                const float dz = rightZ * sprite.halfWidth;
-                                const float dy = sprite.halfHeight;
-                                // top-left, top-right, bottom-right, bottom-left
-                                px[0] = sprite.x - dx; px[1] = sprite.x + dx; px[2] = sprite.x + dx; px[3] = sprite.x - dx;
-                                py[0] = sprite.y + dy; py[1] = sprite.y + dy; py[2] = sprite.y - dy; py[3] = sprite.y - dy;
-                                pz[0] = sprite.z - dz; pz[1] = sprite.z + dz; pz[2] = sprite.z + dz; pz[3] = sprite.z - dz;
-                            }
-                            else
-                            {
-                                // World-oriented: build the quad flat on XY and
-                                // turn it by the sprite's own angles. A tumbling
-                                // shard needs this - a billboard would keep it
-                                // permanently face-on and it would never look
-                                // like it was spinning.
-                                const float cxr = std::cos(sprite.rotX), sxr = std::sin(sprite.rotX);
-                                const float cyr = std::cos(sprite.rotY), syr = std::sin(sprite.rotY);
-                                const float czr = std::cos(sprite.rotZ), szr = std::sin(sprite.rotZ);
-
-                                float lx[4] = { -sprite.halfWidth,  sprite.halfWidth,
-                                                 sprite.halfWidth, -sprite.halfWidth };
-                                float ly[4] = {  sprite.halfHeight, sprite.halfHeight,
-                                                -sprite.halfHeight, -sprite.halfHeight };
-                                float lz[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-                                if (sprite.corners)
-                                {
-                                    for (int corner = 0; corner < 4; ++corner)
-                                    {
-                                        lx[corner] = sprite.cornerX[corner];
-                                        ly[corner] = sprite.cornerY[corner];
-                                        lz[corner] = sprite.cornerZ[corner];
-                                    }
-                                }
-
-                                for (int corner = 0; corner < 4; ++corner)
-                                {
-                                    // Z, then Y, then X.
-                                    float ax = lx[corner] * czr - ly[corner] * szr;
-                                    float ay = lx[corner] * szr + ly[corner] * czr;
-                                    float az = lz[corner];
-
-                                    float bx = ax * cyr + az * syr;
-                                    float bz = -ax * syr + az * cyr;
-
-                                    float cy2 = ay * cxr - bz * sxr;
-                                    float cz2 = ay * sxr + bz * cxr;
-
-                                    px[corner] = sprite.x + bx;
-                                    py[corner] = sprite.y + cy2;
-                                    pz[corner] = sprite.z + cz2;
-                                }
-                            }
-                            float u[4] = { sprite.u0, sprite.u1, sprite.u1, sprite.u0 };
-                            float v[4] = { sprite.v0, sprite.v0, sprite.v1, sprite.v1 };
-                            if (sprite.corners && !sprite.billboard)
-                            {
-                                for (int corner = 0; corner < 4; ++corner) { u[corner] = sprite.cornerU[corner]; v[corner] = sprite.cornerV[corner]; }
-                            }
-
-                            for (int corner = 0; corner < 4; ++corner)
-                            {
-                                ALTEngine::Formats::RenderVertex vertex{};
-                                vertex.x = px[corner]; vertex.y = py[corner]; vertex.z = pz[corner];
-                                vertex.u = u[corner];  vertex.v = v[corner];
-                                vertex.r = sprite.r;   vertex.g = sprite.g;  vertex.b = sprite.b;
-                                verts.push_back(vertex);
-                            }
-                            indices.push_back(base + 0); indices.push_back(base + 1); indices.push_back(base + 2);
-                            indices.push_back(base + 0); indices.push_back(base + 2); indices.push_back(base + 3);
+                            appendQuad(sprite);
                         }
                         const uint32_t added = static_cast<uint32_t>(indices.size()) - firstIndex;
-                        if (added > 0) { batches.push_back({ sheetEntry.second.texture, firstIndex, added, fadePass == 1 }); }
+                        if (added > 0) { batches.push_back({ sheetEntry.second.texture, firstIndex, added, fadePass == 1, false }); }
+                    }
+
+                    // The half-blended ones last, farthest first, as the
+                    // original's depth-ordered list draws them: each one
+                    // averages with what is already there, so order shows.
+                    // Runs on one sheet share a batch.
+                    std::vector<std::pair<float, const PlacedSprite*>> blended;
+                    for (const PlacedSprite& sprite : sprites)
+                    {
+                        if (!sprite.visible || !sprite.halfBlend) { continue; }
+                        const float ex = sprite.x - camera.x, ey = sprite.y - camera.y, ez = sprite.z - camera.z;
+                        blended.push_back({ ex * ex + ey * ey + ez * ez, &sprite });
+                    }
+                    std::sort(blended.begin(), blended.end(),
+                              [](const auto& a, const auto& b) { return a.first > b.first; });
+                    for (const auto& entry : blended)
+                    {
+                        const auto sheet = spriteSheets.find(entry.second->textureKey);
+                        if (sheet == spriteSheets.end()) { continue; }
+                        const uint32_t firstIndex = static_cast<uint32_t>(indices.size());
+                        appendQuad(*entry.second);
+                        SDL_GPUTexture* texture = sheet->second.texture;
+                        if (!batches.empty() && batches.back().halfBlend && batches.back().texture == texture)
+                        {
+                            batches.back().count += 6;
+                        }
+                        else
+                        {
+                            batches.push_back({ texture, firstIndex, 6, true, true });
+                        }
                     }
 
                     if (!batches.empty())
@@ -2736,8 +2781,17 @@ namespace ALTEngine::Renderer
                                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
                                 bool fogOff = false;
 
+                                bool blending = false;
                                 for (const SpriteBatch& batch : batches)
                                 {
+                                    if (batch.halfBlend && !blending)
+                                    {
+                                        blending = true;
+                                        SDL_BindGPUGraphicsPipeline(renderPass,
+                                            translucentSpritePipeline ? translucentSpritePipeline : doubleSidedPipeline);
+                                        const SDL_FColor half{ 0.5f, 0.5f, 0.5f, 0.5f };
+                                        SDL_SetGPUBlendConstants(renderPass, half);
+                                    }
                                     if (batch.ownFade != fogOff)
                                     {
                                         fogOff = batch.ownFade;
