@@ -118,6 +118,8 @@ namespace ALTEngine::Net
     void Session::SendCreatures(const std::vector<CreatureEntry>& entries)
     {
         if (role != Role::Host || !Coop()) { return; }
+        // An empty list still goes: it says the host is in the level.
+        if (entries.empty()) { Broadcast(Creatures{ levelSerial, {} }); return; }
         for (size_t i = 0; i < entries.size(); i += MAX_CREATURES_PER_MESSAGE)
         {
             Creatures m;
@@ -138,6 +140,20 @@ namespace ALTEngine::Net
     {
         if (role != Role::Host || !Coop() || target == 0 || target >= MAX_PLAYERS || !peers[target].used) { return; }
         Send(peers[target].address, CreatureHit{ target, damage, cause, static_cast<uint8_t>(knock ? 1 : 0), yaw });
+    }
+
+    void Session::SendThrow(Throw thrown)
+    {
+        if (!Connected()) { return; }
+        thrown.slot = static_cast<uint8_t>(localSlot);
+        if (role == Role::Host) { Broadcast(thrown); } else { SendToHost(thrown); }
+    }
+
+    void Session::DropStaleEvents()
+    {
+        events.erase(std::remove_if(events.begin(), events.end(), [&](const Event& e) {
+            return e.levelSerial != levelSerial || e.kind == Event::Kind::LevelEnded || e.kind == Event::Kind::LevelStarted;
+        }), events.end());
     }
 
     void Session::SendCreatureShot(CreatureShot shot)
@@ -176,9 +192,9 @@ namespace ALTEngine::Net
         Broadcast(Leave{ static_cast<uint8_t>(slot) });
         Broadcast(roster);
         Event e; e.kind = Event::Kind::PlayerLeft; e.slot = static_cast<uint8_t>(slot);
-        events.push_back(e);
+        Push(e);
         Event r; r.kind = Event::Kind::RosterChanged;
-        events.push_back(r);
+        Push(r);
         CheckLevelEnd();   // no longer waited for
     }
 
@@ -192,8 +208,8 @@ namespace ALTEngine::Net
         }
         Broadcast(frag);
         Broadcast(roster);
-        Event e; e.kind = Event::Kind::Frag; e.frag = frag; events.push_back(e);
-        Event r; r.kind = Event::Kind::RosterChanged; events.push_back(r);
+        Event e; e.kind = Event::Kind::Frag; e.frag = frag; Push(e);
+        Event r; r.kind = Event::Kind::RosterChanged; Push(r);
     }
 
     void Session::Update(double now)
@@ -236,7 +252,7 @@ namespace ALTEngine::Net
             if (now - joinStarted > TIMEOUT_SECONDS)
             {
                 Event e; e.kind = Event::Kind::Rejected; e.reason = RejectReason::Full;
-                events.push_back(e);
+                Push(e);
                 role = Role::None;
                 socket.Close();
                 return;
@@ -250,7 +266,7 @@ namespace ALTEngine::Net
         }
         if (now - lastHeardHost > TIMEOUT_SECONDS)
         {
-            Event e; e.kind = Event::Kind::Disconnected; events.push_back(e);
+            Event e; e.kind = Event::Kind::Disconnected; Push(e);
             role = Role::None;
             welcomed = false;
             socket.Close();
@@ -296,8 +312,8 @@ namespace ALTEngine::Net
                 if (slot < 0) { Send(from, Reject{ RejectReason::Full }); return; }
                 peers[static_cast<size_t>(slot)] = Peer{ true, from, now };
                 roster.players[static_cast<size_t>(slot)] = RosterEntry{ true, join->name.substr(0, MAX_NAME), 0, join->skin };
-                Event e; e.kind = Event::Kind::PlayerJoined; e.slot = static_cast<uint8_t>(slot); events.push_back(e);
-                Event r; r.kind = Event::Kind::RosterChanged; events.push_back(r);
+                Event e; e.kind = Event::Kind::PlayerJoined; e.slot = static_cast<uint8_t>(slot); Push(e);
+                Event r; r.kind = Event::Kind::RosterChanged; Push(r);
             }
             // A repeated Join (the Welcome was lost) is answered again.
             Send(from, Welcome{ static_cast<uint8_t>(slot), level, mode, levelSerial });
@@ -317,18 +333,25 @@ namespace ALTEngine::Net
             remote[static_cast<size_t>(slot)] = fixed;
             Broadcast(fixed, slot);
         }
+        else if (const auto* thrown = std::get_if<Throw>(&message))
+        {
+            Throw fixed = *thrown;
+            fixed.slot = s;
+            Broadcast(fixed, slot);
+            Event e; e.kind = Event::Kind::Throw; e.slot = s; e.thrown = fixed; Push(e);
+        }
         else if (const auto* shot = std::get_if<Shot>(&message))
         {
             Shot fixed = *shot;
             fixed.slot = s;
             Broadcast(fixed, slot);
-            Event e; e.kind = Event::Kind::Shot; e.slot = s; e.shot = fixed; events.push_back(e);
+            Event e; e.kind = Event::Kind::Shot; e.slot = s; e.shot = fixed; Push(e);
         }
         else if (const auto* hit = std::get_if<Hit>(&message))
         {
             Hit fixed = *hit;
             fixed.attacker = s;
-            if (fixed.target == 0) { Event e; e.kind = Event::Kind::Hit; e.slot = s; e.hit = fixed; events.push_back(e); }
+            if (fixed.target == 0) { Event e; e.kind = Event::Kind::Hit; e.slot = s; e.hit = fixed; Push(e); }
             else if (IsBot(fixed.target)) { HitBot(fixed.attacker, fixed.target, fixed.damage); }
             else if (fixed.target < MAX_PLAYERS && peers[fixed.target].used) { Send(peers[fixed.target].address, fixed); }
         }
@@ -344,7 +367,7 @@ namespace ALTEngine::Net
             Chat fixed = *chat;
             fixed.slot = s;
             Broadcast(fixed, slot);
-            Event e; e.kind = Event::Kind::Chat; e.slot = s; e.chat = fixed; events.push_back(e);
+            Event e; e.kind = Event::Kind::Chat; e.slot = s; e.chat = fixed; Push(e);
         }
         else if (std::holds_alternative<Leave>(message))
         {
@@ -362,7 +385,7 @@ namespace ALTEngine::Net
                 entry.seq = static_cast<uint32_t>(worldLog.size() + 1);
                 worldLog.push_back(entry);
                 Broadcast(entry);
-                Event e; e.kind = Event::Kind::World; e.slot = s; e.world = entry; events.push_back(e);
+                Event e; e.kind = Event::Kind::World; e.slot = s; e.world = entry; Push(e);
             }
             Send(from, WorldAck{ levelSerial, peer.worldApplied });
         }
@@ -377,7 +400,7 @@ namespace ALTEngine::Net
             if (!Coop() || damage->levelSerial != levelSerial) { return; }
             Event e; e.kind = Event::Kind::CreatureDamage; e.slot = s; e.creatureDamage = *damage;
             e.creatureDamage.slot = s;
-            events.push_back(e);
+            Push(e);
         }
         else if (std::holds_alternative<AtExit>(message))
         {
@@ -385,7 +408,7 @@ namespace ALTEngine::Net
             {
                 roster.players[static_cast<size_t>(slot)].atExit = true;
                 Broadcast(roster);
-                Event r; r.kind = Event::Kind::RosterChanged; events.push_back(r);
+                Event r; r.kind = Event::Kind::RosterChanged; Push(r);
                 CheckLevelEnd();
             }
             else if (roster.players[static_cast<size_t>(slot)].atExit)
@@ -407,7 +430,7 @@ namespace ALTEngine::Net
                 level = welcome->level;
                 mode = welcome->mode;
                 levelSerial = welcome->levelSerial;
-                Event e; e.kind = Event::Kind::Welcomed; e.slot = welcome->slot; events.push_back(e);
+                Event e; e.kind = Event::Kind::Welcomed; e.slot = welcome->slot; Push(e);
             }
             return;
         }
@@ -415,7 +438,7 @@ namespace ALTEngine::Net
         {
             if (!welcomed)
             {
-                Event e; e.kind = Event::Kind::Rejected; e.reason = reject->reason; events.push_back(e);
+                Event e; e.kind = Event::Kind::Rejected; e.reason = reject->reason; Push(e);
                 role = Role::None;
                 socket.Close();
             }
@@ -428,11 +451,11 @@ namespace ALTEngine::Net
             {
                 const bool was = roster.players[static_cast<size_t>(i)].used;
                 const bool is = list->players[static_cast<size_t>(i)].used;
-                if (i != localSlot && is && !was) { Event e; e.kind = Event::Kind::PlayerJoined; e.slot = static_cast<uint8_t>(i); events.push_back(e); }
+                if (i != localSlot && is && !was) { Event e; e.kind = Event::Kind::PlayerJoined; e.slot = static_cast<uint8_t>(i); Push(e); }
                 if (i != localSlot && was && !is) { remote[static_cast<size_t>(i)].reset(); }
             }
             roster = *list;
-            Event e; e.kind = Event::Kind::RosterChanged; events.push_back(e);
+            Event e; e.kind = Event::Kind::RosterChanged; Push(e);
         }
         else if (const auto* state = std::get_if<State>(&message))
         {
@@ -440,19 +463,19 @@ namespace ALTEngine::Net
         }
         else if (const auto* shot = std::get_if<Shot>(&message))
         {
-            if (shot->slot != localSlot) { Event e; e.kind = Event::Kind::Shot; e.slot = shot->slot; e.shot = *shot; events.push_back(e); }
+            if (shot->slot != localSlot) { Event e; e.kind = Event::Kind::Shot; e.slot = shot->slot; e.shot = *shot; Push(e); }
         }
         else if (const auto* hit = std::get_if<Hit>(&message))
         {
-            if (hit->target == localSlot) { Event e; e.kind = Event::Kind::Hit; e.slot = hit->attacker; e.hit = *hit; events.push_back(e); }
+            if (hit->target == localSlot) { Event e; e.kind = Event::Kind::Hit; e.slot = hit->attacker; e.hit = *hit; Push(e); }
         }
         else if (const auto* frag = std::get_if<Frag>(&message))
         {
-            Event e; e.kind = Event::Kind::Frag; e.frag = *frag; events.push_back(e);
+            Event e; e.kind = Event::Kind::Frag; e.frag = *frag; Push(e);
         }
         else if (const auto* chat = std::get_if<Chat>(&message))
         {
-            Event e; e.kind = Event::Kind::Chat; e.slot = chat->slot; e.chat = *chat; events.push_back(e);
+            Event e; e.kind = Event::Kind::Chat; e.slot = chat->slot; e.chat = *chat; Push(e);
         }
         else if (const auto* world = std::get_if<WorldEvent>(&message))
         {
@@ -461,7 +484,7 @@ namespace ALTEngine::Net
             {
                 worldApplied = world->seq;
                 // Our own come back numbered too; they are already done here.
-                if (world->origin != localSlot) { Event e; e.kind = Event::Kind::World; e.slot = world->origin; e.world = *world; events.push_back(e); }
+                if (world->origin != localSlot) { Event e; e.kind = Event::Kind::World; e.slot = world->origin; e.world = *world; Push(e); }
             }
             SendToHost(WorldAck{ levelSerial, worldApplied });
         }
@@ -471,27 +494,31 @@ namespace ALTEngine::Net
             outbox.erase(std::remove_if(outbox.begin(), outbox.end(), [&](const WorldEvent& e) { return e.seq <= ack->seq; }),
                          outbox.end());
         }
+        else if (const auto* thrown = std::get_if<Throw>(&message))
+        {
+            if (thrown->slot != localSlot) { Event e; e.kind = Event::Kind::Throw; e.slot = thrown->slot; e.thrown = *thrown; Push(e); }
+        }
         else if (const auto* creatures = std::get_if<Creatures>(&message))
         {
             if (creatures->levelSerial != levelSerial) { return; }
-            Event e; e.kind = Event::Kind::Creatures; e.creatures = *creatures; events.push_back(e);
+            Event e; e.kind = Event::Kind::Creatures; e.creatures = *creatures; Push(e);
         }
         else if (const auto* hit = std::get_if<CreatureHit>(&message))
         {
             if (hit->target != localSlot) { return; }
-            Event e; e.kind = Event::Kind::CreatureHit; e.creatureHit = *hit; events.push_back(e);
+            Event e; e.kind = Event::Kind::CreatureHit; e.creatureHit = *hit; Push(e);
         }
         else if (const auto* shot = std::get_if<CreatureShot>(&message))
         {
             if (shot->levelSerial != levelSerial) { return; }
-            Event e; e.kind = Event::Kind::CreatureShot; e.creatureShot = *shot; events.push_back(e);
+            Event e; e.kind = Event::Kind::CreatureShot; e.creatureShot = *shot; Push(e);
         }
         else if (const auto* end = std::get_if<LevelEnd>(&message))
         {
             if (end->levelSerial == levelSerial && !levelEnded)
             {
                 levelEnded = true;
-                Event e; e.kind = Event::Kind::LevelEnded; events.push_back(e);
+                Event e; e.kind = Event::Kind::LevelEnded; Push(e);
             }
         }
         else if (const auto* start = std::get_if<LevelStart>(&message))
@@ -503,7 +530,7 @@ namespace ALTEngine::Net
         {
             if (leave->slot == 0)
             {
-                Event e; e.kind = Event::Kind::Disconnected; events.push_back(e);
+                Event e; e.kind = Event::Kind::Disconnected; Push(e);
                 role = Role::None;
                 welcomed = false;
                 socket.Close();
@@ -511,7 +538,7 @@ namespace ALTEngine::Net
             else if (leave->slot < MAX_PLAYERS)
             {
                 remote[leave->slot].reset();
-                Event e; e.kind = Event::Kind::PlayerLeft; e.slot = leave->slot; events.push_back(e);
+                Event e; e.kind = Event::Kind::PlayerLeft; e.slot = leave->slot; Push(e);
             }
         }
     }
@@ -547,7 +574,7 @@ namespace ALTEngine::Net
         {
             roster.players[0].atExit = true;
             Broadcast(roster);
-            Event r; r.kind = Event::Kind::RosterChanged; events.push_back(r);
+            Event r; r.kind = Event::Kind::RosterChanged; Push(r);
             CheckLevelEnd();
         }
         else
@@ -577,7 +604,7 @@ namespace ALTEngine::Net
         if (playing == 0 || PlayersAtExit() < playing) { return; }
         levelEnded = true;
         Broadcast(LevelEnd{ levelSerial });
-        Event e; e.kind = Event::Kind::LevelEnded; events.push_back(e);
+        Event e; e.kind = Event::Kind::LevelEnded; Push(e);
     }
 
     void Session::NewLevel(const std::string& levelDigits, uint16_t serial)
@@ -591,7 +618,7 @@ namespace ALTEngine::Net
         // What the players did on the last level is no guide to where they are.
         remote = {};
         ClearWorld();
-        Event e; e.kind = Event::Kind::LevelStarted; events.push_back(e);
+        Event e; e.kind = Event::Kind::LevelStarted; Push(e);
     }
 
     void Session::AdvanceLevel(const std::string& levelDigits)
@@ -630,8 +657,8 @@ namespace ALTEngine::Net
             if (entry.used) { continue; }
             entry = RosterEntry{ true, name.substr(0, MAX_NAME), 0, look, true };
             Broadcast(roster);
-            Event e; e.kind = Event::Kind::PlayerJoined; e.slot = static_cast<uint8_t>(i); events.push_back(e);
-            Event r; r.kind = Event::Kind::RosterChanged; events.push_back(r);
+            Event e; e.kind = Event::Kind::PlayerJoined; e.slot = static_cast<uint8_t>(i); Push(e);
+            Event r; r.kind = Event::Kind::RosterChanged; Push(r);
             return i;
         }
         return -1;
@@ -644,8 +671,8 @@ namespace ALTEngine::Net
         remote[static_cast<size_t>(slot)].reset();
         Broadcast(Leave{ static_cast<uint8_t>(slot) });
         Broadcast(roster);
-        Event e; e.kind = Event::Kind::PlayerLeft; e.slot = static_cast<uint8_t>(slot); events.push_back(e);
-        Event r; r.kind = Event::Kind::RosterChanged; events.push_back(r);
+        Event e; e.kind = Event::Kind::PlayerLeft; e.slot = static_cast<uint8_t>(slot); Push(e);
+        Event r; r.kind = Event::Kind::RosterChanged; Push(r);
     }
 
     void Session::SendBotState(int slot, State state)
@@ -667,7 +694,7 @@ namespace ALTEngine::Net
     {
         if (role != Role::Host || !IsBot(attacker) || target >= MAX_PLAYERS || static_cast<int>(target) == attacker) { return; }
         const Hit hit{ static_cast<uint8_t>(attacker), target, damage };
-        if (target == 0) { Event e; e.kind = Event::Kind::Hit; e.slot = hit.attacker; e.hit = hit; events.push_back(e); }
+        if (target == 0) { Event e; e.kind = Event::Kind::Hit; e.slot = hit.attacker; e.hit = hit; Push(e); }
         else if (IsBot(target)) { HitBot(hit.attacker, target, damage); }
         else if (peers[target].used) { Send(peers[target].address, hit); }
     }
@@ -675,7 +702,7 @@ namespace ALTEngine::Net
     void Session::HitBot(uint8_t attacker, uint8_t target, int16_t damage)
     {
         Event e; e.kind = Event::Kind::BotHit; e.slot = attacker; e.hit = Hit{ attacker, target, damage };
-        events.push_back(e);
+        Push(e);
     }
 
     void Session::SendFrag(uint8_t killer, uint8_t victim)

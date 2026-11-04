@@ -1,5 +1,6 @@
 #include "GameplayScreen.h"
 #include "PauseMenuScreen.h"
+#include "MenuBackground.h"
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
 #include "../Bootstrap/TestingSettings.h"
@@ -397,6 +398,9 @@ namespace ALTEngine::Screens
             bool charge = true;  // a seismic charge, or else a grenade
             int spin = 0;        // +0x10: a charge's first angle, +0x20 each tick it is drawn
             int triggerLatch = 0;  // +0x1f: the cell trigger it last set off (FUN_000414f0)
+            // Another player's, seen here (Net::Throw): it flies and bursts,
+            // but harms nothing - that is done on the thrower's machine.
+            bool remote = false;
         };
         std::vector<PlayerExplosive> playerExplosives;
         // Switch/object state, indexed by object record. Non-zero means
@@ -1776,6 +1780,24 @@ namespace ALTEngine::Screens
         // game has reached it (Net::Session::ReportAtExit); then the level
         // ends on every machine together (the LevelEnded event below).
         bool exitWaiting = false;
+
+        // CO-OPERATIVE GUEST: SYNCING. A guest comes into a level the others
+        // may have been playing for a while: everything they did reaches it
+        // at once (Session's world list), and the creatures only move once
+        // the host is in the level too. Until both have settled the level is
+        // covered by a screen in the briefing's style, the sound is off and
+        // the player is held - so the catch-up is not seen or heard.
+        constexpr double SYNC_MIN_SECONDS = 1.0;     // at least this long
+        constexpr double SYNC_QUIET_SECONDS = 0.75;  // and this long with nothing new
+        constexpr double SYNC_MAX_SECONDS = 20.0;    // never longer
+        // The host too, for what the guests did while it read the briefing.
+        bool syncing = session && session->Coop();
+        bool hostInLevel = session && session->CoopHost();
+        double syncStarted = -1.0, lastWorldAt = -1.0;
+        int worldReceived = 0;
+        float syncSavedGain = 1.0f;
+        SDL_Texture* syncBackground = nullptr;
+        int syncBgW = 0, syncBgH = 0;
         auto reachedExit = [&]() {
             if (!(session && session->Connected() && session->Coop()))
             {
@@ -2104,7 +2126,23 @@ namespace ALTEngine::Screens
                         break;
                     case K::World:
                         if (levelReady) { applyWorldEvent(e.world); }
+                        lastWorldAt = netNow;
+                        worldReceived++;
                         break;
+                    case K::Throw:
+                    {
+                        // Another player's grenade or charge: it flies here too.
+                        if (!levelReady) { break; }
+                        PlayerExplosive thrown;
+                        thrown.charge = e.thrown.charge != 0;
+                        thrown.x = e.thrown.x; thrown.y = e.thrown.y; thrown.z = e.thrown.z;
+                        thrown.vx = e.thrown.vx; thrown.vy = e.thrown.vy; thrown.vz = e.thrown.vz;
+                        thrown.bounce = thrown.charge ? 8 : 0x10;
+                        thrown.life = thrown.charge ? 0x40 : 0x30;
+                        thrown.remote = true;
+                        playerExplosives.push_back(thrown);
+                        break;
+                    }
                     case K::CreatureDamage:
                     {
                         // A guest's round, run here where the creatures are.
@@ -2121,6 +2159,7 @@ namespace ALTEngine::Screens
                     }
                     case K::Creatures:
                         // The host's creatures, as it has them now.
+                        hostInLevel = true;
                         if (!levelReady) { break; }
                         for (const auto& c : e.creatures.entries)
                         {
@@ -2137,8 +2176,17 @@ namespace ALTEngine::Screens
                                 enemy.health = c.health;
                                 continue;
                             }
+                            // A death counts toward this player's assessment
+                            // as it would had it happened here: the level's
+                            // creatures are everyone's.
+                            const bool wasAlive = enemy.alive;
                             enemy.active = (c.flags & NT::CREATURE_ACTIVE) != 0;
                             enemy.alive = (c.flags & NT::CREATURE_ALIVE) != 0;
+                            if (wasAlive && !enemy.alive && enemy.type >= 0
+                                && enemy.type < ALTEngine::Game::Progression::TALLY_SIZE)
+                            {
+                                tally.killed[enemy.type]++;
+                            }
                             enemy.bodyRemoved = (c.flags & NT::CREATURE_BODY_REMOVED) != 0;
                             enemy.onCeiling = (c.flags & NT::CREATURE_ON_CEILING) != 0;
                             enemy.velocityActive = (c.flags & NT::CREATURE_MOVING) != 0;
@@ -2220,6 +2268,26 @@ namespace ALTEngine::Screens
                     default: break;
                     }
                 }
+                // Syncing: done once the host is in the level, nothing new has
+                // come for a moment, and the screen has shown long enough to read.
+                if (syncing)
+                {
+                    if (syncStarted < 0.0)
+                    {
+                        syncStarted = netNow;
+                        syncSavedGain = app.SfxGain();
+                        app.SetSfxGain(0.0f);
+                    }
+                    const bool quiet = lastWorldAt < 0.0 || netNow - lastWorldAt >= SYNC_QUIET_SECONDS;
+                    const bool settled = hostInLevel && quiet && netNow - syncStarted >= SYNC_MIN_SECONDS;
+                    if (settled || netNow - syncStarted >= SYNC_MAX_SECONDS || !session->Connected())
+                    {
+                        syncing = false;
+                        app.SetSfxGain(syncSavedGain);
+                    }
+                }
+                hudState.waitingAtExit = exitWaiting || syncing;
+
                 // Our own state, thirty times a second.
                 if (session->Connected() && (lastStateSent < 0.0 || netNow - lastStateSent >= 1.0 / 30.0))
                 {
@@ -2232,7 +2300,7 @@ namespace ALTEngine::Screens
                     state.health = hudState.health;
                     state.weapon = static_cast<uint8_t>(selectedWeapon);
                     state.flags = static_cast<uint8_t>((hudState.dead ? 1 : 0) | (playerCam.speed != 0 ? 4 : 0)
-                                                       | (exitWaiting ? 8 : 0));
+                                                       | (exitWaiting || syncing ? 8 : 0));
                     session->SendState(state);
                 }
 
@@ -2274,7 +2342,7 @@ namespace ALTEngine::Screens
                         enemies[i].netSound = -1;
                         entries.push_back(c);
                     }
-                    if (!entries.empty()) { session->SendCreatures(entries); }
+                    if (!entries.empty() || full) { session->SendCreatures(entries); }
                 }
 
                 // Co-operative guest: the creatures close on where the host has
@@ -2563,7 +2631,7 @@ namespace ALTEngine::Screens
                 {
                     playerTickAccumulator -= playerTickLength;
                     playerTicksThisFrame++;
-                    if (!levelComplete && !playerDead) { levelSeconds += playerTickLength; }
+                    if (!levelComplete && !playerDead && !syncing) { levelSeconds += playerTickLength; }
                     // The original's alternate pass (see logicTick).
                     const bool halfPass = ((logicTick++ & 1u) == 0) || speedCompensationOff;
                     passHalves.push_back(halfPass);
@@ -2687,7 +2755,7 @@ namespace ALTEngine::Screens
                     const bool onHazardCell = (cellAttribute == 7 || cellAttribute == 8 || cellAttribute == 0xc);
 
                     // Waiting at the exit: still.
-                    if (exitWaiting) { pcInput = PC::Input{}; }
+                    if (exitWaiting || syncing) { pcInput = PC::Input{}; }
                     PC::Tick(playerCam, pcInput, cellAttribute, onHazardCell, cameraSway, freeLook);
 
                     // The original's own mover (Game::PlayerMover, FUN_0003dff0):
@@ -2808,7 +2876,7 @@ namespace ALTEngine::Screens
                     // property of the key. See WeaponSystem::FireMode.
                     namespace WS = ALTEngine::Screens::WeaponSystem;
 
-                    const bool fireHeld = (keys[keyBindings.GetKey(InputAction::Fire1)] || mouseFire1) && !exitWaiting;
+                    const bool fireHeld = (keys[keyBindings.GetKey(InputAction::Fire1)] || mouseFire1) && !exitWaiting && !syncing;
                     const bool firePressed = fireHeld && !firePressedLastTick;
                     firePressedLastTick = fireHeld;
                     if (firePressed && testingFaceIndex) { LogShotFace(level, digits, pickedFace); }   // the face logger, see LogShotFace
@@ -3055,7 +3123,7 @@ namespace ALTEngine::Screens
                     // anything yet: FUN_0003efcc's case 2 spends a grenade,
                     // sets state 3 and starts that state's animation - which is
                     // the sequence carrying the 0401gren sound cue.
-                    const bool altFireHeld = (keys[keyBindings.GetKey(InputAction::Fire2)] || mouseFire2) && !exitWaiting;
+                    const bool altFireHeld = (keys[keyBindings.GetKey(InputAction::Fire2)] || mouseFire2) && !exitWaiting && !syncing;
                     const bool altFirePressed = altFireHeld && !altFirePressedLastTick;
                     altFirePressedLastTick = altFireHeld;
 
@@ -3097,6 +3165,15 @@ namespace ALTEngine::Screens
                         e.bounce = charge ? 8 : 0x10;
                         e.life = charge ? 0x40 : 0x30;
                         playerExplosives.push_back(e);
+                        // The others see it thrown.
+                        if (session && session->Connected())
+                        {
+                            ALTEngine::Net::Throw thrown;
+                            thrown.charge = charge ? 1 : 0;
+                            thrown.x = e.x; thrown.y = e.y; thrown.z = e.z;
+                            thrown.vx = e.vx; thrown.vy = e.vy; thrown.vz = e.vz;
+                            session->SendThrow(thrown);
+                        }
                     };
 
                     // Fire 2 with anything but the pulse rifle throws a seismic
@@ -4679,7 +4756,7 @@ namespace ALTEngine::Screens
                                                                     enemy.type, ALTEngine::Screens::Particles::TYPE_PULSE)) { continue; }
                                         const int damage = (enemy.type == ALTEngine::Game::Blast::IMMUNE_CREATURE_TYPE)
                                             ? EXPLOSIVE_HIT_DAMAGE * 2 : enemy.health;
-                                        damageCreature(enemy, damage);
+                                        if (!e.remote) { damageCreature(enemy, damage); }
                                         const int blood = PCol::BloodTypeForCreature(enemy.type);
                                         if (blood >= 0) { particles.SpawnBlood(blood, e.x, e.y, e.z, true); }
                                         return true;
@@ -4687,27 +4764,30 @@ namespace ALTEngine::Screens
                                     return false;
                                 };
                                 int ruled = 0;
+                                // Another player's: the burst and its sound, no blast.
+                                const bool harms = !e.remote;
                                 if (!cell) { gone = true; }
-                                else if (--e.life <= 0) { detonate(e.x, e.y, e.z); gone = true; }
-                                else if ((ruled = explosiveCellRules(e.x, e.y, e.z, EXPLOSIVE_HIT_DAMAGE)) != 0)
+                                else if (--e.life <= 0) { detonate(e.x, e.y, e.z, harms); gone = true; }
+                                else if ((ruled = explosiveCellRules(e.x, e.y, e.z, harms ? EXPLOSIVE_HIT_DAMAGE : 0)) != 0)
                                 {
-                                    detonate(e.x, e.y, e.z, ruled == 2); gone = true;
+                                    detonate(e.x, e.y, e.z, harms && ruled == 2); gone = true;
                                 }
                                 else if (strikeCreature())
                                 {
-                                    detonate(e.x, e.y, e.z); gone = true;
+                                    detonate(e.x, e.y, e.z, harms); gone = true;
                                 }
                                 else
                                 {
                                     // Its cell's triggers, as a round's
-                                    // (FUN_000414f0, 0x2dc17).
+                                    // (FUN_000414f0, 0x2dc17) - the thrower's.
+                                    if (harms)
                                     triggers.OnShotEnterCell(e.triggerLatch,
                                         ALTEngine::Formats::CellIndex(level, gx >> 9, gz >> 9), triggerHandlers);
                                     const float floor = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
                                     if (e.y < floor + 0x20)
                                     {
                                         // Dropped into a hole: it goes off 0x200 up.
-                                        if (floor - e.y > 0x40) { detonate(e.x, e.y + 0x200, e.z); gone = true; }
+                                        if (floor - e.y > 0x40) { detonate(e.x, e.y + 0x200, e.z, harms); gone = true; }
                                         else
                                         {
                                             e.y = floor + 0x20;
@@ -5842,6 +5922,32 @@ namespace ALTEngine::Screens
                 DrawBitmapText(renderer, "(level failed to load - see console)", scale * 8, scale * 8, scale, Color{ 220, 40, 40, 255 });
             }
 
+            // Syncing (co-operative guest): the level is covered until it has
+            // caught up - the briefing's look, so it reads as part of it.
+            if (syncing)
+            {
+                SDL_SetRenderTarget(renderer, nullptr);
+                if (!syncBackground) { syncBackground = LoadMenuBackground(cdDirectory, renderer, 1, syncBgW, syncBgH); }
+                DrawMenuBackground(renderer, syncBackground, syncBgW, syncBgH);
+                const int scale = ComputeMenuScale(renderer);
+                const int lineHeight = ALTEngine::Bootstrap::TextHeight(scale) + scale * 4;
+                const int margin = scale * 8;
+                int windowW = 0, windowH = 0;
+                SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+                const Color bright{ 51, 255, 102, 255 };
+                const Color dim{ 24, 130, 52, 255 };
+                DrawBitmapText(renderer, "Incoming data transfer", margin, margin, scale, bright);
+                DrawBitmapText(renderer, "CO-OPERATIVE", margin, margin + lineHeight * 2, scale, bright);
+                DrawBitmapText(renderer, hostInLevel ? "Synchronising with the other players" : "Waiting for the host",
+                               margin, margin + lineHeight * 4, scale, dim);
+                if (worldReceived > 0)
+                {
+                    DrawBitmapText(renderer, "Changes received: " + std::to_string(worldReceived),
+                                   margin, margin + lineHeight * 5, scale, dim);
+                }
+                DrawBitmapText(renderer, "Loading data", margin, windowH - lineHeight * 2, scale, dim);
+            }
+
             SDL_RenderPresent(renderer);
             // The vents' held sounds stay queued.
             ALTEngine::Audio::SfxPlayer::UpdateLoops();
@@ -5857,6 +5963,8 @@ namespace ALTEngine::Screens
         }
 
         SDL_SetWindowRelativeMouseMode(app.Window(), false);
+        if (syncing) { app.SetSfxGain(syncSavedGain); }
+        if (syncBackground) { SDL_DestroyTexture(syncBackground); syncBackground = nullptr; }
         ALTEngine::Audio::SfxPlayer::StopAllLoops();
         if (frameTexture) { SDL_DestroyTexture(frameTexture); frameTexture = nullptr; }
 

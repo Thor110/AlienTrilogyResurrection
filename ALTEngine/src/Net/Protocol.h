@@ -18,7 +18,7 @@ namespace ALTEngine::Net
     // Every datagram: "ALT" + a version byte, a type byte, then the fields,
     // little-endian. A datagram that doesn't start so, or whose fields run
     // short, is dropped.
-    inline constexpr uint8_t PROTOCOL_VERSION = 5;   // 4: game modes, co-operative level ends; 5: the shared world
+    inline constexpr uint8_t PROTOCOL_VERSION = 6;   // 4: game modes, co-operative level ends; 5: the shared world; 6: throws
     // The original's four records are its limit; the port allows a host to
     // take up to eight (MIN_PLAYER_LIMIT - MAX_PLAYERS, bots included).
     inline constexpr int MAX_PLAYERS = 8;
@@ -58,6 +58,7 @@ namespace ALTEngine::Net
         CreatureDamage = 20, // co-operative, client -> host: my round hit creature `index`
         CreatureHit = 21,    // co-operative, host -> client: a creature hurt you
         CreatureShot = 22,   // co-operative, host -> everyone: a creature fired
+        Throw = 23,          // a player threw a grenade or a seismic charge
     };
 
     // THE PORT'S GAME MODES. The original's network game is a deathmatch on
@@ -213,9 +214,15 @@ namespace ALTEngine::Net
     // kind 0 a gunner's round, 1 a handler's grenade.
     struct CreatureShot { uint16_t levelSerial = 0; uint8_t kind = 0; float x = 0, y = 0, z = 0, vx = 0, vy = 0, vz = 0; };
 
+    // A grenade (the pulse rifle's) or seismic charge thrown: the others fly
+    // and burst a copy, for the look of it; what it does - the creatures it
+    // kills, the objects it breaks, the triggers it sets off - is decided on
+    // the thrower's machine and reaches the others the usual ways.
+    struct Throw { uint8_t slot = 0; uint8_t charge = 0; float x = 0, y = 0, z = 0, vx = 0, vy = 0, vz = 0; };
+
     using Message = std::variant<DiscoverQuery, DiscoverReply, Join, Welcome, Reject, Roster, State, Shot, Hit,
                                  Frag, Chat, Leave, Ping, AtExit, LevelEnd, LevelStart,
-                                 WorldEvent, WorldAck, Creatures, CreatureDamage, CreatureHit, CreatureShot>;
+                                 WorldEvent, WorldAck, Creatures, CreatureDamage, CreatureHit, CreatureShot, Throw>;
 
     std::vector<uint8_t> Encode(const Message& message);
     std::optional<Message> Decode(const std::vector<uint8_t>& bytes);

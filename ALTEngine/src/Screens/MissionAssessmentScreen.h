@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <functional>
 #include <string>
 
 #include "../Bootstrap/Localization.h"
@@ -22,6 +23,8 @@ namespace ALTEngine::Screens
         bool showTimes = false;
         double levelSeconds = 0.0;
         double runSeconds = 0.0;
+        // OURS: a co-operative game's assessment says so, above the title.
+        bool coop = false;
     };
 
     // A time for the Level Timer line: m:ss.cc, or h:mm:ss.cc from an hour,
@@ -63,10 +66,13 @@ namespace ALTEngine::Screens
     class MissionAssessmentScreen
     {
     public:
+        // `idle` runs once a frame - a co-operative game keeps its session
+        // up with it while the assessment is up.
         static MissionAssessmentResult Run(
             const std::filesystem::path& cdDirectory,
             const MissionAssessmentStats& stats,
-            Bootstrap::Language language = Bootstrap::Language::English);
+            Bootstrap::Language language = Bootstrap::Language::English,
+            const std::function<void()>& idle = {});
 
         // FUN_00014ec0's colour table: entry v is the colour of a figure of v,
         // (red, green, 0) on the original's 0x80-is-full-brightness scale.

@@ -514,11 +514,34 @@ int main(int, char**)
             auto playMultiplayer = [&](ALTEngine::Net::Session& session) -> bool {
                 ALTEngine::Screens::PlayerInventoryState netInventory;
                 namespace PG = ALTEngine::Game::Progression;
+                // While a screen between levels is up, the session is read
+                // every frame: nobody times out, and what the others do in the
+                // meantime waits for the level (and is caught up there, under
+                // its syncing screen).
+                const auto keepAlive = [&]() { session.Update(static_cast<double>(SDL_GetTicks()) / 1000.0); };
                 while (true)
                 {
                     const std::string digits = session.Level();
                     const uint16_t serial = session.LevelSerial();
-                    MissionBriefingScreen::PreloadObjectModels(cdDirectory, language);
+                    session.DropStaleEvents();
+                    if (session.Coop())
+                    {
+                        // The story missions keep their briefing.
+                        MissionBriefingResult briefing = MissionBriefingScreen::Run(cdDirectory, language, DottedOf(digits), keepAlive);
+                        if (briefing.windowClosed) { session.Stop(); return false; }
+                        if (!session.Connected()) { session.Stop(); return true; }
+                        // The host moved on while it was read (a guest who
+                        // came in at the very end): that level, then.
+                        if (session.LevelSerial() != serial)
+                        {
+                            if (session.Level().empty()) { session.Stop(); return true; }
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        MissionBriefingScreen::PreloadObjectModels(cdDirectory, language);
+                    }
                     GameplayResult played = GameplayScreen::Run(cdDirectory, language, DottedOf(digits), keyBindings,
                                                                 audioSettings, renderSettings, resolutionSettings,
                                                                 difficultySettings, cameraSwaySettings, languageSettings,
@@ -532,14 +555,32 @@ int main(int, char**)
                         return true;
                     }
 
+                    // The assessment, as after any story mission: this player's
+                    // own (the creatures and objects are everyone's, the
+                    // secrets their own), tagged as a co-operative game.
+                    {
+                        const int index = PG::CampaignIndex(digits);
+                        const auto assessment = PG::Assess(played.tally, index);
+                        MissionAssessmentStats stats;
+                        stats.aliensPercent = static_cast<float>(assessment.aliensPercent);
+                        stats.secretsPercent = static_cast<float>(assessment.secretsPercent);
+                        stats.missionPercent = static_cast<float>(assessment.missionPercent);
+                        stats.requiredPercent = assessment.requiredPercent;
+                        stats.levelDigits = digits;
+                        stats.coop = true;
+                        if (MissionAssessmentScreen::Run(cdDirectory, stats, language, keepAlive).windowClosed)
+                        {
+                            session.Stop();
+                            return false;
+                        }
+                    }
+
                     // CO-OPERATIVE: the next story mission. The host chooses
                     // it: the campaign's next level, by the host's own
                     // assessment (a bonus level opens on 85% or more), but
                     // never the same one again - a mission failed on one
                     // machine is not failed for all, as each runs its own
-                    // creatures. No assessment or briefing screen is shown
-                    // between levels: the game does not wait on menus, so the
-                    // session is not left unread long enough to time out.
+                    // creatures.
                     if (session.GetRole() == ALTEngine::Net::Session::Role::Host)
                     {
                         std::string nextDigits;
@@ -576,7 +617,7 @@ int main(int, char**)
                             }
                             if (leave) { break; }
                             session.Update(static_cast<double>(SDL_GetTicks()) / 1000.0);
-                            session.TakeEvents();
+                            session.DropStaleEvents();   // keeps what the next level has sent already
                             SDL_Delay(10);
                         }
                         if (leave || !session.Connected() || session.Level().empty())

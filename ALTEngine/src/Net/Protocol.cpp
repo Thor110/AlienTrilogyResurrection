@@ -86,6 +86,10 @@ namespace ALTEngine::Net
                     return true;
                 },
                 [](const CreatureDamage& m) { return Slot(m.slot); },
+                [](const Throw& m) {
+                    return Slot(m.slot) && m.charge <= 1 && Coordinate(m.x) && Coordinate(m.y) && Coordinate(m.z)
+                        && Coordinate(m.vx) && Coordinate(m.vy) && Coordinate(m.vz);
+                },
                 [](const CreatureHit& m) { return Slot(m.target); },
                 [](const CreatureShot& m) {
                     return m.kind <= 1 && Coordinate(m.x) && Coordinate(m.y) && Coordinate(m.z)
@@ -168,6 +172,11 @@ namespace ALTEngine::Net
             [&](const CreatureHit& m) {
                 w.U8(static_cast<uint8_t>(MessageType::CreatureHit));
                 w.U8(m.target); w.I16(m.damage); w.U8(m.cause); w.U8(m.knock); w.I16(m.yaw);
+            },
+            [&](const Throw& m) {
+                w.U8(static_cast<uint8_t>(MessageType::Throw));
+                w.U8(m.slot); w.U8(m.charge);
+                w.F32(m.x); w.F32(m.y); w.F32(m.z); w.F32(m.vx); w.F32(m.vy); w.F32(m.vz);
             },
             [&](const CreatureShot& m) {
                 w.U8(static_cast<uint8_t>(MessageType::CreatureShot));
@@ -259,6 +268,12 @@ namespace ALTEngine::Net
         case MessageType::CreatureHit:
         {
             CreatureHit m; m.target = r.U8(); m.damage = r.I16(); m.cause = r.U8(); m.knock = r.U8(); m.yaw = r.I16();
+            result = m; break;
+        }
+        case MessageType::Throw:
+        {
+            Throw m; m.slot = r.U8(); m.charge = r.U8();
+            m.x = r.F32(); m.y = r.F32(); m.z = r.F32(); m.vx = r.F32(); m.vy = r.F32(); m.vz = r.F32();
             result = m; break;
         }
         case MessageType::CreatureShot:

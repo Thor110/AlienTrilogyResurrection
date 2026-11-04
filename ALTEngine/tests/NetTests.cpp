@@ -514,3 +514,50 @@ TEST_CASE("Net: co-operative creatures - the host's state out, a guest's hits in
     REQUIRE(dm.StartHost("DM", "900", "R", 0));
     CHECK(!dm.CoopHost());
 }
+
+TEST_CASE("Net: a thrown grenade or charge reaches the other players, and nothing stale outlives its level")
+{
+    N::Session host, a, b;
+    REQUIRE(host.StartHost("Coop", "111", "Ripley", 0));
+    host.SetGameMode(N::GameMode::Coop);
+    const auto address = N::Address::Loopback(host.Port());
+    REQUIRE(a.StartJoin(address, "Hicks"));
+    REQUIRE(b.StartJoin(address, "Hudson"));
+    double now = 0.0;
+    Pump({ &host, &a, &b }, now);
+    REQUIRE(a.Connected()); REQUIRE(b.Connected());
+    host.TakeEvents(); a.TakeEvents(); b.TakeEvents();
+
+    N::Throw t; t.charge = 1; t.x = 10; t.y = 20; t.z = 30; t.vx = 1; t.vy = 2; t.vz = -3;
+    a.SendThrow(t);
+    Pump({ &host, &a, &b }, now);
+    auto throwsOf = [](N::Session& s) {
+        std::vector<N::Throw> out;
+        for (const auto& e : s.TakeEvents()) { if (e.kind == N::Event::Kind::Throw) { out.push_back(e.thrown); } }
+        return out;
+    };
+    const auto atB = throwsOf(b);
+    REQUIRE(atB.size() == 1);
+    CHECK(atB[0].charge == 1); CHECK(atB[0].vz == -3.0f); CHECK(atB[0].slot == a.LocalSlot());
+    CHECK(throwsOf(host).size() == 1);
+    CHECK(throwsOf(a).empty());   // not back to the thrower
+
+    // Something from the level about to end, then the next level's start and
+    // its first change, all waiting: only the new level's change is kept.
+    a.ReportAtExit(); b.ReportAtExit(); host.ReportAtExit();
+    Pump({ &host, &a, &b }, now);
+    host.AdvanceLevel("112");
+    Pump({ &host, &a, &b }, now);
+    N::WorldEvent door; door.kind = N::WorldKind::Trigger; door.a = 2;
+    host.SendWorldEvent(door);
+    Pump({ &host, &a, &b }, now);
+    a.DropStaleEvents();
+    bool world = false, stale = false;
+    for (const auto& e : a.TakeEvents())
+    {
+        world |= e.kind == N::Event::Kind::World;
+        stale |= e.kind == N::Event::Kind::LevelEnded || e.kind == N::Event::Kind::LevelStarted || e.levelSerial != a.LevelSerial();
+    }
+    CHECK(world);
+    CHECK(!stale);
+}

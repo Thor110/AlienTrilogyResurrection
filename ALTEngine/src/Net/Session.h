@@ -33,6 +33,7 @@ namespace ALTEngine::Net
             CreatureDamage, // co-operative host: a guest's round hit a creature - `creatureDamage`
             CreatureHit,    // co-operative guest: a creature hurt us - `creatureHit`
             CreatureShot,   // co-operative guest: a creature fired - `creatureShot`
+            Throw,          // another player threw a grenade or charge - `thrown`
         };
         Kind kind = Kind::RosterChanged;
         uint8_t slot = 0;
@@ -46,6 +47,9 @@ namespace ALTEngine::Net
         Net::CreatureDamage creatureDamage{};
         Net::CreatureHit creatureHit{};
         Net::CreatureShot creatureShot{};
+        Net::Throw thrown{};
+        // The level it arrived in (Session::LevelSerial then).
+        uint16_t levelSerial = 0;
     };
 
     // A game in progress: one host (slot 0) and up to seven more (the host's
@@ -140,6 +144,13 @@ namespace ALTEngine::Net
         void SendCreatureHit(uint8_t target, int16_t damage, uint8_t cause, bool knock, int16_t yaw);
         // Host: a creature fired; every guest sees the round.
         void SendCreatureShot(CreatureShot shot);
+        // A grenade or charge we threw, for the others to see.
+        void SendThrow(Throw thrown);
+        // Between levels: what is waiting from a level that is over (and the
+        // level's own end and start) is dropped, so the next level begins
+        // with only its own. Events go on gathering while a screen between
+        // levels keeps the session up with Update.
+        void DropStaleEvents();
         // Co-operative and not the host: the creatures are the host's to run.
         bool CoopGuest() const { return Coop() && role == Role::Client; }
         bool CoopHost() const { return Coop() && role == Role::Host; }
@@ -186,6 +197,7 @@ namespace ALTEngine::Net
         std::vector<WorldEvent> outbox;
         double lastWorldResend = -1.0;
         void ResendWorld(double now);
+        void Push(Event event) { event.levelSerial = levelSerial; events.push_back(std::move(event)); }
         void ClearWorld();
 
         void Send(const Address& to, const Message& message);

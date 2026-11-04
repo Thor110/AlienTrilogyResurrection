@@ -21,6 +21,9 @@ namespace ALTEngine::Screens
         constexpr int SCREEN_W = 320;
         constexpr int SCREEN_H = 240;
         constexpr int TITLE_Y = 0x18;
+        // OURS: the co-operative tag, above the title (the font is 17 rows
+        // at most, so it ends clear of it).
+        constexpr int COOP_TAG_Y = 5;
         constexpr int PROMPT_Y = 0xd2;
         // Modern: Level Timer. Its line goes under the last bar (which ends at
         // 0xc2) and the prompt moves down to the screen's last 16 pixels.
@@ -209,7 +212,8 @@ namespace ALTEngine::Screens
 
     MissionAssessmentResult MissionAssessmentScreen::Run(const std::filesystem::path& cdDirectory,
                                                          const MissionAssessmentStats& stats,
-                                                         Bootstrap::Language language)
+                                                         Bootstrap::Language language,
+                                                         const std::function<void()>& idle)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated()) { return { true }; }
@@ -250,6 +254,7 @@ namespace ALTEngine::Screens
         double frameClock = 0.0;
         while (running)
         {
+            if (idle) { idle(); }
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
@@ -285,6 +290,7 @@ namespace ALTEngine::Screens
             if (background) { SDL_RenderTexture(renderer, background, nullptr, nullptr); }
 
             const SDL_Color white{ 255, 255, 255, 255 };
+            if (stats.coop) { DrawCentred(renderer, font, "CO-OPERATIVE", COOP_TAG_Y, SDL_Color{ 120, 230, 150, 255 }); }
             DrawCentred(renderer, font, title, TITLE_Y, white);
             for (int i = 0; i < 3; ++i)
             {

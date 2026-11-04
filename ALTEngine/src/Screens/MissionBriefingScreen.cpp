@@ -190,7 +190,8 @@ namespace ALTEngine::Screens
     MissionBriefingResult MissionBriefingScreen::Run(
         const std::filesystem::path& cdDirectory,
         Language language,
-        const std::string& levelCode)
+        const std::string& levelCode,
+        const std::function<void()>& idle)
     {
         AppWindow& app = AppWindow::Instance();
         if (!app.EnsureCreated())
@@ -267,6 +268,7 @@ namespace ALTEngine::Screens
 
         while (running)
         {
+            if (idle) { idle(); }
             // Time-budgeted rather than a fixed count per frame - same
             // reasoning as MenuController::Run's OPTOBJ queue, more
             // pressing here given this queue is ~68 models (PICKMOD+

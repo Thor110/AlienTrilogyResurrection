@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <string>
 
 #include "../Bootstrap/Localization.h"
@@ -39,9 +40,12 @@ namespace ALTEngine::Screens
         static void PreloadObjectModels(const std::filesystem::path& cdDirectory,
                                         ALTEngine::Bootstrap::Language& language);
 
+        // `idle` runs once a frame - a co-operative game keeps its session
+        // up with it while the briefing is read.
         static MissionBriefingResult Run(
             const std::filesystem::path& cdDirectory,
             ALTEngine::Bootstrap::Language language,
-            const std::string& levelCode);
+            const std::string& levelCode,
+            const std::function<void()>& idle = {});
     };
 }
