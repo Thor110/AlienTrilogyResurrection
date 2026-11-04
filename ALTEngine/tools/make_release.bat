@@ -15,7 +15,8 @@ rem  Taken from the build:   ALTEngine.exe, the DLLs vcpkg deployed beside it,
 rem                          licenses\
 rem  Taken from the source:  data\ (less ScanLights.flag), and LANGUAGE,
 rem                          OVERRIDE and CUSTOM into GameData\CD as the
-rem                          build lays them out
+rem                          build lays them out, and the soundtrack playlist
+rem                          (extra\AlienTrilogyPlaylist.m3u8) beside the exe
 rem  Left behind:            vcpkg_installed, object files, CMake files, the
 rem                          tests and tools, and anything the build folder
 rem                          has picked up from running it - GameData's disc
@@ -90,6 +91,14 @@ robocopy "%ROOT%\OVERRIDE" "%OUT%\GameData\CD\OVERRIDE" /e /njh /njs /nfl /ndl /
 if errorlevel 8 goto :failed
 robocopy "%ROOT%\CUSTOM" "%OUT%\GameData\CD\OVERRIDE\CUSTOM" /e /njh /njs /nfl /ndl /np >nul
 if errorlevel 8 goto :failed
+
+rem The soundtrack playlist, beside the exe: its entries are relative paths
+rem into GameData\CD\MUSIC, where the install puts the ripped tracks.
+if exist "%ROOT%\extra\AlienTrilogyPlaylist.m3u8" (
+    copy /y "%ROOT%\extra\AlienTrilogyPlaylist.m3u8" "%OUT%\" >nul || goto :failed
+) else (
+    echo WARNING: extra\AlienTrilogyPlaylist.m3u8 not found - the release has no playlist.
+)
 
 rem Size of what was gathered.
 set /a BYTES=0
