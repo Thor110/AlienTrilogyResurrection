@@ -719,6 +719,33 @@ FORM header, or a chunk name other than MAP0), the runtime fields would be rebui
 Cleanup, the blanking scan, the Face Index Display's file offsets) would have to run on the original layout first,
 with the trim truly last. Worth doing only once the patching is finished, since it moves every offset after it.
 
+**ALTViewer must read the trimmed levels too (Edward, zip 137).** ALTViewer's own fixer keeps writing files the
+original game can run, but the viewer itself has to open ALTEngine's trimmed copies (the levels an ALTEngine
+install actually holds), not only the original layout: recognise the marker the trim leaves, read the shorter
+records, and show the runtime fields as the loader rebuilds them. To be worked out with the trim itself.
+
+## Later: patch in the gaps above the doors (and other added detail)
+
+Edward (zip 137). With free look the slit above most door frames shows - the original never let the player look
+up at it. The **-GAP overlay is gone** (zip 137): it loaded `CD/OVERRIDE/<section>/<level>-GAP.obj` and drew it
+beside the level, but the faces had no part in the level's own lighting, texture animation or cell-by-cell
+drawing, needed hand-named materials, and any vertex placed by hand could miss. The full-level OBJ override
+(`CD/OVERRIDE/<section>/<level>.obj`) stays - that is expected, for replacing a level's look outright.
+
+The fills are to be **patched into the level data instead**, as an ALTEngine-only patch layer in the same family
+as the planned byte trim (not ALTViewer's fixer). Not only for the gaps: the same patches can add any detail.
+What Edward's L111 attempt (`L111LEV-GAP.obj`, six door headers, 18 quads) showed:
+- the positions were right with no axis change - 68 of its 72 vertices are existing L111 vertices exactly, so a
+  header fill is a few new faces over vertices the level already has, plus a handful of new ones;
+- its faces wind the same way as the level faces they meet (every shared edge runs the opposite way);
+- four vertices sat at x 5312 where the level's are at 5314 - hand placement is the risk the patch removes, by
+  naming the level's own vertices;
+- what it did not carry, and a patch must: a texture descriptor (UV rectangle) per face, the face's light, and
+  the cell the face is drawn with (so it is culled with its doorway).
+Order: after the Level Cleanup's additions and before the trim (which moves every offset), like the other
+geometry the cleanup adds (`data/LevelCleanupExtra.json` already inserts a face by its corners - the natural
+place to start).
+
 ## The MU/TH/UR folder picker (zip 127)
 
 Edward pointed it at an installed copy (C:\Program Files (x86)\Collection Chamber\Alien Trilogy), and at its HDD

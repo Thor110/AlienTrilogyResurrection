@@ -173,7 +173,7 @@ All three came down to the level faces' draw routines, which the port mostly ign
 
 ## Settled this round (see the code comments for the evidence)
 
-- **-GAP and level override geometry never loaded:** both looked for the level's page textures before they had been uploaded. The pages now upload first.
+- **-GAP and level override geometry never loaded:** both looked for the level's page textures before they had been uploaded. The pages now upload first. (The -GAP overlay has since been removed - zip 137; the level override stays.)
 
 - **Creatures could only be hurt once:** a hit set the creature's hit-reaction cooldown and nothing counted it down. Anything that survived its first hit (a warrior drone has 30 << 4 = 480 health against a pistol round's 32) was then immune. It now counts down each tick.
 - **When a creature's hit lands** (`FUN_00033ff8`): the player must be in a zone it sees and inside its cone (`FUN_00033a1c`). At contact range that's enough; in the near and middle bands it also needs a clear line, and does the close or middle damage. There's no vertical test. The port had needed contact range, a clear line and a vertical limit all at once, so warriors rarely hit.
