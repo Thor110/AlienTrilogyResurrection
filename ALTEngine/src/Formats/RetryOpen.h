@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <filesystem>
 #include <thread>
 
 namespace ALTEngine::Formats
@@ -23,5 +24,18 @@ namespace ALTEngine::Formats
             if (attempt + 1 < maxAttempts) { std::this_thread::sleep_for(delay); }
         }
         return false;
+    }
+
+    // Disc-sourced files (a physical CD or a mounted image) are read-only
+    // media, and a copy can carry that attribute over - a permanent file
+    // attribute, not a transient lock, so no retry ever clears it. Cleared
+    // after every install copy and before every patch write. Not checked: if
+    // it fails, the write that follows reports the error clearly.
+    inline void ClearReadOnly(const std::filesystem::path& path)
+    {
+        std::error_code ec;
+        std::filesystem::permissions(path,
+            std::filesystem::perms::owner_write | std::filesystem::perms::group_write | std::filesystem::perms::others_write,
+            std::filesystem::perm_options::add, ec);
     }
 }

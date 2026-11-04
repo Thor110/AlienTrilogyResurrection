@@ -8,23 +8,6 @@ namespace ALTEngine::Formats
 {
     namespace
     {
-        // Disc-sourced files (physical CD or a mounted image) are
-        // inherently read-only media, and copy_file on Windows can carry
-        // that read-only attribute over to the destination copy - a
-        // permanent file attribute, not a transient lock, so retrying
-        // the write later never helps. Clear it explicitly right after
-        // every copy.
-        void ClearReadOnly(const std::filesystem::path& path)
-        {
-            std::error_code ec;
-            std::filesystem::permissions(path,
-                std::filesystem::perms::owner_write | std::filesystem::perms::group_write | std::filesystem::perms::others_write,
-                std::filesystem::perm_options::add, ec);
-            // Deliberately not checked/reported - if this fails, the
-            // subsequent patch write attempt will surface a clear error
-            // anyway, and BinaryUtility does the same clear defensively
-            // before every write regardless.
-        }
 
         // Same transient-lock risk as BinaryUtility's reopen-for-write -
         // OneDrive/AV/Search indexer can briefly hold a file right after

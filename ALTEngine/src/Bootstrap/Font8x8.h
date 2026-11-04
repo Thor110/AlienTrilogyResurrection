@@ -291,6 +291,35 @@ namespace ALTEngine::Bootstrap
         return static_cast<int>(text.size()) * advance - scale;
     }
 
+    // Greedy word wrap measured with TextWidth, so it is exact for this font:
+    // as many words a line as fit in `maxWidth`. A word longer than a line is
+    // left to overflow rather than broken.
+    inline std::vector<std::string> WrapText(const std::string& text, int scale, int maxWidth)
+    {
+        std::vector<std::string> lines;
+        std::string line;
+        size_t pos = 0;
+        while (pos <= text.size())
+        {
+            const size_t space = text.find(' ', pos);
+            const std::string word = text.substr(pos, space == std::string::npos ? std::string::npos : space - pos);
+            std::string candidate = line.empty() ? word : line + " " + word;
+            if (!line.empty() && TextWidth(candidate, scale) > maxWidth)
+            {
+                lines.push_back(line);
+                line = word;
+            }
+            else
+            {
+                line = std::move(candidate);
+            }
+            if (space == std::string::npos) { break; }
+            pos = space + 1;
+        }
+        if (!line.empty()) { lines.push_back(line); }
+        return lines;
+    }
+
     inline int TextHeight(int scale)
     {
         return 8 * scale;

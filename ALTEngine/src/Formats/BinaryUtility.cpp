@@ -11,24 +11,6 @@
 
 namespace ALTEngine::Formats
 {
-    namespace
-    {
-        // Defensive, regardless of how the file got here (Installer
-        // already does this at copy-time, but patching shouldn't depend
-        // on that other code path having run) - disc-sourced files are
-        // inherently read-only media, and a plain copy can carry that
-        // attribute over to the destination. That's a permanent file
-        // attribute, not a transient lock - RetryOnTransientLock alone
-        // never fixes this case, hence clearing it explicitly first.
-        void ClearReadOnly(const std::filesystem::path& path)
-        {
-            std::error_code ec;
-            std::filesystem::permissions(path,
-                std::filesystem::perms::owner_write | std::filesystem::perms::group_write | std::filesystem::perms::others_write,
-                std::filesystem::perm_options::add, ec);
-        }
-    }
-
     uint8_t BinaryUtility::ReadByteAtOffset(const std::filesystem::path& path, uint64_t offset)
     {
         std::ifstream stream(path, std::ios::binary);

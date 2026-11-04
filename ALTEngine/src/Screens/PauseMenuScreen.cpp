@@ -1,5 +1,6 @@
 #include "PauseMenuScreen.h"
 
+#include "MenuStyle.h"
 #include "../Audio/MusicPlayer.h"
 #include "../Renderer/Minimap.h"
 #include "../Renderer/HudPanel.h"
@@ -57,8 +58,8 @@ namespace ALTEngine::Screens
 
     namespace
     {
-        constexpr Color COLOR_DIM{ 24, 130, 52, 255 };       // ordinary items - matches the established dim-green
-        constexpr Color COLOR_CURSOR{ 51, 255, 102, 255 };   // whichever item the cursor is on (not equipped)
+        using MenuStyle::COLOR_DIM;      // ordinary items
+        using MenuStyle::COLOR_CURSOR;   // whichever item the cursor is on (not equipped)
         constexpr Color COLOR_EQUIPPED{ 235, 235, 235, 255 }; // the equipped weapon's label - bright/white, always, regardless of cursor
         constexpr Color COLOR_HIGHLIGHT_BG{ 0, 40, 15, 255 };         // very dark green - every row's default box now (Edward, 2026), not just the cursor's
         constexpr Color COLOR_HIGHLIGHT_BG_LIGHT{ 20, 130, 60, 255 }; // light green - pulse target for the cursor's row
@@ -956,26 +957,7 @@ namespace ALTEngine::Screens
                     int maxWidth = windowW - scale * 32;
                     if (maxWidth < scale * 64) { maxWidth = windowW; }
 
-                    std::vector<std::string> lines;
-                    {
-                        std::string line;
-                        size_t pos = 0;
-                        while (pos <= description.size())
-                        {
-                            size_t space = description.find(' ', pos);
-                            std::string word = description.substr(pos, space == std::string::npos ? std::string::npos : space - pos);
-                            std::string candidate = line.empty() ? word : line + " " + word;
-                            if (!line.empty() && TextWidth(candidate, scale) > maxWidth)
-                            {
-                                lines.push_back(line);
-                                line = word;
-                            }
-                            else { line = candidate; }
-                            if (space == std::string::npos) { break; }
-                            pos = space + 1;
-                        }
-                        if (!line.empty()) { lines.push_back(line); }
-                    }
+                    const std::vector<std::string> lines = ALTEngine::Bootstrap::WrapText(description, scale, maxWidth);
 
                     int bottom = windowH - rowHeight * 4;
                     int top = bottom - rowHeight * static_cast<int>(lines.size());

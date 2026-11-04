@@ -58,17 +58,6 @@ namespace ALTEngine::Screens
             return "COLONY";
         }
 
-        std::optional<std::filesystem::path> ResolveGfxFile(const std::filesystem::path& gfxDir, const std::string& baseName)
-        {
-            for (const char* ext : { ".BND", ".B16", ".16" })
-            {
-                std::filesystem::path candidate = gfxDir / (baseName + ext);
-                std::error_code ec;
-                if (std::filesystem::exists(candidate, ec)) { return candidate; }
-            }
-            return std::nullopt;
-        }
-
         // Tries each MissionTextFilenameCandidates() candidate in order -
         // US discs ship MISSIONU.TXT, other English releases ship
         // MISSIONE.TXT (see Localization.h).
@@ -81,39 +70,6 @@ namespace ALTEngine::Screens
                 if (std::filesystem::exists(path, ec)) { return path; }
             }
             return std::nullopt;
-        }
-
-        SDL_Texture* LoadBackgroundTexture(const std::filesystem::path& cdDirectory, SDL_Renderer* renderer,
-                                            const std::string& baseName, int& outW, int& outH)
-        {
-            auto bndPath = ResolveGfxFile(cdDirectory / "GFX", baseName);
-            std::filesystem::path palPath = cdDirectory / "PALS" / (baseName + ".PAL");
-            std::error_code ec;
-            if (!bndPath.has_value() || !std::filesystem::exists(palPath, ec))
-            {
-                SDL_Log("MissionBriefingScreen: could not find %s background", baseName.c_str());
-                return nullptr;
-            }
-
-            try
-            {
-                // COLONY/PRISHOLD/BONESHIP are "trimmed" palettes (disk
-                // file missing the first 96 bytes) - established earlier
-                // alongside BONESHIP/COLONY/PRISHOLD in PaletteFile.h.
-                SplashImage image = SplashImageLoader::Load(*bndPath, palPath, /*paletteTrimmed*/ true, 0);
-                SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, image.width, image.height);
-                if (!texture) { return nullptr; }
-                SDL_UpdateTexture(texture, nullptr, image.rgba.data(), image.width * 4);
-                SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
-                outW = image.width;
-                outH = image.height;
-                return texture;
-            }
-            catch (const std::exception& e)
-            {
-                SDL_Log("MissionBriefingScreen: failed to load %s: %s", baseName.c_str(), e.what());
-                return nullptr;
-            }
         }
 
         int TotalCharCount(const MissionBriefing& briefing)
@@ -201,7 +157,7 @@ namespace ALTEngine::Screens
         SDL_Renderer* renderer = app.Renderer();
 
         int bgW = 0, bgH = 0;
-        SDL_Texture* background = LoadBackgroundTexture(cdDirectory, renderer, ChapterBackgroundName(levelCode), bgW, bgH);
+        SDL_Texture* background = LoadSplashBackground(cdDirectory, renderer, ChapterBackgroundName(levelCode), 0, /*paletteTrimmed*/ true, bgW, bgH);
 
         std::vector<MissionBriefing> allBriefings;
         const MissionBriefing* briefing = nullptr;

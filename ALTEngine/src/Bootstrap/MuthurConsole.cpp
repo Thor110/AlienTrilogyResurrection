@@ -77,14 +77,20 @@ namespace ALTEngine::Bootstrap
             // A row: its text, and whether it is bright - a headline line, or
             // the one being typed; a detail line (indented, per file) is dim,
             // all its wrapped rows alike.
-            std::vector<std::pair<std::string, bool>> rows;
-            for (size_t i = 0; i < lines.size(); ++i)
+            // Only as many as the panel shows: wrapped from the newest line
+            // back until it is full (the readout keeps 400 lines, and a
+            // headline redraws once a character while it types).
+            const int fit = std::max(1, (int(panel.h) - scale * 8) / lineH);
+            std::deque<std::pair<std::string, bool>> rows;
+            std::vector<std::pair<std::string, bool>> wrapped;
+            for (size_t i = lines.size(); i-- > 0 && rows.size() < size_t(fit);)
             {
                 std::string text = lines[i];
                 const bool last = i + 1 == lines.size();
                 const bool bright = last || text.rfind("  ", 0) != 0;
                 if (last) { text = text.substr(0, std::min(typed, text.size())) + (cursor ? "_" : ""); }
-                if (text.empty()) { rows.push_back({ "", bright }); continue; }
+                wrapped.clear();
+                if (text.empty()) { wrapped.push_back({ "", bright }); }
                 // After the last comma that fits, so a count stays with its
                 // word ("0 FAILED"); else at a space; else mid-word. A
                 // continuation row does not start with the space after it.
@@ -99,12 +105,12 @@ namespace ALTEngine::Bootstrap
                         if (comma != std::string::npos && comma > p + size_t(room) / 4) { n = comma - p + 1; }
                         else if (space != std::string::npos && space > p + size_t(room) / 2) { n = space - p + 1; }
                     }
-                    rows.push_back({ text.substr(p, n), bright });
+                    wrapped.push_back({ text.substr(p, n), bright });
                     p += n;
-                    while (p < text.size() && text[p] == ' ' && rows.size() > 0 && p > 0 && text[p - 1] == ',') { ++p; }
+                    while (p < text.size() && text[p] == ' ' && text[p - 1] == ',') { ++p; }
                 }
+                rows.insert(rows.begin(), wrapped.begin(), wrapped.end());
             }
-            const int fit = std::max(1, (int(panel.h) - scale * 8) / lineH);
             const size_t first = rows.size() > size_t(fit) ? rows.size() - size_t(fit) : 0;
             int y = int(panel.y) + scale * 4;
             for (size_t r = first; r < rows.size(); ++r)

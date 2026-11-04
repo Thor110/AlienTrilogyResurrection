@@ -1,5 +1,6 @@
 #include "SaveSlotScreen.h"
 
+#include "MenuStyle.h"
 #include <utility>
 #include "MenuBackground.h"
 #include "../Audio/SfxPlayer.h"
@@ -25,8 +26,8 @@ namespace ALTEngine::Screens
 
     namespace
     {
-        constexpr Color COLOR_BRIGHT{ 51, 255, 102, 255 };
-        constexpr Color COLOR_DIM{ 24, 130, 52, 255 };
+        constexpr Color COLOR_BRIGHT = MenuStyle::COLOR_CURSOR;
+        using MenuStyle::COLOR_DIM;
     }
 
     namespace

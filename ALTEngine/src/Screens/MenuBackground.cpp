@@ -23,25 +23,22 @@ namespace ALTEngine::Screens
         }
     }
 
-    SDL_Texture* LoadMenuBackground(const std::filesystem::path& cdDirectory, SDL_Renderer* renderer, int imageIndex, int& outW, int& outH)
+    SDL_Texture* LoadSplashBackground(const std::filesystem::path& cdDirectory, SDL_Renderer* renderer,
+                                      const std::string& baseName, int imageIndex, bool paletteTrimmed,
+                                      int& outW, int& outH)
     {
-        auto bndPath = ResolveGfxFile(cdDirectory / "GFX", "LOGOSGFX");
-        std::filesystem::path palPath = cdDirectory / "PALS" / "LOGOSGFX.PAL";
-        if (!bndPath.has_value())
-        {
-            SDL_Log("MenuBackground: could not find LOGOSGFX graphics file");
-            return nullptr;
-        }
+        auto bndPath = ResolveGfxFile(cdDirectory / "GFX", baseName);
+        std::filesystem::path palPath = cdDirectory / "PALS" / (baseName + ".PAL");
         std::error_code ec;
-        if (!std::filesystem::exists(palPath, ec))
+        if (!bndPath.has_value() || !std::filesystem::exists(palPath, ec))
         {
-            SDL_Log("MenuBackground: could not find %s", palPath.string().c_str());
+            SDL_Log("Background: could not find %s (its graphics or PALS/%s.PAL)", baseName.c_str(), baseName.c_str());
             return nullptr;
         }
 
         try
         {
-            SplashImage image = SplashImageLoader::Load(*bndPath, palPath, /*paletteTrimmed*/ false, imageIndex);
+            SplashImage image = SplashImageLoader::Load(*bndPath, palPath, paletteTrimmed, imageIndex);
             SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, image.width, image.height);
             if (!texture) { return nullptr; }
             SDL_UpdateTexture(texture, nullptr, image.rgba.data(), image.width * 4);
@@ -52,9 +49,14 @@ namespace ALTEngine::Screens
         }
         catch (const std::exception& e)
         {
-            SDL_Log("MenuBackground: failed to load LOGOSGFX image %d: %s", imageIndex, e.what());
+            SDL_Log("Background: failed to load %s image %d: %s", baseName.c_str(), imageIndex, e.what());
             return nullptr;
         }
+    }
+
+    SDL_Texture* LoadMenuBackground(const std::filesystem::path& cdDirectory, SDL_Renderer* renderer, int imageIndex, int& outW, int& outH)
+    {
+        return LoadSplashBackground(cdDirectory, renderer, "LOGOSGFX", imageIndex, /*paletteTrimmed*/ false, outW, outH);
     }
 
     void DrawMenuBackground(SDL_Renderer* renderer, SDL_Texture* texture, int texW, int texH)

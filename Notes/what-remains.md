@@ -478,6 +478,25 @@ Done in zip 81:
 6. **Files looked for in the wrong place:** none left - only the level's MAP and GFX are looked for in the SECT
    folders, which is where they are.
 
+Done in zip 139 (a review of zips 121-138, and a scan for repeated code - every run of 8 or more lines
+appearing twice):
+1. **One copy each now:** the Modern/Testing settings read (level start and after the pause menu -
+   `readGameplaySettings`); the light tick's two GPU vertex uploads (`UploadVertexSpans`); a mesh's
+   buffer-and-texture binding (`BindMesh`, five draws); the texture animator's program walk (`RunToFrame`,
+   shared by Prime and the tick); the option descriptions' word wrap (`Bootstrap::WrapText`, boot and pause
+   menus); the full-screen background loader (the boot menu and the briefing each had their own copy -
+   now `LoadSplashBackground`, with `LoadMenuBackground` a one-line call); a model's centre and radius
+   (`BoundsOf`, single and batch loads);
+   `ClearReadOnly` (`RetryOpen.h`, for the installer and the patcher); the menu colours and the pulsing
+   selection colour (`Screens/MenuStyle.h`, five screens); the round's particle looked up once.
+2. **A crash path closed:** the level override lookup had its own case-insensitive file search, which could
+   throw on a folder name the system code page cannot hold (the Windows crash fixed in the installer in zip
+   128); it uses `FsUtil.h`'s now.
+3. **The MU/TH/UR readout** wraps only the rows it shows, newest first, instead of all 400 kept lines each
+   frame - which a typing headline redraws once a character.
+Looked at and left: the three-item menus' Up/Down/Enter switches (a few lines each, the items differ); the
+language tables' identical first lines (data).
+
 Still open:
 - **Splitting `Run`** further (above).
 - Optional: rename the settings classes' `config` parameter so `-Wshadow` can be turned on.

@@ -1,5 +1,6 @@
 #include "EndLevelPromptScreen.h"
 #include "MenuBackground.h"
+#include "MenuStyle.h"
 #include "SaveSlotScreen.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Bootstrap/AppWindow.h"
@@ -25,17 +26,8 @@ namespace ALTEngine::Screens
 
     namespace
     {
-        constexpr Color COLOR_CURSOR{ 51, 255, 102, 255 };
-        constexpr Color COLOR_DIM{ 24, 130, 52, 255 };
-        constexpr Color COLOR_WHITE{ 255, 255, 255, 255 }; // matches the main menu's own selected-item white exactly
+        using namespace MenuStyle;
         constexpr std::array<const char*, 3> ITEMS{ "Continue game", "Save Game", "Quit Game" };
-
-        // Pulses between green and white rather than a static light
-        // green (Edward, 2026).
-        Color SelectedTextColor()
-        {
-            return LerpColor(COLOR_CURSOR, COLOR_WHITE, PulsePhase());
-        }
     }
 
     EndLevelPromptResult EndLevelPromptScreen::Run(const std::filesystem::path& cdDirectory)

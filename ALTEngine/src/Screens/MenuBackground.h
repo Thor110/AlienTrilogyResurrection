@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 
 #include <SDL3/SDL.h>
 
@@ -18,6 +19,14 @@ namespace ALTEngine::Screens
     // decode - callers should keep working without a background rather
     // than treat this as fatal.
     SDL_Texture* LoadMenuBackground(const std::filesystem::path& cdDirectory, SDL_Renderer* renderer, int imageIndex, int& outW, int& outH);
+
+    // Any full-screen image of the same kind: GFX/<baseName>.BND (or .B16,
+    // .16) with PALS/<baseName>.PAL. `paletteTrimmed` for the palettes whose
+    // file lacks its first 96 bytes (the briefing backgrounds: COLONY,
+    // PRISHOLD, BONESHIP - see PaletteFile.h). Null, logged, on any failure.
+    SDL_Texture* LoadSplashBackground(const std::filesystem::path& cdDirectory, SDL_Renderer* renderer,
+                                      const std::string& baseName, int imageIndex, bool paletteTrimmed,
+                                      int& outW, int& outH);
 
     // Clears to black, then draws `texture` centered and scaled to fit
     // the current render output size (letterboxed, aspect preserved).

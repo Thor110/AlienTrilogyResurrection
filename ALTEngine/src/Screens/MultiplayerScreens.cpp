@@ -1,5 +1,6 @@
 #include "MultiplayerScreens.h"
 #include "MenuBackground.h"
+#include "MenuStyle.h"
 #include "TextFieldEditor.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Bootstrap/AppWindow.h"
@@ -32,22 +33,11 @@ namespace ALTEngine::Screens
 
     namespace
     {
-        constexpr Color COLOR_CURSOR{ 51, 255, 102, 255 };
-        constexpr Color COLOR_DIM{ 24, 130, 52, 255 };
+        using namespace MenuStyle;
         constexpr Color COLOR_EDITING{ 235, 235, 235, 255 };
-        constexpr Color COLOR_WHITE{ 255, 255, 255, 255 }; // matches the main menu's own selected-item white exactly
         // A row that does not apply (the bots, in a co-operative game).
         constexpr Color COLOR_DISABLED{ 70, 78, 72, 255 };
 
-        // The selected-but-not-editing text color for these menus -
-        // pulses between green and white rather than a static light
-        // green (Edward, 2026: "currently the multiplayer menus have a
-        // light green, it should be white like the main menu and the
-        // pulsing should go between the green and the white").
-        Color SelectedTextColor()
-        {
-            return LerpColor(COLOR_CURSOR, COLOR_WHITE, PulsePhase());
-        }
 
         // NetworkedComputers (OPTOBJ index 10) - Edward noted this model
         // (and others like it) rests at a different natural angle than

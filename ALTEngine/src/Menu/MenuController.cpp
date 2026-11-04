@@ -110,55 +110,6 @@ namespace ALTEngine::Menu
             return labels;
         }
 
-        std::optional<std::filesystem::path> ResolveGfxFile(const std::filesystem::path& gfxDir, const std::string& baseName)
-        {
-            for (const char* ext : { ".BND", ".B16", ".16" })
-            {
-                std::filesystem::path candidate = gfxDir / (baseName + ext);
-                std::error_code ec;
-                if (std::filesystem::exists(candidate, ec)) { return candidate; }
-            }
-            return std::nullopt;
-        }
-
-        // Loads one of LOGOSGFX's 2 images (imageIndex 0 = main menu, 1 =
-        // options/multiplayer/settings/credits) as an SDL texture.
-        // Returns nullptr on any failure - callers render a plain black
-        // background instead rather than crashing over a missing asset.
-        SDL_Texture* LoadBackgroundTexture(const std::filesystem::path& cdDirectory, SDL_Renderer* renderer, int imageIndex, int& outW, int& outH)
-        {
-            auto bndPath = ResolveGfxFile(cdDirectory / "GFX", "LOGOSGFX");
-            std::filesystem::path palPath = cdDirectory / "PALS" / "LOGOSGFX.PAL";
-            if (!bndPath.has_value())
-            {
-                SDL_Log("Menu: could not find LOGOSGFX graphics file");
-                return nullptr;
-            }
-            std::error_code ec;
-            if (!std::filesystem::exists(palPath, ec))
-            {
-                SDL_Log("Menu: could not find %s", palPath.string().c_str());
-                return nullptr;
-            }
-
-            try
-            {
-                SplashImage image = SplashImageLoader::Load(*bndPath, palPath, /*paletteTrimmed*/ false, imageIndex);
-                SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, image.width, image.height);
-                if (!texture) { return nullptr; }
-                SDL_UpdateTexture(texture, nullptr, image.rgba.data(), image.width * 4);
-                SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
-                outW = image.width;
-                outH = image.height;
-                return texture;
-            }
-            catch (const std::exception& e)
-            {
-                SDL_Log("Menu: failed to load LOGOSGFX image %d: %s", imageIndex, e.what());
-                return nullptr;
-            }
-        }
-
         // Placeholder for the eventual real 3D model render - a labeled
         // box showing the model index. See MenuNode.h. Used as a
         // fallback by DrawModel below if GPU rendering isn't available.
@@ -692,13 +643,13 @@ namespace ALTEngine::Menu
         std::vector<std::string> resolutionLabels = QueryResolutionLabels(app.Window());
 
         int mainBgW = 0, mainBgH = 0, optionsBgW = 0, optionsBgH = 0;
-        SDL_Texture* mainBg = startInOptionsOnly ? nullptr : LoadBackgroundTexture(cdDirectory, renderer, 0, mainBgW, mainBgH);
+        SDL_Texture* mainBg = startInOptionsOnly ? nullptr : ALTEngine::Screens::LoadMenuBackground(cdDirectory, renderer, 0, mainBgW, mainBgH);
         // nullptr when opened from the pause menu (Edward, 2026: "the
         // background menu is still showing when accessing the options
         // menu from the pause menu") - DrawMenuBackground is nullptr-
         // safe (clears to black), same pattern SaveSlotScreen's own
         // showBackground=false already uses.
-        SDL_Texture* optionsBg = startInOptionsOnly ? nullptr : LoadBackgroundTexture(cdDirectory, renderer, 1, optionsBgW, optionsBgH);
+        SDL_Texture* optionsBg = startInOptionsOnly ? nullptr : ALTEngine::Screens::LoadMenuBackground(cdDirectory, renderer, 1, optionsBgW, optionsBgH);
 
         // Current values of every persisted setting the Options tree
         // needs, so each settings list starts on whichever child
@@ -1441,29 +1392,7 @@ namespace ALTEngine::Menu
                         int maxWidth = windowW - scale * 32;
                         if (maxWidth < scale * 64) { maxWidth = windowW; }
 
-                        std::vector<std::string> lines;
-                        {
-                            std::string line;
-                            size_t pos = 0;
-                            while (pos <= description.size())
-                            {
-                                size_t space = description.find(' ', pos);
-                                std::string word = description.substr(pos, space == std::string::npos ? std::string::npos : space - pos);
-                                std::string candidate = line.empty() ? word : line + " " + word;
-                                if (!line.empty() && TextWidth(candidate, scale) > maxWidth)
-                                {
-                                    lines.push_back(line);
-                                    line = word;
-                                }
-                                else
-                                {
-                                    line = candidate;
-                                }
-                                if (space == std::string::npos) { break; }
-                                pos = space + 1;
-                            }
-                            if (!line.empty()) { lines.push_back(line); }
-                        }
+                        const std::vector<std::string> lines = ALTEngine::Bootstrap::WrapText(description, scale, maxWidth);
 
                         // Sits above the Esc/Enter prompts with a clear gap,
                         // and grows upward so extra lines never push into them.

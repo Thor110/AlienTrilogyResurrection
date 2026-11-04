@@ -183,26 +183,7 @@ namespace ALTEngine::Formats
             const std::vector<uint16_t>* program = ProgramFor(a);
             if (!program) { return; }
 
-            for (size_t guard = 0; guard < program->size() * 2 + 4; ++guard)
-            {
-                if (a.ip < 0 || a.ip >= static_cast<int>(program->size())) { a.ip = 0; }
-                uint16_t entry = (*program)[static_cast<size_t>(a.ip)];
-
-                if ((entry & 0x8000) == 0)
-                {
-                    a.currentTex = entry;
-                    a.hasOutput = true;
-                    a.ip++;
-                    a.ticksRemaining = a.speed;
-                    return;
-                }
-
-                int opcode = entry & 0x7fff;
-                if (opcode == 11) { a.stopped = true; return; }
-                if (opcode == 1) { a.ip = 0; continue; }
-                a.speed = SpeedForOpcode(opcode, 0);
-                a.ip++;
-            }
+            RunToFrame(a, *program, 0);
         }
 
         void TickOne(Animator& a, int randomBits)
@@ -219,12 +200,18 @@ namespace ALTEngine::Formats
 
             if (a.ticksRemaining > 0) { a.ticksRemaining--; return; }
 
-            // Walk opcodes until the next output frame. The guard stops a
-            // malformed program (an OP1 loop with no frame in it) spinning.
-            for (size_t guard = 0; guard < program->size() * 2 + 4; ++guard)
+            RunToFrame(a, *program, randomBits);
+        }
+
+        // Walks opcodes to the next output frame and shows it. The guard
+        // stops a malformed program (an OP1 loop with no frame in it)
+        // spinning. Prime passes 0 for the random bits.
+        static void RunToFrame(Animator& a, const std::vector<uint16_t>& program, int randomBits)
+        {
+            for (size_t guard = 0; guard < program.size() * 2 + 4; ++guard)
             {
-                if (a.ip < 0 || a.ip >= static_cast<int>(program->size())) { a.ip = 0; }
-                uint16_t entry = (*program)[static_cast<size_t>(a.ip)];
+                if (a.ip < 0 || a.ip >= static_cast<int>(program.size())) { a.ip = 0; }
+                const uint16_t entry = program[static_cast<size_t>(a.ip)];
 
                 if ((entry & 0x8000) == 0)
                 {
@@ -235,7 +222,7 @@ namespace ALTEngine::Formats
                     return;
                 }
 
-                int opcode = entry & 0x7fff;
+                const int opcode = entry & 0x7fff;
                 if (opcode == 11) { a.stopped = true; return; }
                 if (opcode == 1) { a.ip = 0; continue; }
                 a.speed = SpeedForOpcode(opcode, randomBits);

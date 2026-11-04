@@ -1,6 +1,7 @@
 #include "GameplayScreen.h"
 #include "PauseMenuScreen.h"
 #include "MenuBackground.h"
+#include "MenuStyle.h"
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
 #include "../Bootstrap/TestingSettings.h"
@@ -553,8 +554,12 @@ namespace ALTEngine::Screens
 
         ALTEngine::Screens::PlayerHudState hudState;
         bool hudLoadAttempted = false;
-        {
-            ALTEngine::Bootstrap::Config modernConfig;
+        // The Modern and Testing options play reads: at the level's start,
+        // and again on coming back from the pause menu, whose Options screen
+        // can change them (reading them once at load meant a mid-game toggle
+        // silently did nothing). The draw-distance fade is the inverse of the
+        // "unlimited render distance" feature.
+        auto readGameplaySettings = [&](ALTEngine::Bootstrap::Config& modernConfig) {
             ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
             freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
             playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
@@ -572,6 +577,12 @@ namespace ALTEngine::Screens
             ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
             weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings(modernConfig).Get()
                 / ALTEngine::Screens::PlayerCamera::ORIGINAL_TIMER_HZ;
+            ModelRenderer::SetDrawDistanceFade(!modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance));
+        };
+        {
+            ALTEngine::Bootstrap::Config modernConfig;
+            readGameplaySettings(modernConfig);
+            ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
 
             // The cheat's own stored state, so it stays on across levels while
             // Enable Cheats is active.
@@ -582,10 +593,7 @@ namespace ALTEngine::Screens
                 auto storedHealth = modernConfig.Get("CheatMaximumHealth");
                 cheatMaximumHealth = storedHealth.has_value() && *storedHealth == "On";
             }
-            // The feature is "unlimited render distance", so the original's
-            // fade is the INVERSE of it.
-            bool unlimited = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance);
-            ModelRenderer::SetDrawDistanceFade(!unlimited);
+            const bool unlimited = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance);
             // Diagnostic: prints exactly what was read from disk, so a
             // "setting doesn't stick" report can be pinned to either the store
             // or the menu display rather than guessed at.
@@ -1963,32 +1971,10 @@ namespace ALTEngine::Screens
                                                                       ToGridSpaceZ(camera.z, originZ) / 512.0f,
                                                                       camera.yaw,
                                                                       &pauseMapReveal);
-                    // Re-read on return: the pause menu can reach the same
-                    // Options screen the boot menu does, so this can have
-                    // changed while paused. Reading it once at level load
-                    // meant a mid-game toggle silently did nothing.
+                    // Re-read on return (see readGameplaySettings).
                     {
                         ALTEngine::Bootstrap::Config modernConfig;
-                        ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
-                                    freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
-                        playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
-                        fasterXenomorphs = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterXenomorphs);
-                        speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
-                        saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
-                        liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
-                        {
-                            ALTEngine::Bootstrap::TestingSettings testing(modernConfig);
-                            testingNoEnemies = testing.IsOn(ALTEngine::Bootstrap::TestingOption::DisableEnemySpawn);
-                            testingFaceIndex = testing.IsOn(ALTEngine::Bootstrap::TestingOption::FaceIndexDisplay);
-                            testingGhost = testing.IsOn(ALTEngine::Bootstrap::TestingOption::GhostMode);
-                            testingNoResupply = testing.IsOn(ALTEngine::Bootstrap::TestingOption::DisableResupplyTimer);
-                        }
-                        ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
-                        weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings(modernConfig).Get()
-                            / ALTEngine::Screens::PlayerCamera::ORIGINAL_TIMER_HZ;
-
-                        ModelRenderer::SetDrawDistanceFade(
-                            !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance));
+                        readGameplaySettings(modernConfig);
                     }
 
                     // "Fully Loaded" is a toggle, not a one-shot: while it is on
@@ -4528,9 +4514,8 @@ namespace ALTEngine::Screens
                             // 2b. Multiplayer: another player, a column from
                             // their feet up. The hit is theirs to take (they
                             // are sent it and apply it, as the original's type 8).
-                            const P::Particle* moving = particles.Ticking();
-                            const int owner = moving ? moving->owner : -1;
-                            if (session && session->Connected() && !session->Coop() && !(moving && moving->remote))
+                            const int owner = hitter ? hitter->owner : -1;
+                            if (session && session->Connected() && !session->Coop() && !remoteRound)
                             {
                                 const auto damage = static_cast<int16_t>(D::HitDamage(def.speed, hitLife, def.strength));
                                 // A bot's round can hit the host's own player.
@@ -5934,8 +5919,8 @@ namespace ALTEngine::Screens
                 const int margin = scale * 8;
                 int windowW = 0, windowH = 0;
                 SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-                const Color bright{ 51, 255, 102, 255 };
-                const Color dim{ 24, 130, 52, 255 };
+                const Color bright = MenuStyle::COLOR_CURSOR;
+                const Color dim = MenuStyle::COLOR_DIM;
                 DrawBitmapText(renderer, "Incoming data transfer", margin, margin, scale, bright);
                 DrawBitmapText(renderer, "CO-OPERATIVE", margin, margin + lineHeight * 2, scale, bright);
                 DrawBitmapText(renderer, hostInLevel ? "Synchronising with the other players" : "Waiting for the host",

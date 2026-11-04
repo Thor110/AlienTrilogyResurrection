@@ -1,4 +1,5 @@
 #include "ModelRenderer.h"
+#include "../Bootstrap/FsUtil.h"
 #include "Mat4.h"
 #include "../Bootstrap/PlatformPaths.h"
 #include "../Formats/BndParser.h"
@@ -194,6 +195,36 @@ namespace ALTEngine::Renderer
         SDL_GPUSampler* samplerLinear = nullptr;   // Smoothed
         SDL_GPUSampler* samplerNearest = nullptr;  // Original - hard texel edges
 
+        // A mesh's bounding box as a sphere (centre and radius, at least 1), for
+        // framing it without knowing the model's scale ahead of time.
+        struct MeshBounds { float cx, cy, cz, radius; };
+        MeshBounds BoundsOf(const RenderMesh& mesh)
+        {
+            float minX = std::numeric_limits<float>::max(), maxX = std::numeric_limits<float>::lowest();
+            float minY = minX, maxY = maxX, minZ = minX, maxZ = maxX;
+            for (const auto& v : mesh.vertices)
+            {
+                minX = std::min(minX, v.x); maxX = std::max(maxX, v.x);
+                minY = std::min(minY, v.y); maxY = std::max(maxY, v.y);
+                minZ = std::min(minZ, v.z); maxZ = std::max(maxZ, v.z);
+            }
+            const float dx = maxX - minX, dy = maxY - minY, dz = maxZ - minZ;
+            const float radius = std::sqrt(dx * dx + dy * dy + dz * dz) / 2.0f;
+            return { (minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2, radius < 1.0f ? 1.0f : radius };
+        }
+
+        // A mesh's vertices, indices and texture, bound for the draws after it.
+        void BindMesh(SDL_GPURenderPass* renderPass, SDL_GPUBuffer* vertexBuffer, SDL_GPUBuffer* indexBuffer,
+                      SDL_GPUTexture* texture)
+        {
+            SDL_GPUBufferBinding vbBinding{ vertexBuffer, 0 };
+            SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
+            SDL_GPUBufferBinding ibBinding{ indexBuffer, 0 };
+            SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+            SDL_GPUTextureSamplerBinding texBinding{ texture, sampler };
+            SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
+        }
+
         // Draw-distance fade enable, pushed to the fragment shader each pass.
         // Default ON, i.e. the original's darkness, matching the Render
         // Distance modern feature defaulting off.
@@ -308,11 +339,15 @@ namespace ALTEngine::Renderer
         // Parts of groups' vertex buffers: `count` vertices from `first`, taken
         // from the group's cpuVertices. One transfer, one copy pass.
         struct VertexRange { const LevelSubGroup* group; uint32_t first; uint32_t count; };
-        void ReuploadVertexRanges(const std::vector<VertexRange>& ranges)
+
+        // `count` vertices from `data` into `buffer` from vertex `first`.
+        struct VertexSpan { SDL_GPUBuffer* buffer; const ALTEngine::Formats::RenderVertex* data; uint32_t first; uint32_t count; };
+        // All of them through the one kept transfer buffer, in one copy pass.
+        void UploadVertexSpans(const std::vector<VertexSpan>& spans)
         {
             constexpr size_t STRIDE = sizeof(ALTEngine::Formats::RenderVertex);
             size_t total = 0;
-            for (const auto& r : ranges) { total += size_t(r.count) * STRIDE; }
+            for (const auto& span : spans) { total += size_t(span.count) * STRIDE; }
             if (total == 0) { return; }
             if (vertexUploadBuffer && vertexUploadSize < total)
             {
@@ -332,10 +367,10 @@ namespace ALTEngine::Renderer
             auto* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, vertexUploadBuffer, cycle));
             if (!mapped) { return; }
             size_t offset = 0;
-            for (const auto& r : ranges)
+            for (const auto& span : spans)
             {
-                std::memcpy(mapped + offset, r.group->cpuVertices.data() + r.first, size_t(r.count) * STRIDE);
-                offset += size_t(r.count) * STRIDE;
+                std::memcpy(mapped + offset, span.data, size_t(span.count) * STRIDE);
+                offset += size_t(span.count) * STRIDE;
             }
             SDL_UnmapGPUTransferBuffer(device, vertexUploadBuffer);
 
@@ -343,11 +378,11 @@ namespace ALTEngine::Renderer
             if (!cmd) { return; }
             SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
             offset = 0;
-            for (const auto& r : ranges)
+            for (const auto& span : spans)
             {
-                const size_t size = size_t(r.count) * STRIDE;
+                const size_t size = size_t(span.count) * STRIDE;
                 SDL_GPUTransferBufferLocation src{ vertexUploadBuffer, static_cast<Uint32>(offset) };
-                SDL_GPUBufferRegion dst{ r.group->vertexBuffer, static_cast<Uint32>(size_t(r.first) * STRIDE), static_cast<Uint32>(size) };
+                SDL_GPUBufferRegion dst{ span.buffer, static_cast<Uint32>(size_t(span.first) * STRIDE), static_cast<Uint32>(size) };
                 SDL_UploadToGPUBuffer(copyPass, &src, &dst, false);
                 offset += size;
             }
@@ -355,51 +390,26 @@ namespace ALTEngine::Renderer
             SDL_SubmitGPUCommandBuffer(cmd);
         }
 
+        void ReuploadVertexRanges(const std::vector<VertexRange>& ranges)
+        {
+            std::vector<VertexSpan> spans;
+            spans.reserve(ranges.size());
+            for (const auto& r : ranges)
+            {
+                spans.push_back({ r.group->vertexBuffer, r.group->cpuVertices.data() + r.first, r.first, r.count });
+            }
+            UploadVertexSpans(spans);
+        }
+
         void ReuploadVerticesBatch(const std::vector<VertexUpload>& uploads)
         {
-            size_t total = 0;
-            for (const auto& [group, vertices] : uploads) { total += vertices->size() * sizeof(ALTEngine::Formats::RenderVertex); }
-            if (total == 0) { return; }
-            if (vertexUploadBuffer && vertexUploadSize < total)
-            {
-                SDL_ReleaseGPUTransferBuffer(device, vertexUploadBuffer);
-                vertexUploadBuffer = nullptr;
-            }
-            const bool cycle = vertexUploadBuffer != nullptr;
-            if (!vertexUploadBuffer)
-            {
-                SDL_GPUTransferBufferCreateInfo transferInfo{};
-                transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-                transferInfo.size = static_cast<Uint32>(total);
-                vertexUploadBuffer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
-                if (!vertexUploadBuffer) { vertexUploadSize = 0; return; }
-                vertexUploadSize = total;
-            }
-            auto* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, vertexUploadBuffer, cycle));
-            if (!mapped) { return; }
-            size_t offset = 0;
+            std::vector<VertexSpan> spans;
+            spans.reserve(uploads.size());
             for (const auto& [group, vertices] : uploads)
             {
-                const size_t size = vertices->size() * sizeof(ALTEngine::Formats::RenderVertex);
-                std::memcpy(mapped + offset, vertices->data(), size);
-                offset += size;
+                spans.push_back({ group->vertexBuffer, vertices->data(), 0, static_cast<uint32_t>(vertices->size()) });
             }
-            SDL_UnmapGPUTransferBuffer(device, vertexUploadBuffer);
-
-            SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
-            if (!cmd) { return; }
-            SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
-            offset = 0;
-            for (const auto& [group, vertices] : uploads)
-            {
-                const size_t size = vertices->size() * sizeof(ALTEngine::Formats::RenderVertex);
-                SDL_GPUTransferBufferLocation src{ vertexUploadBuffer, static_cast<Uint32>(offset) };
-                SDL_GPUBufferRegion dst{ group->vertexBuffer, 0, static_cast<Uint32>(size) };
-                SDL_UploadToGPUBuffer(copyPass, &src, &dst, false);
-                offset += size;
-            }
-            SDL_EndGPUCopyPass(copyPass);
-            SDL_SubmitGPUCommandBuffer(cmd);
+            UploadVertexSpans(spans);
         }
 
 
@@ -428,26 +438,11 @@ namespace ALTEngine::Renderer
         // case-sensitive mount would otherwise turn a capitalisation slip into
         // a silently missing override. Scanning the directory costs nothing at
         // level load and makes the case genuinely not matter.
+        // (Bootstrap/FsUtil.h's, which neither throws mid-scan nor on a name
+        // the system's code page cannot hold.)
         std::filesystem::path FindEntryCaseInsensitive(const std::filesystem::path& parent, const std::string& name)
         {
-            std::error_code ec;
-            if (!std::filesystem::is_directory(parent, ec)) { return {}; }
-
-            // Exact hit first - no scan needed in the common case.
-            std::filesystem::path exact = parent / name;
-            if (std::filesystem::exists(exact, ec)) { return exact; }
-
-            auto lower = [](std::string v) {
-                for (char& c : v) { c = static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }
-                return v;
-            };
-            std::string wanted = lower(name);
-
-            for (const auto& entry : std::filesystem::directory_iterator(parent, ec))
-            {
-                if (lower(entry.path().filename().string()) == wanted) { return entry.path(); }
-            }
-            return {};
+            return ALTEngine::Bootstrap::FindEntryCaseInsensitive(parent, name).value_or(std::filesystem::path{});
         }
 
         // Resolves an override .obj for a level file, following the convention
@@ -463,8 +458,8 @@ namespace ALTEngine::Renderer
         // Returns an empty path when nothing is there - the normal case.
         std::filesystem::path FindOverrideObj(const std::filesystem::path& mapPath)
         {
-            std::string name = mapPath.stem().string() + ".obj";
-            std::string section = mapPath.parent_path().filename().string();
+            std::string name = ALTEngine::Bootstrap::PathText(mapPath.stem()) + ".obj";
+            std::string section = ALTEngine::Bootstrap::PathText(mapPath.parent_path().filename());
             std::filesystem::path cdRoot = mapPath.parent_path().parent_path();
 
             std::filesystem::path overrideDir = FindEntryCaseInsensitive(cdRoot, "OVERRIDE");
@@ -1175,18 +1170,8 @@ namespace ALTEngine::Renderer
         // AABB -> bounding sphere, for auto-framing the camera without
         // needing to know the game's arbitrary coordinate scale ahead
         // of time.
-        float minX = std::numeric_limits<float>::max(), maxX = std::numeric_limits<float>::lowest();
-        float minY = minX, maxY = maxX, minZ = minX, maxZ = maxX;
-        for (const auto& v : renderMesh.vertices)
-        {
-            minX = std::min(minX, v.x); maxX = std::max(maxX, v.x);
-            minY = std::min(minY, v.y); maxY = std::max(maxY, v.y);
-            minZ = std::min(minZ, v.z); maxZ = std::max(maxZ, v.z);
-        }
-        float cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
-        float dx = maxX - minX, dy = maxY - minY, dz = maxZ - minZ;
-        float radius = std::sqrt(dx * dx + dy * dy + dz * dz) / 2.0f;
-        if (radius < 1.0f) { radius = 1.0f; }
+        const MeshBounds bounds = BoundsOf(renderMesh);
+        const float cx = bounds.cx, cy = bounds.cy, cz = bounds.cz, radius = bounds.radius;
 
         LevelSubGroup uploaded = UploadMeshWithTexture(renderMesh, *tex);
         if (!uploaded.vertexBuffer || !uploaded.indexBuffer || !uploaded.texture)
@@ -1329,18 +1314,8 @@ namespace ALTEngine::Renderer
                 req.cacheKey.catalog == ModelCatalog::Obj3d && ALTEngine::Formats::Obj3DIsFlatSeeThrough(req.meshNumber));
             if (renderMesh.vertices.empty() || renderMesh.indices.empty()) { continue; }
 
-            float minX = std::numeric_limits<float>::max(), maxX = std::numeric_limits<float>::lowest();
-            float minY = minX, maxY = maxX, minZ = minX, maxZ = maxX;
-            for (const auto& v : renderMesh.vertices)
-            {
-                minX = std::min(minX, v.x); maxX = std::max(maxX, v.x);
-                minY = std::min(minY, v.y); maxY = std::max(maxY, v.y);
-                minZ = std::min(minZ, v.z); maxZ = std::max(maxZ, v.z);
-            }
-            float cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
-            float dx = maxX - minX, dy = maxY - minY, dz = maxZ - minZ;
-            float radius = std::sqrt(dx * dx + dy * dy + dz * dz) / 2.0f;
-            if (radius < 1.0f) { radius = 1.0f; }
+            const MeshBounds bounds = BoundsOf(renderMesh);
+            const float cx = bounds.cx, cy = bounds.cy, cz = bounds.cz, radius = bounds.radius;
 
             PendingUpload up;
             up.cacheKey = req.cacheKey;
@@ -1539,12 +1514,7 @@ namespace ALTEngine::Renderer
         SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(cmd, &colorInfo, 1, &depthInfo);
 
         SDL_BindGPUGraphicsPipeline(renderPass, model.useDoubleSided ? doubleSidedPipeline : pipeline);
-        SDL_GPUBufferBinding vbBinding{ model.vertexBuffer, 0 };
-        SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
-        SDL_GPUBufferBinding ibBinding{ model.indexBuffer, 0 };
-        SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-        SDL_GPUTextureSamplerBinding texBinding{ model.texture, sampler };
-        SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
+        BindMesh(renderPass, model.vertexBuffer, model.indexBuffer, model.texture);
         SDL_PushGPUVertexUniformData(cmd, 0, mvp.m.data(), sizeof(float) * 16);
             {
                 float fog[8] = { fogEnabled, fogStart, fogRange, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f };
@@ -2336,12 +2306,7 @@ namespace ALTEngine::Renderer
             levelIndices(group, indexBuffer, indexCount);
             if (indexCount == 0) { continue; }
 
-            SDL_GPUBufferBinding vbBinding{ group.vertexBuffer, 0 };
-            SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
-            SDL_GPUBufferBinding ibBinding{ indexBuffer, 0 };
-            SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-            SDL_GPUTextureSamplerBinding texBinding{ group.texture, sampler };
-            SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
+            BindMesh(renderPass, group.vertexBuffer, indexBuffer, group.texture);
             SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
             {
                 float fog[8] = { fogEnabled, fogStart, fogRange, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f };
@@ -2377,12 +2342,7 @@ namespace ALTEngine::Renderer
             Mat4 mvp = Mat4::Multiply(vp, modelMatrix);
 
             SDL_BindGPUGraphicsPipeline(renderPass, model.useDoubleSided ? doubleSidedPipeline : pipeline);
-            SDL_GPUBufferBinding vbBinding{ model.vertexBuffer, 0 };
-            SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
-            SDL_GPUBufferBinding ibBinding{ model.indexBuffer, 0 };
-            SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-            SDL_GPUTextureSamplerBinding texBinding{ model.texture, sampler };
-            SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
+            BindMesh(renderPass, model.vertexBuffer, model.indexBuffer, model.texture);
             SDL_PushGPUVertexUniformData(cmd, 0, mvp.m.data(), sizeof(float) * 16);
             {
                 // The light of the cell it stands in: its byte 0x0e picks an
@@ -2708,12 +2668,7 @@ namespace ALTEngine::Renderer
                     SDL_SetGPUBlendConstants(renderPass, half);
                     bound = true;
                 }
-                SDL_GPUBufferBinding vbBinding{ group.vertexBuffer, 0 };
-                SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
-                SDL_GPUBufferBinding ibBinding{ indexBuffer, 0 };
-                SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-                SDL_GPUTextureSamplerBinding texBinding{ group.texture, sampler };
-                SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
+                BindMesh(renderPass, group.vertexBuffer, indexBuffer, group.texture);
                 SDL_PushGPUVertexUniformData(cmd, 0, vp.m.data(), sizeof(float) * 16);
                 // No distance fade: the original applies it to the light
                 // colour (FUN_0004ecdc), which this fill never reads - span
@@ -2732,12 +2687,7 @@ namespace ALTEngine::Renderer
                     bound = true;
                 }
                 const LoadedModel& model = *draw.model;
-                SDL_GPUBufferBinding vbBinding{ model.vertexBuffer, 0 };
-                SDL_BindGPUVertexBuffers(renderPass, 0, &vbBinding, 1);
-                SDL_GPUBufferBinding ibBinding{ model.indexBuffer, 0 };
-                SDL_BindGPUIndexBuffer(renderPass, &ibBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-                SDL_GPUTextureSamplerBinding texBinding{ model.texture, sampler };
-                SDL_BindGPUFragmentSamplers(renderPass, 0, &texBinding, 1);
+                BindMesh(renderPass, model.vertexBuffer, model.indexBuffer, model.texture);
                 SDL_PushGPUVertexUniformData(cmd, 0, draw.mvp.m.data(), sizeof(float) * 16);
                 float fog[8] = { 0.0f, fogStart, fogRange, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
