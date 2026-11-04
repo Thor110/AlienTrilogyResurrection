@@ -10,6 +10,7 @@
 #include "../Net/Session.h"
 #include "../Formats/EnemyAnimData.h"
 #include "../Formats/EnemySpriteSet.h"
+#include "../Game/Progression.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -35,6 +36,8 @@ namespace ALTEngine::Screens
         constexpr Color COLOR_DIM{ 24, 130, 52, 255 };
         constexpr Color COLOR_EDITING{ 235, 235, 235, 255 };
         constexpr Color COLOR_WHITE{ 255, 255, 255, 255 }; // matches the main menu's own selected-item white exactly
+        // A row that does not apply (the bots, in a co-operative game).
+        constexpr Color COLOR_DISABLED{ 70, 78, 72, 255 };
 
         // The selected-but-not-editing text color for these menus -
         // pulses between green and white rather than a static light
@@ -375,10 +378,15 @@ namespace ALTEngine::Screens
         int bgW = 0, bgH = 0;
         SDL_Texture* background = LoadMenuBackground(cdDirectory, renderer, 1, bgW, bgH);
 
-        // 0=Start Game, 1=Name Of Game, 2=Start at level, 3=Minimum game length,
-        // 4=Player limit, 5=Bots, 6=Bot skill
-        int cursor = 0;
-        constexpr int ROWS = 7;
+        // 0=Start Game, 1=Name Of Game, 2=Game Mode, 3=Start at level,
+        // 4=Minimum game length, 5=Player limit, 6=Bots, 7=Bot skill
+        enum Row { START, NAME, MODE, LEVEL, LENGTH, LIMIT, BOTS, SKILL, ROWS };
+        int cursor = START;
+        namespace PG = ALTEngine::Game::Progression;
+        const auto coop = [&]() { return settings.gameMode == static_cast<int>(ALTEngine::Net::GameMode::Coop); };
+        // Co-operative has no bots: their rows are greyed out and skipped.
+        const auto usable = [&](int row) { return !(coop() && (row == BOTS || row == SKILL)); };
+        settings.coopMission = std::clamp(settings.coopMission, 0, PG::CAMPAIGN_LENGTH - 1);
         // Bots: none, or 3 up to the limit less the host's place.
         auto stepBots = [&](int delta) {
             const int most = MultiplayerSettings::MaxBots(settings.playerLimit);
@@ -386,6 +394,33 @@ namespace ALTEngine::Screens
             if (delta > 0) { n = (n == 0) ? 3 : n + 1; }
             else { n = (n <= 3) ? 0 : n - 1; }
             settings.botCount = std::clamp(n, 0, most);   // most is at least 3 (the limit is at least 4)
+        };
+        auto step = [&](int delta) {
+            switch (cursor)
+            {
+            case MODE:
+                settings.gameMode = (settings.gameMode + delta + static_cast<int>(ALTEngine::Net::GameMode::Count))
+                                  % static_cast<int>(ALTEngine::Net::GameMode::Count);
+                break;
+            case LEVEL:
+                if (coop()) { settings.coopMission = std::clamp(settings.coopMission + delta, 0, PG::CAMPAIGN_LENGTH - 1); }
+                else { settings.startLevel = std::clamp(settings.startLevel + delta, 1, 10); }
+                break;
+            case LENGTH: settings.minGameLength = std::clamp(settings.minGameLength + delta, 1, 99); break;
+            case LIMIT:
+                settings.playerLimit = std::clamp(settings.playerLimit + delta, ALTEngine::Net::MIN_PLAYER_LIMIT,
+                                                  ALTEngine::Net::MAX_PLAYERS);
+                settings.botCount = std::min(settings.botCount, MultiplayerSettings::MaxBots(settings.playerLimit));
+                break;
+            case BOTS: stepBots(delta); break;
+            case SKILL: settings.botSkill = std::clamp(settings.botSkill + delta, 1, 5); break;
+            default: return;
+            }
+            SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+        };
+        auto moveCursor = [&](int delta) {
+            do { cursor = (cursor + delta + ROWS) % ROWS; } while (!usable(cursor));
+            SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
         };
         TextFieldEditor editor;
         MultiplayerStartResult result;
@@ -410,42 +445,16 @@ namespace ALTEngine::Screens
                 {
                     switch (event.key.key)
                     {
-                    case SDLK_UP:
-                        cursor = (cursor + ROWS - 1) % ROWS;
-                        SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
-                        break;
-                    case SDLK_DOWN:
-                        cursor = (cursor + 1) % ROWS;
-                        SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
-                        break;
-                    case SDLK_LEFT:
-                        if (cursor == 2) { settings.startLevel = std::max(1, settings.startLevel - 1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
-                        else if (cursor == 3) { settings.minGameLength = std::max(1, settings.minGameLength - 1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
-                        else if (cursor == 4)
-                        {
-                            settings.playerLimit = std::max(ALTEngine::Net::MIN_PLAYER_LIMIT, settings.playerLimit - 1);
-                            settings.botCount = std::min(settings.botCount, MultiplayerSettings::MaxBots(settings.playerLimit));
-                            SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
-                        }
-                        else if (cursor == 5) { stepBots(-1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
-                        else if (cursor == 6) { settings.botSkill = std::max(1, settings.botSkill - 1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
-                        break;
-                    case SDLK_RIGHT:
-                        if (cursor == 2) { settings.startLevel = std::min(10, settings.startLevel + 1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
-                        else if (cursor == 3) { settings.minGameLength = std::min(99, settings.minGameLength + 1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
-                        else if (cursor == 4)
-                        {
-                            settings.playerLimit = std::min(ALTEngine::Net::MAX_PLAYERS, settings.playerLimit + 1);
-                            SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
-                        }
-                        else if (cursor == 5) { stepBots(1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
-                        else if (cursor == 6) { settings.botSkill = std::min(5, settings.botSkill + 1); SfxPlayer::Play(SfxId::MenuMove, cdDirectory); }
-                        break;
+                    case SDLK_UP: moveCursor(-1); break;
+                    case SDLK_DOWN: moveCursor(1); break;
+                    case SDLK_LEFT: step(-1); break;
+                    case SDLK_RIGHT: step(1); break;
                     case SDLK_RETURN:
                     case SDLK_KP_ENTER:
                         SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
-                        if (cursor == 0) { result.startedGame = true; running = false; }
-                        else if (cursor == 1) { editor.BeginEdit(settings.gameName, 24); }
+                        if (cursor == START) { result.startedGame = true; running = false; }
+                        else if (cursor == NAME) { editor.BeginEdit(settings.gameName, 24); }
+                        else if (cursor == MODE) { step(1); }
                         break;
                     case SDLK_ESCAPE:
                         running = false;
@@ -469,32 +478,40 @@ namespace ALTEngine::Screens
             std::string title = "GAME SETUP";
             DrawBitmapText(renderer, title, (windowW - TextWidth(title, scale)) / 2, margin, scale, COLOR_CURSOR);
 
-            int rowY = margin + lineHeight * 4;
-            DrawBitmapText(renderer, "Start Game", margin, rowY, scale, (cursor == 0) ? SelectedTextColor() : COLOR_DIM);
-
-            std::string gameNameValue = (cursor == 1 && editor.IsEditing()) ? editor.Value() : settings.gameName;
-            DrawBitmapText(renderer, "Name Of Game: " + gameNameValue, margin, rowY + lineHeight, scale,
-                            (cursor == 1) ? (editor.IsEditing() ? COLOR_EDITING : SelectedTextColor()) : COLOR_DIM);
-
-            DrawBitmapText(renderer, "Start at level (1-10): " + std::to_string(settings.startLevel), margin, rowY + lineHeight * 2, scale,
-                            (cursor == 2) ? SelectedTextColor() : COLOR_DIM);
-
-            DrawBitmapText(renderer, "Minimum game length: " + std::to_string(settings.minGameLength), margin, rowY + lineHeight * 3, scale,
-                            (cursor == 3) ? SelectedTextColor() : COLOR_DIM);
-
-            DrawBitmapText(renderer, "Player limit (4-8): " + std::to_string(settings.playerLimit), margin, rowY + lineHeight * 4, scale,
-                            (cursor == 4) ? SelectedTextColor() : COLOR_DIM);
-            DrawBitmapText(renderer, "Bots (3-" + std::to_string(MultiplayerSettings::MaxBots(settings.playerLimit)) + "): "
-                               + (settings.botCount == 0 ? std::string("NONE") : std::to_string(settings.botCount)),
-                           margin, rowY + lineHeight * 5, scale, (cursor == 5) ? SelectedTextColor() : COLOR_DIM);
-            DrawBitmapText(renderer, "Bot skill (1-5): " + std::to_string(settings.botSkill), margin, rowY + lineHeight * 6, scale,
-                            (cursor == 6) ? SelectedTextColor() : COLOR_DIM);
+            const int rowY = margin + lineHeight * 4;
+            auto row = [&](int index, const std::string& text, bool editing = false) {
+                Color colour = COLOR_DIM;
+                if (!usable(index)) { colour = COLOR_DISABLED; }
+                else if (cursor == index) { colour = editing ? COLOR_EDITING : SelectedTextColor(); }
+                DrawBitmapText(renderer, text, margin, rowY + lineHeight * index, scale, colour);
+            };
+            row(START, "Start Game");
+            const bool editingName = cursor == NAME && editor.IsEditing();
+            row(NAME, "Name Of Game: " + (editingName ? editor.Value() : settings.gameName), editingName);
+            row(MODE, std::string("Game Mode: ")
+                          + (coop() ? "Co-operative" : "Deathmatch"));
+            if (coop())
+            {
+                const char* digits = PG::CAMPAIGN_ORDER[settings.coopMission];
+                const std::string dotted = std::string(1, digits[0]) + "." + digits[1] + "." + digits[2];
+                row(LEVEL, "Start at mission: " + dotted
+                               + (PG::IsBonusLevel(settings.coopMission) ? " (BONUS)" : ""));
+            }
+            else
+            {
+                row(LEVEL, "Start at level (1-10): " + std::to_string(settings.startLevel));
+            }
+            row(LENGTH, "Minimum game length: " + std::to_string(settings.minGameLength));
+            row(LIMIT, "Player limit (4-8): " + std::to_string(settings.playerLimit));
+            row(BOTS, "Bots (3-" + std::to_string(MultiplayerSettings::MaxBots(settings.playerLimit)) + "): "
+                          + (coop() || settings.botCount == 0 ? std::string("NONE") : std::to_string(settings.botCount)));
+            row(SKILL, "Bot skill (1-5): " + std::to_string(settings.botSkill));
 
             // The host needs this port open (README: "Multiplayer: the port to open").
             DrawBitmapText(renderer, "HOSTING NEEDS UDP PORT " + std::to_string(ALTEngine::Net::DEFAULT_PORT) + " OPEN",
-                           margin, rowY + lineHeight * 8, scale, COLOR_CURSOR);
+                           margin, rowY + lineHeight * 9, scale, COLOR_CURSOR);
             DrawBitmapText(renderer, "FIREWALL: ALLOW. INTERNET: FORWARD IT ON YOUR ROUTER",
-                           margin, rowY + lineHeight * 9, scale, COLOR_DIM);
+                           margin, rowY + lineHeight * 10, scale, COLOR_DIM);
 
             SDL_RenderPresent(renderer);
         }
@@ -604,7 +621,8 @@ namespace ALTEngine::Screens
                 if (i < static_cast<int>(games.size()))
                 {
                     const auto& g = games[static_cast<size_t>(i)];
-                    line += " " + g.info.gameName + "  LEVEL " + g.info.level + "  "
+                    line += " " + g.info.gameName + "  " + (g.info.mode == ALTEngine::Net::GameMode::Coop ? "CO-OP" : "DM")
+                          + "  LEVEL " + g.info.level + "  "
                           + std::to_string(g.info.players) + "/" + std::to_string(g.info.maxPlayers);
                 }
                 const Color colour = (i == cursor) ? COLOR_WHITE : (i < static_cast<int>(games.size()) ? COLOR_CURSOR : COLOR_DIM);

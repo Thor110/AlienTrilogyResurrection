@@ -18,7 +18,7 @@ namespace ALTEngine::Net
     // Every datagram: "ALT" + a version byte, a type byte, then the fields,
     // little-endian. A datagram that doesn't start so, or whose fields run
     // short, is dropped.
-    inline constexpr uint8_t PROTOCOL_VERSION = 3;
+    inline constexpr uint8_t PROTOCOL_VERSION = 4;   // 4: game modes, co-operative level ends
     // The original's four records are its limit; the port allows a host to
     // take up to eight (MIN_PLAYER_LIMIT - MAX_PLAYERS, bots included).
     inline constexpr int MAX_PLAYERS = 8;
@@ -49,10 +49,30 @@ namespace ALTEngine::Net
         Chat = 11,           // one of the F2-F9 messages, or typed
         Leave = 12,          // going
         Ping = 13,           // still here
+        AtExit = 14,         // client -> host: I reached the End Level trigger and am waiting
+        LevelEnd = 15,       // host -> everyone: every player is at the exit, the level is over
+        LevelStart = 16,     // host -> everyone: the level now being played, by number
     };
 
+    // THE PORT'S GAME MODES. The original's network game is a deathmatch on
+    // the ten multiplayer maps (L900-L909). Co-operative is the port's own:
+    // the players go through the story missions together. Each machine runs
+    // its own creatures, doors and pickups; what the session shares is who
+    // is where and when the level is over - it ends only once every player
+    // has reached the exit (AtExit, LevelEnd), and then the host names the
+    // next one (LevelStart).
+    enum class GameMode : uint8_t { Deathmatch = 0, Coop = 1, Count };
+    inline constexpr const char* GameModeName(GameMode mode)
+    {
+        return mode == GameMode::Coop ? "CO-OPERATIVE" : "DEATHMATCH";
+    }
+
     struct DiscoverQuery {};
-    struct DiscoverReply { std::string gameName; std::string level; uint8_t players = 0; uint8_t maxPlayers = MAX_PLAYERS; };
+    struct DiscoverReply
+    {
+        std::string gameName; std::string level; uint8_t players = 0; uint8_t maxPlayers = MAX_PLAYERS;
+        GameMode mode = GameMode::Deathmatch;
+    };
     // How a player looks to the others: the creature whose sprites draw them.
     // The original draws every player as the Synthetic (type 0x0d: the four
     // 0x0d monster records of each multiplayer level, parked outside the map,
@@ -83,11 +103,18 @@ namespace ALTEngine::Net
     }
 
     struct Join { std::string name; Skin skin = Skin::Synthetic; };
-    struct Welcome { uint8_t slot = 0; std::string level; };
+    // `levelSerial` counts the levels the game has been through, so a
+    // LevelStart repeated, or arriving late, is told from a new one.
+    struct Welcome { uint8_t slot = 0; std::string level; GameMode mode = GameMode::Deathmatch; uint16_t levelSerial = 0; };
     enum class RejectReason : uint8_t { Full = 1, Version = 2 };
     struct Reject { RejectReason reason = RejectReason::Full; };
     // `bot`: run by the host (Game::Bots), not a machine of its own.
-    struct RosterEntry { bool used = false; std::string name; int16_t frags = 0; Skin skin = Skin::Synthetic; bool bot = false; };
+    // `atExit`: co-operative, this player has reached the exit and is waiting.
+    struct RosterEntry
+    {
+        bool used = false; std::string name; int16_t frags = 0; Skin skin = Skin::Synthetic; bool bot = false;
+        bool atExit = false;
+    };
     struct Roster { std::array<RosterEntry, MAX_PLAYERS> players{}; };
     struct State
     {
@@ -97,7 +124,7 @@ namespace ALTEngine::Net
         int16_t yaw = 0, pitch = 0;      // the original's 4096 to the turn
         int16_t health = 0;
         uint8_t weapon = 0;
-        uint8_t flags = 0;               // bit 0 dead, bit 1 firing, bit 2 moving
+        uint8_t flags = 0;               // bit 0 dead, bit 1 firing, bit 2 moving, bit 3 at the exit (not drawn)
     };
     struct Shot { uint8_t slot = 0; uint8_t type = 0; float x = 0, y = 0, z = 0, vx = 0, vy = 0, vz = 0; };
     struct Hit { uint8_t attacker = 0; uint8_t target = 0; int16_t damage = 0; };
@@ -105,9 +132,15 @@ namespace ALTEngine::Net
     struct Chat { uint8_t slot = 0; std::string text; };
     struct Leave { uint8_t slot = 0; };
     struct Ping { uint8_t slot = 0; };
+    struct AtExit { uint8_t slot = 0; };
+    // Both of these are the host's standing word, sent again every second,
+    // so a lost datagram costs a second rather than a stuck game.
+    struct LevelEnd { uint16_t levelSerial = 0; };
+    // An empty level: the campaign is over.
+    struct LevelStart { uint16_t levelSerial = 0; std::string level; };
 
     using Message = std::variant<DiscoverQuery, DiscoverReply, Join, Welcome, Reject, Roster, State, Shot, Hit,
-                                 Frag, Chat, Leave, Ping>;
+                                 Frag, Chat, Leave, Ping, AtExit, LevelEnd, LevelStart>;
 
     std::vector<uint8_t> Encode(const Message& message);
     std::optional<Message> Decode(const std::vector<uint8_t>& bytes);

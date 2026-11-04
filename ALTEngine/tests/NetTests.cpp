@@ -288,3 +288,106 @@ TEST_CASE("Net: a message with a slot past the roster, a non-number or a foreign
     N::Hit h; h.attacker = 1; h.target = 9;
     CHECK(!N::Decode(N::Encode(h)).has_value());
 }
+
+TEST_CASE("Net: the game mode and the co-operative messages survive encoding")
+{
+    N::DiscoverReply reply{ "Nostromo", "111", 1, 4, N::GameMode::Coop };
+    CHECK(RoundTrip(reply).mode == N::GameMode::Coop);
+    const auto w = RoundTrip(N::Welcome{ 2, "131", N::GameMode::Coop, 7 });
+    CHECK(w.mode == N::GameMode::Coop); CHECK(w.levelSerial == 7); CHECK(w.level == "131");
+    CHECK(RoundTrip(N::AtExit{ 3 }).slot == 3);
+    CHECK(RoundTrip(N::LevelEnd{ 9 }).levelSerial == 9);
+    const auto ls = RoundTrip(N::LevelStart{ 4, "141" });
+    CHECK(ls.levelSerial == 4); CHECK(ls.level == "141");
+    CHECK(RoundTrip(N::LevelStart{ 5, "" }).level.empty());
+    N::Roster r; r.players[1] = { true, "Hicks", 0, N::Skin::Soldier, false, true };
+    CHECK(RoundTrip(r).players[1].atExit);
+    CHECK(!RoundTrip(r).players[0].atExit);
+    // A mode this version doesn't know is refused.
+    auto bytes = N::Encode(N::Welcome{ 1, "111", N::GameMode::Coop, 0 });
+    bytes[bytes.size() - 3] = 7;
+    CHECK(!N::Decode(bytes).has_value());
+}
+
+TEST_CASE("Net: co-operative - the level ends only once every player is at the exit")
+{
+    N::Session host, a, b;
+    REQUIRE(host.StartHost("Coop", "111", "Ripley", 0));
+    host.SetGameMode(N::GameMode::Coop);
+    const auto address = N::Address::Loopback(host.Port());
+    REQUIRE(a.StartJoin(address, "Hicks"));
+    REQUIRE(b.StartJoin(address, "Hudson"));
+    double now = 0.0;
+    Pump({ &host, &a, &b }, now);
+    REQUIRE(a.Connected()); REQUIRE(b.Connected());
+    CHECK(a.Coop()); CHECK(b.Mode() == N::GameMode::Coop);
+    CHECK(host.PlayersPlaying() == 3);
+    host.TakeEvents(); a.TakeEvents(); b.TakeEvents();
+
+    auto ended = [](N::Session& s) {
+        for (const auto& e : s.TakeEvents()) { if (e.kind == N::Event::Kind::LevelEnded) { return true; } }
+        return false;
+    };
+
+    // Two of three at the exit: the level goes on.
+    a.ReportAtExit();
+    host.ReportAtExit();
+    Pump({ &host, &a, &b }, now);
+    CHECK(host.PlayersAtExit() == 2);
+    CHECK(b.PlayersAtExit() == 2);
+    CHECK(!host.LevelOver());
+    CHECK(!ended(host)); CHECK(!ended(a)); CHECK(!ended(b));
+
+    // The last one: it ends everywhere.
+    b.ReportAtExit();
+    Pump({ &host, &a, &b }, now);
+    CHECK(host.LevelOver()); CHECK(a.LevelOver()); CHECK(b.LevelOver());
+    CHECK(ended(host)); CHECK(ended(a)); CHECK(ended(b));
+
+    // The host moves on; the guests follow, with nobody at the exit.
+    const uint16_t serial = a.LevelSerial();
+    host.AdvanceLevel("112");
+    Pump({ &host, &a, &b }, now);
+    CHECK(a.Level() == "112"); CHECK(b.Level() == "112");
+    CHECK(a.LevelSerial() == serial + 1);
+    CHECK(!a.LevelOver()); CHECK(!a.AtExitReported());
+    CHECK(host.PlayersAtExit() == 0); CHECK(a.PlayersAtExit() == 0);
+    bool started = false;
+    for (const auto& e : a.TakeEvents()) { started |= e.kind == N::Event::Kind::LevelStarted; }
+    CHECK(started);
+}
+
+TEST_CASE("Net: co-operative - a player who leaves is not waited for")
+{
+    N::Session host, a, b;
+    REQUIRE(host.StartHost("Coop", "111", "Ripley", 0));
+    host.SetGameMode(N::GameMode::Coop);
+    const auto address = N::Address::Loopback(host.Port());
+    REQUIRE(a.StartJoin(address, "Hicks"));
+    REQUIRE(b.StartJoin(address, "Hudson"));
+    double now = 0.0;
+    Pump({ &host, &a, &b }, now);
+    host.ReportAtExit();
+    a.ReportAtExit();
+    Pump({ &host, &a, &b }, now);
+    CHECK(!host.LevelOver());
+    b.Stop();
+    Pump({ &host, &a }, now);
+    CHECK(host.LevelOver());
+    CHECK(a.LevelOver());
+}
+
+TEST_CASE("Net: deathmatch has no level end to wait for")
+{
+    N::Session host, a;
+    REQUIRE(host.StartHost("DM", "900", "Ripley", 0));
+    REQUIRE(a.StartJoin(N::Address::Loopback(host.Port()), "Hicks"));
+    double now = 0.0;
+    Pump({ &host, &a }, now);
+    CHECK(!a.Coop());
+    host.ReportAtExit();
+    a.ReportAtExit();
+    Pump({ &host, &a }, now);
+    CHECK(!host.LevelOver());
+    CHECK(host.PlayersAtExit() == 0);
+}

@@ -14,6 +14,10 @@ namespace ALTEngine::Net
         level = levelDigits;
         playerName = player;
         playerLimit = ORIGINAL_PLAYERS;
+        mode = GameMode::Deathmatch;
+        levelSerial = 0;
+        levelEnded = false;
+        atExitWanted = false;
         botsWanted = 0;
         botSkill = 3;
         localSlot = 0;
@@ -34,6 +38,11 @@ namespace ALTEngine::Net
         playerName = player;
         localSlot = -1;
         welcomed = false;
+        mode = GameMode::Deathmatch;
+        levelSerial = 0;
+        levelEnded = false;
+        atExitWanted = false;
+        lastAtExitTry = -1.0;
         lastJoinTry = -1.0;
         joinStarted = -1.0;
         return true;
@@ -84,6 +93,7 @@ namespace ALTEngine::Net
         events.push_back(e);
         Event r; r.kind = Event::Kind::RosterChanged;
         events.push_back(r);
+        CheckLevelEnd();   // no longer waited for
     }
 
     void Session::ApplyFrag(const Frag& frag)
@@ -118,7 +128,17 @@ namespace ALTEngine::Net
             {
                 if (peers[static_cast<size_t>(i)].used && now - peers[static_cast<size_t>(i)].lastHeard > TIMEOUT_SECONDS) { DropPeer(i); }
             }
-            if (now - lastPing >= PING_SECONDS) { lastPing = now; Broadcast(Ping{ 0 }); }
+            if (now - lastPing >= PING_SECONDS)
+            {
+                lastPing = now;
+                Broadcast(Ping{ 0 });
+                // The co-operative word, again: a guest who missed it catches up.
+                if (Coop())
+                {
+                    Broadcast(LevelStart{ levelSerial, level });
+                    if (levelEnded) { Broadcast(LevelEnd{ levelSerial }); }
+                }
+            }
             return;
         }
 
@@ -150,6 +170,14 @@ namespace ALTEngine::Net
             return;
         }
         if (now - lastPing >= PING_SECONDS) { lastPing = now; SendToHost(Ping{ static_cast<uint8_t>(localSlot) }); }
+        // Said again until the host's roster shows it.
+        if (atExitWanted && !levelEnded && localSlot >= 0
+            && !roster.players[static_cast<size_t>(localSlot)].atExit
+            && (lastAtExitTry < 0.0 || now - lastAtExitTry >= JOIN_RETRY_SECONDS))
+        {
+            lastAtExitTry = now;
+            SendToHost(AtExit{ static_cast<uint8_t>(localSlot) });
+        }
     }
 
     void Session::HandleAsHost(const Address& from, const Message& message, double now)
@@ -160,7 +188,7 @@ namespace ALTEngine::Net
             // whose places are all bots is not shown as full.
             uint8_t count = 0;
             for (const auto& p : roster.players) { count = static_cast<uint8_t>(count + (p.used && !p.bot ? 1 : 0)); }
-            Send(from, DiscoverReply{ gameName, level, count, static_cast<uint8_t>(playerLimit) });
+            Send(from, DiscoverReply{ gameName, level, count, static_cast<uint8_t>(playerLimit), mode });
             return;
         }
         if (const auto* join = std::get_if<Join>(&message))
@@ -184,7 +212,7 @@ namespace ALTEngine::Net
                 Event r; r.kind = Event::Kind::RosterChanged; events.push_back(r);
             }
             // A repeated Join (the Welcome was lost) is answered again.
-            Send(from, Welcome{ static_cast<uint8_t>(slot), level });
+            Send(from, Welcome{ static_cast<uint8_t>(slot), level, mode, levelSerial });
             Broadcast(roster);
             return;
         }
@@ -234,6 +262,20 @@ namespace ALTEngine::Net
         {
             DropPeer(slot);
         }
+        else if (std::holds_alternative<AtExit>(message))
+        {
+            if (Coop() && !levelEnded && !roster.players[static_cast<size_t>(slot)].atExit)
+            {
+                roster.players[static_cast<size_t>(slot)].atExit = true;
+                Broadcast(roster);
+                Event r; r.kind = Event::Kind::RosterChanged; events.push_back(r);
+                CheckLevelEnd();
+            }
+            else if (roster.players[static_cast<size_t>(slot)].atExit)
+            {
+                Broadcast(roster);   // their copy did not show it yet
+            }
+        }
     }
 
     void Session::HandleAsClient(const Message& message, double now)
@@ -246,6 +288,8 @@ namespace ALTEngine::Net
                 welcomed = true;
                 localSlot = welcome->slot;
                 level = welcome->level;
+                mode = welcome->mode;
+                levelSerial = welcome->levelSerial;
                 Event e; e.kind = Event::Kind::Welcomed; e.slot = welcome->slot; events.push_back(e);
             }
             return;
@@ -293,6 +337,19 @@ namespace ALTEngine::Net
         {
             Event e; e.kind = Event::Kind::Chat; e.slot = chat->slot; e.chat = *chat; events.push_back(e);
         }
+        else if (const auto* end = std::get_if<LevelEnd>(&message))
+        {
+            if (end->levelSerial == levelSerial && !levelEnded)
+            {
+                levelEnded = true;
+                Event e; e.kind = Event::Kind::LevelEnded; events.push_back(e);
+            }
+        }
+        else if (const auto* start = std::get_if<LevelStart>(&message))
+        {
+            // Newer only (the serial wraps after 65535 levels, which no game reaches).
+            if (static_cast<int16_t>(start->levelSerial - levelSerial) > 0) { NewLevel(start->level, start->levelSerial); }
+        }
         else if (const auto* leave = std::get_if<Leave>(&message))
         {
             if (leave->slot == 0)
@@ -331,6 +388,68 @@ namespace ALTEngine::Net
         if (role == Role::Client) { SendToHost(hit); return; }
         if (IsBot(target)) { HitBot(hit.attacker, target, damage); return; }
         if (peers[target].used) { Send(peers[target].address, hit); }
+    }
+
+    void Session::ReportAtExit()
+    {
+        if (!Connected() || !Coop() || atExitWanted) { return; }
+        atExitWanted = true;
+        if (role == Role::Host)
+        {
+            roster.players[0].atExit = true;
+            Broadcast(roster);
+            Event r; r.kind = Event::Kind::RosterChanged; events.push_back(r);
+            CheckLevelEnd();
+        }
+        else
+        {
+            lastAtExitTry = -1.0;   // at once, then again until the roster shows it
+        }
+    }
+
+    int Session::PlayersPlaying() const
+    {
+        int n = 0;
+        for (const auto& p : roster.players) { n += (p.used && !p.bot) ? 1 : 0; }
+        return n;
+    }
+
+    int Session::PlayersAtExit() const
+    {
+        int n = 0;
+        for (const auto& p : roster.players) { n += (p.used && !p.bot && p.atExit) ? 1 : 0; }
+        return n;
+    }
+
+    void Session::CheckLevelEnd()
+    {
+        if (role != Role::Host || !Coop() || levelEnded) { return; }
+        const int playing = PlayersPlaying();
+        if (playing == 0 || PlayersAtExit() < playing) { return; }
+        levelEnded = true;
+        Broadcast(LevelEnd{ levelSerial });
+        Event e; e.kind = Event::Kind::LevelEnded; events.push_back(e);
+    }
+
+    void Session::NewLevel(const std::string& levelDigits, uint16_t serial)
+    {
+        level = levelDigits;
+        levelSerial = serial;
+        levelEnded = false;
+        atExitWanted = false;
+        lastAtExitTry = -1.0;
+        for (auto& p : roster.players) { p.atExit = false; }
+        // What the players did on the last level is no guide to where they are.
+        remote = {};
+        Event e; e.kind = Event::Kind::LevelStarted; events.push_back(e);
+    }
+
+    void Session::AdvanceLevel(const std::string& levelDigits)
+    {
+        if (role != Role::Host || !Coop()) { return; }
+        NewLevel(levelDigits, static_cast<uint16_t>(levelSerial + 1));
+        Broadcast(LevelStart{ levelSerial, level });
+        Broadcast(roster);
     }
 
     void Session::SetPlayerLimit(int limit)

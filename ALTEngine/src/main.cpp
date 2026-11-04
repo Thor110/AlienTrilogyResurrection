@@ -512,15 +512,82 @@ int main(int, char**)
             // One multiplayer level, as host or guest, until the player leaves
             // or the game ends; then back to the multiplayer menu.
             auto playMultiplayer = [&](ALTEngine::Net::Session& session) -> bool {
-                const std::string digits = session.Level();
-                MissionBriefingScreen::PreloadObjectModels(cdDirectory, language);
                 ALTEngine::Screens::PlayerInventoryState netInventory;
-                GameplayResult played = GameplayScreen::Run(cdDirectory, language, DottedOf(digits), keyBindings,
-                                                            audioSettings, renderSettings, resolutionSettings,
-                                                            difficultySettings, cameraSwaySettings, languageSettings,
-                                                            &netInventory, &session);
-                session.Stop();
-                return played.outcome != GameplayOutcome::WindowClosed;
+                namespace PG = ALTEngine::Game::Progression;
+                while (true)
+                {
+                    const std::string digits = session.Level();
+                    const uint16_t serial = session.LevelSerial();
+                    MissionBriefingScreen::PreloadObjectModels(cdDirectory, language);
+                    GameplayResult played = GameplayScreen::Run(cdDirectory, language, DottedOf(digits), keyBindings,
+                                                                audioSettings, renderSettings, resolutionSettings,
+                                                                difficultySettings, cameraSwaySettings, languageSettings,
+                                                                &netInventory, &session);
+                    if (played.outcome == GameplayOutcome::WindowClosed) { session.Stop(); return false; }
+                    // Deathmatch is one map; co-operative goes on while every
+                    // player finishes the level together.
+                    if (played.outcome != GameplayOutcome::LevelComplete || !session.Coop() || !session.Connected())
+                    {
+                        session.Stop();
+                        return true;
+                    }
+
+                    // CO-OPERATIVE: the next story mission. The host chooses
+                    // it: the campaign's next level, by the host's own
+                    // assessment (a bonus level opens on 85% or more), but
+                    // never the same one again - a mission failed on one
+                    // machine is not failed for all, as each runs its own
+                    // creatures. No assessment or briefing screen is shown
+                    // between levels: the game does not wait on menus, so the
+                    // session is not left unread long enough to time out.
+                    if (session.GetRole() == ALTEngine::Net::Session::Role::Host)
+                    {
+                        std::string nextDigits;
+                        const int index = PG::CampaignIndex(digits);
+                        if (index >= 0)
+                        {
+                            const int grade = std::max(1, PG::Assess(played.tally, index).grade);
+                            const int next = PG::NextCampaignIndex(index, grade);
+                            if (next < PG::CAMPAIGN_LENGTH) { nextDigits = PG::CAMPAIGN_ORDER[next]; }
+                        }
+                        std::cout << "Co-operative: level " << digits << " done, next "
+                                  << (nextDigits.empty() ? std::string("none - the campaign is over") : nextDigits) << "\n";
+                        session.AdvanceLevel(nextDigits);
+                        if (nextDigits.empty())
+                        {
+                            // Say it a few times before leaving, so the guests hear.
+                            for (int i = 0; i < 20; ++i) { session.Update(static_cast<double>(SDL_GetTicks()) / 1000.0); SDL_Delay(50); }
+                            session.Stop();
+                            return true;
+                        }
+                    }
+                    else
+                    {
+                        // A guest waits for the host to name the next level
+                        // (it may already have); Escape leaves the game.
+                        bool leave = false;
+                        while (session.LevelSerial() == serial && session.Connected())
+                        {
+                            SDL_Event event;
+                            while (SDL_PollEvent(&event))
+                            {
+                                if (event.type == SDL_EVENT_QUIT) { session.Stop(); return false; }
+                                if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) { leave = true; }
+                            }
+                            if (leave) { break; }
+                            session.Update(static_cast<double>(SDL_GetTicks()) / 1000.0);
+                            session.TakeEvents();
+                            SDL_Delay(10);
+                        }
+                        if (leave || !session.Connected() || session.Level().empty())
+                        {
+                            if (session.Connected() && session.Level().empty()) { std::cout << "Co-operative: the campaign is over\n"; }
+                            session.Stop();
+                            return true;
+                        }
+                    }
+                    carryInventoryBetweenLevels(netInventory);
+                }
             };
             static std::string typedAddress;
             MultiplayerSettings mpSettings;
@@ -545,6 +612,8 @@ int main(int, char**)
             mpSettings.botCount = readInt("MultiplayerBots", 0, 0, MultiplayerSettings::MaxBots(mpSettings.playerLimit));
             if (mpSettings.botCount > 0 && mpSettings.botCount < 3) { mpSettings.botCount = 0; }
             mpSettings.botSkill = readInt("MultiplayerBotSkill", 3, 1, 5);
+            mpSettings.gameMode = readInt("MultiplayerGameMode", 0, 0, static_cast<int>(ALTEngine::Net::GameMode::Count) - 1);
+            mpSettings.coopMission = readInt("MultiplayerCoopMission", 0, 0, ALTEngine::Game::Progression::CAMPAIGN_LENGTH - 1);
             const auto chosenSkin = [&]() {
                 return static_cast<ALTEngine::Net::Skin>(
                     std::clamp(mpSettings.skin, 0, static_cast<int>(ALTEngine::Net::Skin::Count) - 1));
@@ -566,10 +635,18 @@ int main(int, char**)
                     config.Set("MultiplayerPlayerLimit", std::to_string(mpSettings.playerLimit));
                     config.Set("MultiplayerBots", std::to_string(mpSettings.botCount));
                     config.Set("MultiplayerBotSkill", std::to_string(mpSettings.botSkill));
+                    config.Set("MultiplayerGameMode", std::to_string(mpSettings.gameMode));
+                    config.Set("MultiplayerCoopMission", std::to_string(mpSettings.coopMission));
                     if (!r.startedGame) { break; }
-                    // Host: "Start at level" 1-10 is L900-L909.
+                    const auto mode = static_cast<ALTEngine::Net::GameMode>(mpSettings.gameMode);
+                    const bool coop = mode == ALTEngine::Net::GameMode::Coop;
+                    // Host: "Start at level" 1-10 is L900-L909; co-operative
+                    // starts on the chosen story mission.
                     const int startIndex = std::clamp(mpSettings.startLevel, 1, 10) - 1;
-                    const std::string digits = "90" + std::to_string(startIndex);
+                    const std::string digits = coop
+                        ? std::string(ALTEngine::Game::Progression::CAMPAIGN_ORDER[std::clamp(
+                              mpSettings.coopMission, 0, ALTEngine::Game::Progression::CAMPAIGN_LENGTH - 1)])
+                        : "90" + std::to_string(startIndex);
                     ALTEngine::Net::Session session;
                     if (!session.StartHost(mpSettings.gameName.empty() ? mpSettings.playerName : mpSettings.gameName,
                                            digits, mpSettings.playerName, ALTEngine::Net::DEFAULT_PORT, chosenSkin()))
@@ -577,10 +654,13 @@ int main(int, char**)
                         std::cout << "Multiplayer: could not host on port " << ALTEngine::Net::DEFAULT_PORT << "\n";
                         break;
                     }
+                    session.SetGameMode(mode);
                     session.SetPlayerLimit(mpSettings.playerLimit);
-                    session.SetBots(mpSettings.botCount, mpSettings.botSkill);
-                    std::cout << "Multiplayer: hosting level " << digits << " on port " << session.Port()
-                              << ", up to " << session.PlayerLimit() << " players, " << mpSettings.botCount << " bots\n";
+                    // No bots in a co-operative game (for now).
+                    session.SetBots(coop ? 0 : mpSettings.botCount, mpSettings.botSkill);
+                    std::cout << "Multiplayer: hosting " << ALTEngine::Net::GameModeName(mode) << ", level " << digits
+                              << " on port " << session.Port() << ", up to " << session.PlayerLimit() << " players, "
+                              << session.BotsWanted() << " bots\n";
                     session.SetQuickChat(mpSettings.messages);
                     if (!playMultiplayer(session)) { windowClosed = true; inMultiplayerMenu = false; }
                     break;
@@ -620,7 +700,8 @@ int main(int, char**)
                     }
                     if (windowClosed) { inMultiplayerMenu = false; break; }
                     if (!waiting || !session.Connected()) { session.Stop(); break; }
-                    std::cout << "Multiplayer: in as player " << session.LocalSlot() + 1 << ", level " << session.Level() << "\n";
+                    std::cout << "Multiplayer: in as player " << session.LocalSlot() + 1 << ", "
+                              << ALTEngine::Net::GameModeName(session.Mode()) << ", level " << session.Level() << "\n";
                     session.SetQuickChat(mpSettings.messages);
                     if (!playMultiplayer(session)) { windowClosed = true; inMultiplayerMenu = false; }
                     break;

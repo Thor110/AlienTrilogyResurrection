@@ -101,10 +101,13 @@ namespace ALTEngine::Screens
         //
         // Returns true if the hit landed. `cause` picks the death clip.
         static constexpr int DAMAGE_COOLDOWN = 0x1e;
+        // OURS, co-operative: a player who has reached the exit waits there
+        // for the others and takes no harm meanwhile.
+        bool waitingAtExit = false;
         int lastDamageCause = -1;
         bool ApplyDamage(int amount, int cause)
         {
-            if (damageCooldown > 0 || terrainShield > 0) { return false; }
+            if (damageCooldown > 0 || terrainShield > 0 || waitingAtExit) { return false; }
             lastDamageCause = cause;
             if (armourItem == 0)
             {
@@ -128,7 +131,7 @@ namespace ALTEngine::Screens
         // not help. What a pit uses.
         bool ApplyHealthDamage(int amount, int cause)
         {
-            if (damageCooldown > 0 || terrainShield > 0) { return false; }
+            if (damageCooldown > 0 || terrainShield > 0 || waitingAtExit) { return false; }
             lastDamageCause = cause;
             health = static_cast<int16_t>(health - amount);
             if (health < 1)

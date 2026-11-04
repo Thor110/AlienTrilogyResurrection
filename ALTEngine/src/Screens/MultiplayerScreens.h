@@ -16,7 +16,12 @@ namespace ALTEngine::Screens
         int skin = 0;
         std::array<std::string, 8> messages{}; // F2-F9 quick-chat presets
         std::string gameName;
-        int startLevel = 1;    // 1-10
+        // Net::GameMode: 0 Deathmatch (the original's), 1 Co-operative.
+        int gameMode = 0;
+        int startLevel = 1;    // 1-10, the deathmatch maps L900-L909
+        // Co-operative: the story mission to start on, an index into
+        // Game::Progression::CAMPAIGN_ORDER (0-34).
+        int coopMission = 0;
         int minGameLength = 2;
         // The port's own: how many may play (4-8, bots included), how many
         // bots the host runs (0 for none, else 3-7, always leaving room for
@@ -71,9 +76,11 @@ namespace ALTEngine::Screens
         static MultiplayerSubResult Run(const std::filesystem::path& cdDirectory, MultiplayerSettings& settings);
     };
 
-    // "GAME SETUP" - Start Game / Name Of Game / Start at level (1-10) /
-    // Minimum game length. No real networking, so "Start Game" has
-    // nowhere to hand off to yet - just reported back to the caller.
+    // "GAME SETUP" - Start Game / Name Of Game / Game Mode / Start at level
+    // (1-10, or the story mission in co-operative) / Minimum game length /
+    // the port's player limit, bots and bot skill. Co-operative has no bots,
+    // so those two are greyed out and skipped. "Start Game" is reported back
+    // to the caller, which hosts.
     struct MultiplayerStartResult
     {
         bool windowClosed = false;

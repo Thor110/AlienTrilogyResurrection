@@ -26,6 +26,8 @@ namespace ALTEngine::Net
             Chat,           // `chat`
             RosterChanged,  // names or frags changed
             BotHit,         // host: our bot in `hit.target` was hit by `hit.attacker`
+            LevelEnded,     // co-operative: every player reached the exit
+            LevelStarted,   // co-operative: the host moved on to Level() (empty: the campaign is over)
         };
         Kind kind = Kind::RosterChanged;
         uint8_t slot = 0;
@@ -91,6 +93,29 @@ namespace ALTEngine::Net
         void SendBotShot(int slot, Shot shot);
         void SendBotHit(int attacker, uint8_t target, int16_t damage);
 
+        // Host: Deathmatch (the original's) or Co-operative (the port's). Set
+        // before anyone joins; a guest learns it from the Welcome.
+        void SetGameMode(GameMode chosen) { if (role == Role::Host) { mode = chosen; } }
+        GameMode Mode() const { return mode; }
+        bool Coop() const { return mode == GameMode::Coop; }
+
+        // CO-OPERATIVE LEVEL ENDS. A player who reaches the End Level trigger
+        // reports it and waits; the host marks them in the roster, and once
+        // every player in the game (bots aside) is waiting it says the level
+        // is over (LevelEnded, on every machine). Then the host names the
+        // next level with AdvanceLevel, and the guests see LevelStarted. A
+        // player who leaves stops being waited for.
+        void ReportAtExit();
+        bool AtExitReported() const { return atExitWanted; }
+        // Players at the exit, of those playing (bots aside).
+        int PlayersAtExit() const;
+        int PlayersPlaying() const;
+        bool LevelOver() const { return levelEnded; }
+        // Host: the level now being played; empty when the campaign is over.
+        void AdvanceLevel(const std::string& levelDigits);
+        // Goes up by one with each level the game moves on to.
+        uint16_t LevelSerial() const { return levelSerial; }
+
         // The F2-F9 messages (Multiplayer Options), sent from play by key.
         void SetQuickChat(const std::array<std::string, 8>& messages) { quickChat = messages; }
         const std::string& QuickChat(int index) const { return quickChat[static_cast<size_t>(index & 7)]; }
@@ -109,6 +134,14 @@ namespace ALTEngine::Net
 
     private:
         std::array<std::string, 8> quickChat{};
+        GameMode mode = GameMode::Deathmatch;
+        uint16_t levelSerial = 0;
+        bool levelEnded = false;
+        bool atExitWanted = false;
+        double lastAtExitTry = -1.0;
+        // Host: everyone waiting at the exit ends the level.
+        void CheckLevelEnd();
+        void NewLevel(const std::string& levelDigits, uint16_t serial);
         int playerLimit = ORIGINAL_PLAYERS;
         int botsWanted = 0;
         int botSkill = 3;

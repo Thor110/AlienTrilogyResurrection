@@ -58,7 +58,7 @@ namespace ALTEngine::Net
         bool Sane(const Message& message)
         {
             return std::visit(Overloaded{
-                [](const Welcome& m) { return Slot(m.slot); },
+                [](const Welcome& m) { return Slot(m.slot) && m.mode < GameMode::Count; },
                 [](const State& m) { return Slot(m.slot) && Coordinate(m.x) && Coordinate(m.y) && Coordinate(m.z); },
                 [](const Shot& m) {
                     return Slot(m.slot) && m.type <= MAX_SHOT_TYPE && Coordinate(m.x) && Coordinate(m.y) && Coordinate(m.z)
@@ -69,6 +69,9 @@ namespace ALTEngine::Net
                 [](const Chat& m) { return Slot(m.slot); },
                 [](const Leave& m) { return Slot(m.slot); },
                 [](const Ping& m) { return Slot(m.slot); },
+                [](const AtExit& m) { return Slot(m.slot); },
+                [](const DiscoverReply& m) { return m.mode < GameMode::Count; },
+                [](const LevelStart& m) { return m.level.size() <= 8; },
                 [](const auto&) { return true; },
             }, message);
         }
@@ -87,13 +90,21 @@ namespace ALTEngine::Net
             [&](const DiscoverReply& m) {
                 w.U8(static_cast<uint8_t>(MessageType::DiscoverReply));
                 w.Str(m.gameName, MAX_GAME_NAME); w.Str(m.level, 8); w.U8(m.players); w.U8(m.maxPlayers);
+                w.U8(static_cast<uint8_t>(m.mode));
             },
             [&](const Join& m) { w.U8(static_cast<uint8_t>(MessageType::Join)); w.Str(m.name, MAX_NAME); w.U8(static_cast<uint8_t>(m.skin)); },
-            [&](const Welcome& m) { w.U8(static_cast<uint8_t>(MessageType::Welcome)); w.U8(m.slot); w.Str(m.level, 8); },
+            [&](const Welcome& m) {
+                w.U8(static_cast<uint8_t>(MessageType::Welcome)); w.U8(m.slot); w.Str(m.level, 8);
+                w.U8(static_cast<uint8_t>(m.mode)); w.U16(m.levelSerial);
+            },
             [&](const Reject& m) { w.U8(static_cast<uint8_t>(MessageType::Reject)); w.U8(static_cast<uint8_t>(m.reason)); },
             [&](const Roster& m) {
                 w.U8(static_cast<uint8_t>(MessageType::Roster));
-                for (const auto& p : m.players) { w.U8(static_cast<uint8_t>((p.used ? 1 : 0) | (p.bot ? 2 : 0))); w.Str(p.name, MAX_NAME); w.I16(p.frags); w.U8(static_cast<uint8_t>(p.skin)); }
+                for (const auto& p : m.players)
+                {
+                    w.U8(static_cast<uint8_t>((p.used ? 1 : 0) | (p.bot ? 2 : 0) | (p.atExit ? 4 : 0)));
+                    w.Str(p.name, MAX_NAME); w.I16(p.frags); w.U8(static_cast<uint8_t>(p.skin));
+                }
             },
             [&](const State& m) {
                 w.U8(static_cast<uint8_t>(MessageType::State));
@@ -109,6 +120,9 @@ namespace ALTEngine::Net
             [&](const Chat& m) { w.U8(static_cast<uint8_t>(MessageType::Chat)); w.U8(m.slot); w.Str(m.text, MAX_CHAT); },
             [&](const Leave& m) { w.U8(static_cast<uint8_t>(MessageType::Leave)); w.U8(m.slot); },
             [&](const Ping& m) { w.U8(static_cast<uint8_t>(MessageType::Ping)); w.U8(m.slot); },
+            [&](const AtExit& m) { w.U8(static_cast<uint8_t>(MessageType::AtExit)); w.U8(m.slot); },
+            [&](const LevelEnd& m) { w.U8(static_cast<uint8_t>(MessageType::LevelEnd)); w.U16(m.levelSerial); },
+            [&](const LevelStart& m) { w.U8(static_cast<uint8_t>(MessageType::LevelStart)); w.U16(m.levelSerial); w.Str(m.level, 8); },
         }, message);
         return w.out;
     }
@@ -124,15 +138,25 @@ namespace ALTEngine::Net
         case MessageType::DiscoverReply:
         {
             DiscoverReply m; m.gameName = r.Str(MAX_GAME_NAME); m.level = r.Str(8); m.players = r.U8(); m.maxPlayers = r.U8();
+            m.mode = static_cast<GameMode>(r.U8());
             result = m; break;
         }
         case MessageType::Join: { Join m; m.name = r.Str(MAX_NAME); m.skin = SkinFrom(r.U8()); result = m; break; }
-        case MessageType::Welcome: { Welcome m; m.slot = r.U8(); m.level = r.Str(8); result = m; break; }
+        case MessageType::Welcome:
+        {
+            Welcome m; m.slot = r.U8(); m.level = r.Str(8); m.mode = static_cast<GameMode>(r.U8()); m.levelSerial = r.U16();
+            result = m; break;
+        }
         case MessageType::Reject: { Reject m; m.reason = static_cast<RejectReason>(r.U8()); result = m; break; }
         case MessageType::Roster:
         {
             Roster m;
-            for (auto& p : m.players) { const uint8_t flags = r.U8(); p.used = (flags & 1) != 0; p.bot = (flags & 2) != 0; p.name = r.Str(MAX_NAME); p.frags = r.I16(); p.skin = SkinFrom(r.U8()); }
+            for (auto& p : m.players)
+            {
+                const uint8_t flags = r.U8();
+                p.used = (flags & 1) != 0; p.bot = (flags & 2) != 0; p.atExit = (flags & 4) != 0;
+                p.name = r.Str(MAX_NAME); p.frags = r.I16(); p.skin = SkinFrom(r.U8());
+            }
             result = m; break;
         }
         case MessageType::State:
@@ -152,6 +176,9 @@ namespace ALTEngine::Net
         case MessageType::Chat: { Chat m; m.slot = r.U8(); m.text = r.Str(MAX_CHAT); result = m; break; }
         case MessageType::Leave: { Leave m; m.slot = r.U8(); result = m; break; }
         case MessageType::Ping: { Ping m; m.slot = r.U8(); result = m; break; }
+        case MessageType::AtExit: { AtExit m; m.slot = r.U8(); result = m; break; }
+        case MessageType::LevelEnd: { LevelEnd m; m.levelSerial = r.U16(); result = m; break; }
+        case MessageType::LevelStart: { LevelStart m; m.levelSerial = r.U16(); m.level = r.Str(8); result = m; break; }
         default: return std::nullopt;
         }
         if (!r.ok || !result || !Sane(*result)) { return std::nullopt; }

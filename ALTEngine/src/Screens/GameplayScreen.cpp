@@ -902,7 +902,8 @@ namespace ALTEngine::Screens
                     // a multiplayer map started on its own (Level Select)
                     // starts the same way - its header start can be a sealed
                     // holding room, as L909's is.
-                    if ((session && session->Connected()) || (!digits.empty() && digits[0] == '9'))
+                    // Co-operative plays the story missions from their own start.
+                    if ((session && session->Connected() && !session->Coop()) || (!digits.empty() && digits[0] == '9'))
                     {
                         float sx = 0, sz = 0, sy = 0;
                         if (spawnAtNode(true, sx, sz, sy))
@@ -1506,8 +1507,9 @@ namespace ALTEngine::Screens
                         // Multiplayer: the Synthetic records are the other
                         // players' bodies, parked outside the map, not
                         // creatures. Kept in place (triggers find monsters by
-                        // index) but never in play.
-                        if (session)
+                        // index) but never in play. A story mission's are its
+                        // own (co-operative).
+                        if (session && !session->Coop())
                         {
                             for (size_t m = 0; m < enemies.size() && m < level.monsters.size(); ++m)
                             {
@@ -1647,6 +1649,8 @@ namespace ALTEngine::Screens
                 hudState.health = 100;
                 camera.x = spawnX; camera.z = spawnZ; camera.yaw = spawnYaw;
                 playerFeetY = spawnFeetY;
+                // Co-operative: back at the level's start.
+                if (!session->Coop())
                 {
                     float sx = 0, sz = 0, sy = 0;
                     if (spawnAtNode(false, sx, sz, sy)) { camera.x = sx; camera.z = sz; playerFeetY = sy; }
@@ -1750,9 +1754,26 @@ namespace ALTEngine::Screens
             if (type < ALTEngine::Game::Progression::TALLY_SIZE) { tally.killed[type]++; }
             return true;
         };
+        // CO-OPERATIVE: reaching the exit takes the player out of play - not
+        // drawn for the others, unhurt, still - until every player in the
+        // game has reached it (Net::Session::ReportAtExit); then the level
+        // ends on every machine together (the LevelEnded event below).
+        bool exitWaiting = false;
+        auto reachedExit = [&]() {
+            if (!(session && session->Connected() && session->Coop()))
+            {
+                levelComplete = true;
+                return;
+            }
+            if (exitWaiting) { return; }
+            exitWaiting = true;
+            hudState.waitingAtExit = true;
+            session->ReportAtExit();
+            hudMessages.Show("AT THE EXIT - WAITING FOR THE OTHER PLAYERS");
+        };
         triggerHandlers.endLevel = [&]() {
             SDL_Log("GameplayScreen: End Level trigger fired");
-            levelComplete = true;
+            reachedExit();
         };
         Uint64 lastTicks = SDL_GetTicks();
 
@@ -1920,9 +1941,10 @@ namespace ALTEngine::Screens
                     case K::Hit:
                     {
                         // The original's type 8: a quarter of it, through the
-                        // armour (FUN_0003e5c4 with cause 5).
+                        // armour (FUN_0003e5c4 with cause 5). Co-operative has
+                        // no friendly fire.
                         const int amount = e.hit.damage / 4;
-                        if (amount > 0 && !hudState.dead)
+                        if (amount > 0 && !hudState.dead && !session->Coop())
                         {
                             lastNetAttacker = e.hit.attacker;
                             hudState.ApplyDamage(amount, 5);
@@ -1964,6 +1986,19 @@ namespace ALTEngine::Screens
                     case K::PlayerJoined: hudMessages.Show(nameOf(e.slot) + " JOINED"); break;
                     case K::PlayerLeft: hudMessages.Show("PLAYER " + std::to_string(e.slot + 1) + " LEFT"); break;
                     case K::Chat: hudMessages.Show(nameOf(e.chat.slot) + ": " + e.chat.text); break;
+                    case K::RosterChanged:
+                        if (exitWaiting && session->Coop() && !session->LevelOver())
+                        {
+                            hudMessages.Show(std::to_string(session->PlayersAtExit()) + " OF "
+                                             + std::to_string(session->PlayersPlaying()) + " AT THE EXIT");
+                        }
+                        break;
+                    case K::LevelEnded:
+                    case K::LevelStarted:
+                        // Every player is at the exit (or the host has moved on
+                        // without us): the level is over here too.
+                        if (session->Coop()) { levelComplete = true; }
+                        break;
                     case K::Disconnected:
                         hudMessages.Show("LOST THE HOST");
                         result.outcome = GameplayOutcome::ExitGame;
@@ -1983,7 +2018,8 @@ namespace ALTEngine::Screens
                     state.pitch = static_cast<int16_t>(playerCam.pitch);
                     state.health = hudState.health;
                     state.weapon = static_cast<uint8_t>(selectedWeapon);
-                    state.flags = static_cast<uint8_t>((hudState.dead ? 1 : 0) | (playerCam.speed != 0 ? 4 : 0));
+                    state.flags = static_cast<uint8_t>((hudState.dead ? 1 : 0) | (playerCam.speed != 0 ? 4 : 0)
+                                                       | (exitWaiting ? 8 : 0));
                     session->SendState(state);
                 }
 
@@ -2273,7 +2309,7 @@ namespace ALTEngine::Screens
                     {
                         const int cue = ALTEngine::Game::ResupplyTimer::Pass(resupply, speedCompensationOff ? 2 : 1);
                         if (cue >= 0) { ALTEngine::Audio::SfxPlayer::PlaySlot(cue, digits.c_str(), cdDirectory); }
-                        if (resupply.expired) { levelComplete = true; }
+                        if (resupply.expired) { reachedExit(); }
                     }
                     // The original's last pass, for the weapon: firing, the
                     // switch and the animation. A frame shorter than a tick
@@ -2382,6 +2418,8 @@ namespace ALTEngine::Screens
                     // damage attributes are the ones FUN_0003dff0 reacts to.
                     const bool onHazardCell = (cellAttribute == 7 || cellAttribute == 8 || cellAttribute == 0xc);
 
+                    // Waiting at the exit: still.
+                    if (exitWaiting) { pcInput = PC::Input{}; }
                     PC::Tick(playerCam, pcInput, cellAttribute, onHazardCell, cameraSway, freeLook);
 
                     // The original's own mover (Game::PlayerMover, FUN_0003dff0):
@@ -2502,7 +2540,7 @@ namespace ALTEngine::Screens
                     // property of the key. See WeaponSystem::FireMode.
                     namespace WS = ALTEngine::Screens::WeaponSystem;
 
-                    const bool fireHeld = keys[keyBindings.GetKey(InputAction::Fire1)] || mouseFire1;
+                    const bool fireHeld = (keys[keyBindings.GetKey(InputAction::Fire1)] || mouseFire1) && !exitWaiting;
                     const bool firePressed = fireHeld && !firePressedLastTick;
                     firePressedLastTick = fireHeld;
                     if (firePressed && testingFaceIndex) { LogShotFace(level, digits, pickedFace); }   // the face logger, see LogShotFace
@@ -2749,7 +2787,7 @@ namespace ALTEngine::Screens
                     // anything yet: FUN_0003efcc's case 2 spends a grenade,
                     // sets state 3 and starts that state's animation - which is
                     // the sequence carrying the 0401gren sound cue.
-                    const bool altFireHeld = keys[keyBindings.GetKey(InputAction::Fire2)] || mouseFire2;
+                    const bool altFireHeld = (keys[keyBindings.GetKey(InputAction::Fire2)] || mouseFire2) && !exitWaiting;
                     const bool altFirePressed = altFireHeld && !altFirePressedLastTick;
                     altFirePressedLastTick = altFireHeld;
 
@@ -4017,7 +4055,7 @@ namespace ALTEngine::Screens
                             // are sent it and apply it, as the original's type 8).
                             const P::Particle* moving = particles.Ticking();
                             const int owner = moving ? moving->owner : -1;
-                            if (session && session->Connected() && !(moving && moving->remote))
+                            if (session && session->Connected() && !session->Coop() && !(moving && moving->remote))
                             {
                                 const auto damage = static_cast<int16_t>(D::HitDamage(def.speed, hitLife, def.strength));
                                 // A bot's round can hit the host's own player.
@@ -4033,7 +4071,7 @@ namespace ALTEngine::Screens
                                 const auto& states = session->RemoteStates();
                                 for (size_t slot = 0; slot < states.size(); ++slot)
                                 {
-                                    if (!states[slot] || (states[slot]->flags & 1) || static_cast<int>(slot) == owner) { continue; }
+                                    if (!states[slot] || (states[slot]->flags & (1 | 8)) || static_cast<int>(slot) == owner) { continue; }
                                     const auto& other = *states[slot];
                                     if (std::fabs(px - other.x) > REMOTE_PLAYER_HALF_WIDTH
                                         || std::fabs(pz - other.z) > REMOTE_PLAYER_HALF_WIDTH
@@ -4449,10 +4487,11 @@ namespace ALTEngine::Screens
                                 hudState.health = 200;
                                 hudState.dead = false;
                             }
-                            // No motion tracker in a multiplayer game: the
-                            // original's tracker (FUN_0003a1d0) runs only with
-                            // both network flags clear (DAT_000ae0a4/a5).
-                            if (!session) { hud.TickTracker(); }
+                            // No motion tracker in a deathmatch: the original's
+                            // tracker (FUN_0003a1d0) runs only with both
+                            // network flags clear (DAT_000ae0a4/a5). A
+                            // co-operative story mission keeps it.
+                            if (!session || session->Coop()) { hud.TickTracker(); }
 
                             // What the player has seen, for the map: every cell the
                             // view walk takes in, and the area they stand in
@@ -4993,7 +5032,8 @@ namespace ALTEngine::Screens
                     const auto& states = session->RemoteStates();
                     for (size_t slot = 0; slot < states.size(); ++slot)
                     {
-                        if (!states[slot] || (states[slot]->flags & 1)) { continue; }
+                        // Dead, or waiting at the exit (co-operative): not drawn.
+                        if (!states[slot] || (states[slot]->flags & (1 | 8))) { continue; }
                         const auto& other = *states[slot];
                         EN::Enemy body;
                         body.type = ALTEngine::Net::SkinCreatureType(session->GetRoster().players[slot].skin);
@@ -5285,7 +5325,7 @@ namespace ALTEngine::Screens
                         // second path.
                         // Not in a multiplayer game (FUN_0003a1d0 is skipped
                         // with either network flag set).
-                        if (!session)
+                        if (!session || session->Coop())
                         {
                         std::vector<ALTEngine::Renderer::HudRenderer::Contact> contacts;
                         for (const auto& enemy : enemies)

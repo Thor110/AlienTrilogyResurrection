@@ -253,6 +253,11 @@ The build also makes `ALTLevelScan`, which checks every level for faces whose te
 
 Four players, as in the original, or up to eight: the host sets the player limit (4-8) on the Start Multiplayer Game screen. The host can also add bots (none, or 3 up to the limit less one, so there is always room for the host) and set their skill (1-5); a player joining a full game takes a bot's place. Multiplayer is the original's ten maps, L900-L909; "Start at level" 1-10 picks one. Each player picks a name and a look (Synthetic, Soldier, Guard or Handler) in Multiplayer Options, and F2-F9 send the chat messages set there. Every player needs the same version of ALTEngine: an older or newer one is turned away.
 
+The host chooses the **Game Mode** below Name Of Game:
+
+- **Deathmatch** (the default) is the original's: the ten maps above, players against each other, with bots if wanted.
+- **Co-operative** is ALTEngine's own: the players go through the story missions together, starting on any of the 35 ("Start at mission"). There is no friendly fire and no bots (those rows are greyed out), with the same player limit as deathmatch. A player who reaches the end of a level waits there, out of sight and out of harm, until every player in the game has reached it; then the next mission loads for everyone. Dying puts you back at the level's start. Each computer runs its own aliens, doors and pickups for now, so what one player clears is not cleared for the others.
+
 ## Alien Trilogy Viewer
 
 The main program window.
