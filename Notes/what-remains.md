@@ -180,6 +180,15 @@ Changed in zip 103: **a review of the network, bot and trigger code** (no change
 - The Doom-style marine (green armour, helmet and visor) made from the Synthetic's frames: a separate
   download, not in the repo.
 
+Changed in zip 140, to check: **the motion tracker's sound** (Edward: crunchy, not blippy). The sweep is
+stepped by the timer interrupt itself (FUN_00039f8c, called from the 69.74 Hz handler), so one sweep is
+96 ticks, about 1.38 s; the port stepped it on the alternate world pass, which took twice that. The pulse
+(FUN_0003a1d0 -> FUN_00040b2c with EBX set) halves the volume and goes through the general channels
+(FUN_0005aed9), which won't start a sample still playing; it was on the player's channel and restarted every
+sweep. The idle sample (1002moti) is four clicks 1.31 s apart over 5.2 s, so each restart landed on its third
+click - a doubled tick. Now it plays through at half volume, and the contact tone (1003moti) likewise. The
+dish's sweep animation runs twice as fast as before, which is the original's rate.
+
 Changed in zip 102, to check: **no motion tracker in multiplayer**, as in the original (Edward). Its tracker
 routine (FUN_0003a1d0) runs only with both network flags clear (DAT_000ae0a4 and DAT_000ae0a5), so neither
 the dish nor its sweep is there in a network game. The original also moves the health bar to the bottom

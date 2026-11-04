@@ -877,10 +877,9 @@ namespace ALTEngine::Renderer
 
     void HudRenderer::TickTracker()
     {
-        // The original's counter decrements every tick and gates all of its work
-        // on the low bit, so everything here runs at half rate.
-        // The original's counter decrements every tick and gates all of its work
-        // on the low bit, so the sweep and its pause both run at half rate.
+        // Called once per timer tick (69.74 Hz). The original's counter
+        // decrements every tick and gates all of its work on the low bit, so
+        // the sweep and its pause both run at half that.
         trackerTick++;
         if ((trackerTick & 1) == 0) { return; }
         const int before = trackerFrame;

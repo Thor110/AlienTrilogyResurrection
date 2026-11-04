@@ -4931,6 +4931,21 @@ namespace ALTEngine::Screens
                     // 32-unit step keeps the step-up test and clearance behaving.
                     for (const bool worldHalf : passHalves)
                     {
+                        // The tracker's sweep. The original steps it from the
+                        // timer interrupt itself (FUN_00039f8c, called from the
+                        // 69.74 Hz handler), not from the alternate world pass:
+                        // a sweep every ~1.38 s, the spacing of the clicks in
+                        // its idle sample. Stepped on the world half it took
+                        // twice that, and each restart of the sample landed on
+                        // its third click - a doubled, crunchy tick. With speed
+                        // compensation off a pass is two timer ticks long.
+                        // No tracker in a deathmatch: FUN_0003a1d0 runs only
+                        // with both network flags clear (DAT_000ae0a4/a5); a
+                        // co-operative story mission keeps it.
+                        if (!session || session->Coop())
+                        {
+                            for (int t = speedCompensationOff ? 2 : 1; t > 0; --t) { hud.TickTracker(); }
+                        }
 
                         if (worldHalf)
                         {
@@ -4956,11 +4971,6 @@ namespace ALTEngine::Screens
                                 hudState.health = 200;
                                 hudState.dead = false;
                             }
-                            // No motion tracker in a deathmatch: the original's
-                            // tracker (FUN_0003a1d0) runs only with both
-                            // network flags clear (DAT_000ae0a4/a5). A
-                            // co-operative story mission keeps it.
-                            if (!session || session->Coop()) { hud.TickTracker(); }
 
                             // What the player has seen, for the map: every cell the
                             // view walk takes in, and the area they stand in
@@ -5809,15 +5819,21 @@ namespace ALTEngine::Screens
                             contacts.push_back(c);
                         }
                         const int blips = hud.DrawTracker(renderer, contacts, camera.yaw, windowW, windowH);
-                        // The pulse as each sweep comes round (FUN_0003a1d0),
-                        // on the player's channel: one note for an empty dish,
-                        // another when it drew a contact. It was never played.
+                        // The pulse as each sweep comes round (FUN_0003a1d0):
+                        // 0x15 for an empty dish, 0x16 when it drew a contact.
+                        // Not on the player's channel: it calls FUN_00040b2c
+                        // with EBX set (0x7ff/0xfff/0x1fff), which halves the
+                        // volume and takes the general path (FUN_0005aed9) -
+                        // and that won't start a sample still playing on any
+                        // channel. Both samples run ~5 s (four clicks 1.31 s
+                        // apart; the contact tone), so they play through
+                        // instead of restarting on every sweep.
                         if (hud.TakeTrackerSweep())
                         {
-                            ALTEngine::Audio::SfxPlayer::PlayPlayerSlot(
+                            ALTEngine::Audio::SfxPlayer::PlaySlotAtVolume(
                                 blips < 1 ? ALTEngine::Formats::SoundIds::MOTION_TRACKER
                                           : ALTEngine::Formats::SoundIds::MOTION_TRACKER_CONTACT,
-                                digits.c_str(), cdDirectory);
+                                0.5f, digits.c_str(), cdDirectory);
                         }
                         }
 

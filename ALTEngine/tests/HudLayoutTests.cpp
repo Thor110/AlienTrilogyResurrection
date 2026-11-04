@@ -3,6 +3,7 @@
 #include "Renderer/HudLayout.h"
 
 #include <string>
+#include <vector>
 
 namespace R = ALTEngine::Renderer;
 using ALTEngine::Screens::PlayerHudState;
@@ -81,4 +82,23 @@ TEST_CASE("HUD items: the boxes are wide enough that the count never runs into t
             CHECK(countLeft - labelRight >= R::HUD_ITEM_LABEL_GAP);
         }
     }
+}
+
+TEST_CASE("Motion tracker: one sweep is 96 timer ticks, as FUN_00039f8c steps it from the 69.74 Hz interrupt")
+{
+    // HudRenderer::TickTracker's stepping: work on every other timer tick.
+    int tick = 0, frame = 0, timer = 0, pause = 0;
+    std::vector<int> wraps;
+    for (int t = 1; t <= 96 * 4; ++t)
+    {
+        if ((++tick & 1) == 0) { continue; }
+        const int before = frame;
+        R::HudTrackerAdvance(frame, timer, pause);
+        if (before != 0 && frame == 0) { wraps.push_back(t); }
+    }
+    REQUIRE(wraps.size() >= 3);
+    // 96 ticks = 1.38 s: about the 1.31 s between the clicks in 1002moti, which
+    // is why the sample plays through rather than being restarted each sweep.
+    CHECK(wraps[1] - wraps[0] == 96);
+    CHECK(wraps[2] - wraps[1] == 96);
 }
