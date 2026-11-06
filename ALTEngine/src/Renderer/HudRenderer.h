@@ -132,10 +132,6 @@ namespace ALTEngine::Renderer
         // DAT_00247f6c as the frame wraps to 0): the moment for the pulse.
         bool TakeTrackerSweep() { const bool swept = trackerSwept; trackerSwept = false; return swept; }
 
-        // The half-rate counter FUN_00039f8c keeps. Drives both the sweep and the
-        // blip blink.
-        int TrackerTick() const { return trackerTick; }
-
         bool Ready() const { return sheet != nullptr; }
 
         // One transparent slot in a bar frame: where the fill shows through.

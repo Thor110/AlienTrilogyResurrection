@@ -197,33 +197,9 @@ namespace ALTEngine::Screens
             return projectileType != 0;
         }
 
-        // The hit test is a PER-AXIS BOX, not a radius, and the box belongs to
-        // the target. FUN_0002a628 reads three half-extents from the entity -
-        // the high halves at +0x08, +0x0a and +0x0c - and requires the
-        // projectile to be inside all three:
-        //
-        //     |dx| < halfX  &&  |dy| < halfY  &&  |dz| < halfZ
-        //
-        // AND ALL THREE ARE DOUBLED WHEN THE PROJECTILE TYPE IS 1. That is the
-        // shotgun. A shotgun pellet is tested against a box twice the size on
-        // every axis, which is how the original makes it forgiving to aim
-        // without simulating a spread of pellets. Nothing else gets this.
-        //
-        // The extent VALUES come from the entity template, same record as the
-        // health, and are still unread - so a single radius stands in for all
-        // three. This is the last placeholder in the hit path and it goes away
-        // with the same dump that fixes the health.
-        inline constexpr float HIT_HALF_EXTENT_PLACEHOLDER = 256.0f;
-
-        // Projectile type 1 is the shotgun (Particles::TYPE_SHOTGUN).
-        inline constexpr int SHOTGUN_BOX_MULTIPLIER = 2;
-
-        inline float HitHalfExtent(int projectileType)
-        {
-            return (projectileType == 1)
-                 ? HIT_HALF_EXTENT_PLACEHOLDER * SHOTGUN_BOX_MULTIPLIER
-                 : HIT_HALF_EXTENT_PLACEHOLDER;
-        }
+        // The hit test itself - a per-axis box from the creature's template,
+        // doubled for a shotgun pellet - is Game/ProjectileCollision.h's
+        // OverlapsCreature.
 
         // What kind of thing is being shot. Only matters for the barrel rule.
         enum TargetKind

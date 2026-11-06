@@ -105,12 +105,16 @@ namespace ALTEngine::Screens
         // for the others and takes no harm meanwhile.
         bool waitingAtExit = false;
         int lastDamageCause = -1;
+        // Counts the hits that came off health, for the remark each draws
+        // (FUN_0003e618 runs on that path only, not armour's).
+        int healthHits = 0;
         bool ApplyDamage(int amount, int cause)
         {
             if (damageCooldown > 0 || terrainShield > 0 || waitingAtExit) { return false; }
             lastDamageCause = cause;
             if (armourItem == 0)
             {
+                healthHits++;
                 health = static_cast<int16_t>(health - amount);
                 if (health < 1)
                 {
@@ -133,6 +137,7 @@ namespace ALTEngine::Screens
         {
             if (damageCooldown > 0 || terrainShield > 0 || waitingAtExit) { return false; }
             lastDamageCause = cause;
+            healthHits++;
             health = static_cast<int16_t>(health - amount);
             if (health < 1)
             {

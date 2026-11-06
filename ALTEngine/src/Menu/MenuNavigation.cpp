@@ -46,12 +46,19 @@ namespace ALTEngine::Menu
         return index;
     }
 
+    const MenuNode& ParentOf(const MenuNode& root, const std::vector<int>& path)
+    {
+        if (path.empty()) { return root; }
+        std::vector<int> parentPath = path;
+        parentPath.pop_back();
+        return WalkPath(root, parentPath);
+    }
+
     void MoveSelection(const MenuNode& root, std::vector<int>& path, int delta)
     {
         if (path.empty()) { return; }
 
-        std::vector<int> parentPath(path.begin(), path.end() - 1);
-        const MenuNode& parent = WalkPath(root, parentPath);
+        const MenuNode& parent = ParentOf(root, path);
         if (parent.children.empty()) { return; }
 
         int count = static_cast<int>(parent.children.size());

@@ -208,16 +208,6 @@ namespace ALTEngine::Screens
             return -1;
         }
 
-        int NextAvailable(int current) const
-        {
-            for (int step = 1; step <= 5; ++step)
-            {
-                const int candidate = (current + step) % 5;
-                if (Available(candidate)) { return candidate; }
-            }
-            return current;
-        }
-
         // Rounds per spare magazine, by canonical index. 0 = no magazine.
         static constexpr std::array<int, 5> ROUNDS_PER_UNIT{ 15, 0, 100, 100, 0 };
 

@@ -1384,26 +1384,8 @@ namespace ALTEngine::Menu
                         std::string description = ALTEngine::Bootstrap::Tr(
                             static_cast<ALTEngine::Bootstrap::StringId>(described->descriptionStringId), language);
 
-                        // Wrap to the window rather than running off both
-                        // edges. Greedy word wrap measured with the same
-                        // TextWidth the drawing uses, so it is exact for this
-                        // bitmap font; a single word longer than the line is
-                        // left to overflow rather than being broken mid-word.
-                        int maxWidth = windowW - scale * 32;
-                        if (maxWidth < scale * 64) { maxWidth = windowW; }
-
-                        const std::vector<std::string> lines = ALTEngine::Bootstrap::WrapText(description, scale, maxWidth);
-
-                        // Sits above the Esc/Enter prompts with a clear gap,
-                        // and grows upward so extra lines never push into them.
-                        int bottom = windowH - rowHeight * 4;
-                        int top = bottom - rowHeight * static_cast<int>(lines.size());
-                        for (size_t i = 0; i < lines.size(); ++i)
-                        {
-                            DrawBitmapText(renderer, lines[i],
-                                            (windowW - TextWidth(lines[i], scale)) / 2,
-                                            top + rowHeight * static_cast<int>(i), scale, COLOR_GREEN_DIM);
-                        }
+                        ALTEngine::Bootstrap::DrawDescription(renderer, description, windowW, windowH,
+                                                              scale, rowHeight, COLOR_GREEN_DIM);
                     }
                 }
                 DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::PressEnterToSelect, language),

@@ -89,6 +89,14 @@ namespace ALTEngine::Audio
         static void StopPlayerSlot(int slotId, const char* levelCode,
                                    const std::filesystem::path& cdDirectory);
 
+        // A sample by its file stem rather than a slot, at a fraction of the
+        // SFX volume, not over itself: the speech bank (Audio/Speech.h), whose
+        // lines are not in the level's slot table.
+        static void PlayStem(const std::string& stem, float volume, const std::filesystem::path& cdDirectory)
+        {
+            PlayFile(stem, cdDirectory, volume, true);
+        }
+
         // Samples are read once and kept. Call between levels to release them.
         static void ClearCache();
 

@@ -89,6 +89,27 @@ namespace ALTEngine::Screens
         // the pickup task (0x3c964, the same switch as FUN_0003ccb4). An item
         // the player has no room for stays where it is. Types with no case of
         // their own (5, and anything past 0x19) are never taken.
+        // The sound a pickup makes as it is taken (FUN_0003c6f4, 0x3c8ea on;
+        // FUN_0003ccb4 for another player's): a weapon or its ammunition
+        // sounds a weapon's report - types 0 and 9 0x0c (0601hand), 1 and 0x0a
+        // 0x0f (0701shot), 2 and 0x0b 0x05 (0301puls), 0x0c 0x07 (0401gren),
+        // 3 and 0x0d 0x0a (0501flam), 4 and 0x0e 0x12 (0901smar) - and
+        // everything else 0x28 (pickup). Played through FUN_00040ba0, the
+        // general channels.
+        inline int SoundFor(int type)
+        {
+            switch (type)
+            {
+            case 0x00: case 0x09: return 0x0c;
+            case 0x01: case 0x0a: return 0x0f;
+            case 0x02: case 0x0b: return 0x05;
+            case 0x0c:            return 0x07;
+            case 0x03: case 0x0d: return 0x0a;
+            case 0x04: case 0x0e: return 0x12;
+            default:              return 0x28;
+            }
+        }
+
         inline bool Wanted(int type, int amount, const PlayerInventoryState& inventory, const PlayerHudState& hud)
         {
             // The original tests the loaded and spare counters separately

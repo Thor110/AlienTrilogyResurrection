@@ -320,6 +320,24 @@ namespace ALTEngine::Bootstrap
         return lines;
     }
 
+    // An option's description in the menus: wrapped to the window (a margin of
+    // 16 characters each side, or the whole width if that leaves too little)
+    // and centred, its last line four rows off the bottom so it grows upward
+    // and never reaches the prompts beneath it.
+    inline void DrawDescription(SDL_Renderer* renderer, const std::string& text, int windowW, int windowH,
+                                int scale, int rowHeight, Color color)
+    {
+        int maxWidth = windowW - scale * 32;
+        if (maxWidth < scale * 64) { maxWidth = windowW; }
+        const std::vector<std::string> lines = WrapText(text, scale, maxWidth);
+        const int top = windowH - rowHeight * 4 - rowHeight * static_cast<int>(lines.size());
+        for (size_t i = 0; i < lines.size(); ++i)
+        {
+            DrawBitmapText(renderer, lines[i], (windowW - TextWidth(lines[i], scale)) / 2,
+                           top + rowHeight * static_cast<int>(i), scale, color);
+        }
+    }
+
     inline int TextHeight(int scale)
     {
         return 8 * scale;

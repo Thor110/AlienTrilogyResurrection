@@ -35,6 +35,10 @@ namespace ALTEngine::Menu
     // than a stale boot-time snapshot (Edward, 2026).
     MenuNode& WalkPath(MenuNode& root, const std::vector<int>& path);
 
+    // The node holding the selected one: the path without its last step
+    // (the root for a top-level selection, or an empty path).
+    const MenuNode& ParentOf(const MenuNode& root, const std::vector<int>& path);
+
     // The deepest set modelIndex along `path` from `root`, else -1.
     int EffectiveModelIndex(const MenuNode& root, const std::vector<int>& path);
 

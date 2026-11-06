@@ -214,6 +214,29 @@ namespace ALTEngine::Renderer
         }
 
         // A mesh's vertices, indices and texture, bound for the draws after it.
+        // A pass's targets, both cleared: the colour to `clear` and kept, the
+        // depth to the far plane and thrown away after.
+        SDL_GPUColorTargetInfo ClearColourTarget(SDL_GPUTexture* texture, SDL_FColor clear)
+        {
+            SDL_GPUColorTargetInfo info{};
+            info.texture = texture;
+            info.clear_color = clear;
+            info.load_op = SDL_GPU_LOADOP_CLEAR;
+            info.store_op = SDL_GPU_STOREOP_STORE;
+            return info;
+        }
+        SDL_GPUDepthStencilTargetInfo ClearDepthTarget(SDL_GPUTexture* texture)
+        {
+            SDL_GPUDepthStencilTargetInfo info{};
+            info.texture = texture;
+            info.clear_depth = 1.0f;
+            info.load_op = SDL_GPU_LOADOP_CLEAR;
+            info.store_op = SDL_GPU_STOREOP_DONT_CARE;
+            info.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
+            info.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+            return info;
+        }
+
         void BindMesh(SDL_GPURenderPass* renderPass, SDL_GPUBuffer* vertexBuffer, SDL_GPUBuffer* indexBuffer,
                       SDL_GPUTexture* texture)
         {
@@ -1497,19 +1520,9 @@ namespace ALTEngine::Renderer
 
         SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
 
-        SDL_GPUColorTargetInfo colorInfo{};
-        colorInfo.texture = colorTarget;
-        colorInfo.clear_color = SDL_FColor{ 0.0f, 0.0f, 0.0f, 0.0f }; // transparent - composited over the menu's own background
-        colorInfo.load_op = SDL_GPU_LOADOP_CLEAR;
-        colorInfo.store_op = SDL_GPU_STOREOP_STORE;
-
-        SDL_GPUDepthStencilTargetInfo depthInfo{};
-        depthInfo.texture = depthTarget;
-        depthInfo.clear_depth = 1.0f;
-        depthInfo.load_op = SDL_GPU_LOADOP_CLEAR;
-        depthInfo.store_op = SDL_GPU_STOREOP_DONT_CARE;
-        depthInfo.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
-        depthInfo.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+        // Transparent - composited over the menu's own background.
+        SDL_GPUColorTargetInfo colorInfo = ClearColourTarget(colorTarget, SDL_FColor{ 0.0f, 0.0f, 0.0f, 0.0f });
+        SDL_GPUDepthStencilTargetInfo depthInfo = ClearDepthTarget(depthTarget);
 
         SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(cmd, &colorInfo, 1, &depthInfo);
 
@@ -2186,19 +2199,9 @@ namespace ALTEngine::Renderer
 
         SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
 
-        SDL_GPUColorTargetInfo colorInfo{};
-        colorInfo.texture = colorTarget;
-        colorInfo.clear_color = SDL_FColor{ 0.0f, 0.0f, 0.0f, 1.0f }; // opaque black - a full level view, not composited over anything
-        colorInfo.load_op = SDL_GPU_LOADOP_CLEAR;
-        colorInfo.store_op = SDL_GPU_STOREOP_STORE;
-
-        SDL_GPUDepthStencilTargetInfo depthInfo{};
-        depthInfo.texture = depthTarget;
-        depthInfo.clear_depth = 1.0f;
-        depthInfo.load_op = SDL_GPU_LOADOP_CLEAR;
-        depthInfo.store_op = SDL_GPU_STOREOP_DONT_CARE;
-        depthInfo.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
-        depthInfo.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+        // Opaque black - a full level view, not composited over anything.
+        SDL_GPUColorTargetInfo colorInfo = ClearColourTarget(colorTarget, SDL_FColor{ 0.0f, 0.0f, 0.0f, 1.0f });
+        SDL_GPUDepthStencilTargetInfo depthInfo = ClearDepthTarget(depthTarget);
 
         // The cells to draw. When the set has changed since a group's list was
         // built, its list of the drawn cells' triangles is rebuilt and copied

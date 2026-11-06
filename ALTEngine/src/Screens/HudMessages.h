@@ -3,8 +3,10 @@
 #include "../Bootstrap/Strings.h"
 #include "../Renderer/HudPanel.h"
 
-#include <deque>
+#include <algorithm>
+#include <array>
 #include <string>
+#include <vector>
 
 namespace ALTEngine::Screens
 {
@@ -18,38 +20,41 @@ namespace ALTEngine::Screens
     // GsLiftActivated and GsBatteryRequired at 82-87. So it translates with
     // everything else, and German gets its real strings.
     //
-    // THE PRESENTATION IS OURS, and marked as such. The original reveals its text
-    // a character at a time in a panel at the top left of the HUD, but nothing
-    // traced yet gives the reveal rate, how long a message holds, or how many can
-    // stack - so the three constants below are chosen by eye.
+    // THE TIMING IS THE ORIGINAL'S (FUN_0003b1f0 queues, the task at 0x3b0c8
+    // shows, FUN_0003b044 picks the next): four slots; a message goes into
+    // the highest free one, and is dropped if none is free; ONE message shows
+    // at a time - the lowest occupied slot - a character a pass, with a caret
+    // after it that is solid while it types and blinks four passes on, four
+    // off, once it is done; 40 passes after its last character it goes, and
+    // the next starts. Where it sits on the HUD is ours (HudPanel.h).
     class HudMessages
     {
     public:
-        // How fast the text appears and how long it stays once complete, in the
-        // original's logic ticks. GUESSES.
-        static constexpr int TICKS_PER_CHARACTER = 2;
-        static constexpr int HOLD_TICKS = 90;
-        static constexpr size_t MAX_QUEUED = 4;
+        static constexpr int SLOT_COUNT = 4;
+        // Passes a finished message stays (the task's `+ 0x28`).
+        static constexpr int HOLD_TICKS = 0x28;
+        // The caret's blink: off while bit 2 of the count is set.
+        static constexpr int CARET_BLINK_BIT = 4;
 
-        // Queues one message by string id. Duplicates already showing are
-        // ignored, so walking over a cluster of the same pickup does not stack
-        // four identical lines.
+        // Queues one message by string id.
         void Show(ALTEngine::Bootstrap::StringId id, ALTEngine::Bootstrap::Language language)
         {
-            std::string text = ALTEngine::Bootstrap::Tr(id, language);
-            if (text.empty()) { return; }
-            Show(text);
+            Show(ALTEngine::Bootstrap::Tr(id, language));
         }
 
+        // FUN_0003b1f0: into the highest free slot, or nowhere.
         void Show(const std::string& text)
         {
             if (text.empty()) { return; }
-            for (const Line& line : lines)
+            for (int i = SLOT_COUNT - 1; i >= 0; --i)
             {
-                if (line.text == text) { return; }
+                Slot& slot = slots[static_cast<size_t>(i)];
+                if (!slot.used)
+                {
+                    slot = Slot{ true, text, 0 };
+                    return;
+                }
             }
-            if (lines.size() >= MAX_QUEUED) { lines.pop_front(); }
-            lines.push_back(Line{ text, 0, 0 });
         }
 
         // A pickup's own name, index 137 + type in the original's list.
@@ -64,73 +69,45 @@ namespace ALTEngine::Screens
             Show(static_cast<ALTEngine::Bootstrap::StringId>(id), language);
         }
 
-        // One of the original's logic ticks.
+        // One pass of the message task (0x3b0c8).
         void Tick()
         {
-            // ONE LINE AT A TIME, in order. Advancing every incomplete line at
-            // once had three messages appearing letter by letter in parallel,
-            // which does not read as a terminal printing - it reads as three
-            // things happening at once. The oldest unfinished line types until it
-            // is done, then the next starts.
-            bool typedThisTick = false;
-            for (Line& line : lines)
+            if (current < 0)
             {
-                if (line.revealed < static_cast<int>(line.text.size()))
+                // FUN_0003b044: the lowest occupied slot.
+                for (int i = 0; i < SLOT_COUNT; ++i)
                 {
-                    if (typedThisTick) { break; }   // it waits its turn
-                    if (++line.timer >= TICKS_PER_CHARACTER)
-                    {
-                        line.timer = 0;
-                        line.revealed++;
-                    }
-                    typedThisTick = true;
+                    if (slots[static_cast<size_t>(i)].used) { current = i; break; }
                 }
-                else
-                {
-                    // Only start counting toward expiry once it is complete.
-                    line.timer++;
-                }
+                if (current < 0) { return; }
             }
-            while (!lines.empty()
-                   && lines.front().revealed >= static_cast<int>(lines.front().text.size())
-                   && lines.front().timer > HOLD_TICKS)
+            Slot& slot = slots[static_cast<size_t>(current)];
+            slot.count++;
+            if (slot.count >= static_cast<int>(slot.text.size()) + HOLD_TICKS)
             {
-                lines.pop_front();
+                slot = Slot{};
+                current = -1;
             }
         }
 
-        // What to draw, newest last, already truncated to the revealed length.
+        // What to draw: the message showing, cut to what has typed so far.
         std::vector<std::string> Visible() const
         {
-            std::vector<std::string> out;
-            for (const Line& line : lines)
-            {
-                out.push_back(line.text.substr(0, static_cast<size_t>(line.revealed)));
-            }
-            return out;
+            if (current < 0) { return {}; }
+            const Slot& slot = slots[static_cast<size_t>(current)];
+            const size_t shown = std::min(slot.text.size(), static_cast<size_t>(slot.count));
+            return { slot.text.substr(0, shown) };
         }
 
-        // True while the newest line is still appearing, so the caller can show
-        // a caret.
-        // True while any line is still appearing, and the caret belongs on that
-        // line rather than always on the last.
-        bool Typing() const
-        {
-            for (const Line& line : lines)
-            {
-                if (line.revealed < static_cast<int>(line.text.size())) { return true; }
-            }
-            return false;
-        }
-
-        // Which line the caret sits on - the oldest unfinished one.
+        // Which line the caret sits on: the one showing, while the caret is
+        // lit - always while it types, then on the blink. NO_CARET otherwise.
+        static constexpr size_t NO_CARET = static_cast<size_t>(-1);
         size_t TypingLine() const
         {
-            for (size_t i = 0; i < lines.size(); ++i)
-            {
-                if (lines[i].revealed < static_cast<int>(lines[i].text.size())) { return i; }
-            }
-            return lines.size();
+            if (current < 0) { return NO_CARET; }
+            const Slot& slot = slots[static_cast<size_t>(current)];
+            if (slot.count > static_cast<int>(slot.text.size()) && (slot.count & CARET_BLINK_BIT) != 0) { return NO_CARET; }
+            return 0;
         }
 
         // ---------------------------------------------------------------
@@ -145,19 +122,20 @@ namespace ALTEngine::Screens
         //     GsLiftActivated     "Lift activated"
         //     GsBatteryRequired   "Battery required"
         //
-        // WHICH ACTION PRINTS WHICH IS INFERRED FROM THE TEXT, not traced. I
-        // could not find the call site: the strings live in a pointer array
-        // loaded from the .BIN, and nothing in the export indexes it with 82-87,
-        // so the printer is reached some way I have not identified. The pairings
-        // below are the obvious reading of the words and no more than that.
-        //
-        // The distinction that matters, and the reason there are two door
-        // strings: "activated" reads as the door itself opening, "powered up" as
-        // a switch enabling it - which is exactly the difference the port's door
-        // state already tracks in `switchOperated`. So a switch throw says
-        // powered up, and a door reaching its threshold says activated. If the
-        // original does it the other way round, those two lines swap and nothing
-        // else changes.
+        // TRACED. The strings load into a pointer array at DAT_00402f20, so
+        // 82-87 are DAT_00403068 to DAT_0040307c, and FUN_0003b1f0 is the
+        // printer:
+        //   - FUN_00029594, a door's switch count: "powered up" for each switch
+        //     short of the number the door needs, "activated" (single player
+        //     only) when the last one is thrown;
+        //   - FUN_000358a4, a vent shut off: "steam valve closed" for types
+        //     0x10 and 0x12, "flame jet shut down" for the others;
+        //   - FUN_00036f4c, a battery switch (0x16, 0x1a) used with no battery:
+        //     "battery required";
+        //   - FUN_0003ccb4, a pickup taken: its name, from the table at
+        //     DAT_000acd78.
+        // "Lift activated" (DAT_00403078) is not named by any call in the
+        // export; the port shows it when a lift first runs.
         void ShowDoorActivated(ALTEngine::Bootstrap::Language language)
         {
             Show(ALTEngine::Bootstrap::StringId::GsDoorActivated, language);
@@ -183,17 +161,18 @@ namespace ALTEngine::Screens
             Show(ALTEngine::Bootstrap::StringId::GsFlameJetShutDown, language);
         }
 
-        bool Empty() const { return lines.empty(); }
-        void Clear() { lines.clear(); }
+        bool Empty() const { return current < 0 && !slots[0].used && !slots[1].used && !slots[2].used && !slots[3].used; }
+        void Clear() { slots = {}; current = -1; }
 
     private:
-        struct Line
+        struct Slot
         {
+            bool used = false;
             std::string text;
-            int revealed = 0;
-            int timer = 0;
+            int count = 0;     // passes since it started showing (+6)
         };
 
-        std::deque<Line> lines;
+        std::array<Slot, SLOT_COUNT> slots{};
+        int current = -1;      // the slot showing, -1 for none
     };
 }

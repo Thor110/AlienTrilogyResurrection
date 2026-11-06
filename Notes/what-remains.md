@@ -180,6 +180,26 @@ Changed in zip 103: **a review of the network, bot and trigger code** (no change
 - The Doom-style marine (green armour, helmet and visor) made from the Synthetic's frames: a separate
   download, not in the repo.
 
+Changed in zip 141, to check (from a second pass over the decompilation):
+- **Ripley speaks** (new, `Audio/Speech.h`). The original has a speech bank, SFX/SPCH.TXT (the name is the
+  pointer at 0x4de8, just before the per-level lists), played by FUN_000572e4: never in a network game,
+  and not again for 0x8c passes after a line. The lines come on: being hurt off health (FUN_0003e618 - a
+  remark by how much health is left, one for dying); weapon keys 3 and 4, half the time (FUN_0004d438);
+  firing the flamethrower, 5 in 16 (FUN_0002c0a0); the queen hit (1 in 8), under 0x1a health, and killed
+  (3 in 4); a face hugger killed (half the time); a battery switch with no battery (half the time); and,
+  while a creature holds the pounce lock, a 4-in-8 chance each time a second cooldown runs out
+  (FUN_00057338). Which line each id plays is the table at DAT_000ae0ac. NOT HEARD: the SPCH files are not
+  in the test data here, so this wants a listen - if SPCH.TXT is missing, nothing plays.
+- **Pickups make a sound** - the port had none. FUN_0003c6f4 plays 0x28 for most things and a weapon's
+  own report for that weapon and its ammunition (`Pickups::SoundFor`).
+- **"Battery required"** is printed when a battery switch is used without one (FUN_00036f4c); the port
+  refused silently.
+- **The message panel's timing is the original's** (the task at 0x3b0c8): one message at a time, a
+  character a pass, a caret after it that blinks four on, four off once typed, held 0x28 passes; four
+  slots, the newest into the highest free one and the lowest shown next, a fifth dropped. It used to show
+  up to four lines at once at guessed speeds. Which action prints which notice is now traced (comment in
+  `Screens/HudMessages.h`); the port's pairings were right.
+
 Changed in zip 140, to check: **the motion tracker's sound** (Edward: crunchy, not blippy). The sweep is
 stepped by the timer interrupt itself (FUN_00039f8c, called from the 69.74 Hz handler), so one sweep is
 96 ticks, about 1.38 s; the port stepped it on the alternate world pass, which took twice that. The pulse
@@ -505,6 +525,13 @@ appearing twice):
    frame - which a typing headline redraws once a character.
 Looked at and left: the three-item menus' Up/Down/Enter switches (a few lines each, the items differ); the
 language tables' identical first lines (data).
+
+Done in zip 141: the option descriptions' wrap-and-draw (boot and pause menus: `Bootstrap::DrawDescription`);
+a render pass's cleared colour and depth targets (`ClearColourTarget`, `ClearDepthTarget`, two passes); the
+menu path's parent, three copies (`Menu::ParentOf`, which also makes an empty path safe in the pause menu's
+Enter); a dropped pickup's 0x18 -> 0x15 written out again beside `RemapDroppedType`. Removed as dead:
+`HudRenderer::TrackerTick`, `PlayerInventoryState::NextAvailable` (NextSelectable is the one used), and the
+256-unit hit box placeholder in DamageSystem.h (the real boxes are ProjectileCollision's).
 
 Still open:
 - **Splitting `Run`** further (above).

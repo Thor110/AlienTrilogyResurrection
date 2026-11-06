@@ -471,8 +471,7 @@ namespace ALTEngine::Screens
                     return;
                 }
                 const MenuNode& deepest = WalkPath(root, path);
-                std::vector<int> parentPath(path.begin(), path.end() - 1);
-                std::string parentLabel = WalkPath(root, parentPath).label;
+                std::string parentLabel = ALTEngine::Menu::ParentOf(root, path).label;
 
                 EnterResult r = Enter(root, path);
                 if (r == EnterResult::Toggled && parentLabel == "Exit Game" && deepest.label == "Yes")
@@ -593,9 +592,7 @@ namespace ALTEngine::Screens
             // general rule for any list of leaf Actions (Edward, 2026).
             auto currentListIsExitGameConfirmation = [&]() {
                 if (path.empty()) { return false; }
-                std::vector<int> parentPath(path.begin(), path.end() - 1);
-                const MenuNode& parent = parentPath.empty() ? root : WalkPath(root, parentPath);
-                return parent.label == "Exit Game";
+                return ALTEngine::Menu::ParentOf(root, path).label == "Exit Game";
             };
 
             SDL_Event event;
@@ -954,19 +951,8 @@ namespace ALTEngine::Screens
                     std::string description = ALTEngine::Bootstrap::Tr(
                         static_cast<ALTEngine::Bootstrap::StringId>(described->descriptionStringId), language);
 
-                    int maxWidth = windowW - scale * 32;
-                    if (maxWidth < scale * 64) { maxWidth = windowW; }
-
-                    const std::vector<std::string> lines = ALTEngine::Bootstrap::WrapText(description, scale, maxWidth);
-
-                    int bottom = windowH - rowHeight * 4;
-                    int top = bottom - rowHeight * static_cast<int>(lines.size());
-                    for (size_t i = 0; i < lines.size(); ++i)
-                    {
-                        DrawBitmapText(renderer, lines[i],
-                                       (windowW - TextWidth(lines[i], scale)) / 2,
-                                       top + rowHeight * static_cast<int>(i), scale, COLOR_DIM);
-                    }
+                    ALTEngine::Bootstrap::DrawDescription(renderer, description, windowW, windowH,
+                                                          scale, rowHeight, COLOR_DIM);
                 }
             }
 

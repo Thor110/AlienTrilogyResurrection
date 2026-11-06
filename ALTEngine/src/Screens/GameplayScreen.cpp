@@ -43,6 +43,7 @@
 #include "EnemySprites.h"
 #include "DamageSystem.h"
 #include "../Audio/SfxPlayer.h"
+#include "../Audio/Speech.h"
 #include "../Formats/SoundIds.h"
 #include "../Renderer/WeaponView.h"
 #include "../Renderer/HudRenderer.h"
@@ -509,6 +510,11 @@ namespace ALTEngine::Screens
         ALTEngine::Screens::Particles::Rng dropRng;
         ALTEngine::Screens::ExplosionEffects explosions;
         ALTEngine::Screens::HudMessages hudMessages;
+        // Ripley's remarks (Audio/Speech.h): none in a network game, as the
+        // original (DAT_000ae0a4).
+        ALTEngine::Audio::Speech::Voice voice;
+        voice.Load(cdDirectory);
+        int heardHealthHits = 0;
         ALTEngine::Screens::FaceHugOverlay faceHug;
         std::vector<std::string> faceHugSheets;
         ALTEngine::Screens::ShatterEffects shatter;
@@ -1414,7 +1420,7 @@ namespace ALTEngine::Screens
 
                             // Type 24 is remapped to 21 for both model and
                             // scale lookup.
-                            int type = (pickup.type == 0x18) ? 0x15 : pickup.type;
+                            int type = ALTEngine::Screens::DroppedPickups::RemapDroppedType(pickup.type);
 
                             ALTEngine::Renderer::PlacedObject placed;
                             placed.cacheKey = ALTEngine::Renderer::ModelPreviewSource::ForPickmod(cdDirectory, type).CacheKey();
@@ -1770,7 +1776,10 @@ namespace ALTEngine::Screens
             {
                 if (!inventory.HasBatteries())
                 {
-                    SDL_Log("GameplayScreen: switch %zu needs a battery", oi);
+                    // FUN_00036f4c: "Battery required", and half the time a
+                    // remark (FUN_000572e4(0xe)).
+                    hudMessages.ShowBatteryRequired(language);
+                    if (SDL_rand(2) != 0) { voice.Say(ALTEngine::Audio::Speech::BATTERY_REQUIRED, session != nullptr); }
                     return false;
                 }
                 inventory.batteries--;
@@ -1866,7 +1875,22 @@ namespace ALTEngine::Screens
                 session->SendCreatureDamage(index, static_cast<int16_t>(std::clamp(damage, 0, 32767)));
                 return;
             }
-            ALTEngine::Screens::Enemies::ApplyHit(enemy, damage, ignoreStun);
+            namespace SP = ALTEngine::Audio::Speech;
+            const int before = enemy.health;
+            const bool killed = ALTEngine::Screens::Enemies::ApplyHit(enemy, damage, ignoreStun);
+            if (enemy.health == before) { return; }
+            const bool net = session != nullptr;
+            // The remarks a hit draws: the queen struck (FUN_0002af24, 1 in 8)
+            // and weakening (FUN_000313b0, under 0x1a); killed, a face hugger
+            // half the time (FUN_000313b0) and the queen three times in four
+            // (FUN_00030b04).
+            if (enemy.type == 7)
+            {
+                if (SDL_rand(8) == 0) { voice.Say(SP::QUEEN_HIT, net); }
+                if (enemy.health < 0x1a) { voice.Say(SP::QUEEN_WEAK, net); }
+                if (killed && SDL_rand(4) != 0) { voice.Say(SP::QUEEN_KILLED, net); }
+            }
+            else if (enemy.type == 2 && killed && SDL_rand(2) != 0) { voice.Say(SP::HUGGER_KILLED, net); }
         };
         // A change from another machine, made here.
         auto applyWorldEvent = [&](const ALTEngine::Net::WorldEvent& w) {
@@ -2559,7 +2583,18 @@ namespace ALTEngine::Screens
                             // Only start a swap for a weapon that is actually
                             // held and is not the one already in hand.
                             const int slot = ALTEngine::Screens::PlayerInventoryState::SlotForSelectKey(i);
-                            if (slot != selectedWeapon && inventory.Selectable(slot)) { weaponSwitch.Begin(slot); }
+                            if (slot != selectedWeapon && inventory.Selectable(slot))
+                            {
+                                weaponSwitch.Begin(slot);
+                                // FUN_0004d438: keys 3 and 4 draw a remark
+                                // half the time.
+                                namespace SP = ALTEngine::Audio::Speech;
+                                if (i == 2 && SDL_rand(2) != 0) { voice.Say(SP::WEAPON_THREE, session != nullptr); }
+                                if (i == 3 && SDL_rand(2) != 0)
+                                {
+                                    voice.Say(SDL_rand(2) == 0 ? SP::WEAPON_FOUR_A : SP::WEAPON_FOUR_B, session != nullptr);
+                                }
+                            }
                         }
                         weaponKeyWasDown[static_cast<size_t>(i)] = down;
                     }
@@ -2912,6 +2947,12 @@ namespace ALTEngine::Screens
                             P::TYPE_FLAME,    // 4 flamethrower FUN_0002c0a0 / FUN_0002bcac
                         };
                         const int projectileType = TYPE_FOR_WEAPON[hudState.currentWeapon];
+                        // FUN_0002c0a0: a burst of flame, 5 times in 16, a remark.
+                        if (projectileType == P::TYPE_FLAME && SDL_rand(16) < 5)
+                        {
+                            namespace SP = ALTEngine::Audio::Speech;
+                            voice.Say(SDL_rand(2) == 0 ? SP::FLAMING_B : SP::FLAMING_A, session != nullptr);
+                        }
 
                         // The pulse rifle, flamethrower and smartgun each put
                         // THREE projectiles out per pull, with the later ones
@@ -4911,6 +4952,8 @@ namespace ALTEngine::Screens
                         // Type it out on the HUD, using the original's own name
                         // for the thing - index 137 + type in its string list.
                         hudMessages.ShowPickup(live.type, language);
+                        ALTEngine::Audio::SfxPlayer::PlaySlot(ALTEngine::Screens::Pickups::SoundFor(live.type),
+                                                             digits.c_str(), cdDirectory);
                         SDL_Log("GameplayScreen: collected pickup type %d (amount %d)", live.type, amount);
                     }
 
@@ -4961,6 +5004,14 @@ namespace ALTEngine::Screens
                             }
 
                             hudState.Tick();
+                            // FUN_0003e618 after a hit off health, and the
+                            // speech task (FUN_00057338).
+                            if (hudState.healthHits != heardHealthHits)
+                            {
+                                heardHealthHits = hudState.healthHits;
+                                voice.OnHurt(hudState.health, session != nullptr);
+                            }
+                            voice.Tick(ALTEngine::Screens::Enemies::pounceLockHeld, session != nullptr);
                             if (cheatFullyLoaded) { inventory.GiveEverything(); }
 
                             // 200 is the game's own ceiling: pickup type 0x17 sets it
