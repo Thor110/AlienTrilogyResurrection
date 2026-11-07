@@ -180,6 +180,14 @@ Changed in zip 103: **a review of the network, bot and trigger code** (no change
 - The Doom-style marine (green armour, helmet and visor) made from the Synthetic's frames: a separate
   download, not in the repo.
 
+Changed in zip 144, to check: **a creature coming into play can't be hurt for 0x40 ticks** (Edward: with the
+Modern options on, the hugger in L111's middle row of barrels died in the chain instead of leaping out). The
+original does give this grace: FUN_0002e638, which every creature coming into play goes through (the level's
+start, a trigger, a crate or barrel, an egg), sets +0x4e to 0x40 (0x2e7dc), and FUN_000313b0 refuses damage while
+it runs. The port never set it, and No Hit Immunity ignored that cooldown altogether. Now every creature starts
+with it (`Enemies::BringIntoPlay`), and the option lifts only the cooldown a hit leaves, as its description says.
+Note this also means a hugger leaping out of an egg can't be shot for its first 0x40 ticks, as in the original.
+
 Changed in zip 143, to check: **facehuggers no longer show through wall vents** (Edward: L111, and likely other
 levels). The original draws a creature only when its cell's zones meet the zones the view walk took in
 (FUN_00030304); a duct's cells - the cells with no face, where vent creatures wait - have none on L111 (all

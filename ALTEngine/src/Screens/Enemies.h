@@ -133,6 +133,9 @@ namespace ALTEngine::Screens
             int speed = 0;
             int state = Damage::STATE_NORMAL;
             int hitCooldown = 0;
+            // The cooldown running is the one every creature starts with
+            // (BringIntoPlay), not a hit's: No Hit Immunity leaves it be.
+            bool spawnGuard = false;
             uint8_t drop = 0xFF;        // what it leaves behind
             uint8_t triggerThreshold = 0;
             uint8_t triggerCount = 0;
@@ -353,6 +356,19 @@ namespace ALTEngine::Screens
                 static_cast<int>(std::lround(enemy.x - x)), static_cast<int>(std::lround(enemy.z - z)));
         }
 
+        // Every creature coming into play - at the level's start, from a
+        // trigger, a crate or barrel, or an egg - goes through FUN_0002e638,
+        // which sets its +0x4e to 0x40 (0x2e7dc): the cooldown FUN_000313b0
+        // refuses damage while it runs, so nothing can hurt it for its first
+        // 0x40 ticks. It is why a hugger bursting from the middle row of
+        // barrels on L111 lives through the rest of the chain.
+        inline constexpr int SPAWN_IMMUNITY = 0x40;
+        inline void BringIntoPlay(Enemy& enemy)
+        {
+            enemy.hitCooldown = SPAWN_IMMUNITY;
+            enemy.spawnGuard = true;
+        }
+
         // Builds the roster for a level. Monsters parked off-map start inactive
         // - they are crate contents, and something has to let them out.
         inline std::vector<Enemy> Build(const ALTEngine::Formats::LevelGeometry& level,
@@ -431,6 +447,7 @@ namespace ALTEngine::Screens
                 // Threshold 0 is in play immediately; anything else waits for
                 // whatever triggers it.
                 enemy.active = ActiveAtStart(record);
+                if (enemy.active) { BringIntoPlay(enemy); }
 
                 enemy.facingOctant = record.rotation & 7;
 
@@ -514,6 +531,7 @@ namespace ALTEngine::Screens
                 if (enemy.triggerCount < enemy.triggerThreshold) { return false; }
 
                 enemy.active = true;
+                BringIntoPlay(enemy);
                 enemy.x = x;
                 enemy.y = y;
                 enemy.z = z;
@@ -552,6 +570,7 @@ namespace ALTEngine::Screens
                 if (enemy.triggerCount != enemy.triggerThreshold || enemy.active) { return false; }
 
                 enemy.active = true;
+                BringIntoPlay(enemy);
                 return true;
             }
             return false;
@@ -575,6 +594,7 @@ namespace ALTEngine::Screens
                 if (enemy.monsterIndex != monsterIndex) { continue; }
                 if (enemy.active) { return nullptr; }
                 enemy.active = true;
+                BringIntoPlay(enemy);
                 enemy.springing = false;
                 enemy.state = Damage::STATE_NORMAL;
                 enemy.x = enemy.lastX = x;
@@ -618,7 +638,10 @@ namespace ALTEngine::Screens
             // The option lifts the flinch and the timer after it, but not the
             // rule that a creature already dying takes no more.
             const int state = (ignoreStun && enemy.state == Damage::STATE_HIT) ? EnemyBehaviour::STATE_ACTING : enemy.state;
-            if (!Damage::CanBeDamaged(state, ignoreStun ? 0 : enemy.hitCooldown, 0)) { return false; }
+            // The option lifts a hit's cooldown, not the one a creature
+            // starts with (BringIntoPlay).
+            const int cooldown = (ignoreStun && !enemy.spawnGuard) ? 0 : enemy.hitCooldown;
+            if (!Damage::CanBeDamaged(state, cooldown, 0)) { return false; }
 
             enemy.health -= damage;
             if (enemy.health > 0)
@@ -1209,6 +1232,7 @@ namespace ALTEngine::Screens
             // and never counted down, so anything that survived its first hit
             // - a warrior drone, say - could not be hurt again.
             if (enemy.hitCooldown > 0) { enemy.hitCooldown--; }
+            if (enemy.hitCooldown == 0) { enemy.spawnGuard = false; }
 
             // Perception - the axis separations and the banded distance.
             enemy.separationX = std::fabs(playerX - enemy.x);

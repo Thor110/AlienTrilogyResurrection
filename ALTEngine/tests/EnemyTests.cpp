@@ -492,3 +492,32 @@ TEST_CASE("Ceiling creatures: one killed up there falls, and No Hit Immunity let
     CHECK(Enemies::ApplyHit(w, 100, true));
     CHECK(!Enemies::ApplyHit(w, 100, true));
 }
+
+TEST_CASE("Enemies: a creature let out of a crate can't be hurt for 0x40 ticks (FUN_0002e638), whatever No Hit Immunity says")
+{
+    std::vector<Enemies::Enemy> roster(1);
+    Enemies::Enemy& e = roster[0];
+    e.monsterIndex = 3;
+    e.type = 2;
+    e.health = 0x20;
+    e.alive = true;
+    e.active = false;
+    e.triggerThreshold = 1;
+    REQUIRE(Enemies::Release(roster, 3, 0.0f, 0.0f, 0.0f, 0));
+    CHECK(e.hitCooldown == Enemies::SPAWN_IMMUNITY);
+    // A barrel's blast takes its whole health - and is refused, option or not.
+    CHECK(!Enemies::ApplyHit(e, e.health, false));
+    CHECK(!Enemies::ApplyHit(e, e.health, true));
+    CHECK(e.health == 0x20);
+    // Once the cooldown has run out the next hit lands, and the option goes on
+    // lifting the cooldown a hit leaves.
+    e.hitCooldown = 0;
+    e.spawnGuard = false;
+    e.state = Damage::STATE_NORMAL;
+    CHECK(!Enemies::ApplyHit(e, 1, true));
+    CHECK(e.hitCooldown > 0);
+    CHECK(!e.spawnGuard);
+    const int before = e.health;
+    Enemies::ApplyHit(e, 1, true);
+    CHECK(e.health == before - 1);
+}
