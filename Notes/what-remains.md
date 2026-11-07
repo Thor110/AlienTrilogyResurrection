@@ -180,6 +180,19 @@ Changed in zip 103: **a review of the network, bot and trigger code** (no change
 - The Doom-style marine (green armour, helmet and visor) made from the Synthetic's frames: a separate
   download, not in the repo.
 
+Changed in zip 147 (version 0.9.6), to check:
+- **Pause Weapon Select** (Modern; on in the Convenience and Modernised presets): Enter or Right on a weapon in
+  the pause menu's list switches to it, the menu staying open (FUN_00044b48 cases 2-6, the original's). Uses the
+  same switch as the number keys.
+- **The host's rules in a network game** (`Bootstrap/SessionRules.h`, sent in the Welcome, protocol 7): each
+  Modern feature is Shared (the host's for everyone), Off, or Local (`ModernSettings::NetworkRuleFor`); the
+  weapon pacing is shared; Disable Enemy Spawn, Ghost Mode and Disable Resupply Timer are off. In force for the
+  whole of `playMultiplayer` (main.cpp), through `ModernSettings::IsActive`, `TestingSettings::IsOn` and
+  `WeaponPacingSettings::Get`, so the pause menu and the level loop follow it too. The player's own settings
+  are never written over (SetFeature reads `IsActiveHere`). To check: host with a feature on and join from a
+  machine with it off.
+- **PATCH-NOTES.md** in the repository's root: the changes since 0.9.5. VERSION is 0.9.6 (and vcpkg.json).
+
 Changed in zip 146, to check (from the routine-by-routine audit: 15 agents over every function, their findings
 checked against the disassembly before anything was changed):
 - **Pickups give what the record says** (FUN_000387c0): byte 3 into the loaded counter, byte 4 into the spare

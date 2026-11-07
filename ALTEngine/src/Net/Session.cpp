@@ -316,7 +316,7 @@ namespace ALTEngine::Net
                 Event r; r.kind = Event::Kind::RosterChanged; Push(r);
             }
             // A repeated Join (the Welcome was lost) is answered again.
-            Send(from, Welcome{ static_cast<uint8_t>(slot), level, mode, levelSerial });
+            Send(from, Welcome{ static_cast<uint8_t>(slot), level, mode, levelSerial, rules });
             Broadcast(roster);
             return;
         }
@@ -430,6 +430,7 @@ namespace ALTEngine::Net
                 level = welcome->level;
                 mode = welcome->mode;
                 levelSerial = welcome->levelSerial;
+                rules = welcome->rules;
                 Event e; e.kind = Event::Kind::Welcomed; e.slot = welcome->slot; Push(e);
             }
             return;

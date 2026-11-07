@@ -157,6 +157,8 @@ namespace ALTEngine::Bootstrap
         case StringId::DescSaveAnywhere: return "DescSaveAnywhere";
         case StringId::LevelTimer: return "LevelTimer";
         case StringId::DescLevelTimer: return "DescLevelTimer";
+        case StringId::PauseWeaponSelect: return "PauseWeaponSelect";
+        case StringId::DescPauseWeaponSelect: return "DescPauseWeaponSelect";
         case StringId::AssessmentTime: return "AssessmentTime";
         case StringId::AssessmentRun: return "AssessmentRun";
         case StringId::Testing: return "Testing";
@@ -504,6 +506,8 @@ namespace ALTEngine::Bootstrap
         if (name == "DescSaveAnywhere") { return StringId::DescSaveAnywhere; }
         if (name == "LevelTimer") { return StringId::LevelTimer; }
         if (name == "DescLevelTimer") { return StringId::DescLevelTimer; }
+        if (name == "PauseWeaponSelect") { return StringId::PauseWeaponSelect; }
+        if (name == "DescPauseWeaponSelect") { return StringId::DescPauseWeaponSelect; }
         if (name == "AssessmentTime") { return StringId::AssessmentTime; }
         if (name == "AssessmentRun") { return StringId::AssessmentRun; }
         if (name == "Testing") { return StringId::Testing; }

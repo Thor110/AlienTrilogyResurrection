@@ -76,14 +76,21 @@ namespace ALTEngine::Screens
         // Maps a top-level item's label to its WeaponState, if it's a
         // weapon - nullptr for non-weapon items (Auto Mapper, Batteries,
         // Mission, Options, etc).
+        // The weapon slot a top-level entry names (PlayerInventoryState's
+        // order: 3 smart gun, 4 flamethrower), or -1.
+        int WeaponSlotFor(const std::string& label)
+        {
+            if (label == "9mm Pistol") { return 0; }
+            if (label == "Shotgun") { return 1; }
+            if (label == "Pulse Rifle") { return 2; }
+            if (label == "Smart Gun") { return 3; }
+            if (label == "Flamethrower") { return 4; }
+            return -1;
+        }
+
         std::optional<WeaponInfo> WeaponInfoFor(const std::string& label, const PlayerInventoryState& inv, const MenuNode& node)
         {
-            int index = -1;
-            if (label == "9mm Pistol") { index = 0; }
-            else if (label == "Shotgun") { index = 1; }
-            else if (label == "Pulse Rifle") { index = 2; }
-            else if (label == "Flamethrower") { index = 4; }   // weapon slots: see
-            else if (label == "Smart Gun") { index = 3; }      // PlayerInventoryState
+            const int index = WeaponSlotFor(label);
             if (index < 0) { return std::nullopt; }
             return WeaponInfo{ inv.ByIndex(index), node.modelIndex, node.secondaryModelIndex, inv.AmmoTotal(index) };
         }
@@ -305,7 +312,7 @@ namespace ALTEngine::Screens
         const std::filesystem::path& cdDirectory,
         Language& language,
         const std::string& missionLevelCode,
-        const PlayerInventoryState& inventory,
+        const PlayerInventoryState& inventoryIn,
         AudioSettings& audioSettings,
         RenderSettings& renderSettings,
         ResolutionSettings& resolutionSettings,
@@ -325,6 +332,9 @@ namespace ALTEngine::Screens
             return { PauseMenuOutcome::WindowClosed };
         }
         SDL_Renderer* renderer = app.Renderer();
+
+        // A copy, so a weapon picked here shows as the one in hand at once.
+        PlayerInventoryState inventory = inventoryIn;
 
         // Mission text loaded once up front (not re-loaded every frame) -
         // reuses the same resolver logic as MissionBriefingScreen
@@ -459,6 +469,26 @@ namespace ALTEngine::Screens
             // menu, left escapes one, and terminal selection lists like
             // Exit Game's Yes/No move the cursor with left/right too).
             auto doEnter = [&]() {
+                // Modern, Pause Weapon Select (FUN_00044b48 cases 2-6): a
+                // weapon held, with ammunition, and not already in hand
+                // becomes the one in hand; the menu stays open.
+                if (path.size() == 1)
+                {
+                    const int slot = WeaponSlotFor(root.children[static_cast<size_t>(path[0])].label);
+                    ALTEngine::Bootstrap::Config weaponConfig;
+                    if (slot >= 0 && ALTEngine::Bootstrap::ModernSettings(weaponConfig).IsActive(
+                                         ALTEngine::Bootstrap::ModernFeature::PauseWeaponSelect))
+                    {
+                        const WeaponState* held = inventory.ByIndex(slot);
+                        if (held && !held->equipped && inventory.Selectable(slot))
+                        {
+                            inventory.Equip(slot);
+                            result.selectWeapon = slot;
+                            SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
+                        }
+                        return;
+                    }
+                }
                 // The lamp / goggles entry is used, not opened: it lights
                 // one when one is carried and none is lit (FUN_00044b48).
                 if (path.size() == 1 && root.children[static_cast<size_t>(path[0])].label == "Shoulder Lamp")

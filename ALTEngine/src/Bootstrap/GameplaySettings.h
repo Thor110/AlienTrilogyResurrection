@@ -2,6 +2,7 @@
 
 #include "Config.h"
 #include "Localization.h"
+#include "SessionRules.h"
 
 #include <algorithm>
 #include <string>
@@ -122,7 +123,16 @@ namespace ALTEngine::Bootstrap
 
         explicit WeaponPacingSettings(Config& cfg) : config(cfg) {}
 
+        // In a network game, the host's (SessionRules).
         int Get() const
+        {
+            const ActiveSessionRules& session = ActiveSessionRules::Get();
+            if (session.active) { return std::clamp(static_cast<int>(session.rules.weaponPacing), MINIMUM, MAXIMUM); }
+            return GetHere();
+        }
+
+        // This machine's own setting.
+        int GetHere() const
         {
             auto value = config.Get("WeaponFrameInterrupts");
             if (!value) { return DEFAULT; }

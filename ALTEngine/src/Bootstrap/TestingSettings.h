@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Config.h"
+#include "SessionRules.h"
 
 namespace ALTEngine::Bootstrap
 {
@@ -55,6 +56,15 @@ namespace ALTEngine::Bootstrap
 
         bool IsOn(TestingOption option) const
         {
+            // A network game plays with every creature, gravity and the
+            // resupply timer, whatever a player has set (SessionRules); the
+            // face numbers and the install's cleanup are their own business.
+            if (ActiveSessionRules::Get().active
+                && (option == TestingOption::DisableEnemySpawn || option == TestingOption::GhostMode
+                    || option == TestingOption::DisableResupplyTimer))
+            {
+                return false;
+            }
             auto value = config.Get(KeyFor(option));
             // Level Cleanup is on until it is turned off, so a first run cleans the levels; the rest start off.
             if (!value.has_value()) { return option == TestingOption::LevelCleanup; }

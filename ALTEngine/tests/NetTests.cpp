@@ -2,6 +2,9 @@
 
 #include "Net/Protocol.h"
 #include "Net/Session.h"
+#include "Bootstrap/GameplaySettings.h"
+#include "Bootstrap/ModernSettings.h"
+#include "Bootstrap/TestingSettings.h"
 
 #include <chrono>
 #include <cmath>
@@ -60,7 +63,7 @@ TEST_CASE("Net: every message survives encoding")
     CHECK(RoundTrip(N::Frag{ 2, 1 }).victim == 1);
     CHECK(RoundTrip(N::Chat{ 1, "Get away from her" }).text == "Get away from her");
     CHECK(RoundTrip(N::DiscoverReply{ "LV426", "900", 2, 4 }).level == "900");
-    CHECK(RoundTrip(N::Welcome{ 3, "901" }).slot == 3);
+    CHECK(RoundTrip(N::Welcome{ 3, "901", N::GameMode::Deathmatch, 0, {} }).slot == 3);
     // Names are cut to their limit.
     CHECK(RoundTrip(N::Join{ std::string(40, 'x') }).name.size() == N::MAX_NAME);
 }
@@ -293,7 +296,7 @@ TEST_CASE("Net: the game mode and the co-operative messages survive encoding")
 {
     N::DiscoverReply reply{ "Nostromo", "111", 1, 4, N::GameMode::Coop };
     CHECK(RoundTrip(reply).mode == N::GameMode::Coop);
-    const auto w = RoundTrip(N::Welcome{ 2, "131", N::GameMode::Coop, 7 });
+    const auto w = RoundTrip(N::Welcome{ 2, "131", N::GameMode::Coop, 7, {} });
     CHECK(w.mode == N::GameMode::Coop); CHECK(w.levelSerial == 7); CHECK(w.level == "131");
     CHECK(RoundTrip(N::AtExit{ 3 }).slot == 3);
     CHECK(RoundTrip(N::LevelEnd{ 9 }).levelSerial == 9);
@@ -304,8 +307,8 @@ TEST_CASE("Net: the game mode and the co-operative messages survive encoding")
     CHECK(RoundTrip(r).players[1].atExit);
     CHECK(!RoundTrip(r).players[0].atExit);
     // A mode this version doesn't know is refused.
-    auto bytes = N::Encode(N::Welcome{ 1, "111", N::GameMode::Coop, 0 });
-    bytes[bytes.size() - 3] = 7;
+    auto bytes = N::Encode(N::Welcome{ 1, "111", N::GameMode::Coop, 0, {} });
+    bytes[bytes.size() - 8] = 7;   // the mode: before the serial (2) and the rules (5)
     CHECK(!N::Decode(bytes).has_value());
 }
 
@@ -560,4 +563,44 @@ TEST_CASE("Net: a thrown grenade or charge reaches the other players, and nothin
     }
     CHECK(world);
     CHECK(!stale);
+}
+
+TEST_CASE("Net: the host's rules travel in the Welcome")
+{
+    ALTEngine::Bootstrap::SessionRules rules;
+    rules.modernFeatures = 0x80000123u;
+    rules.weaponPacing = 5;
+    const auto w = RoundTrip(N::Welcome{ 1, "900", N::GameMode::Deathmatch, 0, rules });
+    CHECK_EQ(w.rules.modernFeatures, 0x80000123u);
+    CHECK_EQ(static_cast<int>(w.rules.weaponPacing), 5);
+}
+
+TEST_CASE("Session rules: in a network game the host decides what changes play, cheats and saving are off")
+{
+    namespace B = ALTEngine::Bootstrap;
+    B::Config config;   // read only here
+    B::ModernSettings modern(config);
+    B::SessionRules rules;
+    rules.modernFeatures = B::ModernSettings::BitFor(B::ModernFeature::FasterXenomorphs)
+                         | B::ModernSettings::BitFor(B::ModernFeature::EnableCheats)
+                         | B::ModernSettings::BitFor(B::ModernFeature::SaveAnywhere);
+    rules.weaponPacing = 6;
+    {
+        const B::SessionRulesScope scope(rules);
+        CHECK(modern.IsActive(B::ModernFeature::FasterXenomorphs));
+        CHECK(!modern.IsActive(B::ModernFeature::PlayerJumping));
+        CHECK(!modern.IsActive(B::ModernFeature::SpeedCompensation));
+        CHECK(!modern.IsActive(B::ModernFeature::EnableCheats));   // Off whatever is sent
+        CHECK(!modern.IsActive(B::ModernFeature::SaveAnywhere));
+        CHECK_EQ(B::WeaponPacingSettings(config).Get(), 6);
+        CHECK(!B::TestingSettings(config).IsOn(B::TestingOption::GhostMode));
+        CHECK(!B::TestingSettings(config).IsOn(B::TestingOption::DisableEnemySpawn));
+        // Local features stay the player's own.
+        CHECK(modern.IsActive(B::ModernFeature::LevelTimer) == modern.IsActiveHere(B::ModernFeature::LevelTimer));
+    }
+    CHECK(!B::ActiveSessionRules::Get().active);
+    CHECK(modern.IsActive(B::ModernFeature::FasterXenomorphs) == modern.IsActiveHere(B::ModernFeature::FasterXenomorphs));
+    // A host sends only the features every player must share.
+    CHECK((modern.SharedFeatureBits() & B::ModernSettings::BitFor(B::ModernFeature::EnableCheats)) == 0);
+    CHECK((modern.SharedFeatureBits() & B::ModernSettings::BitFor(B::ModernFeature::LevelTimer)) == 0);
 }

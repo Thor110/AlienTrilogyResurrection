@@ -2005,6 +2005,13 @@ namespace ALTEngine::Screens
                             ALTEngine::Audio::SfxPlayer::PlaySlot(LIGHT_ON_SOUND, digits.c_str(), cdDirectory);
                         }
                     }
+                    // Modern, Pause Weapon Select: the weapon picked there,
+                    // switched to as its key would.
+                    if (pauseResult.selectWeapon >= 0 && pauseResult.selectWeapon != selectedWeapon
+                        && inventory.Selectable(pauseResult.selectWeapon))
+                    {
+                        weaponSwitch.Begin(pauseResult.selectWeapon);
+                    }
                     cheatMaximumHealth = pauseResult.cheatMaximumHealth;
                     if (cheatFullyLoaded)
                     {

@@ -174,6 +174,9 @@ namespace ALTEngine::Bootstrap
         // Modern: Level Timer, and its line on the mission assessment. OURS.
         LevelTimer,
         DescLevelTimer,
+        // Modern: Pause Weapon Select.
+        PauseWeaponSelect,
+        DescPauseWeaponSelect,
         AssessmentTime,
         AssessmentRun,
         // Modern > Testing (TestingSettings.h). OURS.

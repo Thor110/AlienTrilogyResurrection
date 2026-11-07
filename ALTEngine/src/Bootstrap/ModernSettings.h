@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Config.h"
+#include "SessionRules.h"
 
 namespace ALTEngine::Bootstrap
 {
@@ -86,7 +87,24 @@ namespace ALTEngine::Bootstrap
         // under it - for speedrunners. Game time: the logic ticks the player
         // ran, so pauses and loading are left out. OURS.
         LevelTimer,
+
+        // Pick a weapon from the pause menu's list: Enter (or Right, or fire)
+        // on a weapon you have, with ammunition, makes it the one in hand,
+        // and the menu stays open (FUN_00044b48 cases 2-6, which the original
+        // has; the port's pause menu had left it out). Kept here so it can be
+        // turned off.
+        //
+        // New features go at the END of this list: a network game sends the
+        // host's choices as a bit per value (SessionRules).
+        PauseWeaponSelect,
     };
+
+    // What an option does in a network game (deathmatch or co-operative):
+    //   Shared - the host's choice, for every player (it changes how the game
+    //            plays, so all must agree)
+    //   Off    - off for everyone (no saving a network game, no cheats)
+    //   Local  - each player's own (it only changes their own screens)
+    enum class NetworkRule { Shared, Off, Local };
 
     class ModernSettings
     {
@@ -126,7 +144,48 @@ namespace ALTEngine::Bootstrap
             ModernFeature::SpeedCompensation,
             ModernFeature::SaveAnywhere,
             ModernFeature::LevelTimer,
+            ModernFeature::PauseWeaponSelect,
         };
+
+        static constexpr NetworkRule NetworkRuleFor(ModernFeature feature)
+        {
+            switch (feature)
+            {
+            case ModernFeature::EnableCheats:
+            case ModernFeature::SaveAnywhere:
+                return NetworkRule::Off;
+            case ModernFeature::SkipEndLevelScreen:
+            case ModernFeature::LevelSelect:
+            case ModernFeature::LevelTimer:
+                return NetworkRule::Local;
+            case ModernFeature::KeepItems:
+            case ModernFeature::PlayerJumping:
+            case ModernFeature::NoHitImmunity:
+            case ModernFeature::FreeLook:
+            case ModernFeature::RenderDistance:
+            case ModernFeature::LiveMinimap:
+            case ModernFeature::FasterXenomorphs:
+            case ModernFeature::SpeedCompensation:
+            case ModernFeature::PauseWeaponSelect:
+                return NetworkRule::Shared;
+            }
+            return NetworkRule::Shared;
+        }
+
+        static constexpr uint32_t BitFor(ModernFeature feature) { return 1u << static_cast<unsigned>(feature); }
+
+        // The rules a host sends: its own choice for every Shared feature
+        // (SessionRules). Read from this machine's settings, whatever is in
+        // force.
+        uint32_t SharedFeatureBits() const
+        {
+            uint32_t bits = 0;
+            for (ModernFeature feature : AllFeatures)
+            {
+                if (NetworkRuleFor(feature) == NetworkRule::Shared && IsActiveHere(feature)) { bits |= BitFor(feature); }
+            }
+            return bits;
+        }
 
         // The individual toggle's own stored value, ignoring the mode.
         // Menus want this so a feature still shows the state it will
@@ -149,7 +208,9 @@ namespace ALTEngine::Bootstrap
             if (Mode() != ModernMode::Custom)
             {
                 // Materialise each other feature's currently EFFECTIVE state,
-                // read through IsActive rather than derived from the mode.
+                // read through IsActiveHere rather than derived from the mode
+                // (and never a network game's rules, which are not this
+                // player's settings).
                 //
                 // This used to be `bool effective = (Mode() == On)`, which was
                 // right for On and Off but wrong for a Preset: leaving a preset
@@ -158,7 +219,7 @@ namespace ALTEngine::Bootstrap
                 // editable copy of itself.
                 bool effective[sizeof(AllFeatures) / sizeof(AllFeatures[0])]{};
                 size_t index = 0;
-                for (ModernFeature other : AllFeatures) { effective[index++] = IsActive(other); }
+                for (ModernFeature other : AllFeatures) { effective[index++] = IsActiveHere(other); }
 
                 index = 0;
                 for (ModernFeature other : AllFeatures)
@@ -192,7 +253,26 @@ namespace ALTEngine::Bootstrap
         // see the note there. Declared here so IsActive can use it.
         bool PresetEnables(ModernFeature feature) const;
 
+        // In a network game, the host's rules (SessionRules) decide the
+        // Shared features and turn the Off ones off; otherwise, or for a
+        // Local feature, this machine's own settings.
         bool IsActive(ModernFeature feature) const
+        {
+            const ActiveSessionRules& session = ActiveSessionRules::Get();
+            if (session.active)
+            {
+                switch (NetworkRuleFor(feature))
+                {
+                case NetworkRule::Off:    return false;
+                case NetworkRule::Shared: return (session.rules.modernFeatures & BitFor(feature)) != 0;
+                case NetworkRule::Local:  break;
+                }
+            }
+            return IsActiveHere(feature);
+        }
+
+        // This machine's own settings, whatever a network game says.
+        bool IsActiveHere(ModernFeature feature) const
         {
             switch (Mode())
             {
@@ -224,6 +304,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::SpeedCompensation: return "Speed Compensation";
             case ModernFeature::SaveAnywhere: return "Save Anywhere";
             case ModernFeature::LevelTimer: return "Level Timer";
+            case ModernFeature::PauseWeaponSelect: return "Pause Weapon Select";
             }
             return "";
         }
@@ -245,6 +326,7 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::SpeedCompensation: return "ModernSpeedCompensation";
             case ModernFeature::SaveAnywhere: return "ModernSaveAnywhere";
             case ModernFeature::LevelTimer: return "ModernLevelTimer";
+            case ModernFeature::PauseWeaponSelect: return "ModernPauseWeaponSelect";
             }
             return "ModernUnknown";
         }

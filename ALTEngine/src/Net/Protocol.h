@@ -7,6 +7,8 @@
 #include <variant>
 #include <vector>
 
+#include "../Bootstrap/SessionRules.h"
+
 namespace ALTEngine::Net
 {
     // THE PORT'S MULTIPLAYER PROTOCOL. The original spoke IPX through its own
@@ -18,7 +20,7 @@ namespace ALTEngine::Net
     // Every datagram: "ALT" + a version byte, a type byte, then the fields,
     // little-endian. A datagram that doesn't start so, or whose fields run
     // short, is dropped.
-    inline constexpr uint8_t PROTOCOL_VERSION = 6;   // 4: game modes, co-operative level ends; 5: the shared world; 6: throws
+    inline constexpr uint8_t PROTOCOL_VERSION = 7;   // 4: game modes, co-operative level ends; 5: the shared world; 6: throws; 7: the host's rules
     // The original's four records are its limit; the port allows a host to
     // take up to eight (MIN_PLAYER_LIMIT - MAX_PLAYERS, bots included).
     inline constexpr int MAX_PLAYERS = 8;
@@ -112,7 +114,13 @@ namespace ALTEngine::Net
     struct Join { std::string name; Skin skin = Skin::Synthetic; };
     // `levelSerial` counts the levels the game has been through, so a
     // LevelStart repeated, or arriving late, is told from a new one.
-    struct Welcome { uint8_t slot = 0; std::string level; GameMode mode = GameMode::Deathmatch; uint16_t levelSerial = 0; };
+    // `rules`: the host's Modern and Testing choices every player plays by
+    // (Bootstrap::SessionRules).
+    struct Welcome
+    {
+        uint8_t slot = 0; std::string level; GameMode mode = GameMode::Deathmatch; uint16_t levelSerial = 0;
+        Bootstrap::SessionRules rules;
+    };
     enum class RejectReason : uint8_t { Full = 1, Version = 2 };
     struct Reject { RejectReason reason = RejectReason::Full; };
     // `bot`: run by the host (Game::Bots), not a machine of its own.

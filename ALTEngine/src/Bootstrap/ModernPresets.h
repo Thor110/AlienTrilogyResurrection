@@ -31,7 +31,7 @@ namespace ALTEngine::Bootstrap
 
         // Features this preset enables. Anything not listed is off. Sized to
         // the feature count so a preset can name all of them.
-        std::array<ModernFeature, 13> enabled;
+        std::array<ModernFeature, 14> enabled;
         int enabledCount;
 
         bool Enables(ModernFeature feature) const
@@ -53,8 +53,9 @@ namespace ALTEngine::Bootstrap
             StringId::DescPresetConvenience,
             { ModernFeature::KeepItems,
               ModernFeature::SkipEndLevelScreen,
-              ModernFeature::SaveAnywhere },
-            3
+              ModernFeature::SaveAnywhere,
+              ModernFeature::PauseWeaponSelect },
+            4
         },
         // How a modern shooter would present it: free mouse look and no
         // draw-distance fade, on top of the convenience features.
@@ -67,8 +68,9 @@ namespace ALTEngine::Bootstrap
               ModernFeature::FreeLook,
               ModernFeature::RenderDistance,
               ModernFeature::FasterXenomorphs,
-              ModernFeature::SaveAnywhere },
-            6
+              ModernFeature::SaveAnywhere,
+              ModernFeature::PauseWeaponSelect },
+            7
         },
         // For working on the port rather than playing it.
         {

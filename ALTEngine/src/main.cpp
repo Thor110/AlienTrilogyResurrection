@@ -514,6 +514,12 @@ int main(int, char**)
             auto playMultiplayer = [&](ALTEngine::Net::Session& session) -> bool {
                 ALTEngine::Screens::PlayerInventoryState netInventory;
                 namespace PG = ALTEngine::Game::Progression;
+                // The host's Modern and Testing choices, for every player, for
+                // as long as the game lasts (Bootstrap::SessionRules).
+                const ALTEngine::Bootstrap::SessionRulesScope rulesInForce(session.Rules());
+                std::cout << "Multiplayer: playing by the host's rules (Modern features 0x" << std::hex
+                          << session.Rules().modernFeatures << std::dec << ", weapon pacing "
+                          << static_cast<int>(session.Rules().weaponPacing) << ")\n";
                 // While a screen between levels is up, the session is read
                 // every frame: nobody times out, and what the others do in the
                 // meantime waits for the level (and is caught up there, under
@@ -696,6 +702,14 @@ int main(int, char**)
                         break;
                     }
                     session.SetGameMode(mode);
+                    // The options that change how the game plays are the
+                    // host's, for everyone (ModernSettings::NetworkRuleFor).
+                    {
+                        ALTEngine::Bootstrap::SessionRules hostRules;
+                        hostRules.modernFeatures = ALTEngine::Bootstrap::ModernSettings(config).SharedFeatureBits();
+                        hostRules.weaponPacing = static_cast<uint8_t>(ALTEngine::Bootstrap::WeaponPacingSettings(config).GetHere());
+                        session.SetRules(hostRules);
+                    }
                     session.SetPlayerLimit(mpSettings.playerLimit);
                     // No bots in a co-operative game (for now).
                     session.SetBots(coop ? 0 : mpSettings.botCount, mpSettings.botSkill);

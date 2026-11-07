@@ -1,0 +1,115 @@
+# ALTEngine patch notes
+
+What changed in each version of ALTEngine, newest first. The version number lives in `ALTEngine/VERSION`;
+it goes up with each release, and each release gets a section here.
+
+The aim stays the same: with every Modern option off, the game plays as the 1996 original does. The Modern
+options (Options > Modern) are the deliberate departures, each one off until you turn it on.
+
+---
+
+## 0.9.6
+
+Everything since 0.9.5.
+
+### New
+
+- **Pause Weapon Select** (Modern option). Pick the weapon in hand from the pause menu's list: Enter (or Right)
+  on a weapon you carry, with ammunition, switches to it, and the menu stays open. The original game has this;
+  here it can be turned off. On in the Convenience and Modernised presets.
+- **Multiplayer plays by the host's rules.** In deathmatch and co-operative games, every option that changes
+  how the game plays is the host's choice, for every player:
+  - **The host's choice for everyone:** Keep Items, Player Jumping, No Hit Immunity, Free Look, Render Distance,
+    Live Minimap, Faster Xenomorphs, Speed Compensation, Pause Weapon Select, and the weapon pacing.
+  - **Off for everyone:** Enable Cheats and Save Anywhere, and the testing aids Disable Enemy Spawn, Ghost Mode
+    and Disable Resupply Timer.
+  - **Each player's own:** Level Timer, Level Select, Skip End Level Screen, and everything else (sound, video,
+    controls).
+
+  Your own settings are left as they are and come back when the game ends. Older versions can't join a 0.9.6
+  game (the network protocol is now version 7).
+- **Co-operative mode.** Play the story missions together over the network. Every player must reach the exit
+  before the level ends, and the doors, lifts, switches, pickups and creatures are shared between machines.
+  A guest joining a level already in progress is caught up behind a short loading screen.
+- **Ripley speaks.** The original's speech lines play: when you're hurt (depending on how much health you have
+  left), when you're killed, on some weapon changes and flamethrower bursts, when the queen is hit or killed,
+  when a face hugger dies, at a battery switch with no battery, and while a face hugger has hold of you. Not in
+  network games, as in the original. (Needs the SPCH files from the disc.)
+- **The MU/TH/UR boot screen.** Everything the start-up does (finding the game, installing, ripping the music,
+  patching, cleaning the levels) is now typed out on the game window in the MU/TH/UR style. Any key skips the
+  typing.
+- **A music playlist** (`extra/AlienTrilogyPlaylist.m3u8`) ships with releases, for playing the soundtrack
+  outside the game.
+
+### Closer to the original
+
+**Pickups and weapons**
+- Pickups give what the level says: the amount into the loaded rounds and the spare magazines separately, each
+  capped. They had been giving far too much (a box of 10 shotgun shells gave 110, a fuel can 530).
+- Picking up magazines for the pistol, pulse rifle or smart gun in hand starts a reload.
+- Firing and exploding barrels light up the level for a moment, as in the original.
+- The weapon in your hand is drawn in the light of where you stand.
+- The flamethrower's flames converge, as in the original.
+
+**Creatures**
+- A creature coming into play can't be hurt for a moment, as in the original. This is why the face hugger in
+  the first level's middle row of barrels now leaps out instead of dying in the blast. Face huggers from eggs
+  are the exception: they can be shot at once.
+- Handlers walk at the original's speed (they were twice as fast).
+- 29 vents on L122, L222 and L232 now start working at the beginning of the level; before, they waited for a
+  trigger that never came.
+- A colonist whose chestburster has come out can no longer be hurt.
+- Creatures seen mirrored stay mirrored when they flinch or die.
+- Face huggers no longer show through wall vents.
+
+**The player**
+- Dying: the view sinks to the floor before the death video, instead of cutting straight to it.
+- In a network game, the pause between hits you can take is the original's shorter one.
+
+**Sound**
+- Taking a hit makes a sound again (a metallic clank when armour takes it).
+- Blasts, barrels and breaking crates are quieter the further away they are.
+- The pulse grenade's throw has its sound.
+- The flamethrower's sound stops when you let go of the trigger.
+- Picking things up makes a sound (each weapon and its ammunition its own).
+- The burning and acid footstep plays only while the floor is actually hurting you.
+- The motion tracker sounds as it should: clean blips at the original's sweep rate, not a crunchy doubled tick.
+- The shotgun's sound plays once per shot.
+
+**Levels and graphics**
+- Each level plays its own music track. 27 levels had the wrong track; level 909 now has music.
+- Doors are lit as in the original, not by the room they're in (some inner doors were much too dark).
+- Animated textures run at the original's speed.
+- 31 objects turned at an angle (L211's double crates, L141's steel coils, crates on L311 and L381) now face
+  the right way.
+- Switches are drawn at their original size.
+- Flames and steam are drawn half see-through, as in the original.
+
+**HUD and messages**
+- Messages type out one at a time, a letter at a time, with a blinking caret, as in the original.
+- "Battery required" shows at a battery switch when you have none.
+- The speed and shield boxes count down in the original's units, not raw ticks.
+- The item boxes are wide enough that a number never runs into its label.
+- Messages start at the original's place when the Live Minimap is off.
+
+### Fixes
+
+- **Choosing the game folder:** no crash on a folder name with unusual characters; the SELECT button works with
+  Windows display scaling; the path box can be clicked or typed into (Tab, Ctrl+V, Enter).
+- **Installing from an existing installation** (not just the disc) now works, into ALTEngine's own folder; the
+  original game's files are never changed. Repackaged releases missing some of the disc's files are reported
+  clearly rather than half-installed.
+- The level override geometry loads again; the old door-gap overlay (-GAP files) has been removed.
+
+### Under the hood
+
+- Every routine of the original game was compared with the port, one by one; this release carries the first
+  batch of fixes from that audit. The rest are listed in `Notes/what-remains.md`.
+- Every byte of the level files is now accounted for.
+- Code clean-ups: duplicate code merged, stricter compiler warnings, and more tests (283 now).
+
+---
+
+## 0.9.5 and earlier
+
+Not recorded here. See the repository's history and `Notes/` for what came before.

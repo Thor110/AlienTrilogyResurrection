@@ -160,6 +160,8 @@ namespace ALTEngine::Bootstrap
             "Save Game keeps the level as it stands, not just its start",
             "Level Timer",
             "The mission assessment shows the level's time and the run's total",
+            "Pause Weapon Select",
+            "Pick the weapon in hand from the pause menu's list, as the original lets you",
             "Time",
             "Run",
             "Testing",

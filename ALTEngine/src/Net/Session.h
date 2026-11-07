@@ -113,6 +113,12 @@ namespace ALTEngine::Net
         GameMode Mode() const { return mode; }
         bool Coop() const { return mode == GameMode::Coop; }
 
+        // Host: the Modern and Testing choices every player plays by, set
+        // before anyone joins; a guest learns them from the Welcome
+        // (Bootstrap::SessionRules).
+        void SetRules(const Bootstrap::SessionRules& chosen) { if (role == Role::Host) { rules = chosen; } }
+        const Bootstrap::SessionRules& Rules() const { return rules; }
+
         // CO-OPERATIVE LEVEL ENDS. A player who reaches the End Level trigger
         // reports it and waits; the host marks them in the roster, and once
         // every player in the game (bots aside) is waiting it says the level
@@ -174,6 +180,7 @@ namespace ALTEngine::Net
     private:
         std::array<std::string, 8> quickChat{};
         GameMode mode = GameMode::Deathmatch;
+        Bootstrap::SessionRules rules;
         uint16_t levelSerial = 0;
         bool levelEnded = false;
         bool atExitWanted = false;

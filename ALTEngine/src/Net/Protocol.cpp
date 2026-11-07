@@ -119,6 +119,7 @@ namespace ALTEngine::Net
             [&](const Welcome& m) {
                 w.U8(static_cast<uint8_t>(MessageType::Welcome)); w.U8(m.slot); w.Str(m.level, 8);
                 w.U8(static_cast<uint8_t>(m.mode)); w.U16(m.levelSerial);
+                w.U32(m.rules.modernFeatures); w.U8(m.rules.weaponPacing);
             },
             [&](const Reject& m) { w.U8(static_cast<uint8_t>(MessageType::Reject)); w.U8(static_cast<uint8_t>(m.reason)); },
             [&](const Roster& m) {
@@ -205,6 +206,7 @@ namespace ALTEngine::Net
         case MessageType::Welcome:
         {
             Welcome m; m.slot = r.U8(); m.level = r.Str(8); m.mode = static_cast<GameMode>(r.U8()); m.levelSerial = r.U16();
+            m.rules.modernFeatures = r.U32(); m.rules.weaponPacing = r.U8();
             result = m; break;
         }
         case MessageType::Reject: { Reject m; m.reason = static_cast<RejectReason>(r.U8()); result = m; break; }
