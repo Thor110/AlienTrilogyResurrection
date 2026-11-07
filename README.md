@@ -130,6 +130,10 @@ A thanks to bambamalicious for discovering the fix for the inaccessible secret o
 
 And thanks to Kaiser for information regarding animated textures and some other previously unknown bytes.
 
+Thanks to onelastpilot for the suggestion to add a timer to the levels for recording best times.
+
+Thanks to CybeRingu for the suggestion to add co-operative to the multiplayer mode.
+
 ## Engine Reimplementation
 
 Engine reimplementation is currently a work in progress.
