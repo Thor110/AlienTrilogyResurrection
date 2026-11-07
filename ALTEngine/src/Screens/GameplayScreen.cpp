@@ -5610,6 +5610,26 @@ namespace ALTEngine::Screens
                     // staticObjectCount) have no such test. Only with the fade
                     // on, as for the level's faces.
                     zoneCulling = ModelRenderer::DrawDistanceFade() && !drawnCells.empty();
+                    // A creature in a duct behind a wall vent (a cell with no
+                    // face) takes the zone test whatever the settings: with
+                    // Render Distance on it would otherwise show through the
+                    // vent's grille. Its duct's zones (none at all on L111)
+                    // are seldom among those the walk takes in, so it shows
+                    // only once it comes out, as in the original.
+                    if (!zoneCulling && !drawnCells.empty())
+                    {
+                        for (size_t i = creatureSpritesBegin; i < creatureSpritesEnd && i < placedSprites.size(); ++i)
+                        {
+                            auto& sprite = placedSprites[i];
+                            const int cell = ALTEngine::Formats::CellIndex(
+                                level, ToGridSpaceX(sprite.x, originX) >> 9, ToGridSpaceZ(sprite.z, originZ) >> 9);
+                            if (cell >= 0 && ALTEngine::Game::CreatureSight::CellHasNoFace(level, cell)
+                                && !ALTEngine::Game::CreatureSight::ZoneVisible(level, cell, drawnZones))
+                            {
+                                sprite.visible = false;
+                            }
+                        }
+                    }
                     if (zoneCulling)
                     {
                         auto inView = [&](float x, float z) {

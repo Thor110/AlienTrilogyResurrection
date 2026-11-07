@@ -180,6 +180,14 @@ Changed in zip 103: **a review of the network, bot and trigger code** (no change
 - The Doom-style marine (green armour, helmet and visor) made from the Synthetic's frames: a separate
   download, not in the repo.
 
+Changed in zip 143, to check: **facehuggers no longer show through wall vents** (Edward: L111, and likely other
+levels). The original draws a creature only when its cell's zones meet the zones the view walk took in
+(FUN_00030304); a duct's cells - the cells with no face, where vent creatures wait - have none on L111 (all
+5,774 of them, and all 11 of its duct huggers) and seldom share one with the room elsewhere. The port ran that
+test only with the distance fade on, so with Render Distance (on in Modern On and both presets) the huggers
+showed through the grilles. A creature in a duct cell now takes the test whatever the settings; creatures in
+ordinary cells keep the old behaviour, so Render Distance still shows far-off creatures.
+
 Changed in zip 142, to check:
 - **Level music.** The music table is indexed by the original's level number, and that number is now traced:
   it is the index of the level file table at 0xa4dec (0x1069b reads it with the level number), whose 45 entries
