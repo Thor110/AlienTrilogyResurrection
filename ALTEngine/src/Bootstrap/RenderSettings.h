@@ -19,7 +19,7 @@ namespace ALTEngine::Bootstrap
     class RenderSettings
     {
     public:
-        explicit RenderSettings(Config& config) : config(config) {}
+        explicit RenderSettings(Config& cfg) : config(cfg) {}
 
         RenderFidelity Get() const
         {

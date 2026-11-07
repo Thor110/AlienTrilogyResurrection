@@ -3340,9 +3340,9 @@ namespace ALTEngine::Screens
                             if (!cell) { return false; }
                             if (cell->attribute >= 0x14 && cell->attribute <= 0x2c) { return false; }
                             const int index = ALTEngine::Formats::CellIndex(level, gx >> 9, gz >> 9);
-                            const uint8_t mark = (index >= 0 && static_cast<size_t>(index) < occupancy.size())
+                            const uint8_t cellMark = (index >= 0 && static_cast<size_t>(index) < occupancy.size())
                                 ? occupancy[static_cast<size_t>(index)] : 0;
-                            return mark == 0 || (allowPlayer && mark == 0xff);
+                            return cellMark == 0 || (allowPlayer && cellMark == 0xff);
                         };
                         aiWorld.cellOpenOrPlayer = [&](int x, int z) { return walkableAt(x, z, true); };
                         aiWorld.cellOpen = [&](int x, int z) { return walkableAt(x, z, false); };
@@ -5076,18 +5076,18 @@ namespace ALTEngine::Screens
                         for (size_t li = 0; li < lifts.size(); ++li)
                         {
                             namespace LF = ALTEngine::Game::Lifts;
-                            const auto result = LF::Tick(lifts[li], level);
-                            if (result.firstActivation) { hudMessages.ShowLiftActivated(language); }
-                            if (result.started || result.stopped)
+                            const auto liftResult = LF::Tick(lifts[li], level);
+                            if (liftResult.firstActivation) { hudMessages.ShowLiftActivated(language); }
+                            if (liftResult.started || liftResult.stopped)
                             {
                                 // From the lift, louder when the player set it
                                 // off (FUN_00040c38's modes 0 and 3).
                                 const LF::Lift& lift = lifts[li];
                                 const float liftX = (static_cast<float>(lift.cellX) + lift.width * 0.5f) * 512.0f - originX;
                                 const float liftZ = (static_cast<float>(lift.cellZ) + lift.depth * 0.5f) * 512.0f - originZ;
-                                const int mode = result.started && result.startedByTrigger ? LF::SOUND_MODE_TRIGGERED : LF::SOUND_MODE;
+                                const int mode = liftResult.started && liftResult.startedByTrigger ? LF::SOUND_MODE_TRIGGERED : LF::SOUND_MODE;
                                 ALTEngine::Audio::SfxPlayer::PlaySlotAtVolume(
-                                    result.started ? LF::SOUND_START : LF::SOUND_STOP,
+                                    liftResult.started ? LF::SOUND_START : LF::SOUND_STOP,
                                     ALTEngine::Audio::SfxPlayer::DistanceVolume(mode, liftX - camera.x, liftZ - camera.z),
                                     digits.c_str(), cdDirectory);
                             }
@@ -5825,7 +5825,7 @@ namespace ALTEngine::Screens
                                 {
                                     const std::string& line = visible[i];
                                     const int drawn = hud.DrawHudText(
-                                        renderer, line, R::HUD_MESSAGE_X, lineY,
+                                        renderer, line, leftColumn.messageX, lineY,
                                         R::HUD_FONT_C_FIRST_DESCRIPTOR, 1.0f, 1.0f,
                                         R::HUD_FONT_C_LETTER_SPACING);
 
@@ -5836,7 +5836,7 @@ namespace ALTEngine::Screens
                                         // Glyph 0x06, the font's own block cursor.
                                         const std::string caret(1, R::HUD_MESSAGE_CARET_CHAR);
                                         hud.DrawHudText(renderer, caret,
-                                                        R::HUD_MESSAGE_X + drawn, lineY,
+                                                        leftColumn.messageX + drawn, lineY,
                                                         R::HUD_FONT_C_FIRST_DESCRIPTOR, 1.0f, 1.0f,
                                                         R::HUD_FONT_C_LETTER_SPACING);
                                     }
@@ -5984,8 +5984,8 @@ namespace ALTEngine::Screens
                 const int scale = ComputeMenuScale(renderer);
                 const int lineHeight = ALTEngine::Bootstrap::TextHeight(scale) + scale * 4;
                 const int margin = scale * 8;
-                int windowW = 0, windowH = 0;
-                SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+                int loadW = 0, loadH = 0;
+                SDL_GetRenderOutputSize(renderer, &loadW, &loadH);
                 const Color bright = MenuStyle::COLOR_CURSOR;
                 const Color dim = MenuStyle::COLOR_DIM;
                 DrawBitmapText(renderer, "Incoming data transfer", margin, margin, scale, bright);
@@ -5997,7 +5997,7 @@ namespace ALTEngine::Screens
                     DrawBitmapText(renderer, "Changes received: " + std::to_string(worldReceived),
                                    margin, margin + lineHeight * 5, scale, dim);
                 }
-                DrawBitmapText(renderer, "Loading data", margin, windowH - lineHeight * 2, scale, dim);
+                DrawBitmapText(renderer, "Loading data", margin, loadH - lineHeight * 2, scale, dim);
             }
 
             SDL_RenderPresent(renderer);

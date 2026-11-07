@@ -180,6 +180,16 @@ Changed in zip 103: **a review of the network, bot and trigger code** (no change
 - The Doom-style marine (green armour, helmet and visor) made from the Synthetic's frames: a separate
   download, not in the repo.
 
+Changed in zip 142, to check:
+- **Level music.** The music table is indexed by the original's level number, and that number is now traced:
+  it is the index of the level file table at 0xa4dec (0x1069b reads it with the level number), whose 45 entries
+  run 111, 112, 113, 122, 131, 114, 141, 115, ... (`Formats/LevelOrder.h`; the campaign order is its first 35).
+  The port had guessed the manifest's order, which gave 27 levels the wrong track. Now the four levels on the
+  main menu's track 2 are the bonus levels 113, 114, 115 and 155. 909 still plays nothing (the original reads
+  past its table there).
+- **Messages without the Live Minimap** start at the original's place, (0x10, 0x3a), still below the item
+  boxes when there are any; with it they stay under the map.
+
 Changed in zip 141, to check (from a second pass over the decompilation):
 - **Ripley speaks** (new, `Audio/Speech.h`). The original has a speech bank, SFX/SPCH.TXT (the name is the
   pointer at 0x4de8, just before the per-level lists), played by FUN_000572e4: never in a network game,
@@ -533,9 +543,13 @@ Enter); a dropped pickup's 0x18 -> 0x15 written out again beside `RemapDroppedTy
 `HudRenderer::TrackerTick`, `PlayerInventoryState::NextAvailable` (NextSelectable is the one used), and the
 256-unit hit box placeholder in DamageSystem.h (the real boxes are ProjectileCollision's).
 
+Done in zip 142: `-Wshadow` is on for GCC and Clang, with every warning it gave fixed (the settings classes'
+`config` parameters, and twelve inner variables reusing an outer name); the Windows header's set-up is one
+guarded header (`Bootstrap/WindowsHeader.h`) instead of four copies, which also stops MinGW's NOMINMAX
+redefinition warning; the level order is one list (`Formats/LevelOrder.h`) for the campaign and the music.
+
 Still open:
 - **Splitting `Run`** further (above).
-- Optional: rename the settings classes' `config` parameter so `-Wshadow` can be turned on.
 
 ## 4. Performance
 

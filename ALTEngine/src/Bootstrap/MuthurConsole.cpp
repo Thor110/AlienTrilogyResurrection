@@ -159,7 +159,7 @@ namespace ALTEngine::Bootstrap
         class TeeBuffer : public std::streambuf
         {
         public:
-            TeeBuffer(std::streambuf* through, MuthurConsole::State& state) : through(through), state(state) {}
+            TeeBuffer(std::streambuf* out, MuthurConsole::State& readout) : through(out), state(readout) {}
 
         protected:
             int overflow(int c) override

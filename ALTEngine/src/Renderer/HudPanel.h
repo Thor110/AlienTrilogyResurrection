@@ -844,6 +844,10 @@ namespace ALTEngine::Renderer
     // this is not one - it is a terminal readout (Edward, 2026).
     inline constexpr int HUD_MESSAGE_X = HUD_MINIMAP_X;
     inline constexpr int HUD_MESSAGE_Y = HUD_MINIMAP_Y + HUD_MINIMAP_STRIP_H + HUD_MINIMAP_H + 4;
+    // Where the original prints them (FUN_0003b1f0 writes 0x10, 0x3a into the
+    // slot), used without the Live Minimap.
+    inline constexpr int HUD_MESSAGE_ORIGINAL_X = 0x10;
+    inline constexpr int HUD_MESSAGE_ORIGINAL_Y = 0x3a;
     // Line pitch is the HUD font's own glyph height, so lines sit flush the way
     // the ammo row's digits do. No width or padding: there is no box.
     // Font C's own height plus a row of leading.

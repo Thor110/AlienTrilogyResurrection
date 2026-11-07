@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Formats/LevelList.h"
+#include "../Formats/LevelOrder.h"
 
 #include <array>
 #include <optional>
@@ -27,7 +28,8 @@ namespace ALTEngine::Game::Progression
     // table at 0xa616e): 113, 114, 115, 155, 242, 243, 352 and 353, played
     // only after scoring 85% or more on the mission of the level before.
     inline constexpr int CAMPAIGN_LENGTH = 35;
-    extern const char* const CAMPAIGN_ORDER[CAMPAIGN_LENGTH];
+    // The first 35 of the original's level numbers (Formats/LevelOrder.h).
+    inline constexpr const char* const* CAMPAIGN_ORDER = Formats::ORIGINAL_LEVEL_ORDER;
 
     // The level's place in the campaign, or -1 (multiplayer, or not one of
     // the 35).

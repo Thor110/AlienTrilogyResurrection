@@ -27,7 +27,12 @@ TEST_CASE("HUD left side: without the minimap the countdown and the items keep t
     const auto c = R::LayoutHudLeftColumn(WithItems(1), false, true);
     CHECK(c.resupplyY == ALTEngine::Game::ResupplyTimer::HUD_Y);
     CHECK(c.itemTop == R::HUD_ITEM_STACK_TOP);
-    CHECK(c.messageTop == R::HUD_MESSAGE_Y);
+    // The messages at the original's place, moved below the box if it reaches it.
+    CHECK(c.messageX == R::HUD_MESSAGE_ORIGINAL_X);
+    CHECK(c.messageTop >= c.itemBottom + R::HUD_LEFT_COLUMN_GAP);
+    const auto bare = R::LayoutHudLeftColumn(WithItems(0), false, false);
+    CHECK(bare.messageX == R::HUD_MESSAGE_ORIGINAL_X);
+    CHECK(bare.messageTop == R::HUD_MESSAGE_ORIGINAL_Y);
 }
 
 TEST_CASE("HUD left side: with the minimap everything starts below it, countdown, items, messages in turn")

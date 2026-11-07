@@ -14,7 +14,7 @@ namespace ALTEngine::Bootstrap
     class LanguageSettings
     {
     public:
-        explicit LanguageSettings(Config& config) : config(config) {}
+        explicit LanguageSettings(Config& cfg) : config(cfg) {}
 
         Language Get() const
         {
@@ -58,7 +58,7 @@ namespace ALTEngine::Bootstrap
     class DifficultySettings
     {
     public:
-        explicit DifficultySettings(Config& config) : config(config) {}
+        explicit DifficultySettings(Config& cfg) : config(cfg) {}
 
         Difficulty Get() const
         {
@@ -86,7 +86,7 @@ namespace ALTEngine::Bootstrap
     class CameraSwaySettings
     {
     public:
-        explicit CameraSwaySettings(Config& config) : config(config) {}
+        explicit CameraSwaySettings(Config& cfg) : config(cfg) {}
 
         bool Get() const
         {
@@ -120,7 +120,7 @@ namespace ALTEngine::Bootstrap
         static constexpr int MINIMUM = 1;
         static constexpr int MAXIMUM = 8;
 
-        explicit WeaponPacingSettings(Config& config) : config(config) {}
+        explicit WeaponPacingSettings(Config& cfg) : config(cfg) {}
 
         int Get() const
         {

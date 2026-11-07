@@ -10,7 +10,7 @@ namespace ALTEngine::Bootstrap
     class ResolutionSettings
     {
     public:
-        explicit ResolutionSettings(Config& config) : config(config) {}
+        explicit ResolutionSettings(Config& cfg) : config(cfg) {}
 
         // Returns the saved (width, height), or std::nullopt if none is
         // saved yet (caller should fall back to the desktop's current mode).

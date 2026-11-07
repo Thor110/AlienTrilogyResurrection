@@ -11,10 +11,7 @@
 #include <string>
 
 #if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#define NOGDI       // avoid windows.h macro-clobbering DrawText/Rectangle/etc.
-#define NOMINMAX    // avoid windows.h macro-clobbering std::min/std::max/std::clamp
-#include <windows.h>
+#include "WindowsHeader.h"
 #endif
 
 namespace ALTEngine::Bootstrap

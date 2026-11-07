@@ -2382,10 +2382,10 @@ namespace ALTEngine::Renderer
             // a sprite stays upright when the player looks up or down - the
             // original's sprites have no pitch, and tipping them to face the
             // camera would look wrong under Free Look.
-            float forwardX = std::sin(camera.yaw);
-            float forwardZ = -std::cos(camera.yaw);
-            float rightX = forwardZ;
-            float rightZ = -forwardX;
+            float spriteForwardX = std::sin(camera.yaw);
+            float spriteForwardZ = -std::cos(camera.yaw);
+            float rightX = spriteForwardZ;
+            float rightZ = -spriteForwardX;
             const float rightLen = std::sqrt(rightX * rightX + rightZ * rightZ);
             if (rightLen > 0.0001f) { rightX /= rightLen; rightZ /= rightLen; }
 

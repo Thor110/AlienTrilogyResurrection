@@ -14,7 +14,7 @@ namespace ALTEngine::Bootstrap
     class AudioSettings
     {
     public:
-        explicit AudioSettings(Config& config) : config(config) {}
+        explicit AudioSettings(Config& cfg) : config(cfg) {}
 
         int MusicVolume() const { return GetOr("MusicVolume", 8); }
         void SetMusicVolume(int volume) { config.Set("MusicVolume", std::to_string(std::clamp(volume, 0, 10))); }

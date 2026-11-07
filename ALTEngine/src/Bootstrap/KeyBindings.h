@@ -21,7 +21,7 @@ namespace ALTEngine::Bootstrap
     class KeyBindings
     {
     public:
-        explicit KeyBindings(Config& config) : config(config) {}
+        explicit KeyBindings(Config& cfg) : config(cfg) {}
 
         // KEYBOARD - used directly by gameplay code that reads a
         // specific action's keyboard binding (GameplayScreen's

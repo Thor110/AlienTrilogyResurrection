@@ -1369,14 +1369,14 @@ namespace ALTEngine::Menu
                     // description visible means the explanation stays up for as
                     // long as you are anywhere inside that setting
                     // (Edward, 2026).
-                    const MenuNode* node = &(*optionsRootPtr);
+                    const MenuNode* walk = &(*optionsRootPtr);
                     const MenuNode* described = ((*optionsRootPtr).descriptionStringId >= 0) ? &(*optionsRootPtr) : nullptr;
                     for (size_t depth = 0; depth < optionsPath.size(); ++depth)
                     {
                         int childIndex = optionsPath[depth];
-                        if (childIndex < 0 || static_cast<size_t>(childIndex) >= node->children.size()) { break; }
-                        node = &node->children[static_cast<size_t>(childIndex)];
-                        if (node->descriptionStringId >= 0) { described = node; }
+                        if (childIndex < 0 || static_cast<size_t>(childIndex) >= walk->children.size()) { break; }
+                        walk = &walk->children[static_cast<size_t>(childIndex)];
+                        if (walk->descriptionStringId >= 0) { described = walk; }
                     }
 
                     if (described)

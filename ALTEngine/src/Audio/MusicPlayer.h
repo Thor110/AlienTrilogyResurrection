@@ -33,6 +33,7 @@
 #include <optional>
 
 #include <cstdio>
+#include "../Formats/LevelOrder.h"
 #include <string>
 
 namespace ALTEngine::Audio
@@ -50,13 +51,6 @@ namespace ALTEngine::Audio
     // track<NN>.wav, two digits, numbered by CD track. So the table below plugs
     // straight in - LevelMusicTrack(id) gives NN.
     //
-    // STILL OPEN: the original indexes that table by DAT_000b0ca8, its internal
-    // level id, and how that id relates to a level CODE like "111" has not been
-    // traced. The order levels appear in LevelManifest.json is the obvious
-    // guess but it IS a guess, and getting it wrong would give every level
-    // plausible-sounding but wrong music. Not wired to gameplay for that
-    // reason; confirm the mapping first, ideally by checking one level in the
-    // original against what this table predicts.
     inline std::string MusicTrackFileName(int track)
     {
         if (track < 0) { return {}; }
@@ -65,40 +59,17 @@ namespace ALTEngine::Audio
         return name;
     }
 
-    // Level CODE ("111") to the internal level id the track table is indexed
-    // by. The order is LevelManifest.json's: 36 campaign levels then the 10
-    // multiplayer ones.
+    // Level CODE ("111") to the original's level number, which indexes the
+    // music table as it does every per-level table (Formats/LevelOrder.h).
     //
-    // *** THIS ORDERING IS AN ASSUMPTION. *** The original indexes by
-    // DAT_000b0ca8 and nothing traced shows how that relates to a level code.
-    // Manifest order is the obvious candidate and it lines up suggestively -
-    // indices 36..43 land on the four-track cycle 14,15,16,17 that repeats,
-    // which is what you would expect of the multiplayer set sharing a small
-    // pool of music. It is still a guess, and a wrong one gives every level
-    // plausible but incorrect music. The resolved track is logged at level
-    // start so it can be checked against the original.
+    // This replaced a guess (the manifest's order) that gave 27 levels the
+    // wrong music. Read this way, the four levels that share the main menu's
+    // track 2 are exactly the bonus levels 113, 114, 115 and 155.
     //
-    // A CONCRETE REASON TO DOUBT IT: the table has 44 usable entries (0..43)
-    // but there are 46 levels, so under this ordering the last two multiplayer
-    // levels (908 and 909) fall off the end and play nothing. Either the
-    // ordering is not the one the original uses, or multiplayer music comes
-    // from somewhere else entirely. Both of those are worth resolving before
-    // trusting the mapping - 44 of 46 landing is suggestive, not proof.
-    inline int LevelIdForCode(const std::string& code)
-    {
-        static const char* ORDER[] = {
-            "111", "112", "113", "114", "115", "122", "131", "141", "154", "155", "161",
-            "162", "211", "212", "213", "222", "231", "232", "242", "243", "262", "263",
-            "311", "321", "322", "323", "324", "325", "331", "351", "352", "353", "361",
-            "371", "381", "391", "900", "901", "902", "903", "904", "905", "906", "907",
-            "908", "909"
-        };
-        for (int i = 0; i < static_cast<int>(sizeof(ORDER) / sizeof(ORDER[0])); ++i)
-        {
-            if (code == ORDER[i]) { return i; }
-        }
-        return -1;
-    }
+    // 909, number 44, reads one word past the music table, into the current
+    // track slot (DAT_000acf54): an off-by-one in the original. It plays
+    // nothing here.
+    inline int LevelIdForCode(const std::string& code) { return Formats::OriginalLevelNumber(code); }
 
     inline int LevelMusicTrack(int levelId)
     {

@@ -15,8 +15,8 @@ namespace ALTEngine::Bootstrap
         constexpr const char* CONFIG_KEY_GAME_DIR = "GameDirectory";
     }
 
-    GameLocator::GameLocator(Config& config)
-        : config(config)
+    GameLocator::GameLocator(Config& cfg)
+        : config(cfg)
     {
     }
 

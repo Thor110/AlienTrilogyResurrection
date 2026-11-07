@@ -14,14 +14,17 @@ namespace ALTEngine::Renderer
     // messages. Each starts below the one above it, so none covers another.
     // Without the minimap the countdown and the stack keep the original's
     // places, (16, 19) and y 0x37; with it they move down below the map, in
-    // the same order (Edward, 2026). The messages start at HUD_MESSAGE_Y, or
-    // below the stack if it reaches that far. All in 320x240 HUD units.
+    // the same order (Edward, 2026). The messages start at the original's
+    // place (0x10, 0x3a, from FUN_0003b1f0) without the minimap and at
+    // HUD_MESSAGE_X/Y under it with it; either way below the stack if it
+    // reaches that far. All in 320x240 HUD units.
     struct HudLeftColumn
     {
         int resupplyY = 0;
         int itemTop = 0;
         int itemBottom = 0;   // == itemTop when no item is shown
         int messageTop = 0;
+        int messageX = 0;
     };
 
     // The carried-item stack's boxes, top to bottom, each only while its count
@@ -105,7 +108,8 @@ namespace ALTEngine::Renderer
         const int items = HudItemCount(state);
         // The last box ends HUD_ITEM_HEIGHT below its row, not a whole step.
         out.itemBottom = items > 0 ? out.itemTop + (items - 1) * HUD_ITEM_ROW_STEP + HUD_ITEM_HEIGHT : out.itemTop;
-        int messageTop = HUD_MESSAGE_Y;
+        int messageTop = minimapShown ? HUD_MESSAGE_Y : HUD_MESSAGE_ORIGINAL_Y;
+        out.messageX = minimapShown ? HUD_MESSAGE_X : HUD_MESSAGE_ORIGINAL_X;
         if (minimapShown) { messageTop = std::max(messageTop, out.itemTop); }
         if (items > 0) { messageTop = std::max(messageTop, out.itemBottom + HUD_LEFT_COLUMN_GAP); }
         out.messageTop = messageTop;

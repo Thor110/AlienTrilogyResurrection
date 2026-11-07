@@ -503,15 +503,15 @@ namespace ALTEngine::Net
             if (creatures->levelSerial != levelSerial) { return; }
             Event e; e.kind = Event::Kind::Creatures; e.creatures = *creatures; Push(e);
         }
-        else if (const auto* hit = std::get_if<CreatureHit>(&message))
+        else if (const auto* creatureHit = std::get_if<CreatureHit>(&message))
         {
-            if (hit->target != localSlot) { return; }
-            Event e; e.kind = Event::Kind::CreatureHit; e.creatureHit = *hit; Push(e);
+            if (creatureHit->target != localSlot) { return; }
+            Event e; e.kind = Event::Kind::CreatureHit; e.creatureHit = *creatureHit; Push(e);
         }
-        else if (const auto* shot = std::get_if<CreatureShot>(&message))
+        else if (const auto* creatureShot = std::get_if<CreatureShot>(&message))
         {
-            if (shot->levelSerial != levelSerial) { return; }
-            Event e; e.kind = Event::Kind::CreatureShot; e.creatureShot = *shot; Push(e);
+            if (creatureShot->levelSerial != levelSerial) { return; }
+            Event e; e.kind = Event::Kind::CreatureShot; e.creatureShot = *creatureShot; Push(e);
         }
         else if (const auto* end = std::get_if<LevelEnd>(&message))
         {

@@ -434,10 +434,10 @@ int main(int, char**)
                     if (!next)
                     {
                         // A level the manifest doesn't list: its digits are enough.
-                        ALTEngine::Formats::LevelListEntry entry;
-                        entry.digits = PG::CAMPAIGN_ORDER[nextIndex];
-                        entry.dottedCode = DottedOf(entry.digits);
-                        next = entry;
+                        ALTEngine::Formats::LevelListEntry unlisted;
+                        unlisted.digits = PG::CAMPAIGN_ORDER[nextIndex];
+                        unlisted.dottedCode = DottedOf(unlisted.digits);
+                        next = unlisted;
                     }
                     if (PG::IsBonusLevel(nextIndex)) { std::cout << "Bonus level opened: " << next->dottedCode << "\n"; }
                 }

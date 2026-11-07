@@ -12,10 +12,7 @@
 #include <string>
 
 #if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#define NOGDI
-#define NOMINMAX
-#include <windows.h>
+#include "../Bootstrap/WindowsHeader.h"
 #include <winioctl.h>
 #include <ntddcdrm.h>
 #elif defined(__linux__)

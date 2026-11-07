@@ -19,7 +19,7 @@ add_library(alt_warnings INTERFACE)
 if (MSVC)
     target_compile_options(alt_warnings INTERFACE /W4 /permissive-)
 else()
-    target_compile_options(alt_warnings INTERFACE -Wall -Wextra)
+    target_compile_options(alt_warnings INTERFACE -Wall -Wextra -Wshadow)
 endif()
 
 # ---------------------------------------------------------------------------

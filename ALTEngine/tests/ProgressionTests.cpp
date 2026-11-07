@@ -1,4 +1,5 @@
 #include "TestFramework.h"
+#include "Audio/MusicPlayer.h"
 
 #include "Formats/LevelList.h"
 #include "Game/Progression.h"
@@ -113,4 +114,22 @@ TEST_CASE("Progression: a failed mission replays, and 85% opens a bonus level")
     PG::LevelTally q;                       // 3.1.1's objective, type 34
     q.total[34] = 20; q.killed[34] = 9;     // exactly 45%
     CHECK_EQ(PG::Assess(q, 22).grade, 0);
+}
+
+TEST_CASE("Level music: the original's level numbers index the track table; the bonus levels share the menu's track")
+{
+    namespace AU = ALTEngine::Audio;
+    CHECK(AU::LevelIdForCode("111") == 0);
+    CHECK(AU::LevelIdForCode("114") == 5);
+    CHECK(AU::LevelIdForCode("909") == 44);
+    CHECK(AU::LevelIdForCode("361") == -1);
+    for (const char* bonus : { "113", "114", "115", "155" })
+    {
+        CHECK(AU::LevelMusicTrack(AU::LevelIdForCode(bonus)) == 2);
+    }
+    CHECK(AU::LevelMusicTrack(AU::LevelIdForCode("122")) == 13);
+    CHECK(AU::LevelMusicTrack(AU::LevelIdForCode("391")) == 12);
+    CHECK(AU::LevelMusicTrack(AU::LevelIdForCode("909")) == -1);
+    // The campaign is the first 35 of the same list.
+    CHECK(std::string(ALTEngine::Game::Progression::CAMPAIGN_ORDER[34]) == "391");
 }

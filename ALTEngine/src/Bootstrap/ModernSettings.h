@@ -91,7 +91,7 @@ namespace ALTEngine::Bootstrap
     class ModernSettings
     {
     public:
-        explicit ModernSettings(Config& config) : config(config) {}
+        explicit ModernSettings(Config& cfg) : config(cfg) {}
 
         ModernMode Mode() const
         {

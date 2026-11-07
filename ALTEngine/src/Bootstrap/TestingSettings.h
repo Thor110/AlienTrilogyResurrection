@@ -41,7 +41,7 @@ namespace ALTEngine::Bootstrap
     class TestingSettings
     {
     public:
-        explicit TestingSettings(Config& config) : config(config) {}
+        explicit TestingSettings(Config& cfg) : config(cfg) {}
 
         static constexpr TestingOption AllOptions[] = {
             TestingOption::DisableEnemySpawn,
