@@ -96,9 +96,13 @@ namespace ALTEngine::Screens
         // This was implemented as difficulty gating, which would have removed
         // three of L111's monsters on Easy for no reason. See the note on
         // Monster::triggerThreshold.
+        //
+        // FUN_0002f3b0 compares the two bytes as they are on disc (0x2f468):
+        // any record whose count already equals its threshold is put in play.
+        // 29 vents on L122, L222 and L232 have both at 1.
         inline bool ActiveAtStart(const ALTEngine::Formats::Monster& record)
         {
-            return record.triggerThreshold == 0;
+            return record.triggerCount == record.triggerThreshold;
         }
 
         // A monster waiting to be let out is parked off the playable map - on
@@ -395,10 +399,13 @@ namespace ALTEngine::Screens
                 enemy.ai.type = record.type;
                 enemy.ai.speed = (record.speedHigh << 8 | record.speed)
                                + (record.type == 2 ? CreatureAI::HUGGER_SPEED_BONUS : 0);
+                // The handler's arm halves it (`sar dx,1` on +0x5e, 0x2efc0).
+                if (record.type == 0x0e) { enemy.ai.speed = static_cast<int16_t>(enemy.ai.speed) >> 1; }
                 enemy.ai.wakeRange = record.wakeRange;
                 enemy.ai.facing = enemy.ai.target = FacingFromRotation(record.rotation);
                 enemy.drop = record.drop;
                 enemy.triggerThreshold = record.triggerThreshold;
+                enemy.triggerCount = record.triggerCount;
                 enemy.facing = FacingFromRotation(record.rotation);
 
                 // The record's own thresholds - bytes 18/19 and 16/17. No longer
@@ -649,6 +656,9 @@ namespace ALTEngine::Screens
             // starts with (BringIntoPlay).
             const int cooldown = (ignoreStun && !enemy.spawnGuard) ? 0 : enemy.hitCooldown;
             if (!Damage::CanBeDamaged(state, cooldown, 0)) { return false; }
+            // A colonist whose burster has come out takes no more (type 10 in
+            // state 4, 0x313e3). Its task state lives in `colonist`.
+            if (enemy.type == 0x0a && enemy.colonist.state == CreatureTasks::Colonist::BURST) { return false; }
 
             enemy.health -= damage;
             if (enemy.health > 0)
@@ -712,7 +722,10 @@ namespace ALTEngine::Screens
             enemy.animationChanged = true;
             enemy.animationFrames = 0;
             enemy.animationEnded = false;
-            enemy.mirrored = false;
+            // The mirror bit (+0xb6 bit 5) is kept: FUN_0002f4b0 masks +0xb6
+            // with 0xf0 (0x2f4e3), so a creature seen mirrored flinches and
+            // dies mirrored. Only the walk (FUN_000314b8), an attack pick and
+            // the queen's hit (0x3134c) change it.
 
             // FUN_0002f4b0: the script from its start, and one step at once.
             if (Scripted(enemy))
@@ -930,7 +943,7 @@ namespace ALTEngine::Screens
                 }
                 else if (enemy.type == 7)
                 {
-                    if (enemy.ai.introPhase < 2) { PlayAnimation(enemy, 0x10); }
+                    if (enemy.ai.introPhase < 2) { PlayAnimation(enemy, 0x10); enemy.mirrored = false; }
                     else if (enemy.ai.introPhase > 2) { PlayAnimation(enemy, 0x11); enemy.mirrored = false; }
                 }
                 else

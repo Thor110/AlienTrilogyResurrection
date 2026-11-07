@@ -101,6 +101,17 @@ namespace ALTEngine::Screens
         //
         // Returns true if the hit landed. `cause` picks the death clip.
         static constexpr int DAMAGE_COOLDOWN = 0x1e;
+        // In any network game, co-operative included, it is 8 (0x3e57f).
+        static constexpr int DAMAGE_COOLDOWN_NETWORK = 8;
+        bool networkGame = false;
+        int DamageCooldown() const { return networkGame ? DAMAGE_COOLDOWN_NETWORK : DAMAGE_COOLDOWN; }
+        // The sound a landed hit makes, for the caller to play and clear
+        // (FUN_0003e4a8, 0x3e4e0-0x3e59a, through FUN_00040ba0): 0202ripl (3)
+        // for a hit off health, the killing one included; 5003metl (0x24) for
+        // a cause-3 hit taken by armour; nothing else. -1 for none.
+        static constexpr int HURT_SOUND = 3;
+        static constexpr int ARMOUR_STRUCK_SOUND = 0x24;
+        int pendingSound = -1;
         // OURS, co-operative: a player who has reached the exit waits there
         // for the others and takes no harm meanwhile.
         bool waitingAtExit = false;
@@ -112,8 +123,10 @@ namespace ALTEngine::Screens
         {
             if (damageCooldown > 0 || terrainShield > 0 || waitingAtExit) { return false; }
             lastDamageCause = cause;
+            pendingSound = (armourItem > 0 && cause == 3) ? ARMOUR_STRUCK_SOUND : -1;
             if (armourItem == 0)
             {
+                pendingSound = HURT_SOUND;
                 healthHits++;
                 health = static_cast<int16_t>(health - amount);
                 if (health < 1)
@@ -127,7 +140,7 @@ namespace ALTEngine::Screens
                 armourItem = static_cast<int16_t>(armourItem - amount);
                 if (armourItem < 1) { armourItem = 0; }
             }
-            damageCooldown = DAMAGE_COOLDOWN;
+            damageCooldown = DamageCooldown();
             return true;
         }
 
@@ -138,13 +151,14 @@ namespace ALTEngine::Screens
             if (damageCooldown > 0 || terrainShield > 0 || waitingAtExit) { return false; }
             lastDamageCause = cause;
             healthHits++;
+            pendingSound = HURT_SOUND;   // 0x3e443
             health = static_cast<int16_t>(health - amount);
             if (health < 1)
             {
                 health = 0;
                 dead = true;
             }
-            damageCooldown = DAMAGE_COOLDOWN;
+            damageCooldown = DamageCooldown();
             return true;
         }
 

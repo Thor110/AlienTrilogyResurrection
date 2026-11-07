@@ -96,6 +96,22 @@ namespace ALTEngine::Screens
         // 3 and 0x0d 0x0a (0501flam), 4 and 0x0e 0x12 (0901smar) - and
         // everything else 0x28 (pickup). Played through FUN_00040ba0, the
         // general channels.
+        // FUN_00040000, called after a collect with the weapon slot an ammo
+        // pickup fed (the switch at 0x3c974): if that weapon is in hand and
+        // idle, it reloads - state 2 and its animation, the counters already
+        // filled. Only the pistol, pulse rifle and smart gun have the arm
+        // (table 0x3ffec); shotgun shells and fuel do nothing. -1: none.
+        inline int ReloadsWeapon(int type)
+        {
+            switch (type)
+            {
+            case PISTOL_AMMO:   return 0;
+            case PULSE_AMMO:    return 2;
+            case SMARTGUN_AMMO: return 3;
+            default:            return -1;
+            }
+        }
+
         inline int SoundFor(int type)
         {
             switch (type)
@@ -112,11 +128,12 @@ namespace ALTEngine::Screens
 
         inline bool Wanted(int type, int amount, const PlayerInventoryState& inventory, const PlayerHudState& hud)
         {
-            // The original tests the loaded and spare counters separately
-            // (either below its cap); the port keeps the same two counters but
-            // packs a total, so "either below" is "the total below both caps".
+            // The original tests the loaded and spare counters separately:
+            // wanted while either is below its cap (FUN_0003ccb4's cases 9-0xe).
             const auto below = [&](int weaponIndex, int magCap, int unitCap) {
-                return inventory.AmmoTotal(weaponIndex) < magCap * (unitCap + 1);
+                const WeaponState* w = inventory.ByIndex(weaponIndex);
+                if (!w) { return false; }
+                return w->rounds < magCap || (unitCap > 0 && w->units < unitCap);
             };
             switch (type)
             {
@@ -140,22 +157,26 @@ namespace ALTEngine::Screens
             }
         }
 
-        // Applies a pickup. `amount` is the record's own amount times its
-        // multiplier; `units` is the second value the original takes in BX,
-        // which for weapon pickups is the number of spare magazines.
+        // Applies a pickup (FUN_000387c0). `amount` is the record's byte 3 and
+        // `units` its byte 4, as the pickup's +0x21 and +0x22 (copied at
+        // 0x3b9a1) reach it in DX and BX - neither scaled by the other.
         //
         // Returns false for a type with no effect here, so the caller can log it
         // rather than silently swallow an unknown pickup.
         inline bool Apply(int type, int amount, int units,
                           PlayerInventoryState& inventory, PlayerHudState& hud)
         {
-            // NOTE: `amount` arrives already multiplied by the record's
-            // multiplier AND `units` is that same multiplier, so a pistol clip
-            // of 15 x3 adds 45 + 3 x 15 = 90 rounds. That looks like the
-            // multiplier counted twice; it is kept as-is because it is what the
-            // game has always done, and is worth checking against the original.
+            // The two counters as the original keeps them: the amount goes
+            // into the loaded one, clamped to its cap, and the excess is lost;
+            // byte 4 goes into the spare magazines (pistol, pulse rifle and
+            // smart gun only), clamped to 9. The port used to multiply the two
+            // and pour the total into both, so a box of 10 shotgun shells
+            // filled the shotgun to 100.
             auto addAmmo = [&](int weaponIndex, int magCap, int unitCap) {
-                inventory.AddAmmo(weaponIndex, amount + units * magCap, magCap * (unitCap + 1));
+                WeaponState* w = inventory.ByIndex(weaponIndex);
+                if (!w) { return; }
+                w->rounds = Clamp(w->rounds + amount, magCap);
+                if (unitCap > 0) { w->units = Clamp(w->units + units, unitCap); }
             };
             auto grant = [&](int weaponIndex, int magCap, int unitCap) {
                 if (WeaponState* w = inventory.ByIndex(weaponIndex)) { w->available = true; }

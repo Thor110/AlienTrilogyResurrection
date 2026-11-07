@@ -4,6 +4,7 @@
 #include "HudPanel.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace ALTEngine::Renderer
@@ -305,6 +306,9 @@ namespace ALTEngine::Renderer
         // than sinking, which is what bottom-anchoring made it do.
         SDL_FRect dst{ SDL_roundf(x * scaleX), SDL_roundf(y * scaleY),
                        SDL_roundf(frameWidth * scaleX), SDL_roundf(frameHeight * scaleY) };
+        const auto channel = [](float v) { return static_cast<Uint8>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
+        SDL_SetTextureColorMod(current.texture, channel(tint[0]), channel(tint[1]), channel(tint[2]));
         SDL_RenderTexture(renderer, current.texture, nullptr, &dst);
+        SDL_SetTextureColorMod(current.texture, 255, 255, 255);
     }
 }

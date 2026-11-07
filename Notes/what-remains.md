@@ -180,6 +180,36 @@ Changed in zip 103: **a review of the network, bot and trigger code** (no change
 - The Doom-style marine (green armour, helmet and visor) made from the Synthetic's frames: a separate
   download, not in the repo.
 
+Changed in zip 146, to check (from the routine-by-routine audit: 15 agents over every function, their findings
+checked against the disassembly before anything was changed):
+- **Pickups give what the record says** (FUN_000387c0): byte 3 into the loaded counter, byte 4 into the spare
+  magazines, each clamped to its own cap. The port multiplied the two and poured the total into both: a box of
+  10 shotgun shells gave 110, a fuel can 530. An ammo pickup for the pistol, pulse rifle or smart gun in hand,
+  idle, starts its reload (FUN_00040000).
+- **The light flash**: firing and an exploding barrel light the level at 0x2000 for a tick (DAT_000b0cc1 bit 4);
+  the port had the flash but never raised it. The weapon in hand is drawn in its cell's light (light 0 on a
+  flash tick), as the original does (FUN_0003e93c); it only darkens here.
+- **Sounds**: a hit plays 0202ripl (3), or 5003metl (0x24) for a cause-3 hit on armour (FUN_0003e4a8); a blast,
+  barrel, crate or kill by a blast sounds by distance (FUN_00040c38 mode 1), not at full volume; the pulse
+  grenade's throw plays sound 8; the flamethrower's sample stops when the trigger is let go (0x3fbe8).
+- **Dying**: the eye sinks 0xc a pass from standing to 0x180, the pitch walking home and the controls dead,
+  before the death video (FUN_0003ee4c); the port cut to it at once.
+- **Creatures**: the handler walks at half speed (0x2efc0); a record whose bytes 7 and 8 are already equal starts
+  in play (29 vents on L122, L222 and L232 waited for a trigger that could never start them); a colonist whose
+  burster is out can't be hurt; the mirror bit is kept across a new animation (only the walk, an attack pick and
+  the queen's hit change it), so a creature seen mirrored flinches and dies mirrored. The flamethrower's flames
+  converge (0x38).
+- **Level**: doors are lit by light 10, not their cell's; texture animations show a frame for `speed` ticks, not
+  one more; 909 plays track 15 (the word after the music table is static data, not the current-track slot);
+  objects with an odd rotation (31 of them: L211's double crates, L141's coils, crates on L311 and L381) turn
+  the other way (0x800 + r * 0x200); switches are drawn at (0.75, 0.85, 0.75), the triple once wrongly applied to
+  every object; the speed and shield boxes count in 0x1e-tick units; the burning/acid footstep plays only when
+  the floor is actually hurting (not with the speed item or shield running).
+- In a network game the hit cooldown is 8 ticks, not 0x1e.
+- Left for later, checked but not done: the flame cue the original skips once after a release (0x5b25c);
+  reusable switches (35 switches have 0xff uses; the thrown-switch task 0x380f4 counts down and goes back to
+  0x3846c when +0x1a is 2).
+
 Changed in zip 144, to check: **a creature coming into play can't be hurt for 0x40 ticks** (Edward: with the
 Modern options on, the hugger in L111's middle row of barrels died in the chain instead of leaping out). The
 original does give this grace: FUN_0002e638, which every creature coming into play goes through (the level's
@@ -203,8 +233,8 @@ Changed in zip 142, to check:
   it is the index of the level file table at 0xa4dec (0x1069b reads it with the level number), whose 45 entries
   run 111, 112, 113, 122, 131, 114, 141, 115, ... (`Formats/LevelOrder.h`; the campaign order is its first 35).
   The port had guessed the manifest's order, which gave 27 levels the wrong track. Now the four levels on the
-  main menu's track 2 are the bonus levels 113, 114, 115 and 155. 909 still plays nothing (the original reads
-  past its table there).
+  main menu's track 2 are the bonus levels 113, 114, 115 and 155. 909 reads the word after the table, which
+  is static data holding 15, so it plays track 15 (the current-track slot is the word after that).
 - **Messages without the Live Minimap** start at the original's place, (0x10, 0x3a), still below the item
   boxes when there are any; with it they stay under the map.
 

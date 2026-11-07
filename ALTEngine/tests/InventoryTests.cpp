@@ -1,5 +1,7 @@
 #include "TestFramework.h"
 
+#include <algorithm>
+
 #include "Screens/DroppedPickups.h"
 #include "Screens/PickupSystem.h"
 #include "Screens/PlayerInventoryState.h"
@@ -74,8 +76,33 @@ TEST_CASE("Inventory: pickups still add ammo after the cap was reached once")
     for (int i = 0; i < 40; ++i) { FireOnce(inv, 0); }
     CHECK_EQ(inv.AmmoTotal(0), cap - 40);
 
+    // FUN_000387c0: the loaded counter takes the 15 up to its cap of 15 (the
+    // excess is lost) and the spares take the 1.
+    const int loadedBefore = inv.pistol.rounds;
+    const int unitsBefore = inv.pistol.units;
     Pickups::Apply(Pickups::PISTOL_AMMO, 15, 1, inv, hud);
-    CHECK_EQ(inv.AmmoTotal(0), cap - 10);
+    CHECK_EQ(inv.pistol.rounds, Pickups::PISTOL_MAG_CAP);
+    const int unitsExpected = std::min(unitsBefore + 1, Pickups::PISTOL_UNIT_CAP);
+    CHECK_EQ(inv.pistol.units, unitsExpected);
+    CHECK(inv.pistol.rounds >= loadedBefore);
+}
+
+TEST_CASE("Inventory: a pickup adds its byte 3 to the loaded counter and byte 4 to the spares, each capped (FUN_000387c0)")
+{
+    PlayerInventoryState inv;
+    PlayerHudState hud;
+    // Ten shotgun shells add ten, not the whole 100.
+    Pickups::Apply(Pickups::SHOTGUN_AND_AMMO, 10, 1, inv, hud);
+    CHECK_EQ(inv.AmmoTotal(1), 10);
+    Pickups::Apply(Pickups::SHOTGUN_AMMO, 10, 1, inv, hud);
+    CHECK_EQ(inv.AmmoTotal(1), 20);
+    // Thirty of flamethrower fuel adds thirty.
+    Pickups::Apply(Pickups::FLAMETHROWER_AND_AMMO, 30, 1, inv, hud);
+    CHECK_EQ(inv.AmmoTotal(4), 30);
+    // A pulse rifle pickup of 90 with 1 spare magazine.
+    Pickups::Apply(Pickups::PULSE_AND_AMMO, 90, 1, inv, hud);
+    CHECK_EQ(inv.pulseRifle.rounds, 90);
+    CHECK_EQ(inv.pulseRifle.units, 1);
 }
 
 TEST_CASE("Inventory: pulse rifle, smartgun and flamethrower pickups land on their own weapons")

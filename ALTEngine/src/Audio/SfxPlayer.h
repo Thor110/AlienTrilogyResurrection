@@ -88,6 +88,8 @@ namespace ALTEngine::Audio
         // original's FUN_0003cf68 on the light's held channel).
         static void StopPlayerSlot(int slotId, const char* levelCode,
                                    const std::filesystem::path& cdDirectory);
+        // Silences the player's channel whatever it is playing (FUN_0005b4f3).
+        static void StopPlayerChannel();
 
         // A sample by its file stem rather than a slot, at a fraction of the
         // SFX volume, not over itself: the speech bank (Audio/Speech.h), whose

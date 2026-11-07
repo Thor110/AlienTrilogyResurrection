@@ -159,6 +159,15 @@ namespace ALTEngine::Audio
         if (playing[voice] == &sample) { SDL_ClearAudioStream(voice); playing[voice] = nullptr; }
     }
 
+    void SfxPlayer::StopPlayerChannel()
+    {
+        auto& app = ALTEngine::Bootstrap::AppWindow::Instance();
+        SDL_AudioStream* voice = app.PlayerSfxVoice();
+        if (!voice) { return; }
+        SDL_ClearAudioStream(voice);
+        VoiceSamples()[voice] = nullptr;
+    }
+
     void SfxPlayer::PlaySlotAtVolume(int slotId, float volume, const char* levelCode,
                                      const std::filesystem::path& cdDirectory)
     {

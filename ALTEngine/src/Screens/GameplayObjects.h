@@ -96,6 +96,10 @@ namespace ALTEngine::Screens::GameplayObjects
     // FUN_0003d794's FUN_00040ba0(9, -1): the sound a seismic charge's
     // throw plays.
     constexpr int SEISMIC_THROW_SOUND = 9;
+    // FUN_0002c4e0's own sound as a pulse grenade is launched: 0402gren.
+    constexpr int GRENADE_LAUNCH_SOUND = 8;
+    // The light entry every door face is drawn with (FUN_00029a88, EBX 0x0a).
+    constexpr int DOOR_LIGHT = 10;
 
     // The shoulder lamp or goggles coming on (FUN_00029d94, 0x29dd7) and
     // running out (FUN_0003e698).

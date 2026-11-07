@@ -114,8 +114,8 @@ TEST_CASE("Texture animation: a program holds each frame for its speed, then loo
     CHECK_EQ(static_cast<int>(tex), 100);
     std::vector<int> seen;
     for (int t = 0; t < 9; ++t) { anim.Tick(0); anim.CurrentTexture(0, tex); seen.push_back(tex); }
-    // Held for two more ticks after each change, then the next frame.
-    CHECK(seen == std::vector<int>({ 100, 100, 101, 101, 101, 100, 100, 100, 101 }));
+    // Each frame shows for two ticks (FUN_00042ff4 counts down, then moves on at 0).
+    CHECK(seen == std::vector<int>({ 100, 101, 101, 100, 100, 101, 101, 100, 100 }));
 }
 
 TEST_CASE("Texture animation: a gated program waits for ChangeTexture, and op 11 stops it")

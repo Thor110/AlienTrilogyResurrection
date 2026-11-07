@@ -107,3 +107,14 @@ TEST_CASE("Motion tracker: one sweep is 96 timer ticks, as FUN_00039f8c steps it
     CHECK(wraps[1] - wraps[0] == 96);
     CHECK(wraps[2] - wraps[1] == 96);
 }
+
+TEST_CASE("HUD items: speed and shield show their ticks in 0x1e units, at least 1 (0x39ebd)")
+{
+    PlayerHudState s;
+    s.terrainSpeed = 0x1e * 20;
+    s.terrainShield = 5;
+    const R::HudItems shown = R::ShownHudItems(s);
+    REQUIRE(shown.count == 2);
+    CHECK_EQ(shown.items[0].count, 20);
+    CHECK_EQ(shown.items[1].count, 1);
+}

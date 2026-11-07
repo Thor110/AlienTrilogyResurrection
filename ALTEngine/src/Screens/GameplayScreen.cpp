@@ -493,6 +493,11 @@ namespace ALTEngine::Screens
         ALTEngine::Renderer::HudRenderer hud;
         ALTEngine::Renderer::WeaponView weaponView;
         bool firePressedLastTick = false;
+        // The light flash was raised since the weapon was last drawn: it is
+        // then drawn in light entry 0 (FUN_0003e93c, 0x3ea78).
+        bool lightFlashRaised = false;
+        // The weapon slot an ammo pickup asks to reload (Pickups::ReloadsWeapon).
+        int pickupReloadWeapon = -1;
         bool altFirePressedLastTick = false;
         ALTEngine::Screens::WeaponSystem::Runtime weaponRuntime;
 
@@ -515,6 +520,14 @@ namespace ALTEngine::Screens
         ALTEngine::Audio::Speech::Voice voice;
         voice.Load(cdDirectory);
         int heardHealthHits = 0;
+        // A blast's sound - a crate or vent going up (FUN_0002aaf0, 0x29) or a
+        // barrel (FUN_0002ab54, 0x21) - is played through FUN_00040c38's
+        // mode 1 (EBX=1 at 0x2ab0b / 0x2ab6f): quieter the farther away.
+        auto playBlastSound = [&](int slot, float x, float z) {
+            ALTEngine::Audio::SfxPlayer::PlaySlotAtVolume(
+                slot, ALTEngine::Audio::SfxPlayer::CreatureVolume(x - camera.x, z - camera.z),
+                digits.c_str(), cdDirectory);
+        };
         ALTEngine::Screens::FaceHugOverlay faceHug;
         std::vector<std::string> faceHugSheets;
         ALTEngine::Screens::ShatterEffects shatter;
@@ -539,6 +552,9 @@ namespace ALTEngine::Screens
         // rather than mid-tick, so the last frame the player saw is the one that
         // killed them.
         bool playerDead = false;
+        // The eye height while dying (FUN_0003ee4c): it sinks from standing
+        // to EYE_HEIGHT_DEAD before the game over sequence starts.
+        int deathEye = ALTEngine::Screens::PlayerCamera::EYE_HEIGHT_ORIGINAL;
         int deathVideoIndex = 1;
         ALTEngine::Screens::EnemySprites enemySprites;
 
@@ -559,6 +575,7 @@ namespace ALTEngine::Screens
         std::array<bool, 6> weaponKeyWasDown{ false, false, false, false, false, false };
 
         ALTEngine::Screens::PlayerHudState hudState;
+        hudState.networkGame = session != nullptr;
         bool hudLoadAttempted = false;
         // The Modern and Testing options play reads: at the level's start,
         // and again on coming back from the pause menu, whose Options screen
@@ -1108,58 +1125,30 @@ namespace ALTEngine::Screens
                         // shows: the rot=2 (East) wide switch was already
                         // correct, both rot=0 (North) small switches were
                         // facing the wall.
-                        placed.rotationRadians = 3.14159265f - static_cast<float>(crate.rotation) * (3.14159265f / 4.0f);
-                        // Object scale, 12.12 fixed point over 0x1000.
-                        //
-                        // CORRECTED: 0xe00 uniform = 0.875, not the
-                        // (0xc00, 0xd98, 0xc00) = 0.75/0.849609375/0.75 that
-                        // was here. That triple is real, but it belongs to a
-                        // DIFFERENT draw function. There are three sibling
-                        // entity draw routines in the original, and they do
-                        // not agree:
-                        //
-                        //   FUN_0003765c  0xe00 uniform, skipped entirely for
-                        //                 entity type 0x17 (scale 1.0)
-                        //   FUN_000377e4  0xc00 / 0xd98 / 0xc00, non-uniform
-                        //   FUN_00037930  no scale call at all
-                        //
-                        // The one that draws these objects is FUN_0003765c.
-                        // What settles it is which texture descriptor set each
-                        // one binds (Ghidra: FUN_00018bcc's call sites):
-                        //   DAT_00244608 <- resource 0x7d, the SAME on every
-                        //                   level: the object/pickup set.
-                        //   DAT_002408c0 <- resource 0x7f/0x83/0x84/0x85,
-                        //                   chosen by a switch on DAT_000ae10c.
-                        //
-                        // *** CAUTION: THAT SECOND CLAIM IS NOW DOUBTFUL. ***
-                        // DAT_000ae10c was taken to be an episode selector, and
-                        // "episode-dependent therefore enemy graphics" is what
-                        // this scale choice rested on. It is almost certainly the
-                        // LANGUAGE instead: the same variable's switch in
-                        // FUN_00050c58 emits the Spanish string "de disparo" for
-                        // case 3, and its cases are 0/3/4/5 rather than a
-                        // contiguous episode range.
-                        //
-                        // So DAT_002408c0 is likely a language-selected set (art
-                        // containing words), and the argument for which of the
-                        // three draw functions handles crates does NOT hold.
-                        // 0.875 is left in place because it looks right on screen
-                        // and 0.75/0.85/0.75 visibly did not - but treat it as
-                        // observed rather than derived until the draw function is
-                        // identified some other way.
-                        // FUN_0003765c binds DAT_00244608 for everything
-                        // except type 0x14 on levels 0x16-0x22; FUN_000377e4
-                        // binds DAT_002408c0 unconditionally. So the
-                        // non-uniform triple is the ENEMY scale, and objects
-                        // take 0.875 uniform.
-                        //
-                        // Type 0x17 - the explosive barrel - gets no scale at
-                        // all in FUN_0003765c, and the cryopod (0x20) is drawn
-                        // by FUN_00037930, which has no scale call: both 1:1.
+                        // Odd steps turn the other way (FUN_00037184's table at
+                        // 0x3711c: 1 -> 0xa00, 3 -> 0xfe00, 5 -> 0x200, 7 ->
+                        // 0x600, i.e. 0x800 + r * 0x200). 31 objects use them:
+                        // L211's double crates, L141's steel coils, crates on
+                        // L311 and L381.
+                        placed.rotationRadians = (crate.rotation & 1)
+                            ? 3.14159265f + static_cast<float>(crate.rotation) * (3.14159265f / 4.0f)
+                            : 3.14159265f - static_cast<float>(crate.rotation) * (3.14159265f / 4.0f);
+                        // Object scale, 12.12 fixed point over 0x1000, by which
+                        // draw routine the object's task calls:
+                        //   FUN_0003765c (crates, barrels - the 0x37c1c task)
+                        //     0xe00 uniform, none for the barrel (0x17)
+                        //   FUN_000377e4 (the switch tasks 0x3846c and 0x380f4,
+                        //     which FUN_00037184 gives types 0x16, 0x18, 0x1a and
+                        //     0x1b) (0xc00, 0xd98, 0xc00), x, height, z
+                        //   FUN_00037930 (the cryopod) no scale call
+                        // The non-uniform triple was once applied to every
+                        // object, which looked wrong; it is the switches' only.
+                        const bool switchObject = crate.type == 0x16 || crate.type == 0x18
+                            || crate.type == 0x1a || crate.type == 0x1b;
                         const float objectScale = (crate.type == 0x17 || crate.type == CRYOPOD_OBJECT_TYPE) ? 1.0f : 0.875f;
-                        placed.scaleX = objectScale;
-                        placed.scaleY = objectScale;
-                        placed.scaleZ = objectScale;
+                        placed.scaleX = switchObject ? 0xc00 / 4096.0f : objectScale;
+                        placed.scaleY = switchObject ? 0xd98 / 4096.0f : objectScale;
+                        placed.scaleZ = switchObject ? 0xc00 / 4096.0f : objectScale;
 
                         // Types 0x15, 0x1c and 0x1d have no model (FUN_00037184
                         // gives them none): they stand in a window, a
@@ -1691,8 +1680,8 @@ namespace ALTEngine::Screens
                 playerCam.yaw = static_cast<int>(std::lround(camera.yaw * (4096.0f / 6.28318530718f))) & 0xfff;
                 return;
             }
+            // The level ends once the dying fall has run (see the player pass).
             playerDead = true;
-            running = false;
             deathVideoIndex = ALTEngine::Screens::GameOverSequence::DeathVideoForCause(hudState.lastDamageCause);
             SDL_Log("player killed (cause %d) - DEATH%d", hudState.lastDamageCause, deathVideoIndex);
         };
@@ -2771,13 +2760,37 @@ namespace ALTEngine::Screens
                             if (cell->area != 0) { secretsSeen[cell->area] = 1; }
                         }
                     }
-                    // The hazard flag selects which footstep sound plays. The
-                    // damage attributes are the ones FUN_0003dff0 reacts to.
+                    // The cell is one FUN_0003dff0 hurts on.
                     const bool onHazardCell = (cellAttribute == 7 || cellAttribute == 8 || cellAttribute == 0xc);
+                    // DAT_000b0ab5 bit 0x40, which picks the footstep: cleared
+                    // every pass and set only when the floor's damage is
+                    // actually applied - on the floor, no speed item or shield
+                    // running (0x3e329, 0x3e349, 0x3e366).
+                    bool floorHurting = false;
 
                     // Waiting at the exit: still.
                     if (exitWaiting || syncing) { pcInput = PC::Input{}; }
-                    PC::Tick(playerCam, pcInput, cellAttribute, onHazardCell, cameraSway, freeLook);
+                    if (playerDead)
+                    {
+                        // FUN_0003ee4c replaces the player's task once they
+                        // die: no control, the speed zeroed, the pitch walked
+                        // home, and the eye lowered 0xc a pass. The pass it
+                        // passes EYE_HEIGHT_DEAD ends the game (cc0 | 0x40).
+                        pcInput = PC::Input{};
+                        playerCam.speed = 0;
+                        playerCam.bobOffsetY = 0;
+                        PC::RecentrePitch(playerCam);
+                        deathEye -= PC::EYE_HEIGHT_RECOVERY;
+                        if (deathEye < PC::EYE_HEIGHT_DEAD)
+                        {
+                            deathEye = PC::EYE_HEIGHT_DEAD;
+                            running = false;
+                        }
+                    }
+                    else
+                    {
+                        PC::Tick(playerCam, pcInput, cellAttribute, onHazardCell, cameraSway, freeLook);
+                    }
 
                     // The original's own mover (Game::PlayerMover, FUN_0003dff0):
                     // the tick's step, plus a slippery ramp's push and any
@@ -2881,7 +2894,10 @@ namespace ALTEngine::Screens
                         {
                             if (const auto* underfoot = ALTEngine::Formats::CellAt(level, fgx >> 9, fgz >> 9))
                             {
-                                hudState.ApplyFloorHazard(underfoot->attribute);
+                                const uint8_t at = underfoot->attribute;
+                                floorHurting = (at == 7 || at == 8 || at == 0xc)
+                                    && hudState.terrainSpeed == 0 && hudState.terrainShield == 0;
+                                hudState.ApplyFloorHazard(at);
                                 checkPlayerDeath();
                             }
                         }
@@ -2897,8 +2913,19 @@ namespace ALTEngine::Screens
                     // property of the key. See WeaponSystem::FireMode.
                     namespace WS = ALTEngine::Screens::WeaponSystem;
 
-                    const bool fireHeld = (keys[keyBindings.GetKey(InputAction::Fire1)] || mouseFire1) && !exitWaiting && !syncing;
+                    const bool fireHeld = (keys[keyBindings.GetKey(InputAction::Fire1)] || mouseFire1) && !exitWaiting && !syncing && !playerDead;
                     const bool firePressed = fireHeld && !firePressedLastTick;
+                    // The flamethrower in hand with the trigger up, and not
+                    // empty or being raised: FUN_0003efcc's arm 4 stops the
+                    // player's channel every pass (0x3fbe8), so the 5.7 second
+                    // flame sample ends when the trigger is let go. (It also
+                    // sets a flag that skips the next flame cue once, 0x5b25c;
+                    // not reproduced until the cue's cadence is checked.)
+                    if (!fireHeld && hudState.currentWeapon == 4
+                        && weaponRuntime.state != WS::STATE_EMPTY && weaponRuntime.state != WS::STATE_UNKNOWN_5)
+                    {
+                        ALTEngine::Audio::SfxPlayer::StopPlayerChannel();
+                    }
                     firePressedLastTick = fireHeld;
                     if (firePressed && testingFaceIndex) { LogShotFace(level, digits, pickedFace); }   // the face logger, see LogShotFace
 
@@ -2921,6 +2948,15 @@ namespace ALTEngine::Screens
 
                     weaponRuntime.weapon = hudState.currentWeapon;
                     weaponRuntime.stateChanged = false;
+                    // A magazine picked up for the weapon in hand (last pass).
+                    if (pickupReloadWeapon >= 0)
+                    {
+                        if (pickupReloadWeapon == weaponRuntime.weapon && weaponRuntime.state == WS::STATE_IDLE)
+                        {
+                            weaponRuntime.SetState(WS::STATE_RELOAD);
+                        }
+                        pickupReloadWeapon = -1;
+                    }
 
                     // Firing happens on the weapon pass only (FUN_0003d5b0 runs
                     // on the drawing pass); a press in between is kept.
@@ -2931,6 +2967,11 @@ namespace ALTEngine::Screens
 
                     if (triggerActive && WS::TryPrimaryFire(weaponRuntime, inventory))
                     {
+                        // Every weapon's fire routine raises the one-tick light
+                        // flash (DAT_000b0cc1 bit 4: 0x3d61a and its siblings),
+                        // which lights the level at 0x2000 instead of 0xf00.
+                        ModelRenderer::FlashLevelLights(cacheKey);
+                        lightFlashRaised = true;
                         // A shot spawns the round AND the casing - FUN_0003d5b0
                         // calls the weapon's projectile spawn, which then calls
                         // FUN_0002b37c for the ejection once the round is away.
@@ -3150,7 +3191,7 @@ namespace ALTEngine::Screens
                     // anything yet: FUN_0003efcc's case 2 spends a grenade,
                     // sets state 3 and starts that state's animation - which is
                     // the sequence carrying the 0401gren sound cue.
-                    const bool altFireHeld = (keys[keyBindings.GetKey(InputAction::Fire2)] || mouseFire2) && !exitWaiting && !syncing;
+                    const bool altFireHeld = (keys[keyBindings.GetKey(InputAction::Fire2)] || mouseFire2) && !exitWaiting && !syncing && !playerDead;
                     const bool altFirePressed = altFireHeld && !altFirePressedLastTick;
                     altFirePressedLastTick = altFireHeld;
 
@@ -3225,6 +3266,9 @@ namespace ALTEngine::Screens
                         inventory.pulseRifle.grenades--;
                         // The grenade itself, which until now was never launched.
                         throwExplosive(false);
+                        // FUN_0002c4e0 plays 0402gren as it goes (0x2c622),
+                        // besides the animation's own cue.
+                        ALTEngine::Audio::SfxPlayer::PlaySlot(GRENADE_LAUNCH_SOUND, digits.c_str(), cdDirectory);
                         // And the grenade, less (0x2c52c: 0x20).
                         knockbackStrength = ALTEngine::Game::PlayerMover::KNOCKBACK_GRENADE;
                         knockbackYaw = (playerCam.viewYaw + 0x800) & PC::ANGLE_MASK;
@@ -3805,8 +3849,7 @@ namespace ALTEngine::Screens
                                     // none).
                                     explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE,
                                                      enemy.x, enemy.y, enemy.z, false);
-                                    ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                        ALTEngine::Formats::SoundIds::CRATE_BREAK, digits.c_str(), cdDirectory);
+                                    playBlastSound(ALTEngine::Formats::SoundIds::CRATE_BREAK, enemy.x, enemy.z);
                                 }
                                 if (enemy.ventSwitchedOff)
                                 {
@@ -4279,13 +4322,14 @@ namespace ALTEngine::Screens
                                                  target.x,
                                                  target.y - ALTEngine::Formats::ExplosionGraphics::BARREL_EFFECT_DROP,
                                                  target.z);
-                                ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                    ALTEngine::Formats::SoundIds::BARREL_EXPLODE, digits.c_str(), cdDirectory);
+                                playBlastSound(ALTEngine::Formats::SoundIds::BARREL_EXPLODE, target.x, target.z);
+                                // FUN_0002ab54 raises the one-tick light flash too.
+                                ModelRenderer::FlashLevelLights(cacheKey);
+                                lightFlashRaised = true;
                             }
                             else if (!isWindow)
                             {
-                                ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                    ALTEngine::Formats::SoundIds::CRATE_BREAK, digits.c_str(), cdDirectory);
+                                playBlastSound(ALTEngine::Formats::SoundIds::CRATE_BREAK, target.x, target.z);
                                 // A crate breaks into six scattered pieces, on
                                 // an axis chosen by which way it faces - see
                                 // ExplosionEffects::SpawnScatter.
@@ -4327,8 +4371,7 @@ namespace ALTEngine::Screens
                                 }
                                 explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE,
                                                  creature.x, creature.y + 0x100, creature.z);
-                                ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                    ALTEngine::Formats::SoundIds::CRATE_BREAK, digits.c_str(), cdDirectory);
+                                playBlastSound(ALTEngine::Formats::SoundIds::CRATE_BREAK, creature.x, creature.z);
                             };
                             for (int cell : rings.inner) { occupant(cell, true); }
                             for (int cell : rings.outer) { occupant(cell, false); }
@@ -4671,8 +4714,7 @@ namespace ALTEngine::Screens
                                 if (effect)
                                 {
                                     explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE, x, y, z);
-                                    ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                        ALTEngine::Formats::SoundIds::CRATE_BREAK, digits.c_str(), cdDirectory);
+                                    playBlastSound(ALTEngine::Formats::SoundIds::CRATE_BREAK, x, z);
                                 }
                                 if (blast && cell >= 0) { blastQueue.push_back(cell); }
                                 for (size_t q = 0; q < blastQueue.size(); ++q) { RunBlast(blastQueue[q]); }
@@ -4753,8 +4795,7 @@ namespace ALTEngine::Screens
                                 const int cell = ALTEngine::Formats::CellIndex(
                                     level, ToGridSpaceX(x, originX) >> 9, ToGridSpaceZ(z, originZ) >> 9);
                                 explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE, x, y, z);
-                                ALTEngine::Audio::SfxPlayer::PlaySlot(
-                                    ALTEngine::Formats::SoundIds::CRATE_BREAK, digits.c_str(), cdDirectory);
+                                playBlastSound(ALTEngine::Formats::SoundIds::CRATE_BREAK, x, z);
                                 if (blast && cell >= 0) { blastQueue.push_back(cell); }
                                 for (size_t q = 0; q < blastQueue.size(); ++q) { RunBlast(blastQueue[q]); }
                                 blastQueue.clear();
@@ -4856,7 +4897,7 @@ namespace ALTEngine::Screens
                     if (playerCam.footstep)
                     {
                         ALTEngine::Audio::SfxPlayer::PlaySlot(
-                            PC::FootstepSound(onHazardCell), digits.c_str(), cdDirectory);
+                            PC::FootstepSound(floorHurting), digits.c_str(), cdDirectory);
                     }
                 }
 
@@ -4934,7 +4975,8 @@ namespace ALTEngine::Screens
                         if (live.placedIndex < placedObjects.size()) { placedObjects[live.placedIndex].visible = false; }
                         sendWorld(ALTEngine::Net::WorldKind::PickupTaken, static_cast<int>(&live - livePickups.data()));
 
-                        int amount = static_cast<int>(live.amount) * (live.multiplier == 0 ? 1 : live.multiplier);
+                        // Byte 3 and byte 4 as they are (FUN_000387c0's DX and BX).
+                        const int amount = static_cast<int>(live.amount);
 
                         // The whole table, from FUN_000387c0 - see
                         // Screens/PickupSystem.h. This used to handle a dozen of
@@ -4948,6 +4990,8 @@ namespace ALTEngine::Screens
                         {
                             SDL_Log("GameplayScreen: pickup type %d has no handler", live.type);
                         }
+
+                        pickupReloadWeapon = ALTEngine::Screens::Pickups::ReloadsWeapon(live.type);
 
                         // Type it out on the HUD, using the original's own name
                         // for the thing - index 137 + type in its string list.
@@ -5006,6 +5050,11 @@ namespace ALTEngine::Screens
                             hudState.Tick();
                             // FUN_0003e618 after a hit off health, and the
                             // speech task (FUN_00057338).
+                            if (hudState.pendingSound >= 0)
+                            {
+                                ALTEngine::Audio::SfxPlayer::PlaySlot(hudState.pendingSound, digits.c_str(), cdDirectory);
+                                hudState.pendingSound = -1;
+                            }
                             if (hudState.healthHits != heardHealthHits)
                             {
                                 heardHealthHits = hudState.healthHits;
@@ -5183,6 +5232,7 @@ namespace ALTEngine::Screens
                     }
                     playerFeetY = floorY + jumpOffset;
                     camera.y = floorY + jumpOffset + EYE_HEIGHT + static_cast<float>(playerCam.bobOffsetY);
+                    if (playerDead) { camera.y = floorY + jumpOffset + static_cast<float>(deathEye); }
 
                     // Testing: Ghost Mode holds its own height, starting from
                     // where the player stood when it came on. Turned off, the
@@ -5538,6 +5588,16 @@ namespace ALTEngine::Screens
                 for (auto& object : placedObjects)
                 {
                     if (object.cacheKey.catalog == ALTEngine::Renderer::ModelCatalog::LevelObject) { continue; }
+                    // A door is not: its model's faces are all given light 10
+                    // when it loads (FUN_00029b24 passes EBX=0x0a to
+                    // FUN_00029a88, which writes face +0x12), and drawn with
+                    // the per-face walkers - so a door is as bright in a dark
+                    // corridor as in a lit one.
+                    if (object.cacheKey.catalog == ALTEngine::Renderer::ModelCatalog::LevelDoor)
+                    {
+                        object.lightId = DOOR_LIGHT;
+                        continue;
+                    }
                     const auto* cell = ALTEngine::Formats::CellAt(
                         level, ToGridSpaceX(object.x, originX) >> 9, ToGridSpaceZ(object.z, originZ) >> 9);
                     object.lightId = cell ? cell->lighting : -1;
@@ -5738,6 +5798,19 @@ namespace ALTEngine::Screens
                         // frame, and the single blit at the end scales both
                         // together.
                         weaponView.SetWeapon(renderer, cdDirectory, hudState.currentWeapon);
+                        {
+                            // The light of the player's cell, or entry 0 with the flash up.
+                            const auto* cell = levelReady ? ALTEngine::Formats::CellAt(
+                                level, ToGridSpaceX(camera.x, originX) >> 9, ToGridSpaceZ(camera.z, originZ) >> 9) : nullptr;
+                            float rgb[3] = { 1.0f, 1.0f, 1.0f };
+                            const int lightId = lightFlashRaised ? 0 : (cell ? cell->lighting : -1);
+                            if (lightId < 0 || !ModelRenderer::LevelLightColour(cacheKey, lightId, rgb))
+                            {
+                                rgb[0] = rgb[1] = rgb[2] = 1.0f;
+                            }
+                            weaponView.SetTint(rgb[0], rgb[1], rgb[2]);
+                            lightFlashRaised = false;
+                        }
                         // The left side of the HUD, laid out top to bottom so
                         // nothing there covers the Live Minimap or another.
                         const auto leftColumn = ALTEngine::Renderer::LayoutHudLeftColumn(

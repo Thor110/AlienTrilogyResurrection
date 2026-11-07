@@ -42,10 +42,6 @@ namespace ALTEngine::Audio
     // 0x000acefa. Returns -1 for "stop"/unknown, matching the original's own
     // sentinel.
     //
-    // Level 44 is reachable through the original's clamp but reads one word
-    // PAST the table, straight into DAT_000acf54 (the current-track slot) - an
-    // off-by-one in the original that no real level appears to hit. Reported as
-    // -1 here rather than reproducing a garbage read.
     // Where a CD track lives once ripped. The main menu already plays
     // MUSIC/track02.wav (MenuController.cpp), which fixes the convention:
     // track<NN>.wav, two digits, numbered by CD track. So the table below plugs
@@ -66,23 +62,24 @@ namespace ALTEngine::Audio
     // wrong music. Read this way, the four levels that share the main menu's
     // track 2 are exactly the bonus levels 113, 114, 115 and 155.
     //
-    // 909, number 44, reads one word past the music table, into the current
-    // track slot (DAT_000acf54): an off-by-one in the original. It plays
-    // nothing here.
+    // 909, number 44, reads the word after the table's last entry. That word
+    // (DAT_000acf54) is static data holding 15, so 909 plays track 15; the
+    // current-track slot is the word after it (DAT_000acf56, written at
+    // 0x425ee), not this one.
     inline int LevelIdForCode(const std::string& code) { return Formats::OriginalLevelNumber(code); }
 
     inline int LevelMusicTrack(int levelId)
     {
         // Index N holds the track for level N, already un-shifted from the
         // original's high-word read.
-        static constexpr int TRACKS[44] = {
+        static constexpr int TRACKS[45] = {
              6, 10,  2, 13,  9,  2,  8,  2,  7,  2,
             11, 12,  6, 13, 10,  7,  8, 13, 11,  8,
              4, 12, 10,  5,  3,  5,  9,  4,  5,  8,
              3,  5, 11,  5, 12, 14, 15, 16, 17, 14,
-            15, 16, 17, 14
+            15, 16, 17, 14, 15
         };
-        if (levelId < 0 || levelId >= 44) { return -1; }
+        if (levelId < 0 || levelId >= 45) { return -1; }
         return TRACKS[levelId];
     }
 

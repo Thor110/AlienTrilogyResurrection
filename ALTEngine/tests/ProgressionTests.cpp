@@ -129,7 +129,8 @@ TEST_CASE("Level music: the original's level numbers index the track table; the 
     }
     CHECK(AU::LevelMusicTrack(AU::LevelIdForCode("122")) == 13);
     CHECK(AU::LevelMusicTrack(AU::LevelIdForCode("391")) == 12);
-    CHECK(AU::LevelMusicTrack(AU::LevelIdForCode("909")) == -1);
+    // 909 reads the word after the table, static data holding 15.
+    CHECK(AU::LevelMusicTrack(AU::LevelIdForCode("909")) == 15);
     // The campaign is the first 35 of the same list.
     CHECK(std::string(ALTEngine::Game::Progression::CAMPAIGN_ORDER[34]) == "391");
 }

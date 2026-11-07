@@ -198,7 +198,10 @@ namespace ALTEngine::Formats
             const std::vector<uint16_t>* program = ProgramFor(a);
             if (!program) { return; }
 
-            if (a.ticksRemaining > 0) { a.ticksRemaining--; return; }
+            // FUN_00042ff4 counts down first and moves on when the count
+            // reaches 0 (0x43028-0x43030), so a frame shows for `speed`
+            // ticks, not speed + 1.
+            if (--a.ticksRemaining > 0) { return; }
 
             RunToFrame(a, *program, randomBits);
         }

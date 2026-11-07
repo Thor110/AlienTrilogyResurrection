@@ -138,8 +138,10 @@ namespace ALTEngine::Screens
         // The flamethrower's, from FUN_0002bcac: +0x1a = 0x50, and +0x1c is
         // 0x10 - n where n is which of the shots it is. The strength here
         // is the FIRST shot's; FlameLife below gives the rest.
-        // Its muzzle sits 0x38 to the side (FUN_0002bcac's own offset vector).
-        inline constexpr ProjectileDef PROJECTILE_FLAME{ 0x0f, 0x50, 0x38 };
+        // Its muzzle sits 0x38 to the side (FUN_0002bcac's own offset vector),
+        // and its velocity is turned by (-pitch, 0x38, 0) (0x2bd49), so the
+        // stream converges as the other rounds do.
+        inline constexpr ProjectileDef PROJECTILE_FLAME{ 0x0f, 0x50, 0x38, 0x38 };
 
         // The flamethrower builds its own launch rather than going through
         // FUN_0002b534: 0x80 below the eye plus up to 0x1f of jitter, and forward

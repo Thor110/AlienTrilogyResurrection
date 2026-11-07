@@ -190,6 +190,16 @@ TEST_CASE("Monster trigger: a negative amount takes an active vent below its thr
     CHECK(roster[0].active);                 // still out; the vent itself switches off
 }
 
+TEST_CASE("Monster trigger: a record whose count already equals its threshold starts in play (0x2f468)")
+{
+    ALTEngine::Formats::Monster record;
+    CHECK(EN::ActiveAtStart(record));        // 0 and 0
+    record.triggerThreshold = 1;
+    CHECK(!EN::ActiveAtStart(record));       // waits on a trigger
+    record.triggerCount = 1;
+    CHECK(EN::ActiveAtStart(record));        // the 1/1 vents on L122, L222 and L232
+}
+
 namespace CO = ALTEngine::Screens::CreatureTasks::Colonist;
 
 TEST_CASE("Colonist: which eighth the player is in, 4 straight in front")

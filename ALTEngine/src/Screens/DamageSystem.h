@@ -48,8 +48,9 @@ namespace ALTEngine::Screens
             if (busyFlag != 0) { return false; }
             if (state == STATE_HIT) { return false; }
             if (state > STATE_ACTIVE) { return false; }
-            // One specific pairing is also exempt: subtype 10 in state 4.
-            // Untraced why.
+            // One specific pairing is also exempt: subtype 10 in state 4, a
+            // colonist whose burster is out (Enemies::ApplyHit checks it
+            // against the colonist's own task state).
             if (subtype == 0xa && state == 4) { return false; }
             return true;
         }

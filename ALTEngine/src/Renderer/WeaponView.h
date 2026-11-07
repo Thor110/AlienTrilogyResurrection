@@ -71,6 +71,12 @@ namespace ALTEngine::Renderer
 
         void Draw(SDL_Renderer* renderer, int outputWidth, int outputHeight) const;
 
+        // The light the weapon is drawn in, as a multiplier per channel (1 =
+        // neutral): FUN_0003e93c hands its fill (0x4b400, texel x shade) the
+        // light-table entry of the player's cell, or entry 0 on a tick with
+        // the firing flash up. Clamped to 1 here, so it only darkens.
+        void SetTint(float r, float g, float b) { tint[0] = r; tint[1] = g; tint[2] = b; }
+
         // Advances the animation by one of the ORIGINAL'S logic ticks, not one
         // frame - call it from the same fixed-rate loop the player runs on, or
         // the firing speed changes with the frame rate.
@@ -127,6 +133,7 @@ namespace ALTEngine::Renderer
         static const char* WeaponFileStem(int weaponIndex);
 
     private:
+        float tint[3] = { 1.0f, 1.0f, 1.0f };
         struct FrameTexture
         {
             SDL_Texture* texture = nullptr;

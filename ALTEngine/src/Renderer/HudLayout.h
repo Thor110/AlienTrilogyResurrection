@@ -45,8 +45,12 @@ namespace ALTEngine::Renderer
         if (state.currentWeapon == HUD_GRENADE_WEAPON) { add("GREN", state.grenades); }
         else { add("CHRG", state.seismicCharges); }
         add("ARMR", state.armourItem);
-        add("SPD", state.terrainSpeed);
-        add("SHLD", state.terrainShield);
+        // The two timed items count in ticks; the box shows them in 0x1e-tick
+        // units, never below 1 while any are left (0x39ebd-0x39ef5,
+        // FUN_00039c90 0x39d43). Armour shows as it is.
+        const auto timed = [](int ticks) { return ticks > 0 ? std::max(1, ticks / 0x1e) : 0; };
+        add("SPD", timed(state.terrainSpeed));
+        add("SHLD", timed(state.terrainShield));
         return out;
     }
 
