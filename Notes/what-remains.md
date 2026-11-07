@@ -186,7 +186,9 @@ original does give this grace: FUN_0002e638, which every creature coming into pl
 start, a trigger, a crate or barrel, an egg), sets +0x4e to 0x40 (0x2e7dc), and FUN_000313b0 refuses damage while
 it runs. The port never set it, and No Hit Immunity ignored that cooldown altogether. Now every creature starts
 with it (`Enemies::BringIntoPlay`), and the option lifts only the cooldown a hit leaves, as its description says.
-Note this also means a hugger leaping out of an egg can't be shot for its first 0x40 ticks, as in the original.
+Zip 145: **not for a hugger from an egg** (or a colonist's burster). The original gives them the grace too
+(FUN_00035530 goes through FUN_0002e638), but a hugger flying at the player that can't be shot for 1.8 seconds
+feels wrong (Edward) - the port's own choice, in `Enemies::ReleaseFromEgg`.
 
 Changed in zip 143, to check: **facehuggers no longer show through wall vents** (Edward: L111, and likely other
 levels). The original draws a creature only when its cell's zones meet the zones the view walk took in
@@ -493,7 +495,9 @@ library, the sound and video drivers and the DOS extender) was looked at to see 
    in play. (A creature in a wall vent's duct now notices the player as the original does, zip 97, instead of
    coming out alerted.)
 3. **Casings** vanish at the floor; the original's fall through it out of sight.
-4. The assessment bars' colours, routine 14 on level faces, L371's lifts 6-9, the weapon noise value, the
+4. **Spawn grace** (zip 145): a creature out of an egg or a colonist can be hurt at once; the original gives it
+   the same 0x40 ticks as every other new creature.
+5. The assessment bars' colours, routine 14 on level faces, L371's lifts 6-9, the weapon noise value, the
    shatter launch speed, mouse sensitivity and two settings defaults; open question A (pistol rounds against a
    standing hugger).
 

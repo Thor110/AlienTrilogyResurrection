@@ -361,7 +361,8 @@ namespace ALTEngine::Screens
         // which sets its +0x4e to 0x40 (0x2e7dc): the cooldown FUN_000313b0
         // refuses damage while it runs, so nothing can hurt it for its first
         // 0x40 ticks. It is why a hugger bursting from the middle row of
-        // barrels on L111 lives through the rest of the chain.
+        // barrels on L111 lives through the rest of the chain. The port leaves
+        // out the egg's (see ReleaseFromEgg).
         inline constexpr int SPAWN_IMMUNITY = 0x40;
         inline void BringIntoPlay(Enemy& enemy)
         {
@@ -594,7 +595,13 @@ namespace ALTEngine::Screens
                 if (enemy.monsterIndex != monsterIndex) { continue; }
                 if (enemy.active) { return nullptr; }
                 enemy.active = true;
-                BringIntoPlay(enemy);
+                // OURS: no spawn grace (BringIntoPlay) for a hugger leaping
+                // from an egg or a colonist's burster. The original's
+                // FUN_00035530 does go through FUN_0002e638 and gives it one,
+                // but a hugger flying at the player that can't be shot for
+                // its first 0x40 ticks feels wrong (Edward, 2026).
+                enemy.hitCooldown = 0;
+                enemy.spawnGuard = false;
                 enemy.springing = false;
                 enemy.state = Damage::STATE_NORMAL;
                 enemy.x = enemy.lastX = x;

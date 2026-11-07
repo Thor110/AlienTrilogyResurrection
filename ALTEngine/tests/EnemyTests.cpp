@@ -521,3 +521,20 @@ TEST_CASE("Enemies: a creature let out of a crate can't be hurt for 0x40 ticks (
     Enemies::ApplyHit(e, 1, true);
     CHECK(e.health == before - 1);
 }
+
+TEST_CASE("Enemies: a hugger out of an egg has no spawn grace (the port's choice) and can be shot at once")
+{
+    std::vector<Enemies::Enemy> roster(1);
+    Enemies::Enemy& e = roster[0];
+    e.monsterIndex = 4;
+    e.type = 2;
+    e.health = 0x20;
+    e.alive = true;
+    e.active = false;
+    REQUIRE(Enemies::ReleaseFromEgg(roster, 4, 0.0f, 0.0f, 0.0f, 0) != nullptr);
+    CHECK(e.hitCooldown == 0);
+    CHECK(!e.spawnGuard);
+    const int before = e.health;
+    Enemies::ApplyHit(e, 1, false);
+    CHECK(e.health == before - 1);
+}
