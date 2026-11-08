@@ -54,7 +54,7 @@ TEST_CASE("Net: every message survives encoding")
     CHECK(N::SkinCreatureType(N::Skin::Handler) == 0x0e);
     // A look this version doesn't know arrives as the Synthetic.
     auto bytes = N::Encode(N::Join{ "X", N::Skin::Handler });
-    bytes.back() = 9;
+    bytes[bytes.size() - 2 - std::string(N::GameVersion()).size()] = 9;   // the skin, before the version text
     CHECK(std::get<N::Join>(*N::Decode(bytes)).skin == N::Skin::Synthetic);
 
     N::Shot shot; shot.slot = 1; shot.type = 2; shot.vx = 256.0f; shot.vz = -12.5f;
@@ -575,7 +575,7 @@ TEST_CASE("Net: the host's rules travel in the Welcome")
     CHECK_EQ(static_cast<int>(w.rules.weaponPacing), 5);
 }
 
-TEST_CASE("Session rules: in a network game the host decides what changes play, cheats and saving are off")
+TEST_CASE("Session rules: in a network game the host decides what changes play and cheats, saving is off")
 {
     namespace B = ALTEngine::Bootstrap;
     B::Config config;   // read only here
@@ -590,7 +590,7 @@ TEST_CASE("Session rules: in a network game the host decides what changes play, 
         CHECK(modern.IsActive(B::ModernFeature::FasterXenomorphs));
         CHECK(!modern.IsActive(B::ModernFeature::PlayerJumping));
         CHECK(!modern.IsActive(B::ModernFeature::SpeedCompensation));
-        CHECK(!modern.IsActive(B::ModernFeature::EnableCheats));   // Off whatever is sent
+        CHECK(modern.IsActive(B::ModernFeature::EnableCheats));    // the host allows cheats
         CHECK(!modern.IsActive(B::ModernFeature::SaveAnywhere));
         CHECK_EQ(B::WeaponPacingSettings(config).Get(), 6);
         CHECK(!B::TestingSettings(config).IsOn(B::TestingOption::GhostMode));
@@ -601,6 +601,40 @@ TEST_CASE("Session rules: in a network game the host decides what changes play, 
     CHECK(!B::ActiveSessionRules::Get().active);
     CHECK(modern.IsActive(B::ModernFeature::FasterXenomorphs) == modern.IsActiveHere(B::ModernFeature::FasterXenomorphs));
     // A host sends only the features every player must share.
-    CHECK((modern.SharedFeatureBits() & B::ModernSettings::BitFor(B::ModernFeature::EnableCheats)) == 0);
+    CHECK((modern.SharedFeatureBits() & B::ModernSettings::BitFor(B::ModernFeature::SaveAnywhere)) == 0);
     CHECK((modern.SharedFeatureBits() & B::ModernSettings::BitFor(B::ModernFeature::LevelTimer)) == 0);
+}
+
+TEST_CASE("Net: another version's join is read, refused for the version, and told the host's")
+{
+    // A Join as another version would send it: a different protocol byte and version text.
+    N::Join join{ "Bishop", N::Skin::Synthetic, "9.9.9", N::PROTOCOL_VERSION };
+    auto bytes = N::Encode(join);
+    bytes[3] = static_cast<uint8_t>(N::PROTOCOL_VERSION + 1);
+    const auto decoded = N::Decode(bytes);
+    REQUIRE(decoded.has_value());
+    const auto& j = std::get<N::Join>(*decoded);
+    CHECK(j.gameVersion == "9.9.9");
+    CHECK_EQ(static_cast<int>(j.protocol), N::PROTOCOL_VERSION + 1);
+    CHECK(!N::SameVersion(j));
+    CHECK(N::SameVersion(N::Join{ "Hicks", N::Skin::Soldier }));   // ours
+    // A Join from before 0.9.6 had no version text: read, and refused.
+    auto old = N::Encode(N::Join{ "Vasquez", N::Skin::Soldier, "", 6 });
+    old.pop_back();   // the empty version text's length byte
+    old[3] = 6;
+    const auto oldJoin = N::Decode(old);
+    REQUIRE(oldJoin.has_value());
+    CHECK(!N::SameVersion(std::get<N::Join>(*oldJoin)));
+    // The refusal carries the host's version, and is read across versions too.
+    auto reject = N::Encode(N::Reject{ N::RejectReason::Version, "0.9.6" });
+    reject[3] = static_cast<uint8_t>(N::PROTOCOL_VERSION + 1);
+    const auto r = N::Decode(reject);
+    REQUIRE(r.has_value());
+    CHECK(std::get<N::Reject>(*r).reason == N::RejectReason::Version);
+    CHECK(std::get<N::Reject>(*r).hostVersion == "0.9.6");
+    // Anything else from another version is still dropped.
+    auto state = N::Encode(N::State{});
+    state[3] = static_cast<uint8_t>(N::PROTOCOL_VERSION + 1);
+    CHECK(!N::Decode(state).has_value());
+    CHECK(std::string(N::GameVersion()) != "unknown");
 }

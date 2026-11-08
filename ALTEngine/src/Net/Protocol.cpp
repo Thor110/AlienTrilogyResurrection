@@ -3,8 +3,14 @@
 #include <cmath>
 #include <cstring>
 
+#ifndef ALTENGINE_VERSION
+#define ALTENGINE_VERSION "unknown"
+#endif
+
 namespace ALTEngine::Net
 {
+    const char* GameVersion() { return ALTENGINE_VERSION; }
+
     namespace
     {
         constexpr uint8_t MAGIC[3] = { 'A', 'L', 'T' };
@@ -115,13 +121,19 @@ namespace ALTEngine::Net
                 w.Str(m.gameName, MAX_GAME_NAME); w.Str(m.level, 8); w.U8(m.players); w.U8(m.maxPlayers);
                 w.U8(static_cast<uint8_t>(m.mode));
             },
-            [&](const Join& m) { w.U8(static_cast<uint8_t>(MessageType::Join)); w.Str(m.name, MAX_NAME); w.U8(static_cast<uint8_t>(m.skin)); },
+            [&](const Join& m) {
+                w.U8(static_cast<uint8_t>(MessageType::Join)); w.Str(m.name, MAX_NAME); w.U8(static_cast<uint8_t>(m.skin));
+                w.Str(m.gameVersion, MAX_VERSION_TEXT);
+            },
             [&](const Welcome& m) {
                 w.U8(static_cast<uint8_t>(MessageType::Welcome)); w.U8(m.slot); w.Str(m.level, 8);
                 w.U8(static_cast<uint8_t>(m.mode)); w.U16(m.levelSerial);
                 w.U32(m.rules.modernFeatures); w.U8(m.rules.weaponPacing);
             },
-            [&](const Reject& m) { w.U8(static_cast<uint8_t>(MessageType::Reject)); w.U8(static_cast<uint8_t>(m.reason)); },
+            [&](const Reject& m) {
+                w.U8(static_cast<uint8_t>(MessageType::Reject)); w.U8(static_cast<uint8_t>(m.reason));
+                w.Str(m.hostVersion, MAX_VERSION_TEXT);
+            },
             [&](const Roster& m) {
                 w.U8(static_cast<uint8_t>(MessageType::Roster));
                 for (const auto& p : m.players)
@@ -190,7 +202,11 @@ namespace ALTEngine::Net
 
     std::optional<Message> Decode(const std::vector<uint8_t>& bytes)
     {
-        if (bytes.size() < 5 || std::memcmp(bytes.data(), MAGIC, 3) != 0 || bytes[3] != PROTOCOL_VERSION) { return std::nullopt; }
+        if (bytes.size() < 5 || std::memcmp(bytes.data(), MAGIC, 3) != 0) { return std::nullopt; }
+        const uint8_t protocol = bytes[3];
+        const auto type = static_cast<MessageType>(bytes[4]);
+        // Another version's datagram: only the handshake is read.
+        if (protocol != PROTOCOL_VERSION && type != MessageType::Join && type != MessageType::Reject) { return std::nullopt; }
         Reader r{ bytes, 5 };
         std::optional<Message> result;
         switch (static_cast<MessageType>(bytes[4]))
@@ -202,14 +218,26 @@ namespace ALTEngine::Net
             m.mode = static_cast<GameMode>(r.U8());
             result = m; break;
         }
-        case MessageType::Join: { Join m; m.name = r.Str(MAX_NAME); m.skin = SkinFrom(r.U8()); result = m; break; }
+        case MessageType::Join:
+        {
+            Join m; m.name = r.Str(MAX_NAME); m.skin = SkinFrom(r.U8());
+            // Before 0.9.6 a Join ended there.
+            m.gameVersion = r.pos < bytes.size() ? r.Str(MAX_VERSION_TEXT) : std::string();
+            m.protocol = protocol;
+            result = m; break;
+        }
         case MessageType::Welcome:
         {
             Welcome m; m.slot = r.U8(); m.level = r.Str(8); m.mode = static_cast<GameMode>(r.U8()); m.levelSerial = r.U16();
             m.rules.modernFeatures = r.U32(); m.rules.weaponPacing = r.U8();
             result = m; break;
         }
-        case MessageType::Reject: { Reject m; m.reason = static_cast<RejectReason>(r.U8()); result = m; break; }
+        case MessageType::Reject:
+        {
+            Reject m; m.reason = static_cast<RejectReason>(r.U8());
+            m.hostVersion = r.pos < bytes.size() ? r.Str(MAX_VERSION_TEXT) : std::string();
+            result = m; break;
+        }
         case MessageType::Roster:
         {
             Roster m;

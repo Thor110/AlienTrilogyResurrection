@@ -193,6 +193,20 @@ Changed in zip 147 (version 0.9.6), to check:
   machine with it off.
 - **PATCH-NOTES.md** in the repository's root: the changes since 0.9.5. VERSION is 0.9.6 (and vcpkg.json).
 
+Changed in zip 148, to check:
+- **Enable Cheats is the host's** (Shared, not Off): with it on, each player turns their own cheats on in the
+  pause menu.
+- **The version check.** Join and Reject are the handshake: read whatever the datagram's protocol byte, their
+  layouts never to change (new fields on the end only). A Join carries the player's ALTEngine version
+  (`Net::GameVersion`, from ALTEngine/VERSION, compiled into ALTGame); the host refuses a different version or
+  protocol with Reject{Version, its own version}, and the player sees why on `MultiplayerNoticeScreen` (also
+  for a full game and a host that never answered, `JoinRefusedText`). A version before 0.9.6 can't read it
+  and times out as before. Not done: the Join list doesn't show games of another version (DiscoverReply is not
+  part of the handshake); it could, with a version field read across versions the same way.
+- **To do (Edward):** move **Disable Resupply Timer** from Testing to the Modern options. Which preset it
+  belongs in is open, and the Modern list may in time want splitting into categories (play, display,
+  convenience, multiplayer...) as it grows.
+
 Changed in zip 146, to check (from the routine-by-routine audit: 15 agents over every function, their findings
 checked against the disassembly before anything was changed):
 - **Pickups give what the record says** (FUN_000387c0): byte 3 into the loaded counter, byte 4 into the spare
@@ -686,6 +700,8 @@ level's end every tick, which changes nothing; the port doesn't.
 ## 5. Larger features
 
 - **Multiplayer:** see 4b.
+- **The Modern options, reorganised** (Edward, zip 148): move Disable Resupply Timer from Testing into Modern
+  (which preset is open), and split the Modern list into categories once it grows further.
 - **Direct-to-window rendering.**
 - **ALTViewer:** a compressor for replacing compressed images; level object export; its patcher checking every
   file before it starts.

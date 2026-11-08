@@ -630,4 +630,71 @@ namespace ALTEngine::Screens
         if (background) { SDL_DestroyTexture(background); }
         return result;
     }
+
+    std::string JoinRefusedText(ALTEngine::Net::RejectReason reason, const std::string& hostVersion)
+    {
+        using ALTEngine::Net::RejectReason;
+        switch (reason)
+        {
+        case RejectReason::Version:
+            return "THE HOST IS RUNNING ALTENGINE " + (hostVersion.empty() ? std::string("(ANOTHER VERSION)") : hostVersion)
+                 + " AND YOU ARE RUNNING " + ALTEngine::Net::GameVersion()
+                 + ". EVERY PLAYER IN A GAME NEEDS THE SAME VERSION.";
+        case RejectReason::Full:
+            return "THE GAME IS FULL.";
+        case RejectReason::NoAnswer:
+        default:
+            return "THE HOST DID NOT ANSWER. CHECK THE ADDRESS, AND THAT THE HOST HAS UDP PORT "
+                 + std::to_string(ALTEngine::Net::DEFAULT_PORT) + " OPEN.";
+        }
+    }
+
+    bool MultiplayerNoticeScreen::Run(const std::filesystem::path& cdDirectory, const std::string& title, const std::string& text)
+    {
+        AppWindow& app = AppWindow::Instance();
+        if (!app.EnsureCreated()) { return false; }
+        SDL_Renderer* renderer = app.Renderer();
+        int bgW = 0, bgH = 0;
+        SDL_Texture* background = LoadMenuBackground(cdDirectory, renderer, 1, bgW, bgH);
+
+        bool open = true;
+        bool waiting = true;
+        while (waiting)
+        {
+            SDL_Event event;
+            while (SDL_PollEvent(&event))
+            {
+                if (event.type == SDL_EVENT_QUIT) { open = false; waiting = false; }
+                else if ((event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+                {
+                    waiting = false;
+                    SfxPlayer::Play(SfxId::MenuBack, cdDirectory);
+                }
+            }
+            if (!waiting) { break; }
+
+            DrawMenuBackground(renderer, background, bgW, bgH);
+            DrawNetworkedComputersModel(renderer, cdDirectory);
+            const int scale = ComputeMenuScale(renderer);
+            const int lineHeight = TextHeight(scale) + scale * 6;
+            const int margin = scale * 8;
+            int windowW = 0, windowH = 0;
+            SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+
+            DrawBitmapText(renderer, title, (windowW - TextWidth(title, scale)) / 2, margin, scale, COLOR_CURSOR);
+            int y = margin + lineHeight * 3;
+            for (const std::string& line : ALTEngine::Bootstrap::WrapText(text, scale, windowW - margin * 2))
+            {
+                DrawBitmapText(renderer, line, (windowW - TextWidth(line, scale)) / 2, y, scale, COLOR_WHITE);
+                y += lineHeight;
+            }
+            const std::string prompt = "PRESS ANY KEY";
+            DrawBitmapText(renderer, prompt, (windowW - TextWidth(prompt, scale)) / 2, windowH - margin - lineHeight, scale, COLOR_DIM);
+
+            SDL_RenderPresent(renderer);
+            SDL_Delay(10);
+        }
+        if (background) { SDL_DestroyTexture(background); }
+        return open;
+    }
 }

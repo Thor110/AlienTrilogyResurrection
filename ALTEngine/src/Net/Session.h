@@ -42,6 +42,7 @@ namespace ALTEngine::Net
         Frag frag{};
         Chat chat{};
         RejectReason reason = RejectReason::Full;
+        std::string hostVersion;   // Rejected for the version: the host's
         WorldEvent world{};
         Net::Creatures creatures{};
         Net::CreatureDamage creatureDamage{};

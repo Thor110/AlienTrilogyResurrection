@@ -102,6 +102,8 @@ add_library(ALTGame STATIC
 target_include_directories(ALTGame PUBLIC src)
 target_link_libraries(ALTGame PUBLIC ALTFormats)
 target_link_libraries(ALTGame PRIVATE nlohmann_json::nlohmann_json alt_warnings)
+# The version a network game checks (Net::GameVersion).
+target_compile_definitions(ALTGame PRIVATE ALTENGINE_VERSION="${ALTENGINE_VERSION}")
 if(WIN32)
     target_link_libraries(ALTGame PUBLIC ws2_32)   # the multiplayer sockets (src/Net)
 endif()

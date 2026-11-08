@@ -20,14 +20,19 @@ Everything since 0.9.5.
 - **Multiplayer plays by the host's rules.** In deathmatch and co-operative games, every option that changes
   how the game plays is the host's choice, for every player:
   - **The host's choice for everyone:** Keep Items, Player Jumping, No Hit Immunity, Free Look, Render Distance,
-    Live Minimap, Faster Xenomorphs, Speed Compensation, Pause Weapon Select, and the weapon pacing.
-  - **Off for everyone:** Enable Cheats and Save Anywhere, and the testing aids Disable Enemy Spawn, Ghost Mode
-    and Disable Resupply Timer.
+    Live Minimap, Faster Xenomorphs, Speed Compensation, Pause Weapon Select, Enable Cheats, and the weapon
+    pacing. With the host's cheats on, each player can turn their own on from the pause menu.
+  - **Off for everyone:** Save Anywhere, and the testing aids Disable Enemy Spawn, Ghost Mode and Disable
+    Resupply Timer.
   - **Each player's own:** Level Timer, Level Select, Skip End Level Screen, and everything else (sound, video,
     controls).
 
-  Your own settings are left as they are and come back when the game ends. Older versions can't join a 0.9.6
-  game (the network protocol is now version 7).
+  Your own settings are left as they are and come back when the game ends.
+- **Version check when joining.** Every player in a network game must run the same version of ALTEngine. A
+  player on another version is turned away with a message saying which version the host runs and which they
+  run. The same screen explains a full game, or a host that never answered (with a reminder about the UDP
+  port). From 0.9.6 on, any two versions can tell each other this; a version before 0.9.6 can't read the
+  message and still just times out.
 - **Co-operative mode.** Play the story missions together over the network. Every player must reach the exit
   before the level ends, and the doors, lifts, switches, pickups and creatures are shared between machines.
   A guest joining a level already in progress is caught up behind a short loading screen.

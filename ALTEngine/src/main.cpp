@@ -732,6 +732,7 @@ int main(int, char**)
                     std::cout << "Multiplayer: joining " << address->ToString() << "\n";
                     // Wait for the host's welcome (or its refusal, or nothing).
                     bool waiting = true;
+                    std::string refusal;   // why we were kept out, to show
                     while (waiting)
                     {
                         SDL_Event event;
@@ -745,7 +746,8 @@ int main(int, char**)
                         {
                             if (e.kind == ALTEngine::Net::Event::Kind::Rejected)
                             {
-                                std::cout << "Multiplayer: the game refused us or did not answer\n";
+                                refusal = JoinRefusedText(e.reason, e.hostVersion);
+                                std::cout << "Multiplayer: " << refusal << "\n";
                                 waiting = false;
                             }
                         }
@@ -754,7 +756,16 @@ int main(int, char**)
                         SDL_Delay(10);
                     }
                     if (windowClosed) { inMultiplayerMenu = false; break; }
-                    if (!waiting || !session.Connected()) { session.Stop(); break; }
+                    if (!waiting || !session.Connected())
+                    {
+                        session.Stop();
+                        if (!refusal.empty() && !MultiplayerNoticeScreen::Run(cdDirectory, "COULD NOT JOIN THE GAME", refusal))
+                        {
+                            windowClosed = true;
+                            inMultiplayerMenu = false;
+                        }
+                        break;
+                    }
                     std::cout << "Multiplayer: in as player " << session.LocalSlot() + 1 << ", "
                               << ALTEngine::Net::GameModeName(session.Mode()) << ", level " << session.Level() << "\n";
                     session.SetQuickChat(mpSettings.messages);

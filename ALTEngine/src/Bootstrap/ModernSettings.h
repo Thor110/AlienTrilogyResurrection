@@ -102,7 +102,7 @@ namespace ALTEngine::Bootstrap
     // What an option does in a network game (deathmatch or co-operative):
     //   Shared - the host's choice, for every player (it changes how the game
     //            plays, so all must agree)
-    //   Off    - off for everyone (no saving a network game, no cheats)
+    //   Off    - off for everyone (no saving a network game)
     //   Local  - each player's own (it only changes their own screens)
     enum class NetworkRule { Shared, Off, Local };
 
@@ -151,13 +151,13 @@ namespace ALTEngine::Bootstrap
         {
             switch (feature)
             {
-            case ModernFeature::EnableCheats:
             case ModernFeature::SaveAnywhere:
                 return NetworkRule::Off;
             case ModernFeature::SkipEndLevelScreen:
             case ModernFeature::LevelSelect:
             case ModernFeature::LevelTimer:
                 return NetworkRule::Local;
+            case ModernFeature::EnableCheats:
             case ModernFeature::KeepItems:
             case ModernFeature::PlayerJumping:
             case ModernFeature::NoHitImmunity:

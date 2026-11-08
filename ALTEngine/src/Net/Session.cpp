@@ -251,7 +251,7 @@ namespace ALTEngine::Net
             if (joinStarted < 0.0) { joinStarted = now; }
             if (now - joinStarted > TIMEOUT_SECONDS)
             {
-                Event e; e.kind = Event::Kind::Rejected; e.reason = RejectReason::Full;
+                Event e; e.kind = Event::Kind::Rejected; e.reason = RejectReason::NoAnswer;
                 Push(e);
                 role = Role::None;
                 socket.Close();
@@ -297,6 +297,12 @@ namespace ALTEngine::Net
         }
         if (const auto* join = std::get_if<Join>(&message))
         {
+            // Another version of ALTEngine is told so, with ours, and kept out.
+            if (!SameVersion(*join))
+            {
+                Send(from, Reject{ RejectReason::Version, GameVersion() });
+                return;
+            }
             int slot = SlotOf(from);
             if (slot < 0)
             {
@@ -309,7 +315,7 @@ namespace ALTEngine::Net
                 {
                     for (int i = 1; i < MAX_PLAYERS && slot < 0; ++i) { if (!roster.players[static_cast<size_t>(i)].used) { slot = i; } }
                 }
-                if (slot < 0) { Send(from, Reject{ RejectReason::Full }); return; }
+                if (slot < 0) { Send(from, Reject{ RejectReason::Full, GameVersion() }); return; }
                 peers[static_cast<size_t>(slot)] = Peer{ true, from, now };
                 roster.players[static_cast<size_t>(slot)] = RosterEntry{ true, join->name.substr(0, MAX_NAME), 0, join->skin };
                 Event e; e.kind = Event::Kind::PlayerJoined; e.slot = static_cast<uint8_t>(slot); Push(e);
@@ -439,7 +445,7 @@ namespace ALTEngine::Net
         {
             if (!welcomed)
             {
-                Event e; e.kind = Event::Kind::Rejected; e.reason = reject->reason; Push(e);
+                Event e; e.kind = Event::Kind::Rejected; e.reason = reject->reason; e.hostVersion = reject->hostVersion; Push(e);
                 role = Role::None;
                 socket.Close();
             }

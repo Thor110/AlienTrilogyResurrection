@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <string>
 
+#include "../Net/Protocol.h"
+
 namespace ALTEngine::Screens
 {
     // What the multiplayer menus hold. main.cpp keeps the name, look and
@@ -109,4 +111,16 @@ namespace ALTEngine::Screens
     public:
         static MultiplayerJoinResult Run(const std::filesystem::path& cdDirectory, std::string& typedAddress);
     };
+
+    // A message on the multiplayer screens' background - why a game could
+    // not be joined, say - until a key is pressed. Returns false if the
+    // window was closed.
+    class MultiplayerNoticeScreen
+    {
+    public:
+        static bool Run(const std::filesystem::path& cdDirectory, const std::string& title, const std::string& text);
+    };
+
+    // What to tell a player whose join was refused or not answered.
+    std::string JoinRefusedText(ALTEngine::Net::RejectReason reason, const std::string& hostVersion);
 }

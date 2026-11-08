@@ -130,7 +130,7 @@ A thanks to bambamalicious for discovering the fix for the inaccessible secret o
 
 And thanks to Kaiser for information regarding animated textures and some other previously unknown bytes.
 
-Thanks to onelastpilot for the suggestion to add a timer to the levels for recording best times, as well as requesting inverted mouse look.
+Thanks to onelastpilot for the suggestion to add a timer to the levels for recording best times.
 
 Thanks to CybeRingu for the suggestion to add co-operative to the multiplayer mode.
 
@@ -262,7 +262,9 @@ The host chooses the **Game Mode** below Name Of Game:
 - **Deathmatch** (the default) is the original's: the ten maps above, players against each other, with bots if wanted.
 - **Co-operative** is ALTEngine's own: the players go through the story missions together, starting on any of the 35 ("Start at mission"). There is no friendly fire and no bots (those rows are greyed out), with the same player limit as deathmatch. A player who reaches the end of a level waits there, out of sight and out of harm, until every player in the game has reached it; then the next mission loads for everyone. Dying puts you back at the level's start. The level is shared: the host runs the aliens, which go after whichever player is nearest, and every player sees and fights the same ones; doors, lifts, switches, lights, pickups and destroyed crates are the same for everyone, and a player joining late catches up with all of it. The motion tracker works in co-operative games, pulse and all. Grenades and seismic charges are seen by everyone. Each mission keeps its briefing and its assessment (marked CO-OPERATIVE); a player coming into a level the others are already playing sees a short syncing screen, in the briefing's style, while the level catches up.
 
-**The host's rules.** Every Modern option that changes how the game plays (Keep Items, Player Jumping, No Hit Immunity, Free Look, Render Distance, Live Minimap, Faster Xenomorphs, Speed Compensation, Pause Weapon Select) and the weapon pacing are the host's choice, for every player in the game. Enable Cheats, Save Anywhere and the testing aids that change play (Disable Enemy Spawn, Ghost Mode, Disable Resupply Timer) are off in a network game. Each player's own settings are untouched and come back afterwards.
+**The host's rules.** Every Modern option that changes how the game plays (Keep Items, Player Jumping, No Hit Immunity, Free Look, Render Distance, Live Minimap, Faster Xenomorphs, Speed Compensation, Pause Weapon Select, Enable Cheats) and the weapon pacing are the host's choice, for every player in the game. Save Anywhere and the testing aids that change play (Disable Enemy Spawn, Ghost Mode, Disable Resupply Timer) are off in a network game. Each player's own settings are untouched and come back afterwards.
+
+**Versions.** A player on a different version of ALTEngine from the host is turned away with a message naming both versions. A game hosted on another version doesn't show in the Join list.
 
 ## Alien Trilogy Viewer
 
