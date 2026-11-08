@@ -120,9 +120,12 @@ TEST_CASE("HUD items: speed and shield show their ticks in 0x1e units, at least 
     CHECK_EQ(shown.items[1].count, 1);
 }
 
-TEST_CASE("HUD Size: each group shrinks toward its own corner, and 5 is the original's size")
+TEST_CASE("HUD Size: each group shrinks toward its own corner; the default, the largest, is the original's size")
 {
-    CHECK(ALTEngine::Bootstrap::HudSizeSettings::ScaleFor(ALTEngine::Bootstrap::HudSizeSettings::DEFAULT) == 1.0f);
+    namespace B = ALTEngine::Bootstrap;
+    CHECK(B::HudSizeSettings::DEFAULT == B::HudSizeSettings::MAXIMUM);
+    CHECK(B::HudSizeSettings::ScaleFor(B::HudSizeSettings::MAXIMUM) == 1.0f);
+    CHECK(B::HudSizeSettings::ScaleFor(B::HudSizeSettings::MINIMUM) < 0.6f);
     // At 1, nothing moves.
     float x = 215, y = 19, w = 98, h = 34;
     R::HudScaleRect(x, y, w, h, R::HudCorner{ true, false }, 1.0f);

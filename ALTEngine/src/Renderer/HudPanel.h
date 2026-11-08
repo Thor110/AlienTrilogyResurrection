@@ -967,8 +967,9 @@ namespace ALTEngine::Renderer
 
     // ---- HUD Size (ours) ------------------------------------------------
     //
-    // The HUD drawn smaller or larger (Graphics > HUD Size), each group
-    // shrinking or growing toward its own corner of the screen: the map,
+    // The HUD drawn smaller (Graphics > HUD Size; full size is the original's
+    // and the largest), each group shrinking toward its own corner of the
+    // screen: the map,
     // items and messages top-left, health top-right, ammunition bottom-left,
     // the tracker bottom-right. The surface is cut into those four corners at
     // these lines, which run through empty space between the groups (left

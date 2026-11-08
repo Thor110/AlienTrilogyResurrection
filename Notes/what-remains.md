@@ -197,13 +197,13 @@ Changed in zip 150, to check:
 - **Mouse Sensitivity scales both axes** (Edward): the mouse's Y now goes through it too - Free Look's pitch
   already did; without Free Look the mouse's forward/back walking (the original's mouse move, a dead zone then
   a flat speed) now reaches its threshold sooner or later with the slider. 5 is unchanged.
-- **HUD Size** (Graphics, slider sentinel -6; config `HudSize`, `Bootstrap::HudSizeSettings`, 1-10, scale
-  0.5 + 0.1 a step, 5 = 1.0): the panels go on a layer of their own, cut at x 180 / y 150 into four corners,
+- **HUD Size** (Graphics, slider sentinel -6; config `HudSizeStep`, `Bootstrap::HudSizeSettings`, 1-10, scale
+  0.5 + 0.05 a step; 10, the default, = 1.0, the original's size and the largest - Edward, zip 151): the panels go on a layer of their own, cut at x 180 / y 150 into four corners,
   each blitted scaled toward its corner (`Renderer::HudScaleRect`); the text layer (messages, resupply, the
   face index display) with the top-left group; the tracker (drawn straight to the window) and the Live Minimap
-  placed the same way. The weapon (under) and the face hugger (over) are their own layers at full size. At 5
+  placed the same way. The weapon (under) and the face hugger (over) are their own layers at full size. At 10
   the frame is the same as before, except that a half-transparent panel pixel over the weapon now blends
-  twice (the layers are separate) - not expected to show. Not seen in play yet: check 1 and 10 at a few
+  twice (the layers are separate) - not expected to show. Not seen in play yet: check 1 and 5 at a few
   window sizes, and with the Live Minimap on.
 
 Changed in zip 149, to check: **Invert Look** (Options > Controls > Mouse, under Mouse Sensitivity; config

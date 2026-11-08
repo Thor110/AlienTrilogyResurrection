@@ -106,13 +106,15 @@ namespace ALTEngine::Bootstrap
 
     // HUD Size (ours): the in-game HUD drawn smaller or larger, each group
     // staying in its own corner (Renderer::HudScaleRect). A 1-10 slider,
-    // 0.5 + 0.1 a step: 5 (the default) is the original's size, 1 is 60%,
-    // 10 is 150%. The weapon and the face hugger are part of the view and
-    // keep their size.
+    // 0.5 + 0.05 a step: 10, the default and the largest, is the original's
+    // size (which already takes up a lot of the screen - Edward), 1 is 55%.
+    // The weapon and the face hugger are part of the view and keep their size.
+    // Stored as "HudSizeStep" (not zip 150's "HudSize", whose 5 meant full
+    // size), so everyone starts at full size.
     class HudSizeSettings
     {
     public:
-        static constexpr int DEFAULT = 5;
+        static constexpr int DEFAULT = 10;
         static constexpr int MINIMUM = 1;
         static constexpr int MAXIMUM = 10;
 
@@ -120,15 +122,15 @@ namespace ALTEngine::Bootstrap
 
         int Get() const
         {
-            auto value = config.Get("HudSize");
+            auto value = config.Get("HudSizeStep");
             if (!value) { return DEFAULT; }
             try { return std::clamp(std::stoi(*value), MINIMUM, MAXIMUM); }
             catch (...) { return DEFAULT; }
         }
 
-        void Set(int step) { config.Set("HudSize", std::to_string(std::clamp(step, MINIMUM, MAXIMUM))); }
+        void Set(int step) { config.Set("HudSizeStep", std::to_string(std::clamp(step, MINIMUM, MAXIMUM))); }
 
-        static constexpr float ScaleFor(int step) { return 0.5f + 0.1f * static_cast<float>(step); }
+        static constexpr float ScaleFor(int step) { return 0.5f + 0.05f * static_cast<float>(step); }
         float Scale() const { return ScaleFor(Get()); }
 
     private:
