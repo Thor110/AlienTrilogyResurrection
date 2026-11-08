@@ -193,6 +193,18 @@ Changed in zip 147 (version 0.9.6), to check:
   machine with it off.
 - **PATCH-NOTES.md** in the repository's root: the changes since 0.9.5. VERSION is 0.9.6 (and vcpkg.json).
 
+Changed in zip 154, to check: **the face hug overlay reaches the bottom** (Edward). Checked against
+FINGERS.B16 itself: every one of the eight frames ends its drawn art on view row 236 at rest, two sprite rows
+(four view rows at DRAW_SCALE) short of 240 - the frames run to 238-242 but end in one to three empty rows
+(magenta in ALTViewer). `FaceHugOverlay::RepeatBottomRows` fills the two rows under the art with copies of its
+last two rows, growing a frame only where it has one empty row (A1, B2, B3, +1 each); all eight then end on
+240. Zips 152-153 repeated the frames' own last rows, which are empty, so they showed nothing.
+**A native patch of FINGERS.B16** (Edward, for after the split between global and ALTEngine-only fixes): five
+frames have room inside them (two or three empty rows), but A1, B2 and B3 have one, so they would need to grow
+by a row - and a frame's size is in the executable's tables (EnemyAnimData), not the file. The frames are also
+compressed, so any change means re-encoding them (there is no encoder yet) and moving the later frames' offsets,
+which are in the same tables. Until then the load-time fix stands.
+
 Changed in zip 150, to check:
 - **Mouse Sensitivity scales both axes** (Edward): the mouse's Y now goes through it too - Free Look's pitch
   already did; without Free Look the mouse's forward/back walking (the original's mouse move, a dead zone then
@@ -718,6 +730,10 @@ level's end every tick, which changes nothing; the port doesn't.
 ## 5. Larger features
 
 - **Multiplayer:** see 4b.
+- **The face hug overlay's bottom rows as a file fix** (Edward, zip 154): once the patches are split into global
+  and ALTEngine-only ones, take `FaceHugOverlay::RepeatBottomRows` out of the code and make the same change to
+  ALTEngine's copy of FINGERS.B16 instead. Needs a frame encoder (the frames are compressed), A1, B2 and B3 one
+  row taller and the later frames' offsets moved in EnemyAnimData. Details under zip 154 above.
 - **The Modern options, reorganised** (Edward, zip 148): move Disable Resupply Timer from Testing into Modern
   (which preset is open), and split the Modern list into categories once it grows further.
 - **Direct-to-window rendering.**

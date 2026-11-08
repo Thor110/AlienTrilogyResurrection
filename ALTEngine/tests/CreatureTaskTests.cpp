@@ -3,6 +3,7 @@
 
 #include "Screens/CreatureTasks.h"
 #include "Screens/Enemies.h"
+#include "Screens/FaceHugOverlay.h"
 
 namespace EG = ALTEngine::Screens::CreatureTasks::Egg;
 namespace EN = ALTEngine::Screens::Enemies;
@@ -420,4 +421,29 @@ TEST_CASE("Vent: its held sound stops whenever the jet does, a hit back to dorma
     bool stopped = false;
     for (int t = 0; t < 3 && !stopped; ++t) { VT::Step(v, in); stopped = VT::Step(v, far).stopSound; }
     CHECK(stopped);
+}
+
+TEST_CASE("Face hug overlay: the two rows under the art repeat its last two, growing the frame only if needed")
+{
+    using ALTEngine::Screens::FaceHugOverlay;
+    // Art in rows 0-1, two empty rows under it: filled in place.
+    ALTEngine::Formats::EnemySpriteSet::Frame f;
+    f.width = 2; f.height = 4; f.offsetY = -53;
+    f.pixels = { 1, 2, 3, 4, 0, 0, 0, 0 };
+    FaceHugOverlay::RepeatBottomRows(f);
+    CHECK_EQ(f.height, 4);
+    CHECK(f.pixels == std::vector<uint8_t>({ 1, 2, 3, 4, 1, 2, 3, 4 }));
+    CHECK_EQ(f.offsetY, -53);   // nothing moves
+    // One empty row: the frame grows by one.
+    ALTEngine::Formats::EnemySpriteSet::Frame g;
+    g.width = 2; g.height = 3;
+    g.pixels = { 5, 6, 7, 8, 0, 0 };
+    FaceHugOverlay::RepeatBottomRows(g);
+    CHECK_EQ(g.height, 4);
+    CHECK(g.pixels == std::vector<uint8_t>({ 5, 6, 7, 8, 5, 6, 7, 8 }));
+    // A frame whose pixels don't match its size is left alone.
+    ALTEngine::Formats::EnemySpriteSet::Frame bad;
+    bad.width = 4; bad.height = 2; bad.pixels = { 1, 2 };
+    FaceHugOverlay::RepeatBottomRows(bad);
+    CHECK_EQ(bad.height, 2);
 }

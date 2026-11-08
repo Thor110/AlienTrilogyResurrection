@@ -108,6 +108,9 @@ Everything since 0.9.5.
 
 ### Fixes
 
+- The face hugger on your face now reaches the bottom of the screen in every frame; a two-pixel strip of the
+  world used to show under it. As each frame loads, the two empty rows under its drawn art are filled with
+  copies of the art's last two rows (ALTEngine only; the game's files are unchanged).
 - **Choosing the game folder:** no crash on a folder name with unusual characters; the SELECT button works with
   Windows display scaling; the path box can be clicked or typed into (Tab, Ctrl+V, Enter).
 - **Installing from an existing installation** (not just the disc) now works, into ALTEngine's own folder; the
