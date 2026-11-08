@@ -965,6 +965,32 @@ namespace ALTEngine::Renderer
     inline constexpr int HUD_VIRTUAL_WIDTH = 320;
     inline constexpr int HUD_VIRTUAL_HEIGHT = 240;
 
+    // ---- HUD Size (ours) ------------------------------------------------
+    //
+    // The HUD drawn smaller or larger (Graphics > HUD Size), each group
+    // shrinking or growing toward its own corner of the screen: the map,
+    // items and messages top-left, health top-right, ammunition bottom-left,
+    // the tracker bottom-right. The surface is cut into those four corners at
+    // these lines, which run through empty space between the groups (left
+    // groups end by x 144, right ones start at 215; the top ones end by y 133,
+    // the tracker's strip starts at 155).
+    inline constexpr int HUD_SPLIT_X = 180;
+    inline constexpr int HUD_SPLIT_Y = 150;
+
+    struct HudCorner { bool right = false; bool bottom = false; };
+    inline constexpr HudCorner HUD_CORNER_TOP_LEFT{ false, false };
+    inline constexpr HudCorner HUD_CORNER_BOTTOM_RIGHT{ true, true };
+
+    // A rectangle in the 320x240 HUD space, scaled by `scale` toward its
+    // corner - still in HUD space. At 1 it is unchanged.
+    inline void HudScaleRect(float& x, float& y, float& w, float& h, HudCorner corner, float scale)
+    {
+        x = corner.right ? HUD_VIRTUAL_WIDTH - (HUD_VIRTUAL_WIDTH - x) * scale : x * scale;
+        y = corner.bottom ? HUD_VIRTUAL_HEIGHT - (HUD_VIRTUAL_HEIGHT - y) * scale : y * scale;
+        w *= scale;
+        h *= scale;
+    }
+
     // Ammo number's left edge, as the decompilation has it.
     //
     // RESOLVED: this looked 3 pixels too far right until the digit ADVANCE was

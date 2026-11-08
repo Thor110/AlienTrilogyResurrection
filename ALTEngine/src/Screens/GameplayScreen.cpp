@@ -478,6 +478,7 @@ namespace ALTEngine::Screens
         // reaction and the immunity after it.
         bool ignoreStun = false;
         bool invertLook = false;   // Controls > Mouse > Invert Look
+        float hudSizeScale = 1.0f; // Graphics > HUD Size
         bool cheatFullyLoaded = false;
         bool cheatMaximumHealth = false;
         // Cells the player has seen, for the map's fog of war. One byte per
@@ -600,6 +601,7 @@ namespace ALTEngine::Screens
             }
             ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
             invertLook = ALTEngine::Bootstrap::InvertLookSettings(modernConfig).Get();
+            hudSizeScale = ALTEngine::Bootstrap::HudSizeSettings(modernConfig).Scale();
             weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings(modernConfig).Get()
                 / ALTEngine::Screens::PlayerCamera::ORIGINAL_TIMER_HZ;
             ModelRenderer::SetDrawDistanceFade(!modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance));
@@ -2540,7 +2542,11 @@ namespace ALTEngine::Screens
                 // 5/10 (the slider's own default) maps to exactly
                 // MOUSE_SENSITIVITY, so this changes nothing for anyone
                 // who hasn't touched the setting.
-                float sensitivity = MOUSE_SENSITIVITY * (static_cast<float>(keyBindings.MouseSensitivity()) / 5.0f);
+                // The slider scales both axes: turning and Free Look's pitch
+                // through `sensitivity`, and without Free Look the mouse's Y,
+                // which walks forward and back (the original's mouse move).
+                const float sensitivityScale = static_cast<float>(keyBindings.MouseSensitivity()) / 5.0f;
+                float sensitivity = MOUSE_SENSITIVITY * sensitivityScale;
 
                 // Mouse deltas accumulate here and are consumed by the player
                 // tick below, so a 144 Hz machine does not feed the fixed-rate
@@ -2553,7 +2559,7 @@ namespace ALTEngine::Screens
                 // feel it did before this change.
                 pendingMouseYaw += mouseDx * sensitivity
                     * (static_cast<float>(ALTEngine::Screens::PlayerCamera::ANGLE_UNITS) / 6.28318530718f);
-                pendingMouseY += mouseDy;
+                pendingMouseY += mouseDy * sensitivityScale;
 
                 // ---- weapon selection -----------------------------------
                 // Keys 1-5 pick a weapon directly and 6 steps to the next one,
@@ -5827,6 +5833,7 @@ namespace ALTEngine::Screens
                         const auto leftColumn = ALTEngine::Renderer::LayoutHudLeftColumn(
                             hudState, liveMinimap && levelReady, resupply.active && !testingNoResupply);
                         hud.SetLeftColumn(leftColumn);
+                        hud.SetScale(hudSizeScale);
                         hud.Draw(renderer, hudState, windowW, windowH,
                             [&] {
                                 weaponView.Draw(renderer,
@@ -5855,6 +5862,8 @@ namespace ALTEngine::Screens
                                     }
                                 }
 
+                            },
+                            [&] {
                                 // The typed-out messages, at 1:1 in the HUD
                                 // surface so the text lands on whole pixels.
                                 // Newest at the bottom, the way a terminal
@@ -6024,6 +6033,9 @@ namespace ALTEngine::Screens
                             // inset by one pixel horizontally and by the strip's
                             // thickness vertically (Edward, 2026 - "this includes
                             // the black bars").
+                            // HUD Size: with the rest of the top-left group.
+                            hudScaleX *= hudSizeScale;
+                            hudScaleY *= hudSizeScale;
                             SDL_FRect mapRect{
                                 (ALTEngine::Renderer::HUD_MINIMAP_X + 1) * hudScaleX,
                                 (ALTEngine::Renderer::HUD_MINIMAP_Y

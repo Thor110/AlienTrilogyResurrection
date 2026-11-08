@@ -387,7 +387,10 @@ namespace ALTEngine::Renderer
     void HudRenderer::Unload()
     {
         if (sheet) { SDL_DestroyTexture(sheet); sheet = nullptr; }
-        if (hudTarget) { SDL_DestroyTexture(hudTarget); hudTarget = nullptr; }
+        for (SDL_Texture** layer : { &hudTarget, &panelTarget, &overlayTarget, &textTarget })
+        {
+            if (*layer) { SDL_DestroyTexture(*layer); *layer = nullptr; }
+        }
         if (customBorder) { SDL_DestroyTexture(customBorder); customBorder = nullptr; customBorderW = 0; customBorderH = 0; }
         rects.clear();
         healthSlots.clear();
@@ -531,10 +534,30 @@ namespace ALTEngine::Renderer
     void HudRenderer::Draw(SDL_Renderer* renderer, const ALTEngine::Screens::PlayerHudState& state,
                            int outputWidth, int outputHeight,
                            const std::function<void()>& drawUnderPanels,
-                           const std::function<void()>& drawOverPanels) const
+                           const std::function<void()>& drawOverPanels,
+                           const std::function<void()>& drawText) const
     {
         if (!sheet || rects.empty()) { return; }
         if (outputWidth <= 0 || outputHeight <= 0) { return; }
+
+        // The layers over the weapon's surface (HUD Size: see HudScaleRect).
+        auto ensureLayer = [&](SDL_Texture*& layer) {
+            if (layer) { return true; }
+            layer = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET,
+                                      HUD_VIRTUAL_WIDTH, HUD_VIRTUAL_HEIGHT);
+            if (!layer) { return false; }
+            SDL_SetTextureBlendMode(layer, SDL_BLENDMODE_BLEND);
+            SDL_SetTextureScaleMode(layer, SDL_SCALEMODE_NEAREST);
+            return true;
+        };
+        if (!ensureLayer(panelTarget) || !ensureLayer(overlayTarget) || !ensureLayer(textTarget)) { return; }
+        auto beginLayer = [&](SDL_Texture* layer) {
+            SDL_SetRenderTarget(renderer, layer);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+            SDL_RenderClear(renderer);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        };
 
         // Rasterise into the original's own 320x240 surface, then blit that once.
         // See the header: FUN_0003aac8 sets each HUD entry's byte +0xb, which
@@ -566,6 +589,9 @@ namespace ALTEngine::Renderer
 
         // The weapon goes on first, so every panel draws over it.
         if (drawUnderPanels) { drawUnderPanels(); }
+
+        // The panels on their own layer, so HUD Size can move them.
+        beginLayer(panelTarget);
 
         // Identity: HUD coordinates ARE target pixels on this surface. Kept as
         // named variables rather than deleted so the drawing code below stays
@@ -741,16 +767,45 @@ namespace ALTEngine::Renderer
             for (int i = 0; i < shown.count; ++i) { drawItem(shown.items[static_cast<size_t>(i)].label, shown.items[static_cast<size_t>(i)].count); }
         }
 
-        // Last, on top of every panel: the typed-out messages. They belong here
-        // rather than in the underlay because the original's terminal box sits
-        // over the HUD region, not behind it.
+        // Over every panel: what is on the camera (the face hugger), then the
+        // typed-out messages - the original's terminal box sits over the HUD
+        // region, not behind it.
+        beginLayer(overlayTarget);
         if (drawOverPanels) { drawOverPanels(); }
+        beginLayer(textTarget);
+        if (drawText) { drawText(); }
 
-        // Back to the window, and put the whole 320x240 surface on it in one
+        // Back to the window, and put each 320x240 surface on it in one
         // stretch - the single scaling step the original's compositing does.
         SDL_SetRenderTarget(renderer, previousTarget);
-        SDL_FRect full{ 0.0f, 0.0f, static_cast<float>(outputWidth), static_cast<float>(outputHeight) };
+        const float windowScaleX = static_cast<float>(outputWidth) / static_cast<float>(HUD_VIRTUAL_WIDTH);
+        const float windowScaleY = static_cast<float>(outputHeight) / static_cast<float>(HUD_VIRTUAL_HEIGHT);
+        const SDL_FRect full{ 0.0f, 0.0f, static_cast<float>(outputWidth), static_cast<float>(outputHeight) };
+        // A part of a layer, scaled toward its corner, onto the window.
+        auto blitPart = [&](SDL_Texture* layer, float x, float y, float w, float h, HudCorner corner) {
+            const SDL_FRect src{ x, y, w, h };
+            HudScaleRect(x, y, w, h, corner, hudScale);
+            const SDL_FRect dst{ x * windowScaleX, y * windowScaleY, w * windowScaleX, h * windowScaleY };
+            SDL_RenderTexture(renderer, layer, &src, &dst);
+        };
+
         SDL_RenderTexture(renderer, hudTarget, nullptr, &full);
+        if (hudScale == 1.0f)
+        {
+            SDL_RenderTexture(renderer, panelTarget, nullptr, &full);
+        }
+        else
+        {
+            constexpr float W = HUD_VIRTUAL_WIDTH, H = HUD_VIRTUAL_HEIGHT;
+            constexpr float SX = HUD_SPLIT_X, SY = HUD_SPLIT_Y;
+            blitPart(panelTarget, 0.0f, 0.0f, SX, SY, HudCorner{ false, false });
+            blitPart(panelTarget, SX, 0.0f, W - SX, SY, HudCorner{ true, false });
+            blitPart(panelTarget, 0.0f, SY, SX, H - SY, HudCorner{ false, true });
+            blitPart(panelTarget, SX, SY, W - SX, H - SY, HudCorner{ true, true });
+        }
+        SDL_RenderTexture(renderer, overlayTarget, nullptr, &full);
+        if (hudScale == 1.0f) { SDL_RenderTexture(renderer, textTarget, nullptr, &full); }
+        else { blitPart(textTarget, 0.0f, 0.0f, HUD_VIRTUAL_WIDTH, HUD_VIRTUAL_HEIGHT, HUD_CORNER_TOP_LEFT); }
     }
 
     void HudRenderer::DrawEdgeStrips(SDL_Renderer* renderer, int left, int right, int top, int bottom,
@@ -894,8 +949,14 @@ namespace ALTEngine::Renderer
         if (outputWidth <= 0 || outputHeight <= 0) { return 0; }
         int drawn = 0;
 
-        float scaleX = static_cast<float>(outputWidth) / static_cast<float>(HUD_VIRTUAL_WIDTH);
-        float scaleY = static_cast<float>(outputHeight) / static_cast<float>(HUD_VIRTUAL_HEIGHT);
+        const float scaleX = static_cast<float>(outputWidth) / static_cast<float>(HUD_VIRTUAL_WIDTH);
+        const float scaleY = static_cast<float>(outputHeight) / static_cast<float>(HUD_VIRTUAL_HEIGHT);
+        // A HUD-space rectangle onto the window, the tracker keeping to the
+        // bottom-right corner at any HUD Size.
+        auto place = [&](float x, float y, float w, float h) {
+            HudScaleRect(x, y, w, h, HUD_CORNER_BOTTOM_RIGHT, hudScale);
+            return SnapToPixels(x * scaleX, y * scaleY, w * scaleX, h * scaleY);
+        };
 
         int tile = HUD_TRACKER_FIRST_DESCRIPTOR + trackerFrame;
         if (static_cast<size_t>(tile) >= rects.size()) { return 0; }
@@ -929,9 +990,8 @@ namespace ALTEngine::Renderer
 
         for (const Quad& q : quads)
         {
-            SDL_FRect dst = SnapToPixels(q.x * scaleX, q.y * scaleY,
-                                         HUD_TRACKER_QUADRANT_W * scaleX,
-                                         HUD_TRACKER_QUADRANT_H * scaleY);
+            SDL_FRect dst = place(static_cast<float>(q.x), static_cast<float>(q.y),
+                                  HUD_TRACKER_QUADRANT_W, HUD_TRACKER_QUADRANT_H);
             SDL_RenderTextureRotated(renderer, sheet, &src, &dst, 0.0, nullptr, q.flip);
         }
 
@@ -944,12 +1004,12 @@ namespace ALTEngine::Renderer
             int width = HUD_TRACKER_RIGHT - HUD_TRACKER_LEFT;
 
             // Top is the flipped copy; the artwork reads as the bottom edge.
-            SDL_FRect top = SnapToPixels(HUD_TRACKER_LEFT * scaleX, HUD_TRACKER_TOP_STRIP_Y * scaleY,
-                                         width * scaleX, sr.height * scaleY);
+            SDL_FRect top = place(HUD_TRACKER_LEFT, HUD_TRACKER_TOP_STRIP_Y,
+                                  static_cast<float>(width), static_cast<float>(sr.height));
             SDL_RenderTextureRotated(renderer, sheet, &strip, &top, 0.0, nullptr, SDL_FLIP_VERTICAL);
 
-            SDL_FRect bottom = SnapToPixels(HUD_TRACKER_LEFT * scaleX, HUD_TRACKER_BOTTOM_STRIP_Y * scaleY,
-                                            width * scaleX, sr.height * scaleY);
+            SDL_FRect bottom = place(HUD_TRACKER_LEFT, HUD_TRACKER_BOTTOM_STRIP_Y,
+                                     static_cast<float>(width), static_cast<float>(sr.height));
             SDL_RenderTexture(renderer, sheet, &strip, &bottom);
         }
 
@@ -1006,9 +1066,7 @@ namespace ALTEngine::Renderer
                 || px > HUD_TRACKER_CENTRE_X + HUD_TRACKER_QUADRANT_W
                 || pz < HUD_TRACKER_CENTRE_Y - HUD_TRACKER_QUADRANT_H
                 || pz > HUD_TRACKER_CENTRE_Y + HUD_TRACKER_QUADRANT_H) { continue; }
-            SDL_FRect blip = SnapToPixels(px * scaleX, pz * scaleY,
-                                          HUD_TRACKER_BLIP_SIZE * scaleX,
-                                          HUD_TRACKER_BLIP_SIZE * scaleY);
+            SDL_FRect blip = place(px, pz, HUD_TRACKER_BLIP_SIZE, HUD_TRACKER_BLIP_SIZE);
             SDL_RenderFillRect(renderer, &blip);
         }
         return drawn;

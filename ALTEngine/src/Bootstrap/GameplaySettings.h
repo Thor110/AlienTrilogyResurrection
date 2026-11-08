@@ -104,6 +104,37 @@ namespace ALTEngine::Bootstrap
         Config& config;
     };
 
+    // HUD Size (ours): the in-game HUD drawn smaller or larger, each group
+    // staying in its own corner (Renderer::HudScaleRect). A 1-10 slider,
+    // 0.5 + 0.1 a step: 5 (the default) is the original's size, 1 is 60%,
+    // 10 is 150%. The weapon and the face hugger are part of the view and
+    // keep their size.
+    class HudSizeSettings
+    {
+    public:
+        static constexpr int DEFAULT = 5;
+        static constexpr int MINIMUM = 1;
+        static constexpr int MAXIMUM = 10;
+
+        explicit HudSizeSettings(Config& cfg) : config(cfg) {}
+
+        int Get() const
+        {
+            auto value = config.Get("HudSize");
+            if (!value) { return DEFAULT; }
+            try { return std::clamp(std::stoi(*value), MINIMUM, MAXIMUM); }
+            catch (...) { return DEFAULT; }
+        }
+
+        void Set(int step) { config.Set("HudSize", std::to_string(std::clamp(step, MINIMUM, MAXIMUM))); }
+
+        static constexpr float ScaleFor(int step) { return 0.5f + 0.1f * static_cast<float>(step); }
+        float Scale() const { return ScaleFor(Get()); }
+
+    private:
+        Config& config;
+    };
+
     // Invert Look: moving the mouse forward looks down, as in a flight
     // stick. Only matters with Free Look (Modern), the only time the mouse
     // tips the view. Off by default.

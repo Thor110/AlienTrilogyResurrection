@@ -116,6 +116,7 @@ namespace ALTEngine::Bootstrap
         case StringId::Borderless: return "Borderless";
         case StringId::MouseSensitivity: return "MouseSensitivity";
         case StringId::InvertLook: return "InvertLook";
+        case StringId::HudSize: return "HudSize";
         case StringId::Modern: return "Modern";
         case StringId::EnableAll: return "EnableAll";
         case StringId::Custom: return "Custom";
@@ -466,6 +467,7 @@ namespace ALTEngine::Bootstrap
         if (name == "Borderless") { return StringId::Borderless; }
         if (name == "MouseSensitivity") { return StringId::MouseSensitivity; }
         if (name == "InvertLook") { return StringId::InvertLook; }
+        if (name == "HudSize") { return StringId::HudSize; }
         if (name == "Modern") { return StringId::Modern; }
         if (name == "EnableAll") { return StringId::EnableAll; }
         if (name == "Custom") { return StringId::Custom; }

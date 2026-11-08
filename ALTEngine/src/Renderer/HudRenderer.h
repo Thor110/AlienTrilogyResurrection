@@ -84,10 +84,21 @@ namespace ALTEngine::Renderer
         // the original puts both in the same surface, and doing it any other way
         // leaves the weapon's bottom edge landing on a different pixel row than
         // the screen edge does.
+        //
+        // `drawOverPanels` draws on the camera, over the panels, at full size
+        // (the face hugger); `drawText` draws the HUD's text layer (messages,
+        // the resupply countdown), which goes with the top-left group when
+        // the HUD Size is not 1. Each runs with its own 320x240 surface bound.
         void Draw(SDL_Renderer* renderer, const ALTEngine::Screens::PlayerHudState& state,
                   int outputWidth, int outputHeight,
                   const std::function<void()>& drawUnderPanels = {},
-                  const std::function<void()>& drawOverPanels = {}) const;
+                  const std::function<void()>& drawOverPanels = {},
+                  const std::function<void()>& drawText = {}) const;
+
+        // Graphics > HUD Size (Bootstrap::HudSizeSettings): 1 is the
+        // original's size. Applies to Draw and DrawTracker.
+        void SetScale(float scale) { hudScale = scale; }
+        float Scale() const { return hudScale; }
 
         // Draws the tracker's edge strips above and below an arbitrary box, in
         // 320x240 HUD space. Used to frame the live minimap so it matches the
@@ -156,6 +167,12 @@ namespace ALTEngine::Renderer
         // The original's 320x240 HUD surface. Created on first use and kept for
         // the renderer's lifetime; Draw() is const, hence mutable.
         mutable SDL_Texture* hudTarget = nullptr;
+        // The layers over it, each 320x240: the panels (cut into corners when
+        // scaled), the camera overlay, and the text.
+        mutable SDL_Texture* panelTarget = nullptr;
+        mutable SDL_Texture* overlayTarget = nullptr;
+        mutable SDL_Texture* textTarget = nullptr;
+        float hudScale = 1.0f;
 
         // Blits one descriptor rect into the 320x240 virtual space at (x, y),
         // scaled to the output.

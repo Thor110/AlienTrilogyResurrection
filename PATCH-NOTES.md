@@ -15,8 +15,13 @@ Everything since 0.9.5.
 ### New
 
 - **Invert Look** (Options > Controls > Mouse, under Mouse Sensitivity): moving the mouse forward looks down.
-  It applies with Free Look on, the only time the mouse tips the view. Mouse Sensitivity (1-10, 5 the default)
-  is in the same list and also reachable from the pause menu's Options.
+  It applies with Free Look on, the only time the mouse tips the view.
+- **Mouse Sensitivity applies to both axes**: turning, Free Look's up and down, and (without Free Look) the
+  mouse's forward and back walking, which it didn't scale before. 5 is the default and unchanged.
+- **HUD Size** (Options > Graphics, a slider): the in-game HUD drawn from 60% to 150% of the original's size,
+  each part staying in its own corner - the map, items and messages top left, health top right, ammunition
+  bottom left, the motion tracker bottom right. The weapon in hand and a face hugger on your face keep their
+  size, as they're part of the view. Step 5, the default, is the original's size.
 - **Pause Weapon Select** (Modern option). Pick the weapon in hand from the pause menu's list: Enter (or Right)
   on a weapon you carry, with ammunition, switches to it, and the menu stays open. The original game has this;
   here it can be turned off. On in the Convenience and Modernised presets.

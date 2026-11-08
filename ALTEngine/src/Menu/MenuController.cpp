@@ -73,7 +73,7 @@ namespace ALTEngine::Menu
         // three separate copies of the same -5..-3 range check.
         bool IsSliderEntry(const MenuNode& node)
         {
-            return node.inputActionIndex >= -5 && node.inputActionIndex <= -3;
+            return node.inputActionIndex >= -6 && node.inputActionIndex <= -3;
         }
 
         // Queries the real available fullscreen display modes for the
@@ -1114,6 +1114,18 @@ namespace ALTEngine::Menu
                 if (screen != Screen::Options || optionsPath.empty()) { return false; }
                 MenuNode& leaf = WalkPath((*optionsRootPtr), optionsPath);
                 if (!IsSliderEntry(leaf)) { return false; }
+
+                if (leaf.inputActionIndex == -6) // HUD Size
+                {
+                    ALTEngine::Bootstrap::Config hudConfig;
+                    ALTEngine::Bootstrap::HudSizeSettings hudSize(hudConfig);
+                    const int updated = std::clamp(hudSize.Get() + delta, ALTEngine::Bootstrap::HudSizeSettings::MINIMUM,
+                                                   ALTEngine::Bootstrap::HudSizeSettings::MAXIMUM);
+                    hudSize.Set(updated);
+                    leaf.sliderValue = updated;
+                    SfxPlayer::Play(SfxId::MenuMove, cdDirectory);
+                    return true;
+                }
 
                 if (leaf.inputActionIndex == -5) // Mouse Sensitivity
                 {

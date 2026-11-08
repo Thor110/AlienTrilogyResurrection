@@ -221,7 +221,15 @@ namespace ALTEngine::Menu
             displayMode.initialSelectedChild = FindChildIndexByLabel(displayMode.children, displayModeLabel);
             displayMode.isSettingsList = true;
 
-            return List("Graphics", StringId::Graphics, { std::move(quality), std::move(resolution), std::move(vsync), std::move(displayMode) });
+            // HUD Size, a slider like the volumes (sentinel -6, MenuController).
+            MenuNode hudSize = Action("HUD Size", StringId::HudSize);
+            hudSize.inputActionIndex = -6;
+            {
+                ALTEngine::Bootstrap::Config hudConfig;
+                hudSize.sliderValue = ALTEngine::Bootstrap::HudSizeSettings(hudConfig).Get();
+            }
+
+            return List("Graphics", StringId::Graphics, { std::move(quality), std::move(resolution), std::move(vsync), std::move(displayMode), std::move(hudSize) });
         }
 
         MenuNode LanguageMenu(ALTEngine::Bootstrap::Language current)

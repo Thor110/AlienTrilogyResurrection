@@ -1,4 +1,5 @@
 #include "TestFramework.h"
+#include "Bootstrap/GameplaySettings.h"
 
 #include "Renderer/HudLayout.h"
 
@@ -117,4 +118,26 @@ TEST_CASE("HUD items: speed and shield show their ticks in 0x1e units, at least 
     REQUIRE(shown.count == 2);
     CHECK_EQ(shown.items[0].count, 20);
     CHECK_EQ(shown.items[1].count, 1);
+}
+
+TEST_CASE("HUD Size: each group shrinks toward its own corner, and 5 is the original's size")
+{
+    CHECK(ALTEngine::Bootstrap::HudSizeSettings::ScaleFor(ALTEngine::Bootstrap::HudSizeSettings::DEFAULT) == 1.0f);
+    // At 1, nothing moves.
+    float x = 215, y = 19, w = 98, h = 34;
+    R::HudScaleRect(x, y, w, h, R::HudCorner{ true, false }, 1.0f);
+    CHECK(x == 215.0f); CHECK(y == 19.0f); CHECK(w == 98.0f);
+    // Health, top right, at half size: its right edge keeps its gap to the screen's.
+    x = 215; y = 19; w = 98; h = 34;
+    R::HudScaleRect(x, y, w, h, R::HudCorner{ true, false }, 0.5f);
+    CHECK(x + w == 320.0f - (320.0f - 313.0f) * 0.5f);
+    CHECK(y == 9.5f); CHECK(w == 49.0f);
+    // The tracker, bottom right, at 150%: still on screen.
+    x = R::HUD_TRACKER_LEFT; y = R::HUD_TRACKER_TOP_STRIP_Y; w = R::HUD_TRACKER_RIGHT - R::HUD_TRACKER_LEFT; h = 70;
+    R::HudScaleRect(x, y, w, h, R::HUD_CORNER_BOTTOM_RIGHT, 1.5f);
+    CHECK(x + w <= 320.0f); CHECK(y + h <= 240.0f);
+    // The split lines run between the groups.
+    CHECK(R::HUD_SPLIT_X > R::HUD_OVERLAY_AMMO_X + 130);
+    CHECK(R::HUD_SPLIT_X < R::HUD_OVERLAY_HEALTH_X);
+    CHECK(R::HUD_SPLIT_Y < R::HUD_TRACKER_TOP_STRIP_Y);
 }

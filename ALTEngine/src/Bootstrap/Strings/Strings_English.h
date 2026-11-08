@@ -119,6 +119,7 @@ namespace ALTEngine::Bootstrap
             "Borderless",
             "Mouse Sensitivity",
             "Invert Look",
+            "HUD Size",
             "Modern",
             "Enable All",
             "Custom",
