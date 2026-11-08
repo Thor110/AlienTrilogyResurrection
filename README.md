@@ -134,6 +134,8 @@ Thanks to onelastpilot for the suggestion to add a timer to the levels for recor
 
 Thanks to CybeRingu for the suggestion to add co-operative to the multiplayer mode.
 
+Thanks to Drelvak who is working on Diablo 1 first person for the inspiration, while watching their videos I was reminded that HUD scaling is something people like and often forget to implement.
+
 ## Engine Reimplementation
 
 Engine reimplementation is currently a work in progress. What changed in each version: [PATCH-NOTES.md](PATCH-NOTES.md).
