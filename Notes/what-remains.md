@@ -193,6 +193,11 @@ Changed in zip 147 (version 0.9.6), to check:
   machine with it off.
 - **PATCH-NOTES.md** in the repository's root: the changes since 0.9.5. VERSION is 0.9.6 (and vcpkg.json).
 
+Changed in zip 149, to check: **Invert Look** (Options > Controls > Mouse, under Mouse Sensitivity; config
+`InvertLook`, `Bootstrap::InvertLookSettings`): turns the mouse's Y round for Free Look's pitch. Without Free
+Look the mouse's Y still walks forward and back as in the original, and isn't inverted. Mouse Sensitivity was
+already there (1-10, the same list, zip 70s); requested again, so perhaps people don't find it under Mouse.
+
 Changed in zip 148, to check:
 - **Enable Cheats is the host's** (Shared, not Off): with it on, each player turns their own cheats on in the
   pause menu.
@@ -702,6 +707,10 @@ level's end every tick, which changes nothing; the port doesn't.
 - **Multiplayer:** see 4b.
 - **The Modern options, reorganised** (Edward, zip 148): move Disable Resupply Timer from Testing into Modern
   (which preset is open), and split the Modern list into categories once it grows further.
+- **A HUD scale slider** (Edward, zip 149, an idea for later): the in-game HUD (health, ammunition, tracker,
+  item boxes, messages) drawn larger or smaller. It is drawn now on the original's 320x240 layout scaled to
+  the window (Renderer/HudPanel, HUD_VIRTUAL_WIDTH/HEIGHT); a slider would scale that, keeping each element
+  anchored to its corner. Asked for alongside Invert Look and Mouse Sensitivity.
 - **Direct-to-window rendering.**
 - **ALTViewer:** a compressor for replacing compressed images; level object export; its patcher checking every
   file before it starts.

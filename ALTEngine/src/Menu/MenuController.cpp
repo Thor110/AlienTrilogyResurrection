@@ -608,6 +608,11 @@ namespace ALTEngine::Menu
             {
                 cameraSwaySettings.Set(leafLabel == "On");
             }
+            else if (parentLabel == "Invert Look")
+            {
+                ALTEngine::Bootstrap::Config lookConfig;
+                ALTEngine::Bootstrap::InvertLookSettings(lookConfig).Set(leafLabel == "On");
+            }
         }
     }
 

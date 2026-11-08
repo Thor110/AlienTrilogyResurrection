@@ -14,6 +14,9 @@ Everything since 0.9.5.
 
 ### New
 
+- **Invert Look** (Options > Controls > Mouse, under Mouse Sensitivity): moving the mouse forward looks down.
+  It applies with Free Look on, the only time the mouse tips the view. Mouse Sensitivity (1-10, 5 the default)
+  is in the same list and also reachable from the pause menu's Options.
 - **Pause Weapon Select** (Modern option). Pick the weapon in hand from the pause menu's list: Enter (or Right)
   on a weapon you carry, with ammunition, switches to it, and the menu stays open. The original game has this;
   here it can be turned off. On in the Convenience and Modernised presets.

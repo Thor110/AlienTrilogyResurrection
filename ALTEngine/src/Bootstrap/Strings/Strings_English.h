@@ -118,6 +118,7 @@ namespace ALTEngine::Bootstrap
             "Fullscreen",
             "Borderless",
             "Mouse Sensitivity",
+            "Invert Look",
             "Modern",
             "Enable All",
             "Custom",

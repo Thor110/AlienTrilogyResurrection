@@ -104,6 +104,26 @@ namespace ALTEngine::Bootstrap
         Config& config;
     };
 
+    // Invert Look: moving the mouse forward looks down, as in a flight
+    // stick. Only matters with Free Look (Modern), the only time the mouse
+    // tips the view. Off by default.
+    class InvertLookSettings
+    {
+    public:
+        explicit InvertLookSettings(Config& cfg) : config(cfg) {}
+
+        bool Get() const
+        {
+            auto value = config.Get("InvertLook");
+            return value.has_value() && *value == "On";
+        }
+
+        void Set(bool on) { config.Set("InvertLook", on ? "On" : "Off"); }
+
+    private:
+        Config& config;
+    };
+
     // How long one of the original's drawn frames lasts, in its timer
     // interrupts (69.74 Hz), for the weapon. The original fires and steps the
     // weapon's animation once per drawn frame (FUN_0003d5b0 and FUN_0003e93c

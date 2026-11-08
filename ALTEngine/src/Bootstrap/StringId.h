@@ -129,6 +129,7 @@ namespace ALTEngine::Bootstrap
         Fullscreen,
         Borderless,
         MouseSensitivity,
+        InvertLook,
         Modern,
         EnableAll,
         Custom,

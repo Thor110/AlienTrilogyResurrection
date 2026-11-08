@@ -477,6 +477,7 @@ namespace ALTEngine::Screens
         // Modern "No Hit Immunity": every hit lands, during a creature's hit
         // reaction and the immunity after it.
         bool ignoreStun = false;
+        bool invertLook = false;   // Controls > Mouse > Invert Look
         bool cheatFullyLoaded = false;
         bool cheatMaximumHealth = false;
         // Cells the player has seen, for the map's fog of war. One byte per
@@ -598,6 +599,7 @@ namespace ALTEngine::Screens
                 testingNoResupply = testing.IsOn(ALTEngine::Bootstrap::TestingOption::DisableResupplyTimer);
             }
             ignoreStun = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::NoHitImmunity);
+            invertLook = ALTEngine::Bootstrap::InvertLookSettings(modernConfig).Get();
             weaponFrameSeconds = ALTEngine::Bootstrap::WeaponPacingSettings(modernConfig).Get()
                 / ALTEngine::Screens::PlayerCamera::ORIGINAL_TIMER_HZ;
             ModelRenderer::SetDrawDistanceFade(!modern.IsActive(ALTEngine::Bootstrap::ModernFeature::RenderDistance));
@@ -2618,7 +2620,9 @@ namespace ALTEngine::Screens
                 // you can look up, which originally you could not.
                 if (freeLook)
                 {
-                    camera.pitch = std::clamp(camera.pitch - mouseDy * sensitivity, -MAX_PITCH, MAX_PITCH);
+                    // Controls > Mouse > Invert Look turns the mouse's Y round.
+                    const float lookDy = invertLook ? -mouseDy : mouseDy;
+                    camera.pitch = std::clamp(camera.pitch - lookDy * sensitivity, -MAX_PITCH, MAX_PITCH);
                 }
 
                 using ALTEngine::Bootstrap::InputAction;

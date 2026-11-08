@@ -1,6 +1,7 @@
 #include "MenuTree.h"
 #include "../Bootstrap/ModernPresets.h"
 #include "../Bootstrap/ModernSettings.h"
+#include "../Bootstrap/GameplaySettings.h"
 #include "../Bootstrap/TestingSettings.h"
 
 #include <string>
@@ -103,6 +104,19 @@ namespace ALTEngine::Menu
             mouseSensitivity.inputActionIndex = -5;
             mouseSensitivity.sliderValue = keyBindings.MouseSensitivity();
 
+            // Invert Look, under the slider: Off/On, saved at once
+            // (MenuController's ApplyLeafAction).
+            MenuNode invertLook = List("Invert Look", StringId::InvertLook, {
+                Action("Off", StringId::Off),
+                Action("On", StringId::On),
+            });
+            {
+                ALTEngine::Bootstrap::Config lookConfig;
+                invertLook.initialSelectedChild = FindChildIndexByLabel(
+                    invertLook.children, ALTEngine::Bootstrap::InvertLookSettings(lookConfig).Get() ? "On" : "Off");
+            }
+            invertLook.isSettingsList = true;
+
             MenuNode n = List("Controls", StringId::Controls, {
                 // modelIndex on the List node itself (not the Redefine
                 // child) - EffectiveModelIndex takes the deepest SET
@@ -112,7 +126,7 @@ namespace ALTEngine::Menu
                 // the reference images, where highlighting alone changes
                 // the background model (Edward, 2026).
                 List("Keyboard", StringId::Keyboard, { BuildRedefineList(DeviceKind::Keyboard, keyBindings, language), BuildRestoreDefaultsList(DeviceKind::Keyboard) }, ModelIndex::Keyboard),
-                List("Mouse", StringId::Mouse, { BuildRedefineList(DeviceKind::Mouse, keyBindings, language), BuildRestoreDefaultsList(DeviceKind::Mouse), std::move(mouseSensitivity) }, ModelIndex::Mouse),
+                List("Mouse", StringId::Mouse, { BuildRedefineList(DeviceKind::Mouse, keyBindings, language), BuildRestoreDefaultsList(DeviceKind::Mouse), std::move(mouseSensitivity), std::move(invertLook) }, ModelIndex::Mouse),
                 List("Joystick", StringId::Joystick, { Action("Joystick", StringId::Joystick) }, ModelIndex::Joystick),
                 // Gravis Grip and Gravis Pad both use Multitap (index 3) -
                 // Edward: both peripherals visually look like a multitap.
