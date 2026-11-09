@@ -29,7 +29,6 @@ namespace ALTEngine::Bootstrap
 
     enum class ModernFeature
     {
-        KeepItems,          // carry weapons and ammo between levels instead of restarting each level with the pistol
         SkipEndLevelScreen, // go straight on rather than showing the end-of-level prompt
         PlayerJumping,      // enable a jump action, and the extra control binding it needs
         NoHitImmunity,      // every hit lands: no immunity while a creature flinches or just after
@@ -131,7 +130,6 @@ namespace ALTEngine::Bootstrap
 
         // Every feature, for iteration. Must list all of them.
         static constexpr ModernFeature AllFeatures[] = {
-            ModernFeature::KeepItems,
             ModernFeature::SkipEndLevelScreen,
             ModernFeature::PlayerJumping,
             ModernFeature::NoHitImmunity,
@@ -158,7 +156,6 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::LevelTimer:
                 return NetworkRule::Local;
             case ModernFeature::EnableCheats:
-            case ModernFeature::KeepItems:
             case ModernFeature::PlayerJumping:
             case ModernFeature::NoHitImmunity:
             case ModernFeature::FreeLook:
@@ -291,7 +288,6 @@ namespace ALTEngine::Bootstrap
         {
             switch (feature)
             {
-            case ModernFeature::KeepItems: return "Keep Items";
             case ModernFeature::SkipEndLevelScreen: return "Skip End Level Screen";
             case ModernFeature::PlayerJumping: return "Player Jumping";
             case ModernFeature::NoHitImmunity: return "No Hit Immunity";
@@ -313,7 +309,6 @@ namespace ALTEngine::Bootstrap
         {
             switch (feature)
             {
-            case ModernFeature::KeepItems: return "ModernKeepItems";
             case ModernFeature::SkipEndLevelScreen: return "ModernSkipEndLevelScreen";
             case ModernFeature::PlayerJumping: return "ModernPlayerJumping";
             case ModernFeature::NoHitImmunity: return "ModernNoHitImmunity";

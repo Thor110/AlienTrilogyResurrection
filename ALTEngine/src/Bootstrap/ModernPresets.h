@@ -51,11 +51,10 @@ namespace ALTEngine::Bootstrap
             "Convenience",
             StringId::PresetConvenience,
             StringId::DescPresetConvenience,
-            { ModernFeature::KeepItems,
-              ModernFeature::SkipEndLevelScreen,
+            { ModernFeature::SkipEndLevelScreen,
               ModernFeature::SaveAnywhere,
               ModernFeature::PauseWeaponSelect },
-            4
+            3
         },
         // How a modern shooter would present it: free mouse look and no
         // draw-distance fade, on top of the convenience features.
@@ -63,14 +62,13 @@ namespace ALTEngine::Bootstrap
             "Modernised",
             StringId::PresetModernised,
             StringId::DescPresetModernised,
-            { ModernFeature::KeepItems,
-              ModernFeature::SkipEndLevelScreen,
+            { ModernFeature::SkipEndLevelScreen,
               ModernFeature::FreeLook,
               ModernFeature::RenderDistance,
               ModernFeature::FasterXenomorphs,
               ModernFeature::SaveAnywhere,
               ModernFeature::PauseWeaponSelect },
-            7
+            6
         },
         // For working on the port rather than playing it.
         {

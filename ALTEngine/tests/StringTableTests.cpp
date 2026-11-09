@@ -22,8 +22,8 @@ TEST_CASE("Strings: the built-in English table lines up with StringId")
 {
     CHECK(English(StringId::Modern) == std::string("Modern"));
     CHECK(English(StringId::EnableAll) == std::string("Enable All"));
-    CHECK(English(StringId::KeepItems) == std::string("Keep Items"));
-    CHECK(English(StringId::DescKeepItems) == std::string("Carry weapons and ammo between levels"));
+    CHECK(English(StringId::SkipEndLevelScreen) == std::string("Skip End Level Screen"));
+    CHECK(English(StringId::DescSkipEndLevel) == std::string("Skip the end of level screen and continue straight on"));
     CHECK(English(StringId::PlayerJumping) == std::string("Player Jumping"));
     CHECK(English(StringId::FreeLook) == std::string("Free Look"));
     CHECK(English(StringId::DisableResupplyTimer) == std::string("Disable Resupply Timer"));

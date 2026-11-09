@@ -236,27 +236,20 @@ int main(int, char**)
     // Launching a level FROM THE MENU always starts a fresh loadout - the
     // pistol and nothing else, which is the original's behaviour.
     //
-    // This used to be gated on the Modern "Keep Items" feature, and that was
-    // wrong. Keep Items is about carrying a loadout from one level into the
-    // NEXT one; it was never meant to carry anything into a level launched from
-    // the main menu, which is the start of a new run. With the gate in place,
-    // turning on the Fully Loaded cheat once left 999 rounds in the inventory
-    // permanently - disabling cheats and restarting the level did not clear it,
-    // because nothing ever reset the struct again (Edward, 2026).
+    // Carrying a loadout is from one level into the NEXT one; it never carries
+    // anything into a level launched from the main menu, which is the start of
+    // a new run. When it did, turning on the Fully Loaded cheat once left 999
+    // rounds in the inventory permanently - disabling cheats and restarting
+    // the level did not clear it, because nothing ever reset the struct again
+    // (Edward, 2026).
     auto prepareInventory = []( ALTEngine::Screens::PlayerInventoryState& inv) {
         inv = ALTEngine::Screens::PlayerInventoryState{};
     };
 
-    // What Keep Items is actually for: level-to-level progression. Without it
-    // each new level starts from the original's pistol-only loadout.
-    auto carryInventoryBetweenLevels = []( ALTEngine::Screens::PlayerInventoryState& inv) {
-        ALTEngine::Bootstrap::Config modernConfig;
-        ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
-        if (!modern.IsActive(ALTEngine::Bootstrap::ModernFeature::KeepItems))
-        {
-            inv = ALTEngine::Screens::PlayerInventoryState{};
-        }
-    };
+    // Level to level, the weapons and ammunition simply go with the player -
+    // the original's own behaviour. It was a Modern option ("Keep Items") on
+    // the mistaken belief that the original took them away each level; it
+    // never did (Edward, 2026).
 
     // Must happen before anything below could possibly call Tr() -
     // LoadedLanguagePacks() only ever initializes its cache once, on
@@ -452,8 +445,6 @@ int main(int, char**)
                 return CampaignEnd::BackToMenu;
             }
 
-            carryInventoryBetweenLevels(playerInventory);
-
             // Saving from the prompt checkpoints the NEXT level.
             ALTEngine::Game::SaveData checkpoint;
             checkpoint.name = ALTEngine::Game::SaveGame::DefaultName(next->digits);
@@ -633,7 +624,6 @@ int main(int, char**)
                             return true;
                         }
                     }
-                    carryInventoryBetweenLevels(netInventory);
                 }
             };
             static std::string typedAddress;

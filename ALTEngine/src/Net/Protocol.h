@@ -20,7 +20,7 @@ namespace ALTEngine::Net
     // Every datagram: "ALT" + a version byte, a type byte, then the fields,
     // little-endian. A datagram that doesn't start so, or whose fields run
     // short, is dropped.
-    inline constexpr uint8_t PROTOCOL_VERSION = 7;   // 4: game modes, co-operative level ends; 5: the shared world; 6: throws; 7: the host's rules
+    inline constexpr uint8_t PROTOCOL_VERSION = 8;   // 4: game modes, co-operative level ends; 5: the shared world; 6: throws; 7: the host's rules; 8: Keep Items gone (the rules' bits moved)
     // THE HANDSHAKE (Join and Reject) is read whatever the protocol byte says,
     // so a machine running another version of ALTEngine can be told why it
     // is turned away instead of timing out. Their layouts must never change:

@@ -193,6 +193,13 @@ Changed in zip 147 (version 0.9.6), to check:
   machine with it off.
 - **PATCH-NOTES.md** in the repository's root: the changes since 0.9.5. VERSION is 0.9.6 (and vcpkg.json).
 
+Changed in zip 156, to check: **Keep Items removed** (Edward): the original always carries the weapons and
+ammunition into the next level, so the Modern option that made it optional is gone and the port always carries
+them (main.cpp; a level launched from the menu still starts fresh, and a co-operative game's inventory carries
+the same way). Its strings, menu row and preset entries are gone; the Modern features after it moved down a bit,
+so the network protocol is 8. Still to check against the original (aud02 F1): whether health and armour carry
+too, and the original's snapshot of the loadout at the level's start that a restart goes back to.
+
 Changed in zip 154, to check: **the face hug overlay reaches the bottom** (Edward). Checked against
 FINGERS.B16 itself: every one of the eight frames ends its drawn art on view row 236 at rest, two sprite rows
 (four view rows at DRAW_SCALE) short of 240 - the frames run to 238-242 but end in one to three empty rows

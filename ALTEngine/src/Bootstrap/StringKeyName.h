@@ -120,12 +120,10 @@ namespace ALTEngine::Bootstrap
         case StringId::Modern: return "Modern";
         case StringId::EnableAll: return "EnableAll";
         case StringId::Custom: return "Custom";
-        case StringId::KeepItems: return "KeepItems";
         case StringId::SkipEndLevelScreen: return "SkipEndLevelScreen";
         case StringId::PlayerJumping: return "PlayerJumping";
         case StringId::NoHitImmunity: return "NoHitImmunity";
         case StringId::DescEnableAll: return "DescEnableAll";
-        case StringId::DescKeepItems: return "DescKeepItems";
         case StringId::DescSkipEndLevel: return "DescSkipEndLevel";
         case StringId::DescPlayerJumping: return "DescPlayerJumping";
         case StringId::DescNoHitImmunity: return "DescNoHitImmunity";
@@ -471,12 +469,10 @@ namespace ALTEngine::Bootstrap
         if (name == "Modern") { return StringId::Modern; }
         if (name == "EnableAll") { return StringId::EnableAll; }
         if (name == "Custom") { return StringId::Custom; }
-        if (name == "KeepItems") { return StringId::KeepItems; }
         if (name == "SkipEndLevelScreen") { return StringId::SkipEndLevelScreen; }
         if (name == "PlayerJumping") { return StringId::PlayerJumping; }
         if (name == "NoHitImmunity") { return StringId::NoHitImmunity; }
         if (name == "DescEnableAll") { return StringId::DescEnableAll; }
-        if (name == "DescKeepItems") { return StringId::DescKeepItems; }
         if (name == "DescSkipEndLevel") { return StringId::DescSkipEndLevel; }
         if (name == "DescPlayerJumping") { return StringId::DescPlayerJumping; }
         if (name == "DescNoHitImmunity") { return StringId::DescNoHitImmunity; }

@@ -334,17 +334,6 @@ namespace ALTEngine::Menu
                     : "Off");
             enableAll.isSettingsList = true;
 
-            MenuNode keepItems = List("Keep Items", StringId::KeepItems, {
-                Action("Off", StringId::Off),
-                Action("On", StringId::On),
-            });
-            bool keepItemsEffective =
-                mode == ALTEngine::Bootstrap::ModernMode::On ? true
-                : mode == ALTEngine::Bootstrap::ModernMode::Off ? false
-                : modern.FeatureSetting(ALTEngine::Bootstrap::ModernFeature::KeepItems);
-            keepItems.initialSelectedChild = FindChildIndexByLabel(keepItems.children, keepItemsEffective ? "On" : "Off");
-            keepItems.isSettingsList = true;
-
             auto featureNode = [&](const char* label, StringId title, StringId description,
                                    ALTEngine::Bootstrap::ModernFeature feature) {
                 MenuNode node = List(label, title, {
@@ -361,11 +350,9 @@ namespace ALTEngine::Menu
             };
 
             enableAll.descriptionStringId = static_cast<int>(StringId::DescEnableAll);
-            keepItems.descriptionStringId = static_cast<int>(StringId::DescKeepItems);
 
             std::vector<MenuNode> entries = {
                 std::move(enableAll),
-                std::move(keepItems),
                 featureNode(ALTEngine::Bootstrap::ModernSettings::MenuLabel(ALTEngine::Bootstrap::ModernFeature::SkipEndLevelScreen),
                             StringId::SkipEndLevelScreen, StringId::DescSkipEndLevel,
                             ALTEngine::Bootstrap::ModernFeature::SkipEndLevelScreen),

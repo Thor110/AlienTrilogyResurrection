@@ -431,7 +431,7 @@ namespace ALTEngine::Menu
                     }
                     else
                     {
-                        ModernFeature feature = ModernFeature::KeepItems;
+                        ModernFeature feature = ModernFeature::SkipEndLevelScreen;
                         bool known = ModernFeatureForLabel(node.label, feature);
 
                         if (known)
@@ -542,7 +542,7 @@ namespace ALTEngine::Menu
                 }
                 else
                 {
-                    auto feature = ALTEngine::Bootstrap::ModernFeature::KeepItems;
+                    auto feature = ALTEngine::Bootstrap::ModernFeature::SkipEndLevelScreen;
                     ModernFeatureForLabel(parentLabel, feature);
                     // SetFeature switches to Custom itself, and preserves
                     // every other feature's effective state while doing so.

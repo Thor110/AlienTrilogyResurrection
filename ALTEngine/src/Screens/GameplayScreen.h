@@ -74,9 +74,8 @@ namespace ALTEngine::Screens
             ALTEngine::Bootstrap::DifficultySettings& difficultySettings,
             ALTEngine::Bootstrap::CameraSwaySettings& cameraSwaySettings,
             ALTEngine::Bootstrap::LanguageSettings& languageSettings,
-            // Owned by the caller so it can SURVIVE between levels when the
-            // Modern "Keep Items" feature is on. Passing nullptr keeps the old
-            // behaviour of a fresh inventory each level.
+            // Owned by the caller so it SURVIVES between levels, as in the
+            // original. Passing nullptr gives a fresh inventory each level.
             PlayerInventoryState* carriedInventory = nullptr,
             // A multiplayer game this level is part of (Net::Session), or
             // nullptr for the campaign: other players are drawn and shot,

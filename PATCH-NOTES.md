@@ -28,7 +28,7 @@ Everything since 0.9.5.
   here it can be turned off. On in the Convenience and Modernised presets.
 - **Multiplayer plays by the host's rules.** In deathmatch and co-operative games, every option that changes
   how the game plays is the host's choice, for every player:
-  - **The host's choice for everyone:** Keep Items, Player Jumping, No Hit Immunity, Free Look, Render Distance,
+  - **The host's choice for everyone:** Player Jumping, No Hit Immunity, Free Look, Render Distance,
     Live Minimap, Faster Xenomorphs, Speed Compensation, Pause Weapon Select, Enable Cheats, and the weapon
     pacing. With the host's cheats on, each player can turn their own on from the pause menu.
   - **Off for everyone:** Save Anywhere, and the testing aids Disable Enemy Spawn, Ghost Mode and Disable
@@ -58,6 +58,9 @@ Everything since 0.9.5.
 ### Closer to the original
 
 **Pickups and weapons**
+- **Your weapons and ammunition always carry on to the next level**, as in the original. The Modern option
+  "Keep Items" is gone: it was added on the mistaken belief that the original took them away each level, so
+  with Modern off the port was doing so wrongly. A level started from the main menu still starts fresh.
 - Pickups give what the level says: the amount into the loaded rounds and the spare magazines separately, each
   capped. They had been giving far too much (a box of 10 shotgun shells gave 110, a fuel can 530).
 - Picking up magazines for the pistol, pulse rifle or smart gun in hand starts a reload.
