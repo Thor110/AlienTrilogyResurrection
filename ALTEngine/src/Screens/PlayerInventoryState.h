@@ -88,6 +88,33 @@ namespace ALTEngine::Screens
         // is its grenade (FUN_0003efcc -> FUN_0003d794).
         int seismicCharges = 0;
 
+        // Health (DAT_000b0ab8) and armour (DAT_000b0aba) carry from one level
+        // into the next like the weapons: FUN_000407d0 is the only routine
+        // that puts them back to 100 and 0, and it runs only on going back to
+        // the menu (0x114db) or a network respawn. The level-start snapshot
+        // and the saves keep them too (FUN_000178b8, FUN_00017a68). The HUD
+        // takes them at a level's start and hands them back at its end.
+        int health = 100;
+        int armour = 0;
+
+        // What every level's start takes away (FUN_000402f8, the player task's
+        // set-up, single player, 0x40655-0x406a0): batteries, shoulder lamps
+        // and goggles with any still lit, the Auto Mapper (DAT_000b0ab4 bit
+        // 0x80) - and the ID badges and the speed and shield timers, which the
+        // port keeps in the level's own state. The weapons, ammunition,
+        // grenades, seismic charges, health, armour and the weapon in hand are
+        // kept.
+        void StartLevel()
+        {
+            batteries = 0;
+            shoulderLamps = 0;
+            nightVisionGoggles = 0;
+            lampTicks = 0;
+            gogglesTicks = 0;
+            hasShoulderLamp = false;
+            hasAutoMapper = false;
+        }
+
         // "Fully Loaded" cheat: every weapon and item available with full ammo.
         //
         // 999 is the original's own display clamp (its number routines clamp to

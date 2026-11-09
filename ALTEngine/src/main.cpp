@@ -360,6 +360,9 @@ int main(int, char**)
                 MissionBriefingScreen::PreloadObjectModels(cdDirectory, language);
             }
 
+            // The loadout as the level starts (FUN_00017c44 at 0x115ad): a
+            // failed mission goes back to it (FUN_00017c58, 0x1189c).
+            const ALTEngine::Screens::PlayerInventoryState levelStartInventory = playerInventory;
             GameplayResult played = GameplayScreen::Run(cdDirectory, language, dotted, keyBindings, audioSettings,
                                                         renderSettings, resolutionSettings, difficultySettings,
                                                         cameraSwaySettings, languageSettings, &playerInventory);
@@ -420,7 +423,11 @@ int main(int, char**)
             if (campaignIndex >= 0)
             {
                 const int nextIndex = PG::NextCampaignIndex(campaignIndex, assessment.grade);
-                if (nextIndex == campaignIndex) { std::cout << "Mission failed - level " << dotted << " again.\n"; }
+                if (nextIndex == campaignIndex)
+                {
+                    std::cout << "Mission failed - level " << dotted << " again.\n";
+                    playerInventory = levelStartInventory;
+                }
                 if (nextIndex < PG::CAMPAIGN_LENGTH)
                 {
                     next = PG::Find(levelList, PG::CAMPAIGN_ORDER[nextIndex]);

@@ -193,12 +193,29 @@ Changed in zip 147 (version 0.9.6), to check:
   machine with it off.
 - **PATCH-NOTES.md** in the repository's root: the changes since 0.9.5. VERSION is 0.9.6 (and vcpkg.json).
 
-Changed in zip 156, to check: **Keep Items removed** (Edward): the original always carries the weapons and
-ammunition into the next level, so the Modern option that made it optional is gone and the port always carries
-them (main.cpp; a level launched from the menu still starts fresh, and a co-operative game's inventory carries
-the same way). Its strings, menu row and preset entries are gone; the Modern features after it moved down a bit,
-so the network protocol is 8. Still to check against the original (aud02 F1): whether health and armour carry
-too, and the original's snapshot of the loadout at the level's start that a restart goes back to.
+Changed in zip 157, to check: **what carries between levels, as the original** (Edward asked; zip 156 had
+removed Keep Items). Traced, single player:
+- FUN_000407d0, the full reset (pistol 15 + 2 magazines, health 100, armour 0, every ammunition word, grenades,
+  seismic charges, the owned bits and the weapon in hand to 0), runs only on going back to the menu (0x114db)
+  and on a network respawn (0x405cd).
+- Every level's start re-creates the player task (FUN_000124f4(0xa, 0x402f8) at 0x10815); its set-up,
+  FUN_000402f8, in single player clears only (0x40655-0x406a0): batteries 0x10ad2, shoulder lamps 0x10ad4 and
+  their ticks 0x10ad6, goggles 0x10ad8 and 0x10ada, the speed item 0x10abc, ID badges 0x10ae2, the shield
+  0x10ae4, and 0x10ab4 & 0xbe7f (bit 0x80 the Auto Mapper; 0x100 and 0x4000 are per-tick flags), plus the
+  assessment counts at 0x10ae6. So health 0x10ab8, armour 0x10aba, the weapons and ammunition, grenades,
+  seismic charges and the weapon in hand 0x10aae CARRY. (Zip 146's audit note put this at FUN_000402c0; that is a
+  four-line routine of its own.)
+- FUN_00017c44 snapshots at each level start (0x115ad) - health, armour, the owned weapons, the weapon in hand,
+  every ammunition count and magazines, grenades, seismic charges, the level (FUN_000178b8, the save's own
+  format); a failed mission restores it (FUN_00017c58 at 0x1189c) and replays.
+Port, before: health and armour fresh every level; batteries, lamps, goggles and the Auto Mapper carried; a
+failed mission replayed with the end-of-attempt loadout; the pistol in hand at every start. Now:
+`PlayerInventoryState::health/armour` carry (the HUD takes them at the start and hands them back on
+LevelComplete); `PlayerInventoryState::StartLevel` clears what FUN_000402f8 clears (the speed, shield and ID
+badges are the level's own state already); the weapon marked equipped is in hand at the start; main.cpp keeps
+the level-start loadout and restores it on a failed mission; saves keep health and armour. Co-operative games
+carry the same way (the original's network games reset fully each level, but co-op is the port's own story
+mode); deathmatch starts each game fresh. Death goes to the menu, which starts afresh, as the original's does.
 
 Changed in zip 154, to check: **the face hug overlay reaches the bottom** (Edward). Checked against
 FINGERS.B16 itself: every one of the eight frames ends its drawn art on view row 236 at rest, two sprite rows

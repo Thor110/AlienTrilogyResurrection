@@ -58,9 +58,17 @@ Everything since 0.9.5.
 ### Closer to the original
 
 **Pickups and weapons**
-- **Your weapons and ammunition always carry on to the next level**, as in the original. The Modern option
-  "Keep Items" is gone: it was added on the mistaken belief that the original took them away each level, so
-  with Modern off the port was doing so wrongly. A level started from the main menu still starts fresh.
+- **What carries into the next level is now the original's**, checked in its code:
+  - **kept:** the weapons, their ammunition and spare magazines, grenades, seismic charges, the weapon in hand,
+    and your health and armour (health and armour used to go back to 100 and 0 every level);
+  - **taken away at each level's start:** batteries, shoulder lamps and night-vision goggles (and one still
+    lit), and the Auto Mapper - the port used to keep these;
+  - **a failed mission** is played again with what you had when you started it, not what you had left;
+  - a level started from the main menu, or dying and going back to the menu, starts afresh: the pistol, full
+    health, no armour.
+  The Modern option "Keep Items" is gone: it was added on the mistaken belief that the original took the
+  weapons away each level.
+  Saves keep health and armour too.
 - Pickups give what the level says: the amount into the loaded rounds and the spare magazines separately, each
   capped. They had been giving far too much (a box of 10 shotgun shells gave 110, a fuel can 530).
 - Picking up magazines for the pistol, pulse rifle or smart gun in hand starts a reload.

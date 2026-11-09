@@ -243,3 +243,25 @@ TEST_CASE("Inventory: a lamp is used before goggles, one at a time (FUN_00044b48
     CHECK_EQ(inv.gogglesTicks, 0xa8c);
     CHECK(!inv.hasShoulderLamp);
 }
+
+TEST_CASE("Inventory: a level's start takes the batteries, lamps, goggles and Auto Mapper, and keeps the rest (FUN_000402f8)")
+{
+    PlayerInventoryState inv;
+    inv.shotgun.available = true; inv.shotgun.rounds = 40;
+    inv.pulseRifle.grenades = 5;
+    inv.seismicCharges = 3;
+    inv.health = 57; inv.armour = 20;
+    inv.batteries = 2; inv.shoulderLamps = 1; inv.hasShoulderLamp = true; inv.lampTicks = 100;
+    inv.nightVisionGoggles = 1; inv.gogglesTicks = 50; inv.hasAutoMapper = true;
+    inv.StartLevel();
+    CHECK_EQ(inv.batteries, 0);
+    CHECK_EQ(inv.shoulderLamps, 0); CHECK(!inv.hasShoulderLamp); CHECK_EQ(inv.lampTicks, 0);
+    CHECK_EQ(inv.nightVisionGoggles, 0); CHECK_EQ(inv.gogglesTicks, 0);
+    CHECK(!inv.hasAutoMapper);
+    CHECK(inv.shotgun.available); CHECK_EQ(inv.shotgun.rounds, 40);
+    CHECK_EQ(inv.pulseRifle.grenades, 5); CHECK_EQ(inv.seismicCharges, 3);
+    CHECK_EQ(inv.health, 57); CHECK_EQ(inv.armour, 20);
+    // A new run: full health, no armour (FUN_000407d0).
+    CHECK_EQ(PlayerInventoryState{}.health, 100);
+    CHECK_EQ(PlayerInventoryState{}.armour, 0);
+}

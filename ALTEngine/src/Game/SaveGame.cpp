@@ -50,6 +50,8 @@ namespace ALTEngine::Game::SaveGame
                 { "gogglesTicks", data.inventory.gogglesTicks },
                 { "batteries", data.inventory.batteries },
                 { "seismicCharges", data.inventory.seismicCharges },
+                { "health", data.inventory.health },
+                { "armour", data.inventory.armour },
             } },
         };
 
@@ -130,6 +132,8 @@ namespace ALTEngine::Game::SaveGame
             data.inventory.gogglesTicks = inv.value("gogglesTicks", 0);
             data.inventory.batteries = inv.value("batteries", 0);
             data.inventory.seismicCharges = inv.value("seismicCharges", 0);
+            data.inventory.health = inv.value("health", 100);
+            data.inventory.armour = inv.value("armour", 0);
             if (root.contains("snapshot") && root["snapshot"].is_object())
             {
                 data.snapshot = root["snapshot"].dump();

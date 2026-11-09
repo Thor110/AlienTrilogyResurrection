@@ -255,6 +255,7 @@ namespace ALTEngine::Screens
         // pistol-only loadout, which is how the original always starts a level.
         PlayerInventoryState localInventory;
         PlayerInventoryState& inventory = carriedInventory ? *carriedInventory : localInventory;
+        inventory.StartLevel();
 
         // Resolve and load the level
         std::string digits = LevelDigitsFromCode(missionLevelCode);
@@ -562,7 +563,13 @@ namespace ALTEngine::Screens
 
         // The held weapon. Driven by the select keys below; the pistol is the
         // only thing available at the start of a level.
+        // The weapon in hand carries over too (DAT_000b0aae is not reset).
         int selectedWeapon = 0;
+        for (int w = 0; w < ALTEngine::Screens::PlayerHudState::WEAPON_COUNT; ++w)
+        {
+            const auto* held = inventory.ByIndex(w);
+            if (held && held->equipped && inventory.Available(w)) { selectedWeapon = w; }
+        }
         // The mission assessment's tally (Game::Progression::LevelTally): what
         // the level holds and what has been done to it, by type, and which
         // secret areas (cell byte 5) the player has stood in.
@@ -578,6 +585,9 @@ namespace ALTEngine::Screens
 
         ALTEngine::Screens::PlayerHudState hudState;
         hudState.networkGame = session != nullptr;
+        // Carried in from the last level (PlayerInventoryState::health/armour).
+        hudState.health = static_cast<int16_t>(inventory.health);
+        hudState.armourItem = static_cast<int16_t>(inventory.armour);
         bool hudLoadAttempted = false;
         // The Modern and Testing options play reads: at the level's start,
         // and again on coming back from the pause menu, whose Options screen
@@ -6124,6 +6134,9 @@ namespace ALTEngine::Screens
             // assessment screen. Dying on the same frame takes precedence.
             if (levelComplete && !playerDead && running)
             {
+                // Health and armour go on with the player.
+                inventory.health = hudState.health;
+                inventory.armour = hudState.armourItem;
                 result.outcome = GameplayOutcome::LevelComplete;
                 result.levelSeconds = levelSeconds;
                 running = false;

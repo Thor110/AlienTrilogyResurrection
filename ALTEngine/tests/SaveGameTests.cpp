@@ -108,3 +108,17 @@ TEST_CASE("SaveGame: bad slots and broken files are rejected, not crashed on")
     }
     CHECK(SaveGame::Read(dir, 6).has_value());
 }
+
+TEST_CASE("SaveGame: health and armour are kept, as the original's saves keep them (FUN_000178b8)")
+{
+    const auto dir = TempSaveDir("health");
+    SaveData data;
+    data.levelDigits = "131";
+    data.inventory.health = 63;
+    data.inventory.armour = 40;
+    REQUIRE(SaveGame::Write(dir, 4, data));
+    auto read = SaveGame::Read(dir, 4);
+    REQUIRE(read.has_value());
+    CHECK_EQ(read->inventory.health, 63);
+    CHECK_EQ(read->inventory.armour, 40);
+}
