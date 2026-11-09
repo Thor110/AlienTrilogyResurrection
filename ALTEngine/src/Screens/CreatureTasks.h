@@ -19,7 +19,7 @@ namespace ALTEngine::Screens::CreatureTasks
     //   3 OPENING  0x3577d  when the animation ends: phase 2, OPEN.
     //   4 OPEN     0x3579a  the player inside the near band (mode < 2) with a
     //                       clear line (FUN_00032aec): let the hugger out
-    //                       (FUN_00035530, animation 10 if there was one), phase
+    //                       (FUN_00035530, and the hugger starts animation 10), phase
     //                       3, and the egg dies (FUN_00030b04).
     //   6 HIT      0x357ea  after a hit: back to OPENING if it was opening; a
     //                       closed egg starts opening; an open one is OPEN again.
@@ -37,7 +37,9 @@ namespace ALTEngine::Screens::CreatureTasks
         inline constexpr int RECHECK_MIN = 0x40;     // + (random & 0x7f)
         inline constexpr int ANIM_CLOSED = 0;
         inline constexpr int ANIM_OPENING = 2;
-        inline constexpr int ANIM_RELEASE = 10;
+        // The hugger let out starts its leap, animation 10 (0x357d0) - its
+        // own, not the egg's: the egg dies (FUN_00030b04).
+        inline constexpr int HUGGER_LEAP_ANIMATION = 10;
 
         struct Egg
         {

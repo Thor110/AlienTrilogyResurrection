@@ -3474,8 +3474,16 @@ namespace ALTEngine::Screens
                             float highest = -1e9f, lowest = 1e9f;
                             const float lead = (velocity >= 0.0f) ? EB::MOVE_PROBE_LEAD
                                                                   : -EB::MOVE_PROBE_LEAD;
-                            const float probeX = alongX ? x + lead : x;
-                            const float probeZ = alongX ? z : z + lead;
+                            // The probes lead from where the step would put the
+                            // creature, not from where it stands (FUN_000315f0
+                            // 0x31607-0x3162c: target = x + step, probe =
+                            // target +- 0xc8). Probing from where it stood let a
+                            // creature pushing at a wall step into the 200-unit
+                            // margin and be pulled back out on the next pass, so
+                            // it hopped backwards while showing its forward walk.
+                            const float stepped = static_cast<float>(std::lround(velocity));
+                            const float probeX = alongX ? x + stepped + lead : x;
+                            const float probeZ = alongX ? z : z + stepped + lead;
 
                             for (int side = -1; side <= 1; ++side)
                             {
@@ -3576,10 +3584,17 @@ namespace ALTEngine::Screens
                         {
                             aiTargets.push_back({ localSlot, camera.x, playerFeetY, camera.z, drawnZones, &flowField });
                         }
-                        if (creaturePass)
                         for (auto& enemy : enemies)
                         {
-                            if (!halfPass && !ALTEngine::Screens::IsXenomorph(enemy.type)) { continue; }
+                            // Only the common task skips alternate passes (it
+                            // tests [0x6164] & 1, 0x342c1); the egg's, the
+                            // queen's, the colonist's and the vents' tasks have
+                            // no such test and run every pass. The same with
+                            // Speed Compensation off, one pass a tick.
+                            const bool everyPass = enemy.type == 1 || enemy.type == 7 || enemy.type == 10
+                                                || ALTEngine::Screens::IsVent(enemy.type);
+                            if (!creaturePass && !everyPass) { continue; }
+                            if (!halfPass && !everyPass && !ALTEngine::Screens::IsXenomorph(enemy.type)) { continue; }
                             // A co-operative guest's creatures are the host's,
                             // and come by Creatures messages; the vents, which
                             // never move, it runs itself.
@@ -3621,9 +3636,8 @@ namespace ALTEngine::Screens
                                 // so no hugger or other close attacker ever
                                 // had a line to the player and none attacked.
                                 const bool rayLooker = enemy.type == 1 || (enemy.type >= 0x0b && enemy.type <= 0x0e);
-                                enemy.lineOfFire = false;
-                                if (!rayLooker && enemy.distance <= CS::MAX_DISTANCE)
-                                {
+                                auto groundLine = [&]() {
+                                    if (enemy.distance > CS::MAX_DISTANCE) { return false; }
                                     CS::Query q;
                                     q.x = static_cast<float>(egx);
                                     q.y = enemy.y;
@@ -3635,10 +3649,9 @@ namespace ALTEngine::Screens
                                     q.ceilingCrawler = enemy.onCeiling;
                                     q.tallType = (enemy.type == 7);
                                     q.occupancy = &occupancy;
-                                    enemy.lineOfFire = CS::LineOfFire(level, q);
-                                }
-                                if (rayLooker)
-                                {
+                                    return CS::LineOfFire(level, q);
+                                };
+                                auto rayLine = [&]() {
                                     CS::Query3D q;
                                     q.x = static_cast<float>(egx);
                                     q.y = enemy.y;
@@ -3650,7 +3663,20 @@ namespace ALTEngine::Screens
                                     q.targetFloorY = aiFeet;
                                     q.distance = enemy.distance;
                                     q.occupancy = &occupancy;
-                                    enemy.lineOfFire = CS::LineOfFire3D(level, q);
+                                    return CS::LineOfFire3D(level, q);
+                                };
+                                enemy.lineOfFire = rayLooker ? rayLine() : groundLine();
+                                // Waking (the chase, not yet alerted, the player
+                                // in its cone): either line will do, for every
+                                // type (0x34551-0x3457d: FUN_00032aec, else
+                                // FUN_0003231c) - so a hugger sees you across a
+                                // rise or over a crate along the ray, where its
+                                // ground probes fail. Only worked out while it
+                                // could matter.
+                                enemy.eitherLine = enemy.lineOfFire;
+                                if (!enemy.lineOfFire && !enemy.ai.alerted && enemy.ai.state == ALTEngine::Screens::CreatureAI::CHASE)
+                                {
+                                    enemy.eitherLine = rayLooker ? groundLine() : rayLine();
                                 }
                             }
                             aiCreature = &enemy;
@@ -3690,7 +3716,12 @@ namespace ALTEngine::Screens
                                 }
                                 else if (released)
                                 {
-                                    ALTEngine::Screens::Enemies::RestartAnimation(enemy, CT::Egg::ANIM_RELEASE);
+                                    // The egg's hugger flies out on its leap,
+                                    // animation 10 (0x357d0), not its walk, and
+                                    // its act lasts as long as that plays.
+                                    released->actAnimation = CT::Egg::HUGGER_LEAP_ANIMATION;
+                                    ALTEngine::Screens::Enemies::RestartAnimation(
+                                        *released, CT::Egg::HUGGER_LEAP_ANIMATION);
                                 }
                                 SDL_Log("GameplayScreen: %s %d %s monster %d", colonist ? "colonist" : "egg",
                                         enemy.monsterIndex, released ? "released" : "could not release",
@@ -4122,8 +4153,33 @@ namespace ALTEngine::Screens
                             }
                             if (anyPouncing && !faceHug.Active()) { faceHug.Begin(); }
 
-                            // The creature dies when the crawl has slid back off,
-                            // which is what LAB_00030918 waits for.
+                            // LAB_00030918, every pass while a hugger is on us:
+                            // 1 straight off health (FUN_0003e3e4(1, cause 4) -
+                            // armour no help, the damage cooldown spacing it),
+                            // until its 0x40 count lets go; then the crawl slides
+                            // off, and the creature dies when it is all the way
+                            // off. Without the crawl's art (FINGERS.B16 missing)
+                            // the count alone ends it.
+                            // (A co-operative guest's creatures are the host's,
+                            // without its count: the guest keeps its own.)
+                            for (auto& enemy : enemies)
+                            {
+                                if (coopGuest && !enemy.pouncing) { enemy.netHugTicks = 0; }
+                                if (!enemy.pouncing || !onUs(enemy) || enemy.overlayFinished) { continue; }
+                                const bool holding = coopGuest
+                                    ? enemy.netHugTicks++ < ALTEngine::Screens::FaceHugOverlay::HUG_TICKS
+                                    : enemy.pounceTicks > 0;
+                                if (holding)
+                                {
+                                    hudState.ApplyHealthDamage(1, ALTEngine::Screens::GameOverSequence::CAUSE_ENEMY_ATTACK);
+                                    checkPlayerDeath();
+                                }
+                                else
+                                {
+                                    faceHug.LetGo();
+                                    if (!faceHug.Ready() && !coopGuest) { enemy.overlayFinished = true; }
+                                }
+                            }
                             if (faceHug.Finished())
                             {
                                 for (auto& enemy : enemies)

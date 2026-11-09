@@ -121,8 +121,8 @@ namespace ALTEngine::Screens
         inline constexpr int SPRING_SUBTYPE_B = 3;
         inline constexpr int SPRING_ANIM_A = 10;
         inline constexpr int SPRING_ANIM_B = 12;
-        inline constexpr int SPRING_FRAME_DURATION = 0x60;
-        inline constexpr int SPRING_STATE = 5;
+        inline constexpr int SPRING_SPEED = 0x40;   // FUN_00032f78's speed (0x2f36x)
+        inline constexpr int SPRING_LIFT = 0x60;    // +0x32
 
         struct Enemy
         {
@@ -191,6 +191,7 @@ namespace ALTEngine::Screens
             // FUN_0003231c's clear straight line to the player, and
             // FUN_00033a1c's zone test. Every attack needs both.
             bool lineOfFire = true;
+            bool eitherLine = true;     // the ray or the ground line (waking)
             bool zoneVisible = true;
             // Standing in a cell with no face (a duct): FUN_00033a70 notices
             // the player there without the zone test (CreatureSight::CellHasNoFace).
@@ -520,6 +521,25 @@ namespace ALTEngine::Screens
             return enemies;
         }
 
+        // A monster let out leaping (a crate's, FUN_0002f288; an egg's or a
+        // colonist's, FUN_00035530/FUN_00035624): alerted, its wait over, in
+        // the act, flying along its facing at `speed` with `lift` up. With an
+        // animation, its act lasts as long as that plays (+0xb6 bit 2,
+        // 0x348b8); without, until it lands.
+        inline void RestartAnimation(Enemy& enemy, int animation);
+        inline void StartLeapOut(Enemy& enemy, int speed, int lift, int animation)
+        {
+            enemy.ai.alerted = true;
+            enemy.ai.idleTimer = 0;
+            enemy.ai.state = CreatureAI::ACT;
+            enemy.leaping = true;
+            enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * static_cast<float>(speed);
+            enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * static_cast<float>(speed);
+            enemy.vy = static_cast<float>(lift);
+            enemy.actAnimation = animation;
+            if (animation >= 0) { RestartAnimation(enemy, animation); }
+        }
+
         // Lets a crate's monster out. Increments the trigger counter and only
         // activates once it reaches the threshold, as FUN_0002f288 does - and
         // moves the monster to the releasing object, since it has been parked
@@ -540,15 +560,25 @@ namespace ALTEngine::Screens
 
                 enemy.active = true;
                 BringIntoPlay(enemy);
-                enemy.x = x;
+                enemy.x = enemy.lastX = x;
                 enemy.y = y;
-                enemy.z = z;
+                enemy.z = enemy.lastZ = z;
                 enemy.facing = (facing * (PlayerCamera::ANGLE_UNITS / 8)) & PlayerCamera::ANGLE_MASK;
+                enemy.ai.facing = enemy.ai.target = enemy.facing;
+                enemy.springing = false;
+                enemy.state = Damage::STATE_NORMAL;
 
-                // The spring-out. Only subtypes 2 and 3 get it; anything else
-                // simply appears.
-                enemy.springing = (enemy.type == SPRING_SUBTYPE_A || enemy.type == SPRING_SUBTYPE_B);
-                enemy.state = enemy.springing ? SPRING_STATE : Damage::STATE_NORMAL;
+                // The jump-out (0x2f305-0x2f3a4), subtypes 2 and 3 only: alerted,
+                // no wait, leaping along the crate's heading at 0x40 with 0x60
+                // up, on animation 10 (12), its act lasting as that does. It used
+                // to be given damage state 5, which fell through to the hit
+                // recovery: the hugger flinched where the crate stood. Anything
+                // else simply appears. It keeps the spawn grace (FUN_0002e638).
+                if (enemy.type == SPRING_SUBTYPE_A || enemy.type == SPRING_SUBTYPE_B)
+                {
+                    StartLeapOut(enemy, SPRING_SPEED, SPRING_LIFT,
+                                 enemy.type == SPRING_SUBTYPE_A ? SPRING_ANIM_A : SPRING_ANIM_B);
+                }
                 return true;
             }
             return false;
@@ -616,17 +646,10 @@ namespace ALTEngine::Screens
                 enemy.z = enemy.lastZ = z;
                 enemy.facing = bearing & PlayerCamera::ANGLE_MASK;
                 enemy.ai.facing = enemy.ai.target = enemy.facing;
-                enemy.ai.alerted = true;
-                enemy.ai.idleTimer = 0;
-                enemy.ai.state = CreatureAI::ACT;
-                // An egg's hugger leaps out on its walk (FUN_00035530 starts no
-                // animation), so its leap ends on landing; the caller gives a
-                // burster its own.
-                enemy.actAnimation = -1;
-                enemy.leaping = true;
-                enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * static_cast<float>(speed);
-                enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * static_cast<float>(speed);
-                enemy.vy = static_cast<float>(lift);
+                // FUN_00035530 itself starts no animation; its callers do - the
+                // egg animation 10 (0x357d0), the colonist 0xd - so the caller
+                // gives one (StartLeapOut again, or RestartAnimation).
+                StartLeapOut(enemy, speed, lift, -1);
                 return &enemy;
             }
             return nullptr;
@@ -963,10 +986,8 @@ namespace ALTEngine::Screens
                 else if (enemy.animation < 0 || enemy.animation > 7
                          || enemy.ai.state > CreatureAI::CHASE)
                 {
-                    // An idle creature keeps the view it started with: the
-                    // original re-picks it only when it turns or moves
-                    // (FUN_000314b8's callers). Re-picking every tick as the
-                    // player walked about restarted the walk, and its sound.
+                    // Idle, the task re-picks the view itself every tick (see
+                    // the idle arm in Tick); otherwise the walk by view.
                     PlayWalkByView(enemy, enemy.ai.bearingToPlayer);
                 }
                 return;
@@ -1075,6 +1096,7 @@ namespace ALTEngine::Screens
             a.separationY = static_cast<int>(std::lround(enemy.separationY));
             a.bearingToPlayer = BearingTo(enemy, playerX, playerZ);
             a.lineToPlayer = enemy.lineOfFire;
+            a.eitherLine = enemy.eitherLine;
             a.zoneVisible = enemy.zoneVisible;
             a.inDuct = enemy.inDuct;
             a.playerMakingNoise = playerNoise;
@@ -1138,10 +1160,28 @@ namespace ALTEngine::Screens
                 }
             }
 
+            const bool idleArm = !recovering && a.state == AI::IDLE && !a.queen;
             if (recovering) { AI::CommonRecover(a, world); }
             else { AI::Step(a, world, static_cast<int>(std::lround(playerX)), static_cast<int>(std::lround(playerZ))); }
             enemy.facing = a.facing;
             RestartAnimation(enemy, a.startAnimation);
+            if (a.stopped && enemy.vy > 0.0f) { enemy.vy = -enemy.vy; }
+            // The idle arm (0x343fe-0x34424) faces the player and, with +0x6e
+            // set to 0xff, has FUN_000314b8 start the walk afresh on the view
+            // it is now seen from - every tick. So an idle creature always
+            // shows the view it faces you in, held on the walk's first frame
+            // (its script only steps past the chase). It used to keep whatever
+            // view it last walked in: side-on or its back to you while facing
+            // you (and flinched with the "from behind" animation, which reads
+            // the same view). The walk's cue is not played from this restart:
+            // the original sounds it only from the script step in the task's
+            // tail, past the chase (0x34f8b-0x34fb0).
+            if (idleArm && WalksByView(enemy))
+            {
+                enemy.animation = -1;
+                PlayWalkByView(enemy, a.bearingToPlayer);
+                enemy.animSound = -1;
+            }
 
             if (a.resolveHit)
             {
@@ -1180,7 +1220,9 @@ namespace ALTEngine::Screens
                     pounceLockHeld = true;
                     enemy.pouncing = true;
                     enemy.pounceTicks = EB::POUNCE_HANDOVER_TIMER;
-                    enemy.pendingDamage = EB::AttackForSubtype(enemy.type).closeDamage;
+                    // Nothing on the pounce itself: the hug drains 1 a pass
+                    // while it holds on (LAB_00030918; GameplayScreen).
+                    enemy.pendingDamage = 0;
                     enemy.stepX = enemy.stepZ = 0.0f;
                     a.vx = a.vz = 0;
                     return;
@@ -1351,11 +1393,14 @@ namespace ALTEngine::Screens
                 enemy.pendingDamage = 0;
                 enemy.stepX = enemy.stepZ = 0.0f;
 
-                // The creature is spent when the CLIMB finishes, not on a timer of
-                // its own - the two were running independently and drifting apart
-                // (Edward, 2026: "it all happens a bit out of time"). The overlay
-                // owns the clock; this follows it.
-                if (enemy.overlayFinished || --enemy.pounceTicks <= 0)
+                // LAB_00030918: the 0x40 count lets go of the face (the crawl
+                // slides off - GameplayScreen tells the overlay), and the
+                // creature dies, and the lock frees, only once the crawl has
+                // slid all the way off (+0x10 == 2). It used to die, and free
+                // the lock, when the count ran out, with the crawl still on the
+                // face for another 60 ticks.
+                if (enemy.pounceTicks > 0) { --enemy.pounceTicks; }
+                if (enemy.overlayFinished)
                 {
                     enemy.pouncing = false;
                     pounceLockHeld = false;
@@ -1452,6 +1497,14 @@ namespace ALTEngine::Screens
                 if (enemy.type == 7 && enemy.drop != 0xff)
                 {
                     enemy.deathChain = enemy.drop;
+                    enemy.drop = 0xff;
+                }
+                // FUN_00030b04 (0x30b78): any other creature with a pickup
+                // throws it out as it dies (FUN_0003bc9c); eggs, type 7 and
+                // the vents don't.
+                else if (enemy.type != 1 && enemy.drop != 0xff)
+                {
+                    enemy.dropPickup = enemy.drop;
                     enemy.drop = 0xff;
                 }
                 enemy.state = EnemyBehaviour::STATE_DEAD;

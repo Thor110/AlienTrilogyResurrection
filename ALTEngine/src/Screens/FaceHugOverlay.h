@@ -157,19 +157,26 @@ namespace ALTEngine::Screens
             active = true;
             frame = 0;
             timer = 0;
-            hold = 0;
             y = START_Y;
             phase = Phase::Climbing;
         }
 
         void End() { active = false; }
 
-        // How many ticks the crawl takes from Begin to Finished: up, held, down.
+        // The hug task lets go (LAB_00030918 sets +0x10 to 1 when its 0x40
+        // count runs out, 0x30ab4): the crawl stops climbing or holding and
+        // slides back off from where it is.
+        void LetGo() { if (active && phase == Phase::Climbing) { phase = Phase::Falling; } }
+
+        // How many ticks the crawl takes from Begin to Finished, for a hug
+        // timed without one (a co-operative host's on another player): held
+        // for the hug's 0x40, then down.
         static constexpr int DurationTicks()
         {
             const int travel = START_Y - REST_Y;
-            return (travel + CLIMB_STEP - 1) / CLIMB_STEP + HOLD_TICKS + (travel + FALL_STEP - 1) / FALL_STEP + 1;
+            return HUG_TICKS + (travel + FALL_STEP - 1) / FALL_STEP + 1;
         }
+        static constexpr int HUG_TICKS = 0x40;   // FUN_00033cbc's +0xc, 0x33d26
 
         // One logic tick. Advances both halves together - they are one sprite cut
         // in two, so they must never drift apart.
@@ -180,8 +187,8 @@ namespace ALTEngine::Screens
             // The three phases, as FUN_000307c0 runs them.
             if (phase == Phase::Climbing)
             {
+                // Up to the rest position and held there until let go.
                 if (y > REST_Y) { y -= CLIMB_STEP; }
-                else if (++hold >= HOLD_TICKS) { phase = Phase::Falling; }
             }
             else if (phase == Phase::Falling)
             {
@@ -333,10 +340,8 @@ namespace ALTEngine::Screens
         static constexpr int CLIMB_STEP = 8;
         static constexpr int FALL_STEP = 0x10;
 
-        // WHAT ENDS THE CLIMB is the one part still open. The handler tests a
-        // state word it does not itself set, so something else decides the crawl
-        // is over. Holding for the length of the animation is the stand-in.
-        static constexpr int HOLD_TICKS = 90;
+        // WHAT ENDS THE CLIMB is the hug task's own count (see LetGo): 0x40
+        // passes from the pounce, climbing included.
 
         // Paced so the four frames play across the climb.
         static constexpr int TICKS_PER_FRAME = 7;        ALTEngine::Formats::EnemySpriteSet sprites;
@@ -348,6 +353,5 @@ namespace ALTEngine::Screens
         enum class Phase { Climbing, Falling, Done };
         Phase phase = Phase::Climbing;
         int y = START_Y;
-        int hold = 0;
     };
 }

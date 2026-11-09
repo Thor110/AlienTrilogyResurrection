@@ -40,6 +40,7 @@ namespace
         a.mode = AI::Band(a, distance);
         a.zoneVisible = true;
         a.lineToPlayer = true;
+        a.eitherLine = true;
         a.bearingToPlayer = 0;
         a.wakeRange = 0x1800;
         return a;
@@ -282,4 +283,24 @@ TEST_CASE("CreatureAI: a creature in a duct notices the player without seeing it
     CHECK(AI::Notices(a));
     // The cone (FUN_00033a1c) has no such exception.
     CHECK(!AI::SeesInCone(a));
+}
+
+TEST_CASE("CreatureAI: waiting, a creature is woken by either line in its cone - the ray will do where the ground fails (0x34551)")
+{
+    AI::Agent a;
+    a.type = 2;
+    a.speed = 0x40;
+    a.distance = 0x1000;
+    a.mode = AI::Band(a, a.distance);
+    a.zoneVisible = true;
+    a.lineToPlayer = false;   // no ground line (a crate in the way, a rise)
+    a.eitherLine = true;      // but the ray sees the player
+    a.bearingToPlayer = 0;
+    a.facing = 0;
+    a.wakeRange = 0x100;      // too far to notice by distance
+    a.state = AI::CHASE;
+    a.idleTimer = 0;
+    OpenWorld w;
+    AI::Step(a, w.world, 0, -0x1000);
+    CHECK(a.alerted);
 }

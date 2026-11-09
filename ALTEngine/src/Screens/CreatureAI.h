@@ -142,6 +142,7 @@ namespace ALTEngine::Screens::CreatureAI
         int separationY = 0;        // +0x14
         int bearingToPlayer = 0;    // +0x54
         bool lineToPlayer = false;  // FUN_0003231c
+        bool eitherLine = false;    // FUN_00032aec or FUN_0003231c (waking, 0x34551)
         bool zoneVisible = false;   // FUN_00033a1c's first half
         bool inDuct = false;        // its cell has no face (cell dword 0 after load)
         bool playerMakingNoise = false;   // DAT_000b0adc != 0
@@ -150,6 +151,10 @@ namespace ALTEngine::Screens::CreatureAI
         // Set here, for the caller to act on.
         bool startAct = false;      // FUN_00033cbc: start the attack
         bool resolveHit = false;    // FUN_00033ff8: the attack lands now
+        // Stop ran this tick: the original's stop (0x32f4c, inlined across the
+        // task) also turns a rising vertical speed (+0x32) downward, which the
+        // creature, holding its vertical speed, applies.
+        bool stopped = false;
 
         // The queen's own (see above).
         bool queen = false;
@@ -177,7 +182,7 @@ namespace ALTEngine::Screens::CreatureAI
     }
 
     inline void Face(Agent& a, int to) { a.facing = a.target = to & 0xfff; }
-    inline void Stop(Agent& a) { a.vx = 0; a.vz = 0; }
+    inline void Stop(Agent& a) { a.vx = 0; a.vz = 0; a.stopped = true; }
 
     // The distance band the creature task puts every distance into
     // (FUN_00032154 for the player, FUN_00032204 for a waypoint).
@@ -387,6 +392,7 @@ namespace ALTEngine::Screens::CreatureAI
     {
         a.startAct = false;
         a.resolveHit = false;
+        a.stopped = false;
         a.startAnimation = -1;
         Stop(a);
         if (a.type == 3)
@@ -418,6 +424,7 @@ namespace ALTEngine::Screens::CreatureAI
     {
         a.startAct = false;
         a.resolveHit = false;
+        a.stopped = false;
         a.startAnimation = -1;
 
         switch (a.state)
@@ -451,7 +458,7 @@ namespace ALTEngine::Screens::CreatureAI
             if (SeesInCone(a))
             {
                 if (a.mode == 0 && a.separationY <= CONTACT_VERTICAL && a.lineToPlayer) { a.state = ATTACK; }
-                else if (a.lineToPlayer) { a.alerted = true; }
+                else if (a.eitherLine) { a.alerted = true; }
             }
             return;
 

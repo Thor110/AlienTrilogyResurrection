@@ -622,6 +622,35 @@ library, the sound and video drivers and the DOS extender) was looked at to see 
 - Creature animation timing and attack timing come from the scripts for every creature type; the fixed values
   in `Enemies.h` are fallbacks nothing reaches.
 
+### Creature AI audit (zip 158, v0.9.7)
+Four agents went through the creature routines (FUN_000314b8 to FUN_000364d4) against the port, and a fifth
+reviewed the port's AI code. Fixed in zip 158, each checked in the disassembly:
+- **Walking backwards and sideways:** an idle creature picks its walk view again every tick, facing the
+  player (0x343fe-0x34424); the port kept the view from when it stopped. And the wall probes now lead from
+  the position after this tick's step (0x31607-0x3162c), so a creature no longer stops a step short and turns.
+- A creature that stops while rising falls back (0x32f4c).
+- The tasks that run every pass (eggs, face huggers' hold, the queen, colonists, vents) now do; only the
+  common creature task runs every other pass (`[0x6164]&1`, 0x342c1).
+- **Face huggers:** one from an egg leaps out on animation 10 (0x357d0); one from a crate leaps out too
+  (speed 0x40, lift 0x60) instead of walking; a hold lasts 0x40 ticks, costs 1 health a tick, then it lets go
+  and falls; a waiting creature wakes on either sight line (the floor one or the ray), not just its own.
+- A creature with a pickup throws it out as it dies (0x30b78 → FUN_0003bc9c; not eggs, type 7 or vents).
+
+Left from that audit, to look at:
+1. The three wall probes' spread test is max(probe 0, probe 1) against probe 2; which port probe is which is
+   unclear.
+2. The rise and headroom tests use the creature's Y, the port the floor's.
+3. An egg reacts to a hit by its phase, not its state, and waits out the hit cooldown.
+4. The idle and attack timers (+0x52, +0x68) count down in every state, the port's only in some.
+5. Recovering from a hit returns a tick late.
+6. Gunners: CHASE falls back to ATTACK, ATTACK makes no reach test on the ray, and the end of ACT prefers a
+   reposition.
+7. A co-op host picks the walk views against the AI's target, not each machine's own player.
+8. A few random draws the original doesn't make (the random sequence drifts).
+9. The queen's alert needs the sight cone.
+10. The walk view is chosen a tick late; a hug's landing spot can be up to 0x200 off; whether the egg's
+    hugger inherits the egg's end bit is unsure.
+
 ## 3. Code health
 
 Done in zip 81:

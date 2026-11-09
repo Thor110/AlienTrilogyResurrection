@@ -8,6 +8,29 @@ options (Options > Modern) are the deliberate departures, each one off until you
 
 ---
 
+## 0.9.7
+
+Everything since 0.9.6.
+
+### Closer to the original
+
+**Creatures** (a second audit of the creature routines against the original's code)
+- Warriors walk backwards and sideways much less: a creature standing idle keeps turning its walk to face you
+  each moment, as in the original, instead of keeping the view it had when it stopped.
+- Creatures no longer stop a step short of a wall and turn: they look ahead from where this step takes them.
+- A creature that stops while rising falls back down.
+- Eggs, face huggers, the queen, colonists and vents run at the original's rate; before, some ran half as often.
+- **Face huggers:**
+  - one from an egg leaps out of it, on its leap animation;
+  - one from a crate leaps out too, instead of walking out;
+  - one on your face holds on for the original's time, taking 1 health each moment it holds, then lets go and
+    falls away;
+  - a waiting face hugger (or any creature) wakes when it sees you either way the original checks, not just
+    one.
+- A creature carrying a pickup throws it out when it dies, as in the original.
+
+---
+
 ## 0.9.6
 
 Everything since 0.9.5.
