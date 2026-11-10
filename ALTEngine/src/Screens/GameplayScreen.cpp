@@ -2965,6 +2965,13 @@ namespace ALTEngine::Screens
                         if (equipped >= 0)
                         {
                             selectedWeapon = equipped;
+                            // The new weapon is the one in hand from this tick.
+                            // The HUD used to catch up only at the draw, so the
+                            // out-of-ammo check below ran on the empty weapon
+                            // just put away and left the new one in its empty
+                            // state, unable to fire (Edward: the shotgun ran dry,
+                            // back to the pistol, and the pistol wouldn't fire).
+                            hudState.currentWeapon = static_cast<int16_t>(equipped);
                             // FUN_000401d0 puts the new weapon in state 0. Without
                             // this an automatic switch carried the empty weapon's
                             // state across, and the new one could not fire.

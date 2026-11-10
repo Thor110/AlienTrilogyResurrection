@@ -29,6 +29,11 @@ Everything since 0.9.6.
     one.
 - A creature carrying a pickup throws it out when it dies, as in the original.
 
+### Fixes
+
+- A weapon switched to after another ran out of ammunition fires again. Running the shotgun dry and going back
+  to the pistol left the pistol unable to fire.
+
 ---
 
 ## 0.9.6
