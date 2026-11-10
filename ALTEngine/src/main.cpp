@@ -128,7 +128,8 @@ namespace
 
     // Plays the intro videos data/BootSequence.json lists, in its order
     // (the original's four if the file is missing), each resolved for
-    // `language` via LocalizedBaseName. A missing file is skipped, same
+    // `language` via FindLocalizedVideo (falling back to another language's
+    // video when the disc has no such file). A missing file is skipped, same
     // philosophy as ShowLegalSplash - only an actual window-close aborts the
     // boot.
     bool PlayIntroVideos(const std::filesystem::path& cdDirectory, Language language)
@@ -149,17 +150,16 @@ namespace
                 continue;
             }
 
-            std::string localizedName = LocalizedBaseName(baseName, language);
-            std::filesystem::path path = aviDir / (localizedName + ".AVI");
-            std::error_code ec;
-            if (!std::filesystem::exists(path, ec))
+            const auto path = ALTEngine::Bootstrap::FindLocalizedVideo(aviDir, baseName, language);
+            if (!path)
             {
-                std::cout << "Could not find " << ALTEngine::Bootstrap::PathText(path) << " - skipping.\n";
+                std::cout << "Could not find " << baseName << ".AVI in any language in "
+                          << ALTEngine::Bootstrap::PathText(aviDir) << " - skipping.\n";
                 continue;
             }
 
-            std::cout << "Playing " << localizedName << ".AVI...\n";
-            if (!VideoPlayer::Play(path))
+            std::cout << "Playing " << ALTEngine::Bootstrap::PathText(path->filename()) << "...\n";
+            if (!VideoPlayer::Play(*path))
             {
                 return false; // window closed - abort boot
             }

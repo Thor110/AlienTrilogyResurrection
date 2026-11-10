@@ -174,6 +174,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/TextureBlankTests.cpp
         tests/HudLayoutTests.cpp
         tests/HudMessageTests.cpp
+        tests/LocalizationTests.cpp
         # The settings file, read only (the network game's rules test).
         src/Bootstrap/Config.cpp
     )

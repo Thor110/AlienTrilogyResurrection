@@ -1,5 +1,8 @@
 #pragma once
 
+#include <algorithm>
+#include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -46,6 +49,36 @@ namespace ALTEngine::Bootstrap
         return prefixed;
     }
 
+    // The video names to try for `baseName`, in order: the chosen language's,
+    // then the English one (no prefix), then the other languages'. A disc or
+    // installation carries only its own language's videos, so with another
+    // language chosen the chosen one's name is often not there (Pox83, 0.9.7:
+    // the cutscenes were skipped).
+    inline std::vector<std::string> LocalizedBaseNameCandidates(const std::string& baseName, Language language)
+    {
+        std::vector<std::string> result;
+        for (Language each : { language, Language::English, Language::French, Language::Italian, Language::Spanish })
+        {
+            std::string name = LocalizedBaseName(baseName, each);
+            if (std::find(result.begin(), result.end(), name) == result.end()) { result.push_back(std::move(name)); }
+        }
+        return result;
+    }
+
+    // The first of LocalizedBaseNameCandidates that is in `aviDirectory` as
+    // a .AVI, or nothing if none is.
+    inline std::optional<std::filesystem::path> FindLocalizedVideo(
+        const std::filesystem::path& aviDirectory, const std::string& baseName, Language language)
+    {
+        for (const std::string& name : LocalizedBaseNameCandidates(baseName, language))
+        {
+            std::filesystem::path path = aviDirectory / (name + ".AVI");
+            std::error_code ec;
+            if (std::filesystem::exists(path, ec)) { return path; }
+        }
+        return std::nullopt;
+    }
+
     // MISSION#.TXT-style suffix letters - confirmed against real
     // MISSIONE.TXT / MISSIONU.TXT, and also needed for PNL0GFX#.16/
     // PNL1GFX#.16. The FULL set that actually exists on disc, confirmed
@@ -54,21 +87,31 @@ namespace ALTEngine::Bootstrap
     // - two more than "U/E/F/I/S" originally suggested. German and
     // Japanese aren't first-class Language values in this engine yet
     // (would touch the boot menu's language submenu and several other
-    // spots to add properly), so they're not listed as candidates below
-    // - if that support gets added later, this is where their letters
-    // ('G', 'J') go. Returns candidates in the order to try them - for
+    // spots to add properly), so their letters ('G', 'J') come only among
+    // the fallbacks below. Returns candidates in the order to try them - for
     // English, US first (that's the release the English-file gap was
     // actually confirmed against), then the other English variant.
+    //
+    // After the chosen language's own letters come every other letter, so a
+    // disc or installation without that language's file still finds one
+    // that is there (Pox83, 0.9.7: with another language chosen, what the
+    // disc didn't carry in it was skipped or left blank).
     inline std::vector<char> LanguageSuffixCandidates(Language language)
     {
+        std::vector<char> result;
         switch (language)
         {
-        case Language::French:  return { 'F' };
-        case Language::Italian: return { 'I' };
-        case Language::Spanish: return { 'S' };
+        case Language::French:  result = { 'F' }; break;
+        case Language::Italian: result = { 'I' }; break;
+        case Language::Spanish: result = { 'S' }; break;
         case Language::English:
-        default:                return { 'U', 'E' };
+        default:                result = { 'U', 'E' }; break;
         }
+        for (char c : { 'U', 'E', 'F', 'I', 'S', 'G', 'J' })
+        {
+            if (std::find(result.begin(), result.end(), c) == result.end()) { result.push_back(c); }
+        }
+        return result;
     }
 
     // MISSION#.TXT uses a DIFFERENT convention from LocalizedBaseName

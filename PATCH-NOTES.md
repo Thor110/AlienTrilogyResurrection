@@ -8,6 +8,19 @@ options (Options > Modern) are the deliberate departures, each one off until you
 
 ---
 
+## 0.9.8
+
+Everything since 0.9.7.
+
+### Fixes
+
+- **Cutscenes in other languages** (reported by Pox83). With French, Italian or Spanish chosen, the game looked
+  only for that language's videos, and skipped every one the disc or installation didn't have. It now plays
+  the one that is there: the chosen language's, else the English one, else another language's. The same goes
+  for the mission briefing text and the panel graphics, which were left blank.
+
+---
+
 ## 0.9.7
 
 Everything since 0.9.6.

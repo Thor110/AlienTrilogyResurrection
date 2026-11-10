@@ -117,12 +117,11 @@ namespace ALTEngine::Screens
                 return ALTEngine::Video::VideoPlayer::Play(*overridePath);
             }
 
-            const std::string localized = ALTEngine::Bootstrap::LocalizedBaseName(baseName, language);
-            const std::filesystem::path path = cdDirectory / "AVI" / (localized + ".AVI");
-            std::error_code ec;
-            if (!std::filesystem::exists(path, ec)) { return true; }   // absent, not fatal
+            // The chosen language's video, else another language's (FindLocalizedVideo).
+            const auto path = ALTEngine::Bootstrap::FindLocalizedVideo(cdDirectory / "AVI", baseName, language);
+            if (!path) { return true; }   // absent, not fatal
 
-            return ALTEngine::Video::VideoPlayer::Play(path);
+            return ALTEngine::Video::VideoPlayer::Play(*path);
         }
 
         // The death sequence: the one clip that matches how the player died.
