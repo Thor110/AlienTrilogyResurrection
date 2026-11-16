@@ -20,6 +20,7 @@ namespace
         std::vector<std::string> log;
         bool doorsSucceed = true;
         bool objectsSucceed = true;
+        bool lastResets = false;   // the switch handed "comes back" (activateObject)
 
         Triggers::Handlers Handlers()
         {
@@ -32,7 +33,7 @@ namespace
             h.toggleLight = [this](int light, int delta) { log.push_back("light " + std::to_string(light) + "+" + std::to_string(delta)); };
             h.changeTexture = [this](int anim, int delta) { log.push_back("texture " + std::to_string(anim) + "+" + std::to_string(delta)); };
             h.spawnMonster = [this](int monster, int amount) { log.push_back("spawn " + std::to_string(monster) + "+" + std::to_string(amount)); };
-            h.activateObject = [this](int object) { log.push_back("object " + std::to_string(object)); return objectsSucceed; };
+            h.activateObject = [this](int object, bool resets) { lastResets = resets; log.push_back("object " + std::to_string(object)); return objectsSucceed; };
             h.endLevel = [this]() { log.push_back("end"); };
             return h;
         }
@@ -513,4 +514,26 @@ TEST_CASE("Triggers: co-operative - every chain run is reported, and a replay do
     CHECK(there.Replay(1, 0, Source::WalkOn, true, false, hThere));
     CHECK_EQ(here.UsesRemaining(1), 0);
     CHECK(!there.Replay(1, 0, Source::WalkOn, true, false, hThere));
+}
+
+TEST_CASE("Triggers: a switch comes back when its trigger has uses left, not on its last (FUN_00036f4c)")
+{
+    // L232's lift switches: unlimited uses, so the switch is thrown again and
+    // again (state 2, reset at 0x38380). A single-use trigger's stays thrown.
+    for (const uint8_t uses : { Triggers::USES_UNLIMITED, uint8_t{ 2 }, uint8_t{ 1 } })
+    {
+        LevelGeometry level = SyntheticLevel({ LogicGroup{ Triggers::ACTIVATE_OBJECT, 0, 1, 7 } }, uses);
+        Triggers::System system(level);
+        Recorder rec;
+        int latch = 0;
+        CHECK(system.OnPlayerTick(latch, 1, true, rec.Handlers()));
+        CHECK_EQ(rec.lastResets, uses != 1);
+    }
+    // A chain run straight from a command hands the switch 1: it stays.
+    LevelGeometry level = SyntheticLevel({ LogicGroup{ Triggers::ACTIVATE_OBJECT, 0, 1, 7 } });
+    Triggers::System system(level);
+    Recorder rec;
+    rec.lastResets = true;
+    CHECK(system.RunCommands(0, rec.Handlers()));
+    CHECK(!rec.lastResets);
 }

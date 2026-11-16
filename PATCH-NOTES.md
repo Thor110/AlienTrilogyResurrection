@@ -18,6 +18,11 @@ Everything since 0.9.7.
   only for that language's videos, and skipped every one the disc or installation didn't have. It now plays
   the one that is there: the chosen language's, else the English one, else another language's. The same goes
   for the mission briefing text and the panel graphics, which were left blank.
+- **Lift and bridge switches can be used again**, as in the original (reported on Discord). A switch thrown by a
+  trigger with uses left comes back about a second later, ready to be thrown again; only a switch on a trigger's
+  last use stays thrown. Before, every switch stayed thrown for good, so a lift called once could never be
+  called back, and on L232 a player could be left stuck. 35 switches on 11 levels work this way (L131, L141,
+  L213, L231, L232, L262, L311, L331, L371, L905, L908).
 
 ---
 

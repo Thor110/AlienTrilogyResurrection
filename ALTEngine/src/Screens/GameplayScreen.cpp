@@ -406,10 +406,18 @@ namespace ALTEngine::Screens
             bool remote = false;
         };
         std::vector<PlayerExplosive> playerExplosives;
-        // Switch/object state, indexed by object record. Non-zero means
-        // already thrown - the original latches on this and fails, which
-        // aborts the whole command chain rather than re-running it.
+        // Switch/object state, indexed by object record (the object's +0x1a).
+        // Non-zero means already thrown - the original fails on this, which
+        // aborts the whole command chain rather than re-running it. 1 stays
+        // thrown; 2 is a switch that comes back (FUN_00036f4c, when its
+        // trigger has more than one use left): the switch's task puts it back
+        // to 0 SWITCH_RESET_TICKS after the throw (0x38380).
         std::vector<uint8_t> objectState;
+        // The ticks until a state-2 switch is ready again.
+        std::vector<int> objectResetTicks;
+        // The switch's task (LAB_0003846c, then 0x380f4): 8 frames of 5 ticks,
+        // then a hold of 0x20, and on its last tick state 2 goes back to 0.
+        static constexpr int SWITCH_RESET_TICKS = 8 * 5 + 0x20;
         // Switch objects that need their mesh swapped as their state changes.
         // placedIndex -> crate record index, plus the family's base mesh.
         struct SwitchVisual { size_t placedIndex; size_t crateIndex; int familyBase; };
@@ -842,7 +850,15 @@ namespace ALTEngine::Screens
                     }
                 }
                 const auto objects = bytesFromHex(j.value("objects", std::string{}));
-                if (objects.size() == objectState.size()) { objectState = objects; }
+                if (objects.size() == objectState.size())
+                {
+                    objectState = objects;
+                    // A switch on its way back starts its wait again.
+                    for (size_t oi = 0; oi < objectState.size() && oi < objectResetTicks.size(); ++oi)
+                    {
+                        objectResetTicks[oi] = objectState[oi] == 2 ? SWITCH_RESET_TICKS : 0;
+                    }
+                }
 
                 const auto& e = j["enemies"];
                 if (e.is_array() && e.size() == enemies.size())
@@ -1602,6 +1618,7 @@ namespace ALTEngine::Screens
                         }
 
                         objectState.assign(level.crates.size(), 0);
+                        objectResetTicks.assign(level.crates.size(), 0);
 
                         // The tally's totals, as the level builds them: each
                         // creature record by type (FUN_0002f3b0, those in
@@ -1767,7 +1784,7 @@ namespace ALTEngine::Screens
                 }
             }
         };
-        triggerHandlers.activateObject = [&](int objectIndex) {
+        triggerHandlers.activateObject = [&](int objectIndex, bool comesBack) {
             const size_t oi = static_cast<size_t>(objectIndex);
             if (objectIndex < 0 || oi >= level.crates.size() || oi >= objectState.size()) { return false; }
             // Latches: a thrown switch fails, and the chain aborts on the failure.
@@ -1787,7 +1804,12 @@ namespace ALTEngine::Screens
                 }
                 inventory.batteries--;
             }
-            objectState[oi] = 1;
+            // Only the switches run the task that puts one back (types 0x16,
+            // 0x18, 0x1a and 0x1b, LAB_0003846c); anything else stays thrown.
+            const bool isSwitch = type == 0x16 || type == 0x18 || type == 0x1a || type == 0x1b;
+            const bool resets = comesBack && isSwitch;
+            objectState[oi] = resets ? 2 : 1;
+            if (oi < objectResetTicks.size()) { objectResetTicks[oi] = resets ? SWITCH_RESET_TICKS : 0; }
             // FUN_00036f4c's FUN_00040ba0(0x5c, -1): the sound of anything
             // being switched on - a switch, a cryopod.
             ALTEngine::Audio::SfxPlayer::PlaySlot(OBJECT_ACTIVATE_SOUND, digits.c_str(), cdDirectory);
@@ -5189,6 +5211,17 @@ namespace ALTEngine::Screens
                             // battery switch before its battery is fitted, but
                             // nothing has been traced that selects it.
                             switchBlinkTicks++;
+                            // A switch thrown by a trigger with uses left comes
+                            // back to be thrown again (0x38380). L232's lift
+                            // switches are these: without it a lift called
+                            // once could never be called again.
+                            for (size_t oi = 0; oi < objectResetTicks.size() && oi < objectState.size(); ++oi)
+                            {
+                                if (objectResetTicks[oi] > 0 && --objectResetTicks[oi] == 0 && objectState[oi] == 2)
+                                {
+                                    objectState[oi] = 0;
+                                }
+                            }
                             if (switchBlinkTicks >= 16)
                             {
                                 switchBlinkTicks = 0;

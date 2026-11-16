@@ -30,7 +30,7 @@ namespace ALTEngine::Game::Triggers
                              : (source == Source::EnemyThrow) ? FLAG_ENEMY_THROW
                              : (source == Source::Creature) ? FLAG_CREATURE : FLAG_PLAYER;
         if ((trigger.activationMask & needed) == 0 || uses == 0) { return false; }
-        if (!RunChain(trigger.commandStart, source, handlers, true, source == Source::Interact)) { return false; }
+        if (!RunChain(trigger.commandStart, source, handlers, true, source == Source::Interact, uses)) { return false; }
         if (uses != USES_UNLIMITED) { uses--; }
         Fired(triggerId, trigger.commandStart, source, true, source == Source::Interact);
         return true;
@@ -39,12 +39,12 @@ namespace ALTEngine::Game::Triggers
     bool System::Replay(int triggerId, int commandStart, Source source, bool fresh, bool useKey, const Handlers& handlers)
     {
         if (!level_) { return false; }
-        if (triggerId <= 0) { return RunChain(commandStart, source, handlers, fresh, useKey); }
+        if (triggerId <= 0) { return RunChain(commandStart, source, handlers, fresh, useKey, 1); }
         if (static_cast<size_t>(triggerId) >= level_->actions.size()) { return false; }
         const auto& trigger = level_->actions[static_cast<size_t>(triggerId)];
         uint8_t& uses = uses_[static_cast<size_t>(triggerId)];
         if (uses == 0) { return false; }
-        if (!RunChain(trigger.commandStart, source, handlers, fresh, useKey)) { return false; }
+        if (!RunChain(trigger.commandStart, source, handlers, fresh, useKey, uses)) { return false; }
         if (uses != USES_UNLIMITED) { uses--; }
         return true;
     }
@@ -54,12 +54,13 @@ namespace ALTEngine::Game::Triggers
         if (!level_) { return false; }
         // FUN_00040e2c runs every command, the switch (with 1) and the door's
         // final opening included.
-        const bool ran = RunChain(commandStart, Source::Interact, handlers, true, true);
+        const bool ran = RunChain(commandStart, Source::Interact, handlers, true, true, 1);
         if (ran) { Fired(0, commandStart, Source::Interact, true, true); }
         return ran;
     }
 
-    bool System::RunChain(int commandStart, Source source, const Handlers& handlers, bool fresh, bool useKey)
+    bool System::RunChain(int commandStart, Source source, const Handlers& handlers, bool fresh, bool useKey,
+                           uint8_t switchUses)
     {
         // The chain's result, as the original keeps it in ECX across the loop
         // (0x415a2): it starts as a failure; a command that runs sets it (an
@@ -126,8 +127,13 @@ namespace ALTEngine::Game::Triggers
                 break;
             case ACTIVATE_OBJECT:
                 // No arm in a round's, a grenade's or a creature's runner.
+                // FUN_00036f4c is handed the trigger's uses left: a switch
+                // thrown by a trigger with one use left stays thrown; any
+                // other (unlimited, or more than one) comes back to be thrown
+                // again (its state 2, 0x38380). A chain run straight from a
+                // command (FUN_00040e2c) hands it 1.
                 if (!useKey) { break; }
-                result = handlers.activateObject && handlers.activateObject(target);
+                result = handlers.activateObject && handlers.activateObject(target, switchUses != 1);
                 if (result) { sawActivateObject = true; }
                 break;
             case SPAWN_PICKUP:
@@ -196,7 +202,7 @@ namespace ALTEngine::Game::Triggers
         // Standing on, without the key, nothing in a chain can run but the
         // level's end (8), which has already run on the way in: skipped.
         if (!fresh && !useKey) { return false; }
-        if (RunChain(trigger.commandStart, useKey ? Source::Interact : Source::WalkOn, handlers, fresh, useKey))
+        if (RunChain(trigger.commandStart, useKey ? Source::Interact : Source::WalkOn, handlers, fresh, useKey, uses))
         {
             if (uses != USES_UNLIMITED) { uses--; }
             latch = id;

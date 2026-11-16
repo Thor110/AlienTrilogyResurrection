@@ -82,7 +82,9 @@ namespace ALTEngine::Game
             std::function<void(int, int)> changeTexture;    // animator, signed delta
             std::function<void(int, int)> spawnMonster;     // monster, amount
             std::function<void(int, int)> spawnPickup;      // pickup, amount
-            std::function<bool(int)> activateObject;        // object record
+            // object record, and whether the switch comes back to be thrown again
+            // (the trigger had more than one use left; see RunChain)
+            std::function<bool(int, bool)> activateObject;
             // lift record, amount, final-increment-only; false fails the chain
             std::function<bool(int, int, bool)> lift;
             std::function<void()> endLevel;
@@ -153,7 +155,8 @@ namespace ALTEngine::Game
             bool Replay(int triggerId, int commandStart, Source source, bool fresh, bool useKey, const Handlers& handlers);
 
         private:
-            bool RunChain(int commandStart, Source source, const Handlers& handlers, bool fresh, bool useKey);
+            bool RunChain(int commandStart, Source source, const Handlers& handlers, bool fresh, bool useKey,
+                          uint8_t switchUses);
 
             void Fired(int triggerId, int commandStart, Source source, bool fresh, bool useKey) const
             {
