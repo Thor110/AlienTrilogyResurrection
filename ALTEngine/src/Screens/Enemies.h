@@ -134,6 +134,12 @@ namespace ALTEngine::Screens
 
             int health = 0;
             int baseHealth = 0;         // the record's own byte, before the shift
+            int spawnHealth = 0;        // FUN_0002e52c's health for its record, at this difficulty
+            // HARD ONLY: a body comes back to life when the player is far off
+            // (0x3431b-0x34394). Not the queen, and not a ceiling creature's
+            // record (types 8 and 9), even after it dropped as a warrior or dog.
+            bool revivesWhenFar = false;
+            bool revived = false;       // came back this tick: the caller clears an acid cell under it
             int speed = 0;
             int state = Damage::STATE_NORMAL;
             int hitCooldown = 0;
@@ -392,6 +398,9 @@ namespace ALTEngine::Screens
                 enemy.monsterIndex = static_cast<int>(i);
                 enemy.baseHealth = record.health;
                 enemy.health = SpawnHealth(record.type, record.health, difficulty);
+                enemy.spawnHealth = enemy.health;
+                enemy.revivesWhenFar = difficulty == 2 && CreatureAI::UsesCommonTask(record.type)
+                                    && record.type != 7 && record.type != 8 && record.type != 9;
                 enemy.speed = record.speed;
 
                 // The common task's spawn values (FUN_0002e638): the record's
@@ -1089,8 +1098,6 @@ namespace ALTEngine::Screens
             a.coneHalfWidth = enemy.coneHalfWidth;
             a.nearThreshold = enemy.nearThreshold;
             a.middleThreshold = enemy.middleThreshold;
-            if (a.idleTimer > 0) { a.idleTimer--; }
-            if (a.attackTimer > 0) { a.attackTimer--; }
             a.distance = enemy.distance;
             a.mode = enemy.mode;
             a.separationY = static_cast<int>(std::lround(enemy.separationY));
@@ -1181,6 +1188,16 @@ namespace ALTEngine::Screens
                 enemy.animation = -1;
                 PlayWalkByView(enemy, a.bearingToPlayer);
                 enemy.animSound = -1;
+            }
+            // Every other call of FUN_000314b8: after this tick's turn, from
+            // this tick's facing. Picked before the step (UpdateAnimation), it
+            // showed the octant faced a tick earlier - a turn is 0x200 a tick,
+            // a whole octant - so a creature setting off on each new leg
+            // walked a tick in a view up to 45 degrees off its path.
+            else if (a.pickView && a.state != AI::ACT && !a.startAct && WalksByView(enemy)
+                     && !(a.queen && a.state == AI::IDLE))
+            {
+                PlayWalkByView(enemy, a.bearingToPlayer);
             }
 
             if (a.resolveHit)
@@ -1294,6 +1311,16 @@ namespace ALTEngine::Screens
             // and never counted down, so anything that survived its first hit
             // - a warrior drone, say - could not be hurt again.
             if (enemy.hitCooldown > 0) { enemy.hitCooldown--; }
+            // The idle and attack timers (+0x52, +0x68) count down at the top
+            // of the task, before its mode-4 test and its state switch
+            // (0x342ce-0x342f8; the queen's 0x35bf9): in every state, a flinch
+            // or a death included, and however far away. They used to stop
+            // while the creature flinched.
+            if (commonTask)
+            {
+                if (enemy.ai.idleTimer > 0) { enemy.ai.idleTimer--; }
+                if (enemy.ai.attackTimer > 0) { enemy.ai.attackTimer--; }
+            }
             if (enemy.hitCooldown == 0) { enemy.spawnGuard = false; }
 
             // Perception - the axis separations and the banded distance.
@@ -1326,7 +1353,37 @@ namespace ALTEngine::Screens
             // 0x3431b).
             if (commonTask)
             {
-                if (enemy.mode == 4) { enemy.stepX = enemy.stepZ = 0.0f; enemy.ai.vx = enemy.ai.vz = 0; return; }
+                if (enemy.mode == 4)
+                {
+                    // Out of range it stands still, and a rising one turns
+                    // down (0x34399-0x343b2).
+                    enemy.stepX = enemy.stepZ = 0.0f;
+                    enemy.ai.vx = enemy.ai.vz = 0;
+                    if (enemy.vy > 0.0f) { enemy.vy = -enemy.vy; }
+                    // On Hard a body lying out there comes back (0x34325): its
+                    // spawn health, idle for 0x20 ticks, unalerted, where it
+                    // fell, walking by the view it is seen from.
+                    if (enemy.revivesWhenFar && enemy.state == EnemyBehaviour::STATE_DEAD
+                        && (enemy.animator.Ended() || enemy.animationEnded))
+                    {
+                        enemy.alive = true;
+                        enemy.state = EnemyBehaviour::STATE_ACTING;
+                        enemy.health = enemy.spawnHealth;
+                        enemy.bodyDown = false;
+                        enemy.pushX = enemy.pushZ = 0.0f;
+                        enemy.leaping = false;
+                        enemy.leapX = enemy.leapZ = 0.0f;
+                        enemy.spawnDeathEffect = false;
+                        enemy.ai.state = CreatureAI::IDLE;
+                        enemy.ai.idleTimer = 0x20;
+                        enemy.ai.alerted = false;
+                        enemy.ai.retreating = false;
+                        enemy.animation = -1;
+                        PlayWalkByView(enemy, BearingTo(enemy, playerX, playerZ));
+                        enemy.revived = true;
+                    }
+                    return;
+                }
             }
             else if (!eggTask && !colonistTask && enemy.distance > EnemyBehaviour::SIMULATION_CUTOFF) { return; }
 

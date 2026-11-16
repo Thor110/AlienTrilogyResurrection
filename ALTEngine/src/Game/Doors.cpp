@@ -131,6 +131,11 @@ namespace ALTEngine::Game::Doors
     DoorNotice Tick(DoorState& door, Formats::LevelGeometry& level, float playerX, float playerZ)
     {
         DoorNotice notice = DoorNotice::None;
+        door.sound = -1;
+        door.madeNoise = false;
+        constexpr int OPEN_SOUND = 0x2a;   // 3101open, setting off
+        constexpr int THUD_SOUND = 0x2b;   // 3103thud, stopping
+        const auto sound = [&door](int id, int mode) { door.sound = id; door.soundMode = mode; };
 
         switch (door.phase)
         {
@@ -139,6 +144,8 @@ namespace ALTEngine::Game::Doors
             if (door.unlockProgress >= door.threshold)
             {
                 door.phase = DoorState::Phase::Opening;
+                sound(OPEN_SOUND, 1);       // 0x2926b
+                door.madeNoise = true;      // 0x29243
                 notice = door.isLift ? DoorNotice::LiftActivated
                        : door.switchOperated ? DoorNotice::DoorPoweredUp
                        : DoorNotice::DoorActivated;
@@ -148,7 +155,7 @@ namespace ALTEngine::Game::Doors
         case DoorState::Phase::Opening:
             // The step that reaches the full count does not raise the door, so
             // a door opened from shut stops one unit short of its travel.
-            if (++door.counter >= door.travel) { door.counter = door.travel; FinishOpen(door); }
+            if (++door.counter >= door.travel) { door.counter = door.travel; FinishOpen(door); sound(THUD_SOUND, 1); }   // 0x2946b
             else { door.progress++; }
             break;
 
@@ -167,14 +174,14 @@ namespace ALTEngine::Game::Doors
             // through in X, so that is the axis that matters.
             float d = door.alongZ ? (door.worldX - playerX) : (door.worldZ - playerZ);
             if (d < 0) { d = -d; }
-            if (d > 1024.0f && !Occupied(door, level)) { door.phase = DoorState::Phase::Closing; }
+            if (d > 1024.0f && !Occupied(door, level)) { door.phase = DoorState::Phase::Closing; sound(OPEN_SOUND, 0); }   // 0x2918c
             break;
         }
 
         case DoorState::Phase::Closing:
             --door.counter;
-            if (Occupied(door, level)) { door.phase = DoorState::Phase::Opening; }
-            else if (door.counter <= 0) { door.counter = 0; FinishClose(door); }
+            if (Occupied(door, level)) { door.phase = DoorState::Phase::Opening; sound(OPEN_SOUND, 0); }   // 0x292ec
+            else if (door.counter <= 0) { door.counter = 0; FinishClose(door); sound(THUD_SOUND, 0); }     // 0x2935c
             else if (door.progress > 0) { door.progress--; }
             break;
         }

@@ -117,30 +117,52 @@ namespace ALTEngine::Renderer
             const FrameOffset* offsets[4];
             size_t offsetCounts[4];
             const std::vector<uint16_t>* sequences[4];
+            // The .B16 section each state draws from, by the file's own section
+            // number (FUN_00019670 reads it from each section's F0nn name). The
+            // same as the state everywhere but PULSE.B16, whose sections run
+            // idle, grenade, firing, reload. -1 for none.
+            int sections[4];
+            // Each frame record's image within its section, where records share
+            // images (their data offsets repeat, FUN_000195bc): the smart gun
+            // fires on two images over four records, for one. nullptr = record
+            // i is image i.
+            const uint8_t* images[4];
         };
+
+        // The record -> image tables, from the records' data offsets.
+        inline constexpr uint8_t SHOTGUN_FIRING_IMAGES[] = { 0, 1, 2, 3, 4, 3, 2 };
+        inline constexpr uint8_t PULSERIFLE_RELOAD_IMAGES[] = { 0, 1, 2, 0 };
+        inline constexpr uint8_t SMARTGUN_FIRING_IMAGES[] = { 0, 1, 0, 1 };
+        inline constexpr uint8_t SMARTGUN_RELOAD_IMAGES[] = { 0, 1, 2, 0 };
+        inline constexpr uint8_t FLAMETHROWER_RELOAD_IMAGES[] = { 0, 1, 2, 1, 0 };
 
         inline const WeaponTables& For(int portWeaponIndex)
         {
             static const WeaponTables pistol{
                 { PISTOL_IDLE_OFFSETS, PISTOL_FIRING_OFFSETS, PISTOL_RELOAD_OFFSETS, nullptr },
                 { 1, 3, 3, 0 },
-                { &PISTOL_IDLE_SEQUENCE, &PISTOL_FIRING_SEQUENCE, &PISTOL_RELOAD_SEQUENCE, nullptr } };
+                { &PISTOL_IDLE_SEQUENCE, &PISTOL_FIRING_SEQUENCE, &PISTOL_RELOAD_SEQUENCE, nullptr },
+                { 0, 1, 2, -1 }, { nullptr, nullptr, nullptr, nullptr } };
             static const WeaponTables shotgun{
                 { SHOTGUN_IDLE_OFFSETS, SHOTGUN_FIRING_OFFSETS, nullptr, nullptr },
                 { 1, 7, 0, 0 },
-                { &SHOTGUN_IDLE_SEQUENCE, &SHOTGUN_FIRING_SEQUENCE, nullptr, nullptr } };
+                { &SHOTGUN_IDLE_SEQUENCE, &SHOTGUN_FIRING_SEQUENCE, nullptr, nullptr },
+                { 0, 1, -1, -1 }, { nullptr, SHOTGUN_FIRING_IMAGES, nullptr, nullptr } };
             static const WeaponTables flame{
                 { FLAMETHROWER_IDLE_OFFSETS, FLAMETHROWER_FIRING_OFFSETS, FLAMETHROWER_RELOAD_OFFSETS, nullptr },
                 { 1, 1, 5, 0 },
-                { &FLAMETHROWER_IDLE_SEQUENCE, &FLAMETHROWER_FIRING_SEQUENCE, &FLAMETHROWER_RELOAD_SEQUENCE, nullptr } };
+                { &FLAMETHROWER_IDLE_SEQUENCE, &FLAMETHROWER_FIRING_SEQUENCE, &FLAMETHROWER_RELOAD_SEQUENCE, nullptr },
+                { 0, 1, 2, -1 }, { nullptr, nullptr, FLAMETHROWER_RELOAD_IMAGES, nullptr } };
             static const WeaponTables pulse{
                 { PULSERIFLE_IDLE_OFFSETS, PULSERIFLE_FIRING_OFFSETS, PULSERIFLE_RELOAD_OFFSETS, PULSERIFLE_GRENADE_OFFSETS },
                 { 1, 3, 4, 2 },
-                { &PULSERIFLE_IDLE_SEQUENCE, &PULSERIFLE_FIRING_SEQUENCE, &PULSERIFLE_RELOAD_SEQUENCE, &PULSERIFLE_GRENADE_SEQUENCE } };
+                { &PULSERIFLE_IDLE_SEQUENCE, &PULSERIFLE_FIRING_SEQUENCE, &PULSERIFLE_RELOAD_SEQUENCE, &PULSERIFLE_GRENADE_SEQUENCE },
+                { 0, 2, 3, 1 }, { nullptr, nullptr, PULSERIFLE_RELOAD_IMAGES, nullptr } };
             static const WeaponTables smart{
                 { SMARTGUN_IDLE_OFFSETS, SMARTGUN_FIRING_OFFSETS, SMARTGUN_RELOAD_OFFSETS, nullptr },
                 { 1, 4, 4, 0 },
-                { &SMARTGUN_IDLE_SEQUENCE, &SMARTGUN_FIRING_SEQUENCE, &SMARTGUN_RELOAD_SEQUENCE, nullptr } };
+                { &SMARTGUN_IDLE_SEQUENCE, &SMARTGUN_FIRING_SEQUENCE, &SMARTGUN_RELOAD_SEQUENCE, nullptr },
+                { 0, 1, 2, -1 }, { nullptr, SMARTGUN_FIRING_IMAGES, SMARTGUN_RELOAD_IMAGES, nullptr } };
 
             switch (portWeaponIndex)
             {

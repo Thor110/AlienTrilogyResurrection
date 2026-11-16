@@ -176,7 +176,7 @@ TEST_CASE("Inventory: an empty weapon switches to the best one that can still fi
     CHECK_EQ(inv.BestOtherSelectable(0), -1);
 }
 
-TEST_CASE("WeaponSystem: the switch lowers and raises 0x10 a tick")
+TEST_CASE("WeaponSystem: the switch lowers and raises 0x10 a pass, swapping on the 9th (0x3f0bc)")
 {
     namespace WS = ALTEngine::Screens::WeaponSystem;
     WS::SwitchAnimation anim;
@@ -184,10 +184,14 @@ TEST_CASE("WeaponSystem: the switch lowers and raises 0x10 a tick")
     int swapped = -1, ticks = 0;
     while (swapped < 0 && ticks < 20) { swapped = anim.Tick(); ++ticks; }
     CHECK_EQ(swapped, 2);
-    CHECK_EQ(ticks, 8);
+    CHECK_EQ(ticks, 9);
     CHECK_EQ(anim.Offset(), 0x80);
+    CHECK(anim.Busy());
     anim.Tick();
     CHECK_EQ(anim.Offset(), 0x70);
+    while (anim.Busy() && ticks < 40) { anim.Tick(); ++ticks; }
+    CHECK_EQ(ticks, 9 + 8 - 1);   // idle on the 17th pass (the loop counted from the 10th)
+    CHECK_EQ(anim.Offset(), 0);
 }
 
 TEST_CASE("Pickups: an item the player has no room for is left where it is")

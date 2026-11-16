@@ -651,6 +651,51 @@ Left from that audit, to look at:
 10. The walk view is chosen a tick late; a hug's landing spot can be up to 0x200 off; whether the egg's
     hugger inherits the egg's end bit is unsure.
 
+### Feel audit, round 3 (zip 166, v0.9.9)
+Six agents compared the original with the port for what makes play feel off: timing and frame rate, the
+player's movement, creature physics (and L232's pit), creature decisions, weapons and sound, and the world.
+Fixed in zip 166, each checked in the code: falling and climbing (Game/PlayerFall.h, 0x40040/0x3eafc/0x3ed70)
+with landing damage; the mover's reference height is the floor before the move; no movement while dying;
+the ramp pitch windows in the port's yaw; mouse turning drawn once; every one-shot sound flushed (SDL3 kept a
+finished sound "playing" - the smart gun's lost report, random missing sounds, the flamethrower's loop); the
+weapons' frame -> image maps and PULSE.B16's section order (WeaponData.h); the first animation step in
+PlayState (FUN_000400fc) and cues held until played; the weapon switch every pass, 9 down + 8 up, no firing
+while busy; the lamp's sound on a general voice; the walk view picked after the turn (Agent::pickView); no
+node scatter for a near or far node; the creatures' climb and headroom from their own Y and the original's
+spread test; their timers in every state; the queen's cone; Hard's revival of bodies far off (0x3431b); doors'
+sounds and their 0x200 noise; light modes 2, 3 and 5 and the unarmed reload; lights 0 and 1 outside the
+flash; "lift activated" every time; tracker blips on cells; flame/jet flicker per tick; triggers and pickups
+at most once per tick; bots at the players' rate.
+
+**L232's pit.** The alien that rose to the walkway did so by the original's own arithmetic: a step refused by a
+side probe is clamped from the lead probe's cell (FUN_000315b4 / FUN_00031ab8), which can push a creature back
+across into a cell no probe tested, and the next tick stands it on that cell's floor - here the bridge gap
+(cells 22-24, 29-32) beside a walkway at 0x600. Simulated on L232's data, it happens with the port's mover and
+with an original-exact one alike (about every 5-6 minutes of steady traffic through the gap). Not changed:
+to settle, stand at (21,30) or (25,30) in DOSBox while dogs run through the gap. If it never happens there, a
+guard (keep the old position when the clamped cell's floor is over 0x100 above the creature) is the fix.
+
+Left from that audit, to look at:
+1. **Weapon pacing - done (zip 167, Edward):** the default is now 2, the original under -so (the weapon every
+   pass); it was 3, two passes of three, firing and the weapon's animation at 2/3 of the world's speed.
+2. Gunners (types 0xb-0xe): CHASE falls back to ATTACK when all pickers fail; ATTACK fires on the ray with no
+   reach test in any mode below 3; the end of ACT repositions from the middle band; mode-0 contact uses the
+   ground line (0x344c2, 0x3477d, 0x34930, 0x34534).
+3. Rounds hit before creatures move in a pass (task priority 0x28 before 0x32): the port runs creatures first,
+   so every flinch, push and death lands a tick late.
+4. The egg's hit by its phase, and its recovery waiting out the hit cooldown (0x311f7, 0x357ea).
+5. The hugger's landing spot after a hug: random within +-0x200 of the player, retried until clear
+   (0x3093d-0x30a28; the constants exist, unused).
+6. The light flash is lost on a frame with two or more ticks (below about 35 fps); the eye's bob, pitch and the
+   world's objects aren't interpolated between ticks.
+7. The player's step: the original floors each part of the move separately (sar 12); the port rounds the sum.
+   The shot fires before the move in the original, after it in the port.
+8. Switches: a thrown switch flashes for 40 passes before it settles, the idle blink is 17 passes per switch on
+   its own clock, and 0x5c plays twice (0x3846c, 0x380f4).
+9. Speed Compensation (Modern) runs lights, animators, messages and switch timers at half rate; the noise timer
+   runs every tick (the original once a frame).
+10. The seismic charge and grenade aren't tied to the weapon pass; the reload clip sounds look port-own.
+
 ## 3. Code health
 
 Done in zip 81:

@@ -33,6 +33,7 @@
 #include "../Game/MultiplayerSpawn.h"
 #include "../Game/Lifts.h"
 #include "../Game/PlayerMover.h"
+#include "../Game/PlayerFall.h"
 #include "../Game/Triggers.h"
 #include "SaveSlotScreen.h"
 #include "LevelSnapshot.h"
@@ -669,6 +670,11 @@ namespace ALTEngine::Screens
         bool zoneCulling = false;
         std::vector<int> markedCreatureBuffer;
         float pendingMouseYaw = 0.0f;   // angle units, accumulated between player ticks
+        int tickMouseYaw = 0;
+        // The lamp's or goggles' full-on sound, held on a general voice
+        // (FUN_0003cfd0 -> FUN_00040b2c with EBX 0x1fff, 0x29e09) so the weapon's
+        // cues on the player's channel neither cut it nor are cut by it.
+        int lightFullSound = -1;           // the mouse turn the last tick took in (drawn in full, not blended)
         float pendingMouseY = 0.0f;     // raw mouse Y, drives the original's mouse-forward
         bool playerCamSeeded = false;
 
@@ -678,10 +684,22 @@ namespace ALTEngine::Screens
         // Without this, movement on a 60Hz+ display stepped visibly at the
         // 30Hz tick rate.
         float prevCamX = 0.0f, prevCamZ = 0.0f, prevCamYaw = 0.0f;
+        int prevBodyY = 0;   // playerBodyY at the last tick's start, for the drawn view
 
         // The player's Y in the original's sense (DAT_000b0a4a): the floor under
         // them. The camera sits EYE_HEIGHT above this.
         float playerFeetY = 0.0f;
+        // The same height as the original keeps it, a whole number moved once
+        // a tick: it falls and climbs to the floor 0x100 a pass (Game::PlayerFall)
+        // rather than standing on it at once. playerFeetY follows it each frame.
+        int playerBodyY = 0;
+        ALTEngine::Game::PlayerFall::State playerFall;
+        // Puts the player on the floor at `feet`, standing (a start, a respawn).
+        auto standAt = [&](float feet) {
+            playerFeetY = feet;
+            playerBodyY = static_cast<int>(std::lround(feet));
+            playerFall = ALTEngine::Game::PlayerFall::State{};
+        };
         // Multiplayer: where a player killed comes back (the level's start),
         // and who last hit us, for the frag.
         float spawnX = 0.0f, spawnZ = 0.0f, spawnFeetY = 0.0f, spawnYaw = 0.0f;
@@ -952,6 +970,7 @@ namespace ALTEngine::Screens
                                    level,
                                    ToGridSpaceX(camera.x, originX),
                                    ToGridSpaceZ(camera.z, originZ));
+                    standAt(playerFeetY);
                     camera.y = playerFeetY + EYE_HEIGHT;
                     camera.fovYRadians = ALTEngine::Screens::PlayerCamera::VIEW_FOV_Y_RADIANS;
 
@@ -986,7 +1005,7 @@ namespace ALTEngine::Screens
                         float sx = 0, sz = 0, sy = 0;
                         if (spawnAtNode(true, sx, sz, sy))
                         {
-                            camera.x = sx; camera.z = sz; playerFeetY = sy;
+                            camera.x = sx; camera.z = sz; standAt(sy);
                             camera.y = playerFeetY + EYE_HEIGHT;
                         }
                     }
@@ -1700,12 +1719,14 @@ namespace ALTEngine::Screens
                 hudState.dead = false;
                 hudState.health = 100;
                 camera.x = spawnX; camera.z = spawnZ; camera.yaw = spawnYaw;
-                playerFeetY = spawnFeetY;
+                standAt(spawnFeetY);
+                // Whatever pushed the dead player is spent.
+                knockbackStrength = 0;
                 // Co-operative: back at the level's start.
                 if (!session->Coop())
                 {
                     float sx = 0, sz = 0, sy = 0;
-                    if (spawnAtNode(false, sx, sz, sy)) { camera.x = sx; camera.z = sz; playerFeetY = sy; }
+                    if (spawnAtNode(false, sx, sz, sy)) { camera.x = sx; camera.z = sz; standAt(sy); }
                 }
                 camera.y = playerFeetY + EYE_HEIGHT;
                 playerCam.yaw = static_cast<int>(std::lround(camera.yaw * (4096.0f / 6.28318530718f))) & 0xfff;
@@ -2483,7 +2504,10 @@ namespace ALTEngine::Screens
                     };
 
                     const B::Skill skill = B::SkillFor(session->BotSkill());
-                    const double botTick = 1.0 / ALTEngine::Screens::PlayerCamera::TICK_HZ;
+                    // At the players' own rate: a pass is two timer ticks by
+                    // default (speedCompensationOff), and bots ticking every
+                    // timer tick ran, turned and fired twice as fast as players.
+                    const double botTick = (speedCompensationOff ? 2.0 : 1.0) / ALTEngine::Screens::PlayerCamera::TICK_HZ;
                     botTickAccumulator = std::min(botTickAccumulator + static_cast<double>(dt), 0.25);
                     while (botTickAccumulator >= botTick)
                     {
@@ -2717,6 +2741,7 @@ namespace ALTEngine::Screens
                     prevCamX = camera.x;
                     prevCamZ = camera.z;
                     prevCamYaw = PC::ToRadians(playerCam.viewYaw);
+                    prevBodyY = playerBodyY;
                     prevCamValid = true;
 
                     PC::Input pcInput;
@@ -2790,6 +2815,7 @@ namespace ALTEngine::Screens
                     // frame owes so a single large delta is not applied twice.
                     pcInput.mouseYaw = static_cast<int>(std::lround(pendingMouseYaw));
                     pendingMouseYaw -= static_cast<float>(pcInput.mouseYaw);
+                    tickMouseYaw = pcInput.mouseYaw;
                     // Mouse-forward is the original's scheme and only makes
                     // sense when the mouse is not being used to aim.
                     pcInput.mouseForward = freeLook ? 0 : static_cast<int>(std::lround(pendingMouseY));
@@ -2841,11 +2867,59 @@ namespace ALTEngine::Screens
                         PC::Tick(playerCam, pcInput, cellAttribute, onHazardCell, cameraSway, freeLook);
                     }
 
+                    // Falling and climbing (Game::PlayerFall): the task's own
+                    // step on the height comes before the move (0x3eb39,
+                    // 0x3edac). A fall that lands exactly on the floor hurts.
+                    namespace PF = ALTEngine::Game::PlayerFall;
+                    const bool fallActive = levelReady && !playerDead && !testingGhost;
+                    const bool walkedTask = playerFall.task == PF::Task::Walk;
+                    if (fallActive && !walkedTask)
+                    {
+                        const bool wasFalling = playerFall.task == PF::Task::Fall;
+                        const int drop = PF::StepBeforeMove(playerFall, playerBodyY);
+                        if (wasFalling && playerFall.task == PF::Task::Walk)
+                        {
+                            // Not while the shield runs (DAT_000b0ae4, 0x3ebaa).
+                            // Straight off health: armour takes none of it.
+                            if (hudState.terrainShield == 0)
+                            {
+                                const int damage = PF::LandingDamage(drop);
+                                if (damage != 0 && !cheatMaximumHealth)
+                                {
+                                    hudState.health = damage < 0 ? int16_t{ 0 }
+                                                                 : static_cast<int16_t>(hudState.health - damage);
+                                }
+                                if (damage != 0)
+                                {
+                                    hudState.damageCooldown = static_cast<int16_t>(hudState.DamageCooldown());
+                                }
+                                if (hudState.health <= 0 && !cheatMaximumHealth)
+                                {
+                                    hudState.health = 0;
+                                    hudState.damageCooldown = static_cast<int16_t>(hudState.DamageCooldown());
+                                    checkPlayerDeath();
+                                }
+                            }
+                            // Landing on an attribute 8 or 9 cell (0x3ecbf).
+                            if (cellAttribute == 8 || cellAttribute == 9)
+                            {
+                                ALTEngine::Audio::SfxPlayer::PlaySlot(PF::LANDING_SOUND, digits.c_str(), cdDirectory);
+                            }
+                        }
+                    }
+                    // The height the move starts from, for the floor hazards
+                    // ("Y did not change this pass").
+                    const int bodyYBeforeMove = playerBodyY;
+
                     // The original's own mover (Game::PlayerMover, FUN_0003dff0):
                     // the tick's step, plus a slippery ramp's push and any
-                    // knockback, x first and then z.
+                    // knockback, x first and then z. A dying player's task
+                    // (FUN_0003ee4c) never calls it: the killing blow's knockback
+                    // and a ramp's push no longer carry the body along.
                     float stepX = 0.0f, stepZ = 0.0f;
-                    PC::MovementStep(playerCam, stepX, stepZ);
+                    if (playerDead) { knockbackStrength = 0; }
+                    else { PC::MovementStep(playerCam, stepX, stepZ); }
+                    if (!playerDead)
                     {
                         namespace PM = ALTEngine::Game::PlayerMover;
                         int pushX = 0, pushZ = 0;
@@ -2914,7 +2988,10 @@ namespace ALTEngine::Screens
                             };
                             const int gx = ToGridSpaceX(camera.x, originX);
                             const int gz = ToGridSpaceZ(camera.z, originZ);
-                            const int gy = static_cast<int>(std::lround(playerFeetY));
+                            // The reference height is the floor under the player
+                            // before the move (0x3e1b8), not their own Y, which
+                            // may be part way through a fall.
+                            const int gy = static_cast<int>(ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz));
                             const int nx = PM::MoveX(mw, gx, gz, gy, static_cast<int>(std::lround(stepX)));
                             const int nz = PM::MoveZ(mw, nx, gz, gy, static_cast<int>(std::lround(stepZ)));
                             // Exactly where the mover put the player. Keeping a
@@ -2939,7 +3016,18 @@ namespace ALTEngine::Screens
                         const int fgx = ToGridSpaceX(camera.x, originX);
                         const int fgz = ToGridSpaceZ(camera.z, originZ);
                         const float floorNow = ALTEngine::Formats::FindFloorHeightGridSpace(level, fgx, fgz);
-                        if (floorNow == playerFeetY && !testingGhost)
+                        // The move's end, every task (0x4008c, 0x3ed13, 0x3edf2):
+                        // a floor below starts a fall, one above a climb.
+                        if (fallActive)
+                        {
+                            PF::AfterMove(playerFall, playerBodyY, static_cast<int>(floorNow), walkedTask);
+                        }
+                        else if (testingGhost || !levelReady)
+                        {
+                            playerBodyY = static_cast<int>(floorNow);
+                            playerFall = PF::State{};
+                        }
+                        if (static_cast<float>(bodyYBeforeMove) == floorNow && !playerDead && !testingGhost)
                         {
                             if (const auto* underfoot = ALTEngine::Formats::CellAt(level, fgx >> 9, fgz >> 9))
                             {
@@ -2979,8 +3067,9 @@ namespace ALTEngine::Screens
                     if (firePressed && testingFaceIndex) { LogShotFace(level, digits, pickedFace); }   // the face logger, see LogShotFace
 
                     // The swap happens at the bottom of the lower, out of sight.
-                    // On the weapon's own (drawing-pass) rate, like its animation.
-                    const int swapTo = weaponPass ? weaponSwitch.Tick() : -1;
+                    // Every pass: FUN_0003efcc moves it, not the weapon's own
+                    // drawing pass (0x3f0bc).
+                    const int swapTo = weaponSwitch.Tick();
                     if (swapTo >= 0)
                     {
                         const int equipped = inventory.Equip(swapTo);
@@ -3018,7 +3107,9 @@ namespace ALTEngine::Screens
                     // on the drawing pass); a press in between is kept.
                     if (firePressed) { firePressPending = true; }
                     const bool onPress = WS::Def(weaponRuntime.weapon).primary == WS::FIRE_ON_PRESS;
-                    const bool triggerActive = weaponPass && (onPress ? firePressPending : fireHeld);
+                    // Not while the weapon is being lowered or raised (states
+                    // 4 and 5 can't fire).
+                    const bool triggerActive = weaponPass && !weaponSwitch.Busy() && (onPress ? firePressPending : fireHeld);
                     if (weaponPass) { firePressPending = false; }
 
                     if (triggerActive && WS::TryPrimaryFire(weaponRuntime, inventory))
@@ -3194,7 +3285,7 @@ namespace ALTEngine::Screens
                     // and is switched for the best one left (FUN_00038e64).
                     {
                         const int best = inventory.BestOtherSelectable(selectedWeapon);
-                        WS::UpdateIdle(weaponRuntime, inventory, best >= 0);
+                        if (!weaponSwitch.Busy()) { WS::UpdateIdle(weaponRuntime, inventory, best >= 0); }
                         if (weaponRuntime.state == WS::STATE_EMPTY && best >= 0 && !weaponSwitch.Busy())
                         {
                             weaponSwitch.Begin(best);
@@ -3303,7 +3394,7 @@ namespace ALTEngine::Screens
                     // Fire 2 with anything but the pulse rifle throws a seismic
                     // charge (FUN_0003d794): the noise 0x280 and sound 9, with no
                     // change to the weapon's own state. It never did anything.
-                    if (altFirePressed
+                    if (altFirePressed && !weaponSwitch.Busy()
                         && hudState.currentWeapon != ALTEngine::Renderer::HUD_GRENADE_WEAPON
                         && weaponRuntime.state == WS::STATE_IDLE
                         && inventory.seismicCharges > 0)
@@ -3314,7 +3405,7 @@ namespace ALTEngine::Screens
                         throwExplosive(true);
                     }
 
-                    if (altFirePressed
+                    if (altFirePressed && !weaponSwitch.Busy()
                         && hudState.currentWeapon == ALTEngine::Renderer::HUD_GRENADE_WEAPON
                         && weaponRuntime.state == WS::STATE_IDLE
                         && inventory.pulseRifle.grenades > 0)
@@ -3484,12 +3575,15 @@ namespace ALTEngine::Screens
                             return static_cast<int>((creatureRandom >> 16) & 0xffff);
                         };
 
-                        auto enemyAxisClear = [&](float x, float z, bool alongX, float velocity, float halfHeight, bool hanging) {
+                        auto enemyAxisClear = [&](float x, float z, bool alongX, float velocity, float halfHeight, bool hanging,
+                                                  float bodyY) {
                             namespace EB = ALTEngine::Screens::EnemyBehaviour;
-                            // FUN_000315f0's height tests run against the floor
-                            // the creature stands on now.
-                            const float standing = ALTEngine::Formats::FindFloorHeightGridSpace(
-                                level, ToGridSpaceX(x, originX), ToGridSpaceZ(z, originZ));
+                            // FUN_000315f0's height tests run against the
+                            // creature's own height (BX): after this tick's
+                            // vertical step, floor + 0x20 when standing
+                            // (0x3174a, 0x31998). So it climbs 0x120 on the
+                            // ground, and its headroom counts the 0x20.
+                            const float standing = bodyY;
                             // A creature on the ceiling measures the ceiling
                             // instead (FUN_000315f0's +0x6c bit 8 arm): no fall
                             // of it by more than 0x200, the probes within 0x200
@@ -3500,7 +3594,7 @@ namespace ALTEngine::Screens
                                 const auto* here = ALTEngine::Formats::CellAt(level, ToGridSpaceX(x, originX) >> 9, ToGridSpaceZ(z, originZ) >> 9);
                                 standingCeiling = here ? static_cast<float>(here->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT : 0.0f;
                             }
-                            float highest = -1e9f, lowest = 1e9f;
+                            float probeHeight[3] = { 0.0f, 0.0f, 0.0f };
                             const float lead = (velocity >= 0.0f) ? EB::MOVE_PROBE_LEAD
                                                                   : -EB::MOVE_PROBE_LEAD;
                             // The probes lead from where the step would put the
@@ -3546,23 +3640,27 @@ namespace ALTEngine::Screens
                                 if (hanging)
                                 {
                                     if (ceilingHere < standingCeiling && standingCeiling - ceilingHere > EB::CEILING_STEP) { return false; }
-                                    highest = std::max(highest, ceilingHere);
-                                    lowest = std::min(lowest, ceilingHere);
+                                    probeHeight[side + 1] = ceilingHere;
                                     continue;
                                 }
                                 if (floorHere > standing && floorHere - standing > EB::CREATURE_STEP_UP) { return false; }
                                 if (ceilingHere < standing + halfHeight) { return false; }
-                                highest = std::max(highest, floorHere);
-                                lowest = std::min(lowest, floorHere);
+                                probeHeight[side + 1] = floorHere;
 
                                 // (The map's own +0x0c bytes are editor leftovers
                                 // and the loader clears them; the marks tested
                                 // above are the runtime ones - objects, the
                                 // player and creatures.)
                             }
-                            // Nor may the three probes disagree by more than 0x100
-                            // - the leading edge must be level enough to stand on.
-                            if (highest - lowest > (hanging ? EB::CEILING_STEP : EB::CREATURE_STEP_UP)) { return false; }
+                            // Nor may the leading edge be too uneven: the higher of
+                            // the first two probes against the third, more than
+                            // 0x100 apart (0x200 on the ceiling) refuses
+                            // (0x31922-0x3196e; the lower of the first two is
+                            // never used). It used to compare the highest and
+                            // lowest of all three, refusing steps the original
+                            // takes along a drop on the - side.
+                            const float spread = std::fabs(std::max(probeHeight[0], probeHeight[1]) - probeHeight[2]);
+                            if (spread > (hanging ? EB::CEILING_STEP : EB::CREATURE_STEP_UP)) { return false; }
                             return true;
                         };
 
@@ -3718,6 +3816,18 @@ namespace ALTEngine::Screens
                             const bool wasAlive = enemy.alive;
                             ALTEngine::Screens::Enemies::Tick(enemy, aiX, aiFeet, aiZ,
                                                               aiWorld, weaponRuntime.noise > 0);
+                            // Back from the dead (Hard): an acid cell under the
+                            // body is cleared (0x3435d).
+                            if (enemy.revived)
+                            {
+                                enemy.revived = false;
+                                const int rc = ALTEngine::Formats::CellIndex(level,
+                                    ToGridSpaceX(enemy.x, originX) >> 9, ToGridSpaceZ(enemy.z, originZ) >> 9);
+                                if (rc >= 0 && level.collisionGrid[static_cast<size_t>(rc)].attribute == 0x0c)
+                                {
+                                    level.collisionGrid[static_cast<size_t>(rc)].attribute = 0;
+                                }
+                            }
                             // A creature's death counts toward the assessment
                             // (FUN_00030b04), whatever killed it.
                             if (wasAlive && !enemy.alive
@@ -3961,12 +4071,17 @@ namespace ALTEngine::Screens
                                 const float startFloor = ALTEngine::Formats::FindFloorHeightGridSpace(
                                     level, ToGridSpaceX(enemy.x, originX), ToGridSpaceZ(enemy.z, originZ));
                                 const bool crawler = enemy.ai.ceilingCrawler;
+                                // The creature's height for the tests: the
+                                // original's vertical step comes first in the
+                                // mover (0x31f7b), standing it at the old floor
+                                // + 0x20, or moving it by its vertical speed.
+                                const float bodyY = enemy.vy == 0.0f ? startFloor + EB::STAND_CLEARANCE : enemy.y + enemy.vy;
                                 if (enemy.stepX != 0.0f)
                                 {
                                     const int gx = ToGridSpaceX(enemy.x, originX);
                                     const int step = static_cast<int>(std::lround(enemy.stepX));
                                     int to = 0;
-                                    if (enemyAxisClear(enemy.x, enemy.z, true, enemy.stepX, stepHalfHeight, enemy.onCeiling))
+                                    if (enemyAxisClear(enemy.x, enemy.z, true, enemy.stepX, stepHalfHeight, enemy.onCeiling, bodyY))
                                     {
                                         to = EB::LedgeStep(gx + step, step, startFloor,
                                             ALTEngine::Formats::FindFloorHeightGridSpace(level, gx + step, ToGridSpaceZ(enemy.z, originZ)),
@@ -3980,7 +4095,7 @@ namespace ALTEngine::Screens
                                     const int gz = ToGridSpaceZ(enemy.z, originZ);
                                     const int step = static_cast<int>(std::lround(enemy.stepZ));
                                     int to = 0;
-                                    if (enemyAxisClear(enemy.x, enemy.z, false, enemy.stepZ, stepHalfHeight, enemy.onCeiling))
+                                    if (enemyAxisClear(enemy.x, enemy.z, false, enemy.stepZ, stepHalfHeight, enemy.onCeiling, bodyY))
                                     {
                                         to = EB::LedgeStep(gz + step, step, startFloor,
                                             ALTEngine::Formats::FindFloorHeightGridSpace(level, ToGridSpaceX(enemy.x, originX), gz + step),
@@ -4150,7 +4265,8 @@ namespace ALTEngine::Screens
                             if (inventory.TickLight())
                             {
                                 ModelRenderer::SetLevelLightEquipment(cacheKey, 0);
-                                ALTEngine::Audio::SfxPlayer::StopPlayerSlot(LIGHT_FULL_SOUND, digits.c_str(), cdDirectory);
+                                ALTEngine::Audio::SfxPlayer::StopLoop(lightFullSound);
+                                lightFullSound = -1;
                                 ALTEngine::Audio::SfxPlayer::PlaySlot(LIGHT_OFF_SOUND, digits.c_str(), cdDirectory);
                             }
                             hudMessages.Tick();
@@ -4999,10 +5115,14 @@ namespace ALTEngine::Screens
                     // cue as it steps the animation: the cue stays up until the
                     // next step, so reading it every player tick played it two
                     // or three times over, each one now cutting off the last.
-                    if (weaponPass && weaponView.SoundCued())
+                    // Each cue once, as soon as it is raised: a state's first
+                    // step (WeaponView::PlayState) can raise it before the
+                    // weapon pass's own step.
+                    if (weaponView.SoundCued())
                     {
                         ALTEngine::Audio::SfxPlayer::PlayPlayerSlot(
                             weaponView.CuedSoundId(), digits.c_str(), cdDirectory);
+                        weaponView.ConsumeCue();
                     }
 
                     // Footsteps, each half-stride of the bob phase.
@@ -5066,7 +5186,15 @@ namespace ALTEngine::Screens
                     // runs it, a failed chain tries again next tick, and the
                     // use key throws its switches and opens its doors.
                     const bool useHeldForTrigger = keys[keyBindings.GetKey(InputAction::Use)];
-                    triggers.OnPlayerTick(playerLastTrigger, cellIndex, useHeldForTrigger, triggerHandlers);
+                    // Once for a frame that ran a tick, never more often than
+                    // the ticks: run every frame, a chain that failed was tried
+                    // again at the frame rate, and the commands before the one
+                    // that failed (a light, a texture, a spawn count) ran several
+                    // times a tick at 144 fps.
+                    if (playerTicksThisFrame > 0)
+                    {
+                        triggers.OnPlayerTick(playerLastTrigger, cellIndex, useHeldForTrigger, triggerHandlers);
+                    }
 
                     // Collection, as the pickup task does it (0x3c8d0): an item
                     // within 0x300 of the player on both ground axes and 0x400
@@ -5075,6 +5203,9 @@ namespace ALTEngine::Screens
                     // (Pickups::Wanted); otherwise it stays where it is.
                     for (auto& live : livePickups)
                     {
+                        // As often as the ticks, and not while dying (0x3c5d7:
+                        // refused while cc0 has 0x20, 0x40 or 0x80000).
+                        if (playerTicksThisFrame == 0 || playerDead) { break; }
                         if (live.collected || live.contained || live.waitingOnTrigger || live.falling) { continue; }
                         if (live.placedIndex >= placedObjects.size()) { continue; }
                         {
@@ -5156,7 +5287,8 @@ namespace ALTEngine::Screens
                             ModelRenderer::TickLevelLights(cacheKey, SDL_rand(256));
                             if (ModelRenderer::TakeLevelLightFull(cacheKey))
                             {
-                                ALTEngine::Audio::SfxPlayer::PlayPlayerSlot(LIGHT_FULL_SOUND, digits.c_str(), cdDirectory);
+                                ALTEngine::Audio::SfxPlayer::StopLoop(lightFullSound);
+                                lightFullSound = ALTEngine::Audio::SfxPlayer::StartLoop(LIGHT_FULL_SOUND, 1.0f, digits.c_str(), cdDirectory);
                             }
 
                             hudState.Tick();
@@ -5249,7 +5381,10 @@ namespace ALTEngine::Screens
                         {
                             namespace LF = ALTEngine::Game::Lifts;
                             const auto liftResult = LF::Tick(lifts[li], level);
-                            if (liftResult.firstActivation) { hudMessages.ShowLiftActivated(language); }
+                            // Every time it sets off from rest, in a game on
+                            // its own (0x42267-0x42275; only the count in
+                            // DAT_000b0b2a is first-time only).
+                            if (liftResult.startedByTrigger && !session) { hudMessages.ShowLiftActivated(language); }
                             if (liftResult.started || liftResult.stopped)
                             {
                                 // From the lift, louder when the player set it
@@ -5285,6 +5420,18 @@ namespace ALTEngine::Screens
                             case ALTEngine::Game::DoorNotice::LiftActivated: hudMessages.ShowLiftActivated(language); break;
                             case ALTEngine::Game::DoorNotice::None: break;
                             }
+                            // Its sounds, from the door, through the general
+                            // voices (FUN_00040c38's modes 1 opening, 0 closing).
+                            if (ds.sound >= 0)
+                            {
+                                ALTEngine::Audio::SfxPlayer::PlaySlotAtVolume(
+                                    ds.sound,
+                                    ALTEngine::Audio::SfxPlayer::DistanceVolume(ds.soundMode, ds.worldX - camera.x, ds.worldZ - camera.z),
+                                    digits.c_str(), cdDirectory);
+                            }
+                            // A door setting off from shut is a noise creatures
+                            // hear, as a shot is (0x29243: a store, not a raise).
+                            if (ds.madeNoise) { weaponRuntime.noise = 0x200; }
 
                             const float y = ds.MeshY();
                             for (int i = 0; i < ds.placedCount; ++i)
@@ -5323,14 +5470,12 @@ namespace ALTEngine::Screens
                     }
                 }
 
-                // Follow the floor. No gravity or fall handling yet - the
-                // camera is simply pinned to the surface underfoot.
+                // The player's height: the tick's own (playerBodyY), which
+                // falls and climbs to the floor a step a pass as the original's
+                // does (Game::PlayerFall).
                 if (levelReady)
                 {
-                    float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(
-                        level,
-                        ToGridSpaceX(camera.x, originX),
-                        ToGridSpaceZ(camera.z, originZ));
+                    const float floorY = static_cast<float>(playerBodyY);
                     // Head bob rides on top of the eye height. It only ever
                     // dips - the original's vertical term is
                     // min(sin p, sin p+180), which is -|sin p| - so the camera
@@ -5396,9 +5541,20 @@ namespace ALTEngine::Screens
                 if (levelReady)
                 {
                     namespace P = ALTEngine::Screens::Particles;
-                    // The jets pick a frame at random each frame (FUN_000100ec).
-                    static uint32_t ventFlicker = 1;
-                    for (const P::Particle& particle : particles.All())
+                    // The jets and flames pick a frame at random each frame
+                    // (FUN_000100ec) - each original frame, which is each pass:
+                    // here a draw per particle per tick, so at 144 fps they
+                    // flicker no faster than the original's. (Picked every
+                    // drawn frame, they flickered four times as fast.)
+                    const auto& allParticles = particles.All();
+                    const auto tickRandom = [&](const P::Particle& p) {
+                        uint32_t h = static_cast<uint32_t>(&p - allParticles.data()) * 2654435761u
+                                   ^ (static_cast<uint32_t>(logicTick) * 0x9e3779b9u);
+                        h = h * 1103515245u + 12345u;
+                        h ^= h >> 15;
+                        return static_cast<int>((h >> 16) & 0x7fff);
+                    };
+                    for (const P::Particle& particle : allParticles)
                     {
                         if (!particle.alive) { continue; }
                         if (particle.type == P::TYPE_CASING_A || particle.type == P::TYPE_CASING_B) { continue; }
@@ -5445,8 +5601,7 @@ namespace ALTEngine::Screens
                             if (distance < 0x200 || distance > 0x1800) { continue; }
                             const bool steam = particle.type == P::TYPE_VENT_STEAM_H || particle.type == P::TYPE_VENT_STEAM_V;
                             const bool vertical = particle.type == P::TYPE_VENT_STEAM_V || particle.type == P::TYPE_VENT_FLAME_V;
-                            ventFlicker = ventFlicker * 1103515245u + 12345u;
-                            const VS::Look look = VS::For(steam, vertical, particle.life, static_cast<int>(ventFlicker >> 16));
+                            const VS::Look look = VS::For(steam, vertical, particle.life, tickRandom(particle));
                             if (!explosions.UseRecord(look.record, spark, steam)) { continue; }
                             spark.halfWidth = look.halfWidth;
                             spark.halfHeight = look.halfHeight;
@@ -5478,8 +5633,7 @@ namespace ALTEngine::Screens
                             // A flickering sprite that swells with age
                             // (FUN_0002c94c; ExplosionGraphics::FlameSprites).
                             namespace FS = ALTEngine::Formats::ExplosionGraphics::FlameSprites;
-                            ventFlicker = ventFlicker * 1103515245u + 12345u;
-                            const FS::Look look = FS::For(particle.life, static_cast<int>(ventFlicker >> 16));
+                            const FS::Look look = FS::For(particle.life, tickRandom(particle));
                             if (!explosions.UseRecord(look.record, spark)) { continue; }
                             spark.halfWidth = spark.halfHeight = look.halfSize;
                             spark.halfBlend = true;   // fill 0x4b5cc: unshaded, half over the scene
@@ -5691,15 +5845,23 @@ namespace ALTEngine::Screens
                     const float alpha = std::clamp(playerTickAccumulator / tickLength, 0.0f, 1.0f);
                     view.x = prevCamX + (camera.x - prevCamX) * alpha;
                     view.z = prevCamZ + (camera.z - prevCamZ) * alpha;
+                    // A fall or climb steps 0x100 a tick; drawn, it moves
+                    // smoothly between the two.
+                    view.y -= static_cast<float>(playerBodyY - prevBodyY) * (1.0f - alpha);
 
                     // Yaw the short way round, plus whatever mouse turn has
                     // arrived since the last tick and not been simulated yet -
                     // so mouse look answers every frame rather than every tick.
                     constexpr float TWO_PI = 6.28318530718f;
-                    float turn = camera.yaw - prevCamYaw;
+                    // The mouse turn the last tick took in was drawn as it
+                    // arrived (as pending), so it is drawn in full here too,
+                    // not blended in again from the tick's start: that drew it
+                    // twice, the view running ahead and jumping back each tick.
+                    const float tickMouse = static_cast<float>(tickMouseYaw) * (TWO_PI / static_cast<float>(PC::ANGLE_UNITS));
+                    float turn = camera.yaw - prevCamYaw - tickMouse;
                     while (turn > TWO_PI * 0.5f) { turn -= TWO_PI; }
                     while (turn < -TWO_PI * 0.5f) { turn += TWO_PI; }
-                    view.yaw = prevCamYaw + turn * alpha
+                    view.yaw = prevCamYaw + tickMouse + turn * alpha
                              + pendingMouseYaw * (TWO_PI / static_cast<float>(PC::ANGLE_UNITS));
                 }
 

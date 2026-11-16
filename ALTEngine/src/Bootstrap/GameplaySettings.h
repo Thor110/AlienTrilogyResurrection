@@ -165,12 +165,16 @@ namespace ALTEngine::Bootstrap
     // frame, but not for the weapon, so the original's rate of fire followed
     // the frame rate of the machine. The port runs the weapon on a fixed
     // clock of this many interrupts instead, so it is the same at any frame
-    // rate. 2 is the original's design point (35 fps); the default, 3, is
-    // about 23 fps. Stored as "WeaponFrameInterrupts", 1 to 8.
+    // rate. 2 is the original's design point (35 fps), and the default: with
+    // the port's default timing (one pass every two interrupts, the original
+    // run with -so) the original's weapon runs every pass, and 2 is exactly
+    // that. (The default was 3, about 23 fps: firing and the weapon's
+    // animation ran at two thirds of the world's speed.) Stored as
+    // "WeaponFrameInterrupts", 1 to 8.
     class WeaponPacingSettings
     {
     public:
-        static constexpr int DEFAULT = 3;
+        static constexpr int DEFAULT = 2;
         static constexpr int MINIMUM = 1;
         static constexpr int MAXIMUM = 8;
 

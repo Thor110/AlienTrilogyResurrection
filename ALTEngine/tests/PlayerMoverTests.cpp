@@ -124,3 +124,42 @@ TEST_CASE("PlayerMover: walking into a wall at an angle slides along it at full 
     }
     CHECK_EQ(x, 0x800 - 201);
 }
+
+#include "Game/PlayerFall.h"
+
+TEST_CASE("PlayerFall: a fall of 0x800 takes 8 passes and lands hurt; overshooting the floor hurts nothing")
+{
+    namespace PF = ALTEngine::Game::PlayerFall;
+    PF::State s;
+    int y = 0x800;
+    PF::AfterMove(s, y, 0, true);          // walked off a ledge onto floor 0
+    CHECK(s.task == PF::Task::Fall);
+    CHECK_EQ(s.start, 0x800);
+    CHECK_EQ(y, 0x800);                     // put back: it falls a step a pass
+    int drop = 0, passes = 0;
+    while (s.task == PF::Task::Fall && passes < 20) { drop = PF::StepBeforeMove(s, y); ++passes; }
+    CHECK_EQ(passes, 8);
+    CHECK_EQ(y, 0);
+    CHECK_EQ(drop, 0x800);
+    CHECK_EQ(PF::LandingDamage(drop), 0xf);  // over 0x600
+
+    // A drop that isn't a whole number of steps steps past the floor: no hurt.
+    PF::State t;
+    int y2 = 0x880;
+    PF::AfterMove(t, y2, 0, true);
+    int last = -1;
+    while (t.task == PF::Task::Fall) { last = PF::StepBeforeMove(t, y2); }
+    CHECK_EQ(y2, 0);
+    CHECK_EQ(last, 0);
+
+    // Climbing: 0x100 a pass, held at the floor.
+    PF::State c;
+    int y3 = 0;
+    PF::AfterMove(c, y3, 0x180, true);
+    CHECK(c.task == PF::Task::Climb);
+    PF::StepBeforeMove(c, y3);
+    CHECK_EQ(y3, 0x100);
+    PF::StepBeforeMove(c, y3);
+    CHECK_EQ(y3, 0x180);
+    CHECK(c.task == PF::Task::Walk);
+}

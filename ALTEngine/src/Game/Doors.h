@@ -62,6 +62,15 @@ namespace ALTEngine::Game
         int placedCount = 0;
 
         float MeshY() const { return baseY + static_cast<float>(progress) * 32.0f; }
+
+        // The sound this tick's step makes, or -1 (FUN_00040c38 from the
+        // door's tasks): 0x2a as it sets off, 0x2b as it stops; mode 1 opening,
+        // mode 0 closing. Set by Doors::Tick, read by the caller.
+        int sound = -1;
+        int soundMode = 0;
+        // Set on the tick it starts to open from shut: the closed task makes
+        // noise 0x200 then (0x29243), which wakes creatures (DAT_000b0adc).
+        bool madeNoise = false;
     };
 
     // What a door did this tick that the player should be told about.

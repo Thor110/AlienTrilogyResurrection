@@ -310,8 +310,15 @@ namespace ALTEngine::Screens
             // does NOT count as facing along the ramp, even though it is the
             // same direction. Reproduced as-is; it is the original's behaviour,
             // not a transcription slip.
-            const bool alongPositiveZ = (yaw <= 0x200);
-            const bool alongNegativeZ = (yaw >= 0x600 && yaw <= 0xa00);
+            //
+            // `yaw` is the port's, which is the original's turned half round
+            // (+0x800), so the original's windows [0x600, 0xa00] and the
+            // lopsided [0, 0x200] land here as [0xe00, 0x200] and [0x800, 0xa00].
+            // Applying the original's numbers to the port's yaw put the lopsided
+            // half on the wrong side: the view tipped where the original
+            // recentres, and the other way round.
+            const bool alongPositiveZ = (yaw >= 0xe00 || yaw <= 0x200);
+            const bool alongNegativeZ = (yaw >= 0x800 && yaw <= 0xa00);
             const bool alongPositiveX = (yaw >= 0x200 && yaw <= 0x600);
             const bool alongNegativeX = (yaw >= 0xa00 && yaw <= 0xe00);
 

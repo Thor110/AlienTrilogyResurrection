@@ -155,6 +155,11 @@ namespace ALTEngine::Screens::CreatureAI
         // task) also turns a rising vertical speed (+0x32) downward, which the
         // creature, holding its vertical speed, applies.
         bool stopped = false;
+        // FUN_000314b8 (the walk by view) is called this tick: after every
+        // turn and every outright facing change but the turn while acting
+        // (0x346f9, 0x347b1..., 0x34923...). So the view is picked from this
+        // tick's facing, after it turned. Set here, the caller picks the view.
+        bool pickView = false;
 
         // The queen's own (see above).
         bool queen = false;
@@ -173,6 +178,7 @@ namespace ALTEngine::Screens::CreatureAI
     // FUN_00032ec4: turn toward `to` by at most the turn rate.
     inline void TurnToward(Agent& a, int to)
     {
+        a.pickView = true;
         a.target = to & 0xfff;
         if (a.facing == a.target) { return; }
         int d = (a.facing - a.target) & 0xfff;
@@ -181,7 +187,7 @@ namespace ALTEngine::Screens::CreatureAI
         else { a.facing = (-d < a.turnRate) ? a.target : ((a.facing + a.turnRate) & 0xfff); }
     }
 
-    inline void Face(Agent& a, int to) { a.facing = a.target = to & 0xfff; }
+    inline void Face(Agent& a, int to) { a.facing = a.target = to & 0xfff; a.pickView = true; }
     inline void Stop(Agent& a) { a.vx = 0; a.vz = 0; a.stopped = true; }
 
     // The distance band the creature task puts every distance into
@@ -230,11 +236,20 @@ namespace ALTEngine::Screens::CreatureAI
     }
 
     // The node pickers' pattern: the node itself, then one random point
-    // 0x200-0x3ff around it.
+    // 0x200-0x3ff around it - but only when the node's cell is shut or taken
+    // or the line to it fails (0x33486, 0x3349f, 0x334c4). A node too near
+    // (band 0) or too far (band 4), or off the map, fails at once with no
+    // scatter and no draws (0x333fc-0x3340a, 0x3343f): so a creature close to
+    // its node falls through to the side step ahead of it rather than to a
+    // random point round the node, often beside or behind it.
     inline bool TryNode(Agent& a, World& w, int node)
     {
         int nx, nz;
         if (node < 0 || !w.nodePosition(node, nx, nz)) { return false; }
+        {
+            const int band = Band(a, Game::OriginalMath::Distance(nx - a.x, nz - a.z));
+            if (band == 0 || band == 4) { return false; }
+        }
         if (TryWaypoint(a, w, nx, nz, false)) { return true; }
         const int length = NODE_SCATTER_MIN + (w.random() & 0x1ff);
         const int angle = w.random() & 0xfff;
@@ -393,6 +408,7 @@ namespace ALTEngine::Screens::CreatureAI
         a.startAct = false;
         a.resolveHit = false;
         a.stopped = false;
+        a.pickView = false;
         a.startAnimation = -1;
         Stop(a);
         if (a.type == 3)
@@ -425,6 +441,7 @@ namespace ALTEngine::Screens::CreatureAI
         a.startAct = false;
         a.resolveHit = false;
         a.stopped = false;
+        a.pickView = false;
         a.startAnimation = -1;
 
         switch (a.state)
@@ -452,7 +469,8 @@ namespace ALTEngine::Screens::CreatureAI
             if (Notices(a)) { a.alerted = true; return; }
             if (a.queen)
             {
-                if (a.zoneVisible && (a.mode == 0 || a.lineToPlayer)) { a.alerted = true; }
+                // In her sight cone too (FUN_00033a1c, 0x35d96-0x35dce).
+                if (SeesInCone(a) && (a.mode == 0 || a.lineToPlayer)) { a.alerted = true; }
                 return;
             }
             if (SeesInCone(a))
@@ -511,6 +529,7 @@ namespace ALTEngine::Screens::CreatureAI
 
         case ACT:
             TurnToward(a, a.bearingToPlayer);
+            a.pickView = false;   // the attack's own animation runs on
             if (!a.actFinished) { return; }
             a.actFinished = false;
             Stop(a);

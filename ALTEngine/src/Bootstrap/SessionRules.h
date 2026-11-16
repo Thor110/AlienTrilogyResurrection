@@ -24,7 +24,7 @@ namespace ALTEngine::Bootstrap
         // keep their meaning; the protocol version keeps builds apart).
         uint32_t modernFeatures = 0;
         // The host's weapon pacing (WeaponPacingSettings), 1-8.
-        uint8_t weaponPacing = 3;
+        uint8_t weaponPacing = 2;
     };
 
     // The rules in force: set while a network game is on, otherwise unset.

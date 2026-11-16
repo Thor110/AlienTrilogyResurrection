@@ -39,7 +39,7 @@ language versions, so it needs nothing.
 ## 2. Smoothed textures: marks on the main door, pixels missing from the firing pulse rifle
 
 - **Reported by:** a player on Discord (0.9.7)
-- **Status:** open, screenshots needed
+- **Status:** rifle likely fixed in 0.9.9; door open, screenshot needed
 - **Report:** "Images with the "smoothed" filter applied show artifacts on the main door, and pixels are missing
   from the pulse rifle when it fires."
 
@@ -57,6 +57,11 @@ drawn in the world, or something else.
 the likely fix for the door: keep each face's texture lookup half a texel inside its own rectangle on the
 sheet while smoothing (Original is unaffected and stays as it is).
 
+
+**Update (0.9.9).** The pulse rifle half is likely fixed: the port was drawing the rifle's GRENADE art when it
+fired (PULSE.B16's sections run idle, grenade, firing, reload, and the port took them in state order), so its
+firing frames were the wrong pictures - with or without smoothing. The door's marks are still open: a
+screenshot would confirm.
 ---
 
 ## 3. Lift and bridge switches can only be used once
@@ -124,15 +129,17 @@ planned file fix of FINGERS.B16 (the ALTEngine-only patch).
 ## 6. Smart gun: firing again and again, its firing sound stops
 
 - **Reported by:** Edward, in play (0.9.8)
-- **Status:** open, more detail needed
+- **Status:** fixed in 0.9.9
 - **Report:** "repetitive firing of the smart gun makes the firing sound stop"
 
-**What is known.** The smart gun's report (slot 0x13, `0902smar`, 1.4 seconds) is the cue at the start of its
-firing animation (`WeaponData.h`, `SMARTGUN_FIRING_SEQUENCE`), played on the player's own channel; each cue cuts
-off the one before, as in the original (FUN_0005b21b), so held fire restarts it on every shot. The sample has no
-silence at its start; nothing else plays on that channel but the weapons' cues and the full-light sound; only the
-flamethrower's trigger release stops the channel. So the cause isn't found yet.
+**What happened.** Two things together.
+- The smart gun's original firing animation has four frames drawn from two images; the port counted images
+  instead of frames, rejected the original animation, and used a stand-in without the sound cue. Its report
+  then went through the general sound voices, which refuse a sound that is still playing.
+- And SDL3 never reported a finished sound as finished: without a flush it keeps a few resampler frames
+  queued for ever. So after the first shot the report was "still playing" for good, and refused.
 
-**To do.** Say how it happens: tapping fire quickly or holding it; whether the sound stops for good (until the
-weapon is changed, or the level restarted) or only drops out between shots; and whether the shots still go off.
-
+**Fixed (0.9.9).** Every one-shot sound is flushed (`Audio/SfxPlayer.cpp`), so it reads finished once played
+- which also fixes sounds going missing at random everywhere. And each weapon state now maps its frames to
+images (`Renderer/WeaponData.h`), so the smart gun, shotgun, pulse rifle and flamethrower play their own
+animations with their own cues.

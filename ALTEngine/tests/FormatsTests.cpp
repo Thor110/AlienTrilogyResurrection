@@ -51,17 +51,59 @@ TEST_CASE("Lights: a flat record shows its lit colour, scaled by the global mult
     CHECK_EQ(static_cast<int>(table.ColourFor(5).corner[0].r), 255);
 }
 
-TEST_CASE("Lights: a flash brightens one tick only, clamped at 255")
+TEST_CASE("Lights: a flash brightens one tick only, clamped at 255, but never lights 0 and 1")
 {
     LightTable table;
     LightRecord flat = Light(0, 96, 0);
     flat.on = 1;
-    table.Reset({ flat });
+    table.Reset({ flat, flat, flat });
     table.RequestFlash();
     table.Tick(0);
-    CHECK_EQ(static_cast<int>(table.ColourFor(0).corner[0].r), 255);   // 96 * 8192 / 0xc00 = 256
-    table.Tick(0);
+    CHECK_EQ(static_cast<int>(table.ColourFor(2).corner[0].r), 255);   // 96 * 8192 / 0xc00 = 256
+    // Records 0 and 1 keep the normal multiplier (0x2a05d): the weapon's light.
     CHECK_EQ(static_cast<int>(table.ColourFor(0).corner[0].r), 120);
+    CHECK_EQ(static_cast<int>(table.ColourFor(1).corner[0].r), 120);
+    table.Tick(0);
+    CHECK_EQ(static_cast<int>(table.ColourFor(2).corner[0].r), 120);
+}
+
+TEST_CASE("Lights: mode 3 pulses for ever at its own times; modes 2 and 5 flicker at random")
+{
+    LightTable table;
+    LightRecord pulse = Light(3, 96, 0);
+    pulse.onDuration = 2;
+    pulse.offDuration = 3;
+    pulse.blinkRepeats = 1;              // not a repeat count in mode 3 (0x2a11b)
+    LightRecord flicker = Light(2, 96, 0);
+    LightRecord fast = Light(5, 96, 0);
+    table.Reset({ pulse, flicker, fast });
+    // Mode 3: on 2 ticks, off 3, on 2... well past any repeat count.
+    int changes = 0;
+    int last = table.Records()[0].on;
+    for (int t = 0; t < 100; ++t)
+    {
+        table.Tick(0);
+        if (table.Records()[0].on != last) { ++changes; last = table.Records()[0].on; }
+    }
+    CHECK(changes >= 30);
+    // Mode 2 with draws of 1 and 1: on for 1 then off for 1, from the first tick.
+    LightTable two;
+    two.Reset({ Light(2, 96, 0), Light(2, 96, 0), Light(5, 96, 0) });
+    two.Tick(0);
+    CHECK_EQ(static_cast<int>(two.Records()[2].on), 1);
+    CHECK_EQ(static_cast<int>(two.Records()[2].blinkCountdown), 0);   // mode 5: (1 - 1) >> 1
+    CHECK_EQ(static_cast<int>(two.Records()[2].on), 1);
+    two.Tick(0);
+    CHECK_EQ(static_cast<int>(two.Records()[2].on), 0);
+    CHECK_EQ(static_cast<int>(two.Records()[2].on), 0);
+    // A record that isn't armed is put back to the level's own state.
+    LightTable waiting;
+    LightRecord w = Light(2, 96, 0);
+    w.variantMax = 1;
+    w.on = 1;
+    waiting.Reset({ w, w, w });
+    waiting.Tick(0);
+    CHECK_EQ(static_cast<int>(waiting.Records()[2].on), 1);
 }
 
 TEST_CASE("Lights: a gouraud record takes lit on its first corner and unlit on its second")

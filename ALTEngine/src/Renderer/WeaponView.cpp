@@ -89,8 +89,13 @@ namespace ALTEngine::Renderer
         // load leaves that state empty, which is how a weapon without a reload
         // is expressed - no special-casing needed.
         int totalFrames = 0;
-        for (int section = 0; section < MAX_SECTION; ++section)
+        // Each state from its own section of the file (WeaponData::sections):
+        // the state's number everywhere but PULSE.B16.
+        const WeaponData::WeaponTables& loadTables = WeaponData::For(weaponIndex);
+        for (int state = 0; state < MAX_SECTION && state < 4; ++state)
         {
+            const int section = loadTables.sections[state];
+            if (section < 0) { continue; }
             for (int frameIndex = 0; frameIndex < MAX_FRAMES; ++frameIndex)
             {
                 std::optional<ALTEngine::Formats::SpriteFrameInfo> frame;
@@ -125,7 +130,7 @@ namespace ALTEngine::Renderer
                 SDL_SetTextureScaleMode(ft.texture, SDL_SCALEMODE_NEAREST);
                 ft.width = frame->width;
                 ft.height = frame->height;
-                frames[static_cast<size_t>(section)].push_back(ft);
+                frames[static_cast<size_t>(state)].push_back(ft);
                 totalFrames++;
             }
         }
@@ -196,7 +201,16 @@ namespace ALTEngine::Renderer
         {
             const std::vector<uint16_t>* seq = tables.sequences[state];
             if (!seq) { continue; }
-            if (FrameCount(state) < static_cast<int>(tables.offsetCounts[state])) { continue; }
+            // Enough images for every record: records can share an image
+            // (WeaponData::images), so that is the highest image used, not the
+            // number of records.
+            int imagesNeeded = static_cast<int>(tables.offsetCounts[state]);
+            if (const uint8_t* images = tables.images[state])
+            {
+                imagesNeeded = 0;
+                for (size_t r = 0; r < tables.offsetCounts[state]; ++r) { imagesNeeded = std::max(imagesNeeded, images[r] + 1); }
+            }
+            if (FrameCount(state) < imagesNeeded) { continue; }
             stateSequences[static_cast<size_t>(state)] = *seq;
             originalSequence[static_cast<size_t>(state)] = true;
         }
@@ -206,7 +220,13 @@ namespace ALTEngine::Renderer
     {
         if (weaponState < 0 || weaponState >= ALTEngine::Screens::WeaponSystem::STATE_COUNT) { return; }
         currentState = weaponState;
-        ALTEngine::Formats::SpriteAnim::Start(animator, stateSequences[static_cast<size_t>(weaponState)]);
+        const auto& sequence = stateSequences[static_cast<size_t>(weaponState)];
+        ALTEngine::Formats::SpriteAnim::Start(animator, sequence);
+        // FUN_000400fc takes the first step itself (0x401ae), and the weapon's
+        // own step follows on the same pass: so a state lasts records x
+        // duration passes, not one more, and a cue at its start is raised here.
+        ALTEngine::Formats::SpriteAnim::Tick(animator, sequence);
+        if (animator.EventFired()) { pendingCue = static_cast<int>(animator.param); }
     }
 
     bool WeaponView::Tick()
@@ -216,11 +236,13 @@ namespace ALTEngine::Renderer
         const std::vector<uint16_t>& sequence = stateSequences[static_cast<size_t>(currentState)];
         const bool wasEnded = animator.Ended();
         ALTEngine::Formats::SpriteAnim::Tick(animator, sequence);
+        if (animator.EventFired()) { pendingCue = static_cast<int>(animator.param); }
         return animator.Ended() && !wasEnded;
     }
 
     void WeaponView::Unload()
     {
+        pendingCue = -1;
         for (auto& section : frames)
         {
             for (FrameTexture& ft : section)
@@ -248,9 +270,15 @@ namespace ALTEngine::Renderer
         if (frames[section].empty()) { section = WSD::STATE_IDLE; }
         if (frames[section].empty()) { return; }
 
-        size_t index = animator.frameIndex;
-        if (index >= frames[section].size()) { index = 0; }
-        const FrameTexture& current = frames[section][index];
+        // The record the animation is on, and the image it draws.
+        const size_t index = animator.frameIndex;
+        size_t image = index;
+        {
+            const WeaponData::WeaponTables& t = WeaponData::For(loadedWeapon);
+            if (section < 4 && t.images[section] && index < t.offsetCounts[section]) { image = t.images[section][index]; }
+        }
+        if (image >= frames[section].size()) { image = 0; }
+        const FrameTexture& current = frames[section][image];
         if (!current.texture || current.width <= 0 || current.height <= 0) { return; }
         const int frameWidth = current.width;
         const int frameHeight = current.height;

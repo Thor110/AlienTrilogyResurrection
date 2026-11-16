@@ -105,6 +105,12 @@ namespace ALTEngine::Audio
         // Voices are shared, so every sound sets its own gain.
         SDL_SetAudioStreamGain(voice, app.SfxGain() * volume);
         SDL_PutAudioStreamData(voice, sample.data(), static_cast<int>(sample.size()));
+        // A one-shot is complete: flushed, the voice reads empty once it has
+        // played. Without it SDL keeps the resampler's last few frames queued
+        // for ever, so a finished sound looked still playing - the same sample
+        // was refused from then on (the smart gun's report went silent) and
+        // no voice ever read free.
+        SDL_FlushAudioStream(voice);
     }
 
     void SfxPlayer::Play(SfxId id, const std::filesystem::path& cdDirectory)
@@ -144,6 +150,10 @@ namespace ALTEngine::Audio
         playing[voice] = &sample;
         SDL_SetAudioStreamGain(voice, app.SfxGain());
         SDL_PutAudioStreamData(voice, sample.data(), static_cast<int>(sample.size()));
+        // Flushed so it reads finished once played (see PlayFile): the
+        // flamethrower's loop is started again after its 5.7 seconds, as the
+        // original's (0x5b2b4), instead of being refused as still running.
+        SDL_FlushAudioStream(voice);
     }
 
     void SfxPlayer::StopPlayerSlot(int slotId, const char* levelCode, const std::filesystem::path& cdDirectory)
@@ -207,6 +217,9 @@ namespace ALTEngine::Audio
         VoiceSamples()[voice] = &sample;
         SDL_SetAudioStreamGain(voice, app.SfxGain() * volume);
         SDL_PutAudioStreamData(voice, sample.data(), static_cast<int>(sample.size()));
+        // A held sound that doesn't loop plays once: flushed, it reads finished
+        // and frees its voice (see PlayFile).
+        if (!SfxBank::Loops(name)) { SDL_FlushAudioStream(voice); }
         return handle;
     }
 

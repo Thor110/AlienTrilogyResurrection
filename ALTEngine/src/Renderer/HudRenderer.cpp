@@ -1049,8 +1049,12 @@ namespace ALTEngine::Renderer
             // >> 9 is the world-to-cell shift; the dish is 32 cells across its
             // 64-pixel height, so a cell is two pixels.
             // Two pixels per cell - the dish is 32 cells across its 64 rows.
-            float cellX = c.dx / 512.0f * HUD_TRACKER_PIXELS_PER_CELL;
-            float cellZ = c.dz / 512.0f * HUD_TRACKER_PIXELS_PER_CELL;
+            // Whole cells, as the original's (player - creature) >> 9 per axis
+            // (0x3a141): blips sit on a two-pixel grid and jump a cell at a
+            // time rather than gliding. dx here is creature - player, so the
+            // same floor is a ceiling on it.
+            float cellX = std::ceil(c.dx / 512.0f) * HUD_TRACKER_PIXELS_PER_CELL;
+            float cellZ = std::ceil(c.dz / 512.0f) * HUD_TRACKER_PIXELS_PER_CELL;
             float rx = cellX * cosYaw - cellZ * sinYaw;
             float rz = cellX * sinYaw + cellZ * cosYaw;
 

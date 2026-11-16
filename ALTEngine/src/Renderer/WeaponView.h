@@ -100,8 +100,11 @@ namespace ALTEngine::Renderer
         void SetSwitchOffset(int rows) { switchOffset = rows; }
 
         // True on the tick the animation asked for a sound, with its id.
-        bool SoundCued() const { return animator.EventFired(); }
-        int CuedSoundId() const { return static_cast<int>(animator.param); }
+        // The animation's sound cue (OP_EVENT), raised by a step and held until
+        // read: a state's start can raise it before the pass's own step.
+        bool SoundCued() const { return pendingCue >= 0; }
+        int CuedSoundId() const { return pendingCue; }
+        void ConsumeCue() { pendingCue = -1; }
 
         // True on the tick an OP_EVENT opcode fired, with its operand. This is
         // where a muzzle flash, a shot, or a sound would hang once the meaning
@@ -153,6 +156,7 @@ namespace ALTEngine::Renderer
         int failedWeapon = -1;
 
         ALTEngine::Formats::SpriteAnim::Animator animator;
+        int pendingCue = -1;   // a sound cue not yet played (SoundCued)
 
         // One sequence per weapon state, indexed by WeaponSystem::State.
         //

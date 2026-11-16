@@ -99,8 +99,9 @@ namespace ALTEngine::Formats
     //
     // The original runs this every tick from the per-level periodic
     // callback, applying a global multiplier and stepping the blink state
-    // machines. Modes 2 and 5 are unimplemented: their handlers were
-    // identified but not decompiled, and no level seen so far uses them.
+    // machines. Every mode's handler is in (the jump table at 0x29d78):
+    // 1 blinks with jitter and a repeat count, 2 and 5 flicker at random,
+    // 3 pulses for ever at fixed times.
     class LightTable
     {
     public:
@@ -114,6 +115,7 @@ namespace ALTEngine::Formats
         void Reset(const std::vector<LightRecord>& records)
         {
             lights = records;
+            authored = records;
             entries.assign(lights.size(), Entry{});
             Restamp();
         }
@@ -124,7 +126,11 @@ namespace ALTEngine::Formats
         void Tick(int randomBits)
         {
             if (StepEquipment()) { equipmentReachedFull = true; }
-            int jitter = (randomBits & 3) + 1;
+            // Two draws a pass, shared by every light (0x29f98-0x29fb0):
+            // (rand & 3) + 1 and (rand & 7) + 1. So every mode-2 light in a
+            // level flickers in step, and so does every mode-5 one.
+            const int jitter = (randomBits & 3) + 1;
+            const int jitter8 = ((randomBits >> 2) & 7) + 1;
 
             for (size_t i = 0; i < lights.size(); ++i)
             {
@@ -132,10 +138,52 @@ namespace ALTEngine::Formats
 
                 // Blink only runs once ToggleLight has driven the variant
                 // counter to its maximum - that is how a switch or a door
-                // brings a set of wall lights to life.
-                bool armed = (light.variant >= light.variantMax);
+                // brings a set of wall lights to life. Until then a blinking
+                // light is put back to the level's own state every pass
+                // (0x2a0ee, 0x2a1d9): on, countdown and repeats.
+                // (The original compares for equality.)
+                const bool armed = (light.variant == light.variantMax);
+                const bool blinks = light.mode == 1 || light.mode == 2 || light.mode == 3 || light.mode == 5;
+                if (blinks && !armed)
+                {
+                    if (i < authored.size())
+                    {
+                        light.on = authored[i].on;
+                        light.blinkCountdown = authored[i].blinkCountdown;
+                        light.blinkRepeats = authored[i].blinkRepeats;
+                    }
+                    continue;
+                }
 
-                if ((light.mode == 1 || light.mode == 3) && armed)
+                if (light.mode == 2 || light.mode == 5)
+                {
+                    // 0x2a15f / 0x2a193: count down; at 0 turn over, on for
+                    // the first draw and off for the second (mode 5: each
+                    // (draw - 1) >> 1, a faster flicker).
+                    if (light.blinkCountdown != 0) { light.blinkCountdown--; continue; }
+                    const bool toOn = light.on == 0;
+                    int next = toOn ? jitter : jitter8;
+                    if (light.mode == 5) { next = (next - 1) >> 1; }
+                    light.on = toOn ? 1 : 0;
+                    light.blinkCountdown = static_cast<uint16_t>(next);
+                    continue;
+                }
+
+                if (light.mode == 3)
+                {
+                    // 0x2a11b: count down, and at 0 turn over for the record's
+                    // own on or off time - no jitter, no repeat count, so it
+                    // pulses for as long as the level runs.
+                    if (light.blinkCountdown != 0) { light.blinkCountdown--; }
+                    if (light.blinkCountdown == 0)
+                    {
+                        light.on = light.on == 1 ? 0 : 1;
+                        light.blinkCountdown = light.on ? light.onDuration : light.offDuration;
+                    }
+                    continue;
+                }
+
+                if (light.mode == 1)
                 {
                     if (light.on == 0)
                     {
@@ -299,13 +347,19 @@ namespace ALTEngine::Formats
         // record per tick is equivalent and much cheaper.
         void Restamp()
         {
-            const std::array<int, 3> global = GlobalTriple();
+            const std::array<int, 3> globalAll = GlobalTriple();
+            // Records 0 and 1 always take the normal 0xf00 (0x2a05d): neither
+            // the flash nor the lamp or goggles touch them. Entry 0 is what the
+            // weapon in hand is lit by on a shot, so it shows at 1.25x rather
+            // than blown out.
+            const std::array<int, 3> normal{ LIGHT_GLOBAL_NORMAL, LIGHT_GLOBAL_NORMAL, LIGHT_GLOBAL_NORMAL };
             flash = false;
 
             for (size_t i = 0; i < lights.size(); ++i)
             {
                 const LightRecord& light = lights[i];
                 Entry& out = entries[i];
+                const std::array<int, 3>& global = i < 2 ? normal : globalAll;
 
                 if (light.mode == 4)
                 {
@@ -333,6 +387,7 @@ namespace ALTEngine::Formats
         }
 
         std::vector<LightRecord> lights;
+        std::vector<LightRecord> authored;   // as the level file has them, for the reload
         std::vector<Entry> entries;
         bool flash = false;
         Equipment equipment = Equipment::None;

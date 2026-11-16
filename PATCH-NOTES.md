@@ -8,6 +8,70 @@ options (Options > Modern) are the deliberate departures, each one off until you
 
 ---
 
+## 0.9.9
+
+Everything since 0.9.8.
+
+A third review of the original's code against ALTEngine, this time looking for what makes play feel slightly
+off: rates, timing, rounding and the order things happen in.
+
+### Closer to the original
+
+**The player**
+- **Falling and climbing.** Walking off a ledge, you now drop to the floor at the original's speed (0x100 a
+  step) instead of landing at once, and climb up the same way. A long fall that lands exactly on the floor
+  hurts, as in the original (it skips armour); landing in water or slime makes its sound.
+- The killing hit's knockback no longer slides your body two cells while you die.
+- The view tips on ramps the way the original's does when facing along them (one direction was the wrong way
+  round).
+- Mouse turning is smooth at high frame rates. The view used to run ahead and jump back every tick, a fine
+  judder while turning.
+
+**Weapons**
+- **The smart gun's firing sound no longer stops** (bug report 6). The real cause hit every sound: once a sound
+  had finished, the audio system still counted it as playing, so the same sound was refused from then on, and
+  sounds went missing at random once a dozen had played. Fixed for every sound.
+- The smart gun, shotgun, pulse rifle and flamethrower now play the original's own animations, with their own
+  sounds at the right frame: the shotgun's pump, the smart gun's reload. Their rates of fire and reload times
+  are the original's (the smart gun was firing 60% too fast).
+- **The pulse rifle shows its own firing art.** It was drawing its grenade art when firing, its firing art when
+  reloading, and its reload art for the grenade.
+- Switching weapons runs at the original's speed: down for 9 steps, up for 8. You can't fire or throw while
+  the weapon is lowered.
+- The lamp's sound no longer cuts off your gunfire.
+- **Weapons fire and animate at the original's speed against the world.** The weapon pacing's default is now 2
+  (it was 3): with ALTEngine's default timing the original steps the weapon every game tick, and 3 ran it on
+  only two ticks of three, so every gun fired and moved at two thirds of its speed. A `WeaponFrameInterrupts`
+  value already in your config file is kept; remove it (or set 2) to get the new default.
+
+**Creatures**
+- **Warriors walking backwards and sideways:** a creature now picks the view it is drawn in after it has
+  turned, as the original does. It used to show the way it faced a moment before, so on setting off each new
+  leg it walked a step in a view up to 45 degrees off its path.
+- A creature near a path node no longer heads for a random point around it, often beside or behind it.
+- Creatures climb and duck the original's heights. They step up a little more (0x120), aren't let into
+  passages too low for them, and walk along a drop's edge as the original's do.
+- Their timers keep counting while they flinch, as in the original.
+- The queen notices you only in her sight cone.
+- **On Hard, the dead come back.** As in the original: a body left lying while you're far away gets up again.
+
+**The world**
+- **Doors make their sounds** (opening, closing, the thud). A door opening also makes the noise that wakes
+  creatures nearby, as a shot does.
+- **Flickering, strobing and pulsing lights** (three light modes the port didn't have) now work, on most
+  levels. L111's red alarm lights pulse for good instead of dying out after 18 seconds.
+- The gun is no longer blown out white by its own muzzle flash.
+- "Lift activated" shows every time a lift is called, not only the first.
+- Motion tracker blips move a cell at a time, as the original's do.
+- Flames and steam jets flicker at the original's speed at any frame rate.
+- Triggers and pickups are checked once per game tick, not once per frame (at high frame rates some trigger
+  commands ran several times over). No pickups are collected while you're dying.
+
+**Multiplayer**
+- Bots move, turn and fire at the players' own rate (they were twice as fast).
+
+---
+
 ## 0.9.8
 
 Everything since 0.9.7.

@@ -144,61 +144,65 @@ namespace ALTEngine::Screens
         // WEAPON SWITCH: LOWER, SWAP, RAISE - FUN_0003efcc at 0x3f0bc.
         //
         // State 4 lowers: DAT_000b0b57 (the weapon's Y offset) goes up 0x10 a
-        // tick, and at 0x80 the swap happens - an automatic switch
-        // (FUN_00038e64), a chosen one (FUN_00039004) or a pickup's
-        // (FUN_00038fb4) - and the state becomes 5. State 5 raises: 0x10 a tick
-        // back down, and at 0 the weapon is idle again. Eight ticks each way.
+        // pass; the pass it would pass 0x80 it is held there and the swap
+        // happens - an automatic switch (FUN_00038e64), a chosen one
+        // (FUN_00039004) or a pickup's (FUN_00038fb4) - and the state becomes 5
+        // (0x3f0bc-0x3f141). So the swap is on the 9th pass. State 5 raises:
+        // 0x10 a pass back down, and the pass it reaches 0 the weapon is idle
+        // (0x3f14a), 17 passes in all. FUN_0003efcc runs every pass, so this
+        // runs at the player's rate, not the weapon's; and in states 4 and 5
+        // the weapon can't fire or reload.
         inline constexpr int SWITCH_TRAVEL = 0x80;     // HUD rows to drop
-        inline constexpr int SWITCH_STEP = 0x10;       // per tick
-        inline constexpr int SWITCH_LOWER_TICKS = SWITCH_TRAVEL / SWITCH_STEP;
-        inline constexpr int SWITCH_RAISE_TICKS = SWITCH_TRAVEL / SWITCH_STEP;
+        inline constexpr int SWITCH_STEP = 0x10;       // per pass
 
         // Drives the lower/raise. `pending` is the weapon to switch TO, or -1.
         struct SwitchAnimation
         {
             int pending = -1;
-            int ticks = 0;
-            bool lowering = false;
+            int offset = 0;          // DAT_000b0b57
+            bool lowering = false;   // state 4
+            bool raising = false;    // state 5
 
             void Begin(int nextWeapon)
             {
-                // Ignore a repeat of the weapon already in hand, and do not
-                // restart a swap that is already under way.
+                // Do not restart a swap that is already on its way down.
                 if (pending >= 0) { return; }
                 pending = nextWeapon;
-                ticks = SWITCH_LOWER_TICKS;
                 lowering = true;
+                raising = false;
             }
 
-            bool Busy() const { return pending >= 0 || ticks > 0; }
+            bool Busy() const { return lowering || raising; }
 
-            // Returns the weapon to equip on the tick the swap happens, or -1.
+            // One pass. Returns the weapon to equip on the pass the swap
+            // happens, or -1.
             int Tick()
             {
-                if (ticks <= 0) { return -1; }
-                ticks--;
-                if (ticks == 0 && lowering)
+                if (lowering)
                 {
-                    // Bottom of the travel: swap now, out of sight.
-                    const int next = pending;
-                    pending = -1;
-                    lowering = false;
-                    ticks = SWITCH_RAISE_TICKS;
-                    return next;
+                    offset += SWITCH_STEP;
+                    if (offset > SWITCH_TRAVEL)
+                    {
+                        // Bottom of the travel: swap now, out of sight.
+                        offset = SWITCH_TRAVEL;
+                        const int next = pending;
+                        pending = -1;
+                        lowering = false;
+                        raising = true;
+                        return next;
+                    }
+                    return -1;
+                }
+                if (raising)
+                {
+                    offset -= SWITCH_STEP;
+                    if (offset <= 0) { offset = 0; raising = false; }
                 }
                 return -1;
             }
 
-            // How far down the weapon is drawn this tick, 0 when it is up.
-            int Offset() const
-            {
-                if (ticks <= 0) { return 0; }
-                const int span = lowering ? SWITCH_LOWER_TICKS : SWITCH_RAISE_TICKS;
-                if (span <= 0) { return 0; }
-                // Lowering counts down to the swap; raising counts down to rest.
-                const int progress = lowering ? (span - ticks) : ticks;
-                return (SWITCH_TRAVEL * progress) / span;
-            }
+            // How far down the weapon is drawn, 0 when it is up.
+            int Offset() const { return offset; }
         };
 
         // The weapon's vertical bob, from FUN_0003e93c's `_DAT_000b0b4e >> 0x14`.
