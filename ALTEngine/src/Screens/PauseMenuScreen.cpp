@@ -542,6 +542,10 @@ namespace ALTEngine::Screens
                         cheatConfig.Set("CheatMaximumHealth", on ? "On" : "Off");
                         result.cheatMaximumHealth = on;
                     }
+                    // Show what was just picked: each cheat's list (and Enable
+                    // All's) is read again from the config, so backing out and
+                    // in again shows On, not the state the menu opened with.
+                    syncCheatsEntry();
                     SfxPlayer::Play(SfxId::MenuSelect, cdDirectory);
                 }
                 else if (r == EnterResult::Toggled && deepest.label == "Options")
@@ -989,6 +993,22 @@ namespace ALTEngine::Screens
             SDL_RenderPresent(renderer);
         }
 
+        // The cheats as they stand when the menu closes, not only the ones
+        // changed this time: a cheat left alone stays as it was, and with
+        // Enable Cheats turned off in Options every cheat is off. (The result
+        // used to carry only what was picked this time, so a cheat untouched
+        // came back off.)
+        {
+            ALTEngine::Bootstrap::Config cheatConfig;
+            const bool enabled = ALTEngine::Bootstrap::ModernSettings(cheatConfig).IsActive(
+                ALTEngine::Bootstrap::ModernFeature::EnableCheats);
+            const auto isOn = [&cheatConfig](const char* key) {
+                const auto stored = cheatConfig.Get(key);
+                return stored.has_value() && *stored == "On";
+            };
+            result.cheatFullyLoaded = enabled && isOn("CheatFullyLoaded");
+            result.cheatMaximumHealth = enabled && isOn("CheatMaximumHealth");
+        }
         return result;
     }
 }

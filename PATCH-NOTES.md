@@ -23,6 +23,10 @@ Everything since 0.9.7.
   last use stays thrown. Before, every switch stayed thrown for good, so a lift called once could never be
   called back, and on L232 a player could be left stuck. 35 switches on 11 levels work this way (L131, L141,
   L213, L231, L232, L262, L311, L331, L371, L905, L908).
+- **Cheats in the pause menu** stay as you set them. Turning one on and backing out showed it off again (it was
+  still on underneath until the menu closed), and closing the menu could switch off a cheat that hadn't been
+  touched that time. Now the menu shows what you picked, and the game takes every cheat's setting as the menu
+  closes.
 
 ---
 
