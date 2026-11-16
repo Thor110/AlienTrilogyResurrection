@@ -88,11 +88,16 @@ switches on 11 levels are of this kind: L131, L141 (10), L213, L231, L232, L262,
 ## 4. L232: a missing texture in the boiler room, near a grate
 
 - **Reported by:** a player on Discord (0.9.7), with report 3
-- **Status:** open, location needed
+- **Status:** found; listed for the final step of the level fixes
 - **Report:** "By the way, in this level, a texture is missing in the boiler room, near a grate."
 
-**To do.** A screenshot, or the face number from the Face Index Display (Options > Testing), to find the face.
-Then a level fix like the others, if the original has a texture there.
+**What it is.** Edward found the hole (Face Index Display, Level Cleanup off): the wall between faces 179, 3, 1
+and 7. It is the level's record 0 (vertices 6552, 6553, 6550, 6551, texture 194), the first face of the level's
+first cell, which the original never draws. With Level Cleanup on (the default) ALTEngine already puts it back,
+with its shipped texture 194; with it off, it is missing.
+
+**To do (final step).** Give record 0's copy texture 193, flipped horizontally (routine 2), as Edward picked.
+Listed in `Notes/uv-review-log.md`, "Missing faces - to add in the final pass". Not patched until then.
 
 ---
 
@@ -113,4 +118,21 @@ screen.
 **To do.** A screenshot (ideally the same moment in DOSBox), to see whether the gap is in the art's own rows
 or below them. That decides the fix: fill the see-through corner, or move the art down. To fold into the
 planned file fix of FINGERS.B16 (the ALTEngine-only patch).
+
+---
+
+## 6. Smart gun: firing again and again, its firing sound stops
+
+- **Reported by:** Edward, in play (0.9.8)
+- **Status:** open, more detail needed
+- **Report:** "repetitive firing of the smart gun makes the firing sound stop"
+
+**What is known.** The smart gun's report (slot 0x13, `0902smar`, 1.4 seconds) is the cue at the start of its
+firing animation (`WeaponData.h`, `SMARTGUN_FIRING_SEQUENCE`), played on the player's own channel; each cue cuts
+off the one before, as in the original (FUN_0005b21b), so held fire restarts it on every shot. The sample has no
+silence at its start; nothing else plays on that channel but the weapons' cues and the full-light sound; only the
+flamethrower's trigger release stops the channel. So the cause isn't found yet.
+
+**To do.** Say how it happens: tapping fire quickly or holding it; whether the sound stops for good (until the
+weapon is changed, or the level restarted) or only drops out between shots; and whether the shots still go off.
 

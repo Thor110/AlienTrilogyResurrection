@@ -196,9 +196,17 @@ Holes in the levels where a face is missing. They are added once every other fix
 | L212 | 35, 7, 5, 1 (floor) | 579, 882, 890, 629 | 579, 882, 890, 629 (no rotation - Edward) | 103 (darker, matches face 7 - Edward) | 0 | 0x0C | (16, 0) - the level's first cell, see below |
 | L242 | 25, 7, 2, 3 (floor) | 6223, 6225, 6224, 6220 | 6225, 6224, 6220, 6223 | 31 | 0 | 0x6F | (68, 0) - the level's first cell |
 | L243 | 25, 7, 2, 3 (floor) | 6223, 6225, 6224, 6220 | 6225, 6224, 6220, 6223 | 31 | 0 | 0x09 | (68, 0) - the level's first cell |
+| L232 | 179, 3, 1, 7 (wall) | 6552, 6551, 6550, 6553 | 6552, 6553, 6550, 6551 (record 0's own order) | 193, flipped horizontally (Edward); record 0 has 194 | 2 (the flip; record 0 has 0) | 0x0A | (58, 0) - the level's first cell |
 
 - **L161**: in the port meanwhile through duplicate 3758 (round 5 above); that reverts to its original triangle when the real face goes in.
 - **L211**: laid out like its texture 264 neighbour 1104 (same corner order, facing up). Previewed in the port on a scratch copy, the hole fills and lines up with the panels beside it. Not patched.
+- **L232** (Edward, after zip 163; face numbers with Level Cleanup off): the wall in the boiler room by the grate
+  (also reported on Discord, BUG-REPORTS.md entry 4). It is the level's record 0 - vertices 6552, 6553, 6550, 6551,
+  texture 194, routine 0, light 0x0A - the first face of the first cell (58, 0), which the original never draws. The
+  Level Cleanup already gives it back (`"recordZero": true` for L232), so with the cleanup on it shows, with texture 194
+  as shipped; with the cleanup off it is missing. Edward: it wants texture 193 flipped horizontally, which on these
+  corners is routine 0 -> 2 (routine 2 mirrors the texture across, as for L141's face 2736). In the final pass: record
+  0's copy given texture 193 and routine 2. Not patched.
 - **L212, L242, L243**: floors facing up, laid out like the floors beside them (face 35 on L212, face 25 on L242/L243); L212's settled with Edward as texture 103, unrotated. Previewed in the port on scratch copies (L212 with its own 212GFX). Not patched.
 - **The level's first cell (L161, L212, L242, L243).** In every level, the first open cell in grid order (always in the map's top row) has run start 0 - the blank first record - instead of its own run, which is the level's first run (faces 0 to a few). No cell names that run, so the original never draws those faces, and the cell's floor (and on most levels its ceiling) has no face at all. This looks like an off-by-one in the original level export. It is behind L161's hole (a wall of cell (8, 0)) and the floors here; on most levels that cell is presumably out of sight. In the final pass these cells need their missing faces inserted at the start of the first run, and their run start set from 0 to 1, so the original draws the whole cell. The first cell of every level, and whether its floor and ceiling exist, is listed by the scratch probe `firstcell`.
 

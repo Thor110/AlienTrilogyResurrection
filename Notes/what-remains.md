@@ -915,6 +915,36 @@ smaller (LZMA 19.1%). Report: `Notes/texture-use.md`. The whole routine, in orde
    page (none found on L111, L161, L371 or L906) still builds the level again. Tested against the whole build, frame
    by frame (RenderMeshTests).
 
+## 7b. ALTEngine-only fixes, and the order every fix is applied in
+
+**Two kinds of fix.** *Global* fixes correct the game's own files and suit the original as well (ALTViewer's patch
+button, Patches.json, the `Patch/` files). *ALTEngine-only* fixes are made for ALTEngine and are never offered for
+the original game. Every ALTEngine-only fix, done or planned, is listed here, so the split stays clear:
+
+| Fix | Where it lives now | Status |
+|---|---|---|
+| Level Cleanup: the faces no one can see taken out, cells never drawn cleared (ALTLevelCleanupList, `data/LevelCleanupList.json` and `LevelCleanupExtra.json`) | applied at install, `.untrimmed` copies kept | done (zips 103-118) |
+| Level Cleanup: each level's record 0 given back as a copy at the head of its first cell's run (`"recordZero"`), and L211's floor added (`"add"`) | the same | done (zips 116-118); L232's copy to get texture 193 flipped (see uv-review-log.md) |
+| Texture blanking: unused texture slots blanked (`data/TextureBlankList.json`) | applied at install, `.unblanked` copies kept | done (zip 120) |
+| The face hugger's two empty bottom rows filled (FINGERS.B16) | in the code, at load (`FaceHugOverlay::RepeatBottomRows`) | TEMPORARY: to become a file fix of FINGERS.B16 (section 5, and the B16 note above) |
+| The gaps above the doors | not yet | planned (below, "Later: patch in the gaps above the doors") |
+| Trimming the bytes nothing uses | not yet | planned (below, "Towards the end of the project") |
+
+**The order.** Edward's order, applied one after another, each step reading the file as the step before leaves it:
+
+1. **level fixes** (global: geometry, objects, lifts, doors - Patches.json);
+2. **texture fixes** (global: the UV review, texture indices and turns - Patches.json, the sheets);
+3. **ALTEngine-only fixes** (the table above);
+4. **missing faces** (global: uv-review-log.md, "Missing faces - to add in the final pass").
+
+This works because each step names what it changes in a way the steps before it don't upset: the byte patches
+(1 and 2) never change a file's size, so their offsets hold; the cleanup (3) works out its own face numbers from
+the file it is given; and a missing face (4) is named by its corners and its cell, not by a face number or an
+offset, so it goes in the same way whether or not step 3 has run. The one rule: **nothing after step 4 may name a
+face by number** (an insertion moves every later face up one), and anything that names a face by number before it
+(a Patches.json entry, the cleanup's list) is read against the file before the insertion. For the original game
+the same list is run without step 3.
+
 ## Install size (v0.9.4, Edward's measurements)
 
 The original installed: 129,751,918 bytes (its music streams off the disc). ALTEngine: 548,430,318, of which the ripped
