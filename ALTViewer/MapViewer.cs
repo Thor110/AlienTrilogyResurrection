@@ -80,7 +80,7 @@ namespace ALTViewer
             levelPath7 = gameDirectory + "SECT90";
             levels = new string[] { levelPath1, levelPath2, levelPath3, levelPath4, levelPath5, levelPath6, levelPath7 };
             // check if the game is patched
-            byte[] patched = File.ReadAllBytes(Utilities.CheckDirectory() + "SECT90\\L906LEV.MAP");
+            byte[] patched = LevelTrim.ReadLevel(Utilities.CheckDirectory() + "SECT90\\L906LEV.MAP"); // ALTEngine's trimmed levels read as MAP0 (LevelTrim.cs)
             using var ms = new MemoryStream(patched);
             using var read = new BinaryReader(ms);
             read.BaseStream.Seek(0x50BC8, SeekOrigin.Current);
@@ -164,7 +164,7 @@ namespace ALTViewer
             textBox37.Text = "";
             textBox23.Text = "";
             // parse level data -> skip 20 bytes in rather than using ParseBndFormSections in future
-            List<BndSection> levelSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(selectedLevelFile), "MAP0"); // read MAP0 block
+            List<BndSection> levelSections = TileRenderer.ParseBndFormSections(LevelTrim.ReadLevel(selectedLevelFile), "MAP0"); // read MAP0 block (a trimmed ALTEngine level is put back to MAP0 first, LevelTrim.cs)
             using var ms = new MemoryStream(levelSections[0].Data);
             using var br = new BinaryReader(ms); // currently just reading the MAP0 block so that an accurate remainder is known
             //using var br = new BinaryReader(new MemoryStream(File.ReadAllBytes(selectedLevelFile))); // read entire .MAP file
@@ -801,7 +801,7 @@ namespace ALTViewer
             }
             // parse the BND sections for UVs and model data
             List<BndSection> uvSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(textureDirectory), "BX");
-            List<BndSection> levelSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(fileDirectory + $"\\{caseName}.MAP"), "MAP0");
+            List<BndSection> levelSections = TileRenderer.ParseBndFormSections(LevelTrim.ReadLevel(fileDirectory + $"\\{caseName}.MAP"), "MAP0");
             ModelRenderer.ExportLevel(caseName, uvSections, levelSections[0].Data, $"{levelNumber}GFX", outputPath, checkBox1.Checked, checkBox2.Checked, patch);
             GenerateDebugTextures();
             MessageBox.Show($"Exported {caseName} with UVs!");
@@ -816,7 +816,7 @@ namespace ALTViewer
                 string fileDirectory = levelPath(levelNumber); // determine file directory based on selected item level number
                 // parse the BND sections for UVs and model data
                 List<BndSection> uvSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(fileDirectory + $"\\{levelNumber}GFX.B16"), "BX");
-                List<BndSection> levelSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(fileDirectory + $"\\{caseName}.MAP"), "MAP0");
+                List<BndSection> levelSections = TileRenderer.ParseBndFormSections(LevelTrim.ReadLevel(fileDirectory + $"\\{caseName}.MAP"), "MAP0");
                 ModelRenderer.ExportLevel(caseName, uvSections, levelSections[0].Data, $"{levelNumber}GFX", outputPath, checkBox1.Checked, checkBox2.Checked, patch);
 
             }

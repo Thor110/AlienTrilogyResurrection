@@ -29,6 +29,13 @@ namespace ALTEngine::Bootstrap
     //   original game, patched, has them. On by default
     //   (until it has been tested enough to stop being an option). Not part of
     //   "All Testing Options", since it rewrites files.
+    // Padding Trim        - the install's very last step, ALTEngine only: the
+    //   level bytes the game never reads (or reads as one fixed value, or
+    //   clears at level start) taken out of each level file, about 10% of them
+    //   (Formats::LevelTrim, the MAPT layout). Off restores the untrimmed
+    //   files (the copy kept beside each, .padded) at the next start - for
+    //   working on the files with tools that read only MAP0. On by default;
+    //   not part of "All Testing Options".
     //
     // The menu's "All Testing Options" row sets every one of them at once
     // (SetAll); it shows On only when they all are (AllOn).
@@ -39,6 +46,7 @@ namespace ALTEngine::Bootstrap
         GhostMode,
         DisableResupplyTimer,
         LevelCleanup,
+        PaddingTrim,
     };
 
     class TestingSettings
@@ -68,8 +76,8 @@ namespace ALTEngine::Bootstrap
                 return false;
             }
             auto value = config.Get(KeyFor(option));
-            // Level Cleanup is on until it is turned off, so a first run cleans the levels; the rest start off.
-            if (!value.has_value()) { return option == TestingOption::LevelCleanup; }
+            // Level Cleanup and Padding Trim are on until turned off, so a first run makes them; the rest start off.
+            if (!value.has_value()) { return option == TestingOption::LevelCleanup || option == TestingOption::PaddingTrim; }
             return *value == "On";
         }
 
@@ -96,6 +104,7 @@ namespace ALTEngine::Bootstrap
             case TestingOption::GhostMode: return "Ghost Mode";
             case TestingOption::DisableResupplyTimer: return "Disable Resupply Timer";
             case TestingOption::LevelCleanup: return "Level Cleanup";
+            case TestingOption::PaddingTrim: return "Padding Trim";
             }
             return "";
         }
@@ -107,6 +116,7 @@ namespace ALTEngine::Bootstrap
                 if (label == MenuLabel(option)) { out = option; return true; }
             }
             if (label == MenuLabel(TestingOption::LevelCleanup)) { out = TestingOption::LevelCleanup; return true; }
+            if (label == MenuLabel(TestingOption::PaddingTrim)) { out = TestingOption::PaddingTrim; return true; }
             return false;
         }
 
@@ -120,6 +130,7 @@ namespace ALTEngine::Bootstrap
             case TestingOption::GhostMode: return "TestingGhostMode";
             case TestingOption::DisableResupplyTimer: return "TestingDisableResupplyTimer";
             case TestingOption::LevelCleanup: return "TestingLevelCleanup";
+            case TestingOption::PaddingTrim: return "TestingPaddingTrim";
             }
             return "";
         }

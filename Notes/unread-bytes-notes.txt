@@ -65,5 +65,8 @@ Lifts (16 bytes)
   +13..15  NEVER READ (FUN_00041b30's setup copies bytes 0-12 only). All three always equal: 0, or a copy of the
          model index at +12 on some levels - an older form of the model field.
 
+ALTEngine's padding trim (zip 170, Formats/LevelTrim.h) takes every byte below that the game never reads, reads as
+one fixed value, or clears at level start out of its own copies of the levels (the MAPT layout); ALTViewer reads both.
+
 Vertices +6,7 (always 0), path nodes +2 (always 0, the flow field's runtime value), light records +3/+7/+11/+15
 (the pad byte after each RGB, always 0) and action groups +3 (always 0) are padding or runtime space.

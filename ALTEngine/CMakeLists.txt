@@ -65,6 +65,7 @@ add_library(ALTFormats STATIC
     src/Formats/RenderMesh.cpp
     src/Formats/UvSeamScan.cpp
     src/Formats/LevelLoader.cpp
+    src/Formats/LevelTrim.cpp
     src/Formats/BinaryReadLE.h
     src/Formats/MissionText.cpp
     src/Formats/Obj3DTexture.cpp
@@ -171,6 +172,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/NetTests.cpp
         tests/BotTests.cpp
         tests/LevelCleanupTests.cpp
+        tests/LevelTrimTests.cpp
         tests/TextureBlankTests.cpp
         tests/HudLayoutTests.cpp
         tests/HudMessageTests.cpp

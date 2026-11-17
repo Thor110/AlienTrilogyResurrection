@@ -469,15 +469,14 @@ namespace ALTEngine::Screens
             // menu, left escapes one, and terminal selection lists like
             // Exit Game's Yes/No move the cursor with left/right too).
             auto doEnter = [&]() {
-                // Modern, Pause Weapon Select (FUN_00044b48 cases 2-6): a
-                // weapon held, with ammunition, and not already in hand
-                // becomes the one in hand; the menu stays open.
+                // Picking the weapon in hand from the list (FUN_00044b48 cases
+                // 2-6), as the original does: a weapon held, with ammunition,
+                // and not already in hand becomes the one in hand; the menu
+                // stays open. Always on - it was a Modern option until zip 171.
                 if (path.size() == 1)
                 {
                     const int slot = WeaponSlotFor(root.children[static_cast<size_t>(path[0])].label);
-                    ALTEngine::Bootstrap::Config weaponConfig;
-                    if (slot >= 0 && ALTEngine::Bootstrap::ModernSettings(weaponConfig).IsActive(
-                                         ALTEngine::Bootstrap::ModernFeature::PauseWeaponSelect))
+                    if (slot >= 0)
                     {
                         const WeaponState* held = inventory.ByIndex(slot);
                         if (held && !held->equipped && inventory.Selectable(slot))

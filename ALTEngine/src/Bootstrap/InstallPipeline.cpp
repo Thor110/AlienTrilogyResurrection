@@ -6,6 +6,7 @@
 
 #include "../Game/LevelCleanup.h"
 #include "../Game/TextureBlank.h"
+#include "../Formats/LevelTrim.h"
 
 #include "../Formats/CddaRipper.h"
 #include "../Formats/DiscManifest.h"
@@ -591,6 +592,82 @@ namespace ALTEngine::Bootstrap
         }
     }
 
+    namespace
+    {
+        // THE PADDING TRIM (Formats::LevelTrim): ALTEngine only, the very last
+        // step, since every offset a patch, the cleanup or the blanking names
+        // is in the untrimmed layout. Beside each trimmed level:
+        // <file>.padded, the level before the trim. Every start puts that back
+        // first (the trimmed one kept as <file>.trimmed), so every stage before
+        // meets untrimmed files; afterwards the kept copy goes back if it is
+        // still the trim of what the stages made, or the level is trimmed again.
+        // Testing > Padding Trim off: the untrimmed files stay.
+        void SetPaddedAside(const std::filesystem::path& cdDirectory)
+        {
+            std::error_code ec;
+            for (const auto& relative : ALTEngine::Game::LevelCleanup::LevelFiles(cdDirectory))
+            {
+                const auto file = cdDirectory / relative;
+                const auto padded = With(file, ".padded");
+                if (!std::filesystem::exists(padded, ec)) { continue; }
+                const auto trimmed = With(file, ".trimmed");
+                std::filesystem::remove(trimmed, ec);
+                if (std::filesystem::exists(file, ec)) { std::filesystem::rename(file, trimmed, ec); }
+                std::filesystem::rename(padded, file, ec);
+                if (ec) { std::cout << "Padding trim: could not restore " << file.string() << ": " << ec.message() << "\n"; }
+            }
+        }
+
+        void ApplyPaddingTrim(const std::filesystem::path& cdDirectory, bool enabled)
+        {
+            namespace LT = ALTEngine::Formats::LevelTrim;
+            int made = 0, kept = 0, refused = 0;
+            size_t saved = 0;
+            std::error_code ec;
+            for (const auto& relative : ALTEngine::Game::LevelCleanup::LevelFiles(cdDirectory))
+            {
+                const auto file = cdDirectory / relative;
+                const auto trimmedCopy = With(file, ".trimmed");
+                if (!enabled) { std::filesystem::remove(trimmedCopy, ec); continue; }
+                std::vector<uint8_t> bytes, trimmed;
+                if (!ReadAll(file, bytes)) { continue; }
+                std::string error;
+                if (!LT::Trim(bytes, trimmed, error))
+                {
+                    ++refused;
+                    std::cout << "Padding trim: " << relative.generic_string() << " left as it is: " << error << "\n";
+                    std::filesystem::remove(trimmedCopy, ec);
+                    continue;
+                }
+                saved += bytes.size() - trimmed.size();
+                // The level before the trim is kept; the trimmed one takes its name.
+                std::vector<uint8_t> cached;
+                const bool same = std::filesystem::exists(trimmedCopy, ec) && ReadAll(trimmedCopy, cached) && cached == trimmed;
+                std::filesystem::rename(file, With(file, ".padded"), ec);
+                if (ec) { std::cout << "Padding trim: could not set " << file.string() << " aside: " << ec.message() << "\n"; continue; }
+                if (same) { std::filesystem::rename(trimmedCopy, file, ec); }
+                if (!same || ec)
+                {
+                    std::filesystem::remove(trimmedCopy, ec);
+                    if (!WriteAll(file, trimmed))
+                    {
+                        // Never leave the level missing: the untrimmed one goes back.
+                        std::filesystem::rename(With(file, ".padded"), file, ec);
+                        std::cout << "Padding trim: could not write " << file.string() << "\n";
+                        continue;
+                    }
+                    ++made;
+                }
+                else { ++kept; }
+            }
+            if (enabled)
+            {
+                std::cout << "Padding trim: " << made << " levels trimmed, " << kept << " as before, " << refused
+                          << " left as they are; " << saved << " bytes nothing reads taken out.\n";
+            }
+        }
+    }
+
     void RunPatches(const std::filesystem::path& cdDirectory)
     {
         // THE STAGES, in order (Patch/README.txt):
@@ -599,11 +676,13 @@ namespace ALTEngine::Bootstrap
         //      "level" then "texture" byte patches),
         //   4. the missing faces (MissingFaces.json),
         //   5. ALTEngine's own: the Level Cleanup, then the texture blanking,
-        //      then its file fixes (EngineFilePatches.json: FINGERS.B16).
+        //      then its file fixes (EngineFilePatches.json: FINGERS.B16),
+        //      then, truly last, the padding trim (Formats::LevelTrim).
         // 1-4 are global (ALTViewer's patch button makes the same files); 5 is
         // ALTEngine's alone. The byte patches always meet the files as shipped
         // (less the removed models), so every later stage's work is put aside
         // first, last stage first.
+        SetPaddedAside(cdDirectory);
         SetCleanedAside(cdDirectory);
         SetFacedAside(cdDirectory);
         SetBlankedAside(cdDirectory);
@@ -681,6 +760,8 @@ namespace ALTEngine::Bootstrap
         // Last: the texture blanking, against the sheets as the fixes leave them.
         ApplyTextureBlanking(cdDirectory, TestingSettings(config).IsOn(TestingOption::LevelCleanup));
         ApplyEngineFilePatches(cdDirectory);
+        // Truly last: every offset named before this is in the untrimmed layout.
+        ApplyPaddingTrim(cdDirectory, TestingSettings(config).IsOn(TestingOption::PaddingTrim));
     }
 
     bool InstallFromDisc(const std::filesystem::path& discRoot, const std::filesystem::path& destination)

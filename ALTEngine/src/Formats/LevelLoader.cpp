@@ -1,6 +1,7 @@
 #include "LevelLoader.h"
 #include "BinaryReadLE.h"
 #include "BndParser.h"
+#include "LevelTrim.h"
 
 #include <fstream>
 #include <stdexcept>
@@ -40,6 +41,20 @@ namespace ALTEngine::Formats
 
     LevelGeometry LevelLoader::Parse(const std::vector<uint8_t>& file, const std::string& sourceName)
     {
+        // An ALTEngine install's levels are trimmed (MAPT: LevelTrim.h, the
+        // install's last step). They are put back to MAP0 first, so all that
+        // follows - and every offset it notes, faceRecordsPos and the rest -
+        // is the untrimmed layout the patches and tools name.
+        if (LevelTrim::IsTrimmed(file))
+        {
+            std::vector<uint8_t> expanded;
+            std::string error;
+            if (!LevelTrim::Expand(file, expanded, error))
+            {
+                throw std::runtime_error("LevelLoader: " + sourceName + " is trimmed but cannot be read back: " + error);
+            }
+            return Parse(expanded, sourceName);
+        }
         std::vector<BndSection> mapSections = BndParser::ParseFormSections(file, "MAP0");
         if (mapSections.empty())
         {

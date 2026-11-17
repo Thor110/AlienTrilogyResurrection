@@ -66,7 +66,12 @@ namespace ALTEngine::Game::LevelFileLayout
         if (bytes.size() < 20 || bytes[0] != 'F' || bytes[1] != 'O' || bytes[2] != 'R' || bytes[3] != 'M'
             || bytes[12] != 'M' || bytes[13] != 'A' || bytes[14] != 'P' || bytes[15] != '0')
         {
-            error = "not a level file (no FORM with MAP0 first)";
+            // An ALTEngine install's levels are trimmed (MAPT, Formats/LevelTrim.h)
+            // and every offset here is in the untrimmed layout: these tools work
+            // on untrimmed files only.
+            error = bytes.size() >= 16 && bytes[15] == 'T' && bytes[12] == 'M'
+                        ? "a trimmed level (MAPT): turn Testing > Padding Trim off, or use the file's .padded copy"
+                        : "not a level file (no FORM with MAP0 first)";
             return false;
         }
         Layout l;

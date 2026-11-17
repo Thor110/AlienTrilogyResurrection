@@ -6,11 +6,12 @@
         {
             int w = 0, h = 0;
             (w, h) = DetectDimensions.AutoDetectDimensions(Path.GetFileNameWithoutExtension(fileDirectory), comboBox1.SelectedIndex, comboBox2.SelectedIndex);
-            pictureBox1.Width = w;
-            pictureBox1.Height = h;
             List<BndSection> allSections = TileRenderer.ParseBndFormSections(File.ReadAllBytes(fileDirectory), "F0");
             List<byte[]> frames = TileRenderer.DecompressAllFramesInSection(allSections[comboBox1.SelectedIndex].Data);
             byte[] frameData = frames[comboBox2.SelectedIndex];
+            h = DetectDimensions.HeightFromData(w, h, frameData); // ALTEngine's taller FINGERS frames
+            pictureBox1.Width = w;
+            pictureBox1.Height = h;
             try { pictureBox1.Image = TileRenderer.RenderRaw8bppImage(frameData, palette, w, h, values, bitsPerPixel); }
             catch (Exception ex) { MessageBox.Show("Render failed: " + ex.Message); }
             return frameData;

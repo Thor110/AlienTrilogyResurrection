@@ -157,8 +157,6 @@ namespace ALTEngine::Bootstrap
         case StringId::DescSaveAnywhere: return "DescSaveAnywhere";
         case StringId::LevelTimer: return "LevelTimer";
         case StringId::DescLevelTimer: return "DescLevelTimer";
-        case StringId::PauseWeaponSelect: return "PauseWeaponSelect";
-        case StringId::DescPauseWeaponSelect: return "DescPauseWeaponSelect";
         case StringId::AssessmentTime: return "AssessmentTime";
         case StringId::AssessmentRun: return "AssessmentRun";
         case StringId::Testing: return "Testing";
@@ -173,6 +171,8 @@ namespace ALTEngine::Bootstrap
         case StringId::DescDisableResupplyTimer: return "DescDisableResupplyTimer";
         case StringId::LevelCleanup: return "LevelCleanup";
         case StringId::DescLevelCleanup: return "DescLevelCleanup";
+        case StringId::PaddingTrim: return "PaddingTrim";
+        case StringId::DescPaddingTrim: return "DescPaddingTrim";
         case StringId::AllTestingOptions: return "AllTestingOptions";
         case StringId::DescAllTestingOptions: return "DescAllTestingOptions";
         case StringId::GsOptions: return "GsOptions";
@@ -506,8 +506,6 @@ namespace ALTEngine::Bootstrap
         if (name == "DescSaveAnywhere") { return StringId::DescSaveAnywhere; }
         if (name == "LevelTimer") { return StringId::LevelTimer; }
         if (name == "DescLevelTimer") { return StringId::DescLevelTimer; }
-        if (name == "PauseWeaponSelect") { return StringId::PauseWeaponSelect; }
-        if (name == "DescPauseWeaponSelect") { return StringId::DescPauseWeaponSelect; }
         if (name == "AssessmentTime") { return StringId::AssessmentTime; }
         if (name == "AssessmentRun") { return StringId::AssessmentRun; }
         if (name == "Testing") { return StringId::Testing; }
@@ -522,6 +520,8 @@ namespace ALTEngine::Bootstrap
         if (name == "DescDisableResupplyTimer") { return StringId::DescDisableResupplyTimer; }
         if (name == "LevelCleanup") { return StringId::LevelCleanup; }
         if (name == "DescLevelCleanup") { return StringId::DescLevelCleanup; }
+        if (name == "PaddingTrim") { return StringId::PaddingTrim; }
+        if (name == "DescPaddingTrim") { return StringId::DescPaddingTrim; }
         if (name == "AllTestingOptions") { return StringId::AllTestingOptions; }
         if (name == "DescAllTestingOptions") { return StringId::DescAllTestingOptions; }
         if (name == "GsOptions") { return StringId::GsOptions; }

@@ -79,7 +79,7 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
 2. the level fixes (geometry, objects, lifts, doors);
 3. the texture fixes (texture numbers, turns, flips, the texture sheets);
 4. **the missing faces** - new in the global fixes;
-5. ALTEngine only: the Level Cleanup, the texture blanking, and ALTEngine's own file fixes.
+5. ALTEngine only: the Level Cleanup, the texture blanking, ALTEngine's own file fixes, and last the padding trim.
 
 - **The missing faces are now fixed for the original game too.** On 36 levels the first cell of the map never
   had its faces drawn (an off-by-one in the original's level files); some of those faces fill real holes, like
@@ -88,6 +88,9 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
   whether the cleanup is on or off, and ALTViewer's patch button puts them in for the original game.
 - **L232: the missing wall in the boiler room, by the grate** (reported on Discord), is in, with the texture
   Edward picked (193, flipped).
+- **The padding trim** (ALTEngine only, Options > Testing > Padding Trim, on by default): the level files lose
+  the bytes the game never reads, about 10% of them (1.9 MB across the 45 levels). The levels play exactly the
+  same. Turned off, the untrimmed files come back at the next start. ALTViewer reads the trimmed levels too.
 - **The face hugger's art is fixed in ALTEngine's copy of FINGERS.B16** (ALTEngine only). The two rows under
   the creature, filled since 0.9.6 so it reaches the bottom of the screen, were made in code every time the art
   loaded; they are now in the file itself, the same pictures (`Patch/FINGERS.txt`).
@@ -95,6 +98,14 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
   (the Face Index Display shows the new numbers).
 - ALTViewer's patch button can be pressed again over a patched game: it takes the missing faces out, checks the
   byte patches, and puts them back. ALTEngine does the same when it is installed from a game ALTViewer patched.
+- **ALTViewer reads ALTEngine's files**: the trimmed levels (Level Viewer) and the face hugger's taller frames
+  (Graphics Viewer). Its patch button stays hidden on an ALTEngine install, whose patches are already in, and
+  refuses one if pressed: its byte patches are for the original game's files.
+
+### Changed
+
+- **Picking a weapon from the pause menu is always on**, as in the original: Enter (or Right) on a weapon in the
+  list switches to it. It was the Modern option Pause Weapon Select, which is gone.
 
 ---
 

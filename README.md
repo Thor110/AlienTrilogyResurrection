@@ -78,6 +78,7 @@ The road map for this project.
 	- Does not currently extract the associated textures alongside them.
 	- Provides a list based interface for looking through the parsed objects within each level.
 	- Has a preview of the levels map generated using the collision blocks parsed for the level.
+	- Reads ALTEngine's trimmed levels (the MAPT layout its padding trim leaves) as well as the original ones.
 - [❌ 7 : Patches](#patches) ( ??% Complete )
 	- [Patched an issue on L906LEV where a vertex had incorrect coordinates.](#L906LEV-Multiplayer-Map-7-Fix-1)
 	- [Patched an issue on L906LEV where four faces were lacking the double sided transparency flag.](#L906LEV-Multiplayer-Map-7-Fix-2)
@@ -265,7 +266,7 @@ The host chooses the **Game Mode** below Name Of Game:
 - **Deathmatch** (the default) is the original's: the ten maps above, players against each other, with bots if wanted.
 - **Co-operative** is ALTEngine's own: the players go through the story missions together, starting on any of the 35 ("Start at mission"). There is no friendly fire and no bots (those rows are greyed out), with the same player limit as deathmatch. A player who reaches the end of a level waits there, out of sight and out of harm, until every player in the game has reached it; then the next mission loads for everyone. Dying puts you back at the level's start. The level is shared: the host runs the aliens, which go after whichever player is nearest, and every player sees and fights the same ones; doors, lifts, switches, lights, pickups and destroyed crates are the same for everyone, and a player joining late catches up with all of it. The motion tracker works in co-operative games, pulse and all. Grenades and seismic charges are seen by everyone. Each mission keeps its briefing and its assessment (marked CO-OPERATIVE); a player coming into a level the others are already playing sees a short syncing screen, in the briefing's style, while the level catches up.
 
-**The host's rules.** Every Modern option that changes how the game plays (Player Jumping, No Hit Immunity, Free Look, Render Distance, Live Minimap, Faster Xenomorphs, Speed Compensation, Pause Weapon Select, Enable Cheats) and the weapon pacing are the host's choice, for every player in the game. Save Anywhere and the testing aids that change play (Disable Enemy Spawn, Ghost Mode, Disable Resupply Timer) are off in a network game. Each player's own settings are untouched and come back afterwards.
+**The host's rules.** Every Modern option that changes how the game plays (Player Jumping, No Hit Immunity, Free Look, Render Distance, Live Minimap, Faster Xenomorphs, Speed Compensation, Enable Cheats) and the weapon pacing are the host's choice, for every player in the game. Save Anywhere and the testing aids that change play (Disable Enemy Spawn, Ghost Mode, Disable Resupply Timer) are off in a network game. Each player's own settings are untouched and come back afterwards.
 
 **Versions.** A player on a different version of ALTEngine from the host is turned away with a message naming both versions. A game hosted on another version doesn't show in the Join list.
 
@@ -383,7 +384,7 @@ A preview of the lift L000 from L232LEV.
 
 I am also looking at making patches for any issues I find in the original game.
 
-The fixes run in stages, always in the same order, each on the files as the stage before leaves them: the duplicate door and lift models taken out, the level fixes (shape, objects, lifts), the texture fixes, then the missing faces. These four suit the original game as well, and ALTViewer's patch button applies all of them; ALTEngine then adds its own (the Level Cleanup and the texture blanking). [Patch/README.txt](Patch/README.txt) explains each stage.
+The fixes run in stages, always in the same order, each on the files as the stage before leaves them: the duplicate door and lift models taken out, the level fixes (shape, objects, lifts), the texture fixes, then the missing faces. These four suit the original game as well, and ALTViewer's patch button applies all of them; ALTEngine then adds its own: the Level Cleanup, the texture blanking, its file fixes (the face hugger's art) and, last, the padding trim, which takes the bytes the game never reads out of its level files (about 10%; ALTViewer reads those files too). [Patch/README.txt](Patch/README.txt) explains each stage.
 
 The missing faces: on every level, the first cell of the map was never drawn by the original (an off-by-one in its level files), which leaves holes on some levels - the floors on L212, L242 and L243, a wall on L161, the boiler room wall by the grate on L232 - and L211 lacks a floor face altogether. They are now put in, for the original game too.
 

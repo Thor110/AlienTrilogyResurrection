@@ -374,9 +374,6 @@ namespace ALTEngine::Menu
                 featureNode(ALTEngine::Bootstrap::ModernSettings::MenuLabel(ALTEngine::Bootstrap::ModernFeature::LevelTimer),
                             StringId::LevelTimer, StringId::DescLevelTimer,
                             ALTEngine::Bootstrap::ModernFeature::LevelTimer),
-                featureNode(ALTEngine::Bootstrap::ModernSettings::MenuLabel(ALTEngine::Bootstrap::ModernFeature::PauseWeaponSelect),
-                            StringId::PauseWeaponSelect, StringId::DescPauseWeaponSelect,
-                            ALTEngine::Bootstrap::ModernFeature::PauseWeaponSelect),
                 featureNode(ALTEngine::Bootstrap::ModernSettings::MenuLabel(ALTEngine::Bootstrap::ModernFeature::FreeLook),
                             StringId::FreeLook, StringId::DescFreeLook,
                             ALTEngine::Bootstrap::ModernFeature::FreeLook),
@@ -426,6 +423,7 @@ namespace ALTEngine::Menu
                     testingNode(TestingOption::GhostMode, StringId::GhostMode, StringId::DescGhostMode),
                     testingNode(TestingOption::DisableResupplyTimer, StringId::DisableResupplyTimer, StringId::DescDisableResupplyTimer),
                     testingNode(TestingOption::LevelCleanup, StringId::LevelCleanup, StringId::DescLevelCleanup),
+                    testingNode(TestingOption::PaddingTrim, StringId::PaddingTrim, StringId::DescPaddingTrim),
                 });
                 testingList.descriptionStringId = static_cast<int>(StringId::DescTesting);
                 entries.push_back(std::move(testingList));

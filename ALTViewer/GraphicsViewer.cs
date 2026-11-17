@@ -283,6 +283,7 @@ namespace ALTViewer
                 if (comboBox2.Items.Count != 1) { filepath = Path.Combine(outputPath, $"{lastSelectedFile}_{sectionName}_FRAME{comboBox2.SelectedIndex:D2}"); }
                 saving = currentFrame!; // use current frame data for compressed files
                 (w, h) = DetectDimensions.AutoDetectDimensions(lastSelectedFile, comboBox1.SelectedIndex, comboBox2.SelectedIndex);
+                h = DetectDimensions.HeightFromData(w, h, saving); // ALTEngine's taller FINGERS frames
             }
             try
             {

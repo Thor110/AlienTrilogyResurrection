@@ -15,7 +15,8 @@ them, so each one is written against a known file.
   2. Level fixes                                                   global
   3. Texture fixes                                                 global
   4. Missing faces                                                 global
-  5. The Level Cleanup, the texture blanking, the file fixes       ALTEngine only
+  5. The Level Cleanup, the texture blanking, the file fixes,
+     then the padding trim                                         ALTEngine only
 
 Global fixes correct mistakes in the shipped files and suit the original game as well as ALTEngine: ALTViewer's
 patch button puts all four into an installed copy of the original. ALTEngine-only fixes are made for ALTEngine
@@ -82,7 +83,30 @@ and are never offered for the original game.
 
    ALTEngine's file fixes (data/EngineFilePatches.json) change files for ALTEngine alone, each checked by its
    CRC before and after. The first is the face hugger's art, FINGERS.B16, filled to the bottom of the screen
-   (FINGERS.txt). Planned for this stage: the gaps above the doors, and trimming the bytes nothing uses
+   (FINGERS.txt).
+
+   The padding trim, truly last (Options > Testing > Padding Trim, on by default): each level file loses the
+   bytes the game never reads, or reads as one fixed value, or clears when the level starts - 1,930,078 bytes
+   across the 45 levels, about 10% of them (Notes/unread-bytes-notes.txt says what every byte is). The level's
+   MAP0 chunk becomes MAPT, with shorter records; every other chunk stays as it was:
+
+     record        bytes   taken out
+     header        36->32  +28,+29 (always 0x40 0x40); +34,+35 (vent types, never read)
+     vertex         8->6   +6,+7 (always 0)
+     cell          16->13  +4, +7 (always 0, rebuilt at level start); +12 (cleared at level start)
+     path node      8->7   +2 (always 0)
+     monster       20->19  +9 (never read)
+     pickup         8->6   +5 (always 0); +7 (never read)
+     object        16->12  +5 (10 on the crate types, else 0); +11, +13, +15 (always 0)
+     door           8->7   +5 (always 0)
+     lift          16->10  +4, +11 (always 0); +6 (always 1); +13..15 (never read)
+     action group   4->3   +3 (always 0)
+     light         28->24  the pad byte after each colour (always 0)
+
+   It comes last because every offset in this folder, and every offset the stages before it use, is in the
+   untrimmed layout. The untrimmed level is kept beside each (.padded); turning the option off puts it back at
+   the next start. ALTEngine reads either; ALTViewer reads either too (LevelTrim.cs), and refuses to patch a
+   trimmed install, whose patches are all in already. Planned for this stage: the gaps above the doors
    (Notes/what-remains.md, section 7b).
 
 

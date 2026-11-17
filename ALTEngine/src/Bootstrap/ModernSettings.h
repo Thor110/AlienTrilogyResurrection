@@ -87,15 +87,10 @@ namespace ALTEngine::Bootstrap
         // ran, so pauses and loading are left out. OURS.
         LevelTimer,
 
-        // Pick a weapon from the pause menu's list: Enter (or Right, or fire)
-        // on a weapon you have, with ammunition, makes it the one in hand,
-        // and the menu stays open (FUN_00044b48 cases 2-6, which the original
-        // has; the port's pause menu had left it out). Kept here so it can be
-        // turned off.
-        //
         // New features go at the END of this list: a network game sends the
-        // host's choices as a bit per value (SessionRules).
-        PauseWeaponSelect,
+        // host's choices as a bit per value (SessionRules). (Pause Weapon
+        // Select was the last, value 12: removed in zip 171, the original's
+        // own behaviour and so always on - PauseMenuScreen.cpp.)
     };
 
     // What an option does in a network game (deathmatch or co-operative):
@@ -142,7 +137,6 @@ namespace ALTEngine::Bootstrap
             ModernFeature::SpeedCompensation,
             ModernFeature::SaveAnywhere,
             ModernFeature::LevelTimer,
-            ModernFeature::PauseWeaponSelect,
         };
 
         static constexpr NetworkRule NetworkRuleFor(ModernFeature feature)
@@ -163,7 +157,6 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::LiveMinimap:
             case ModernFeature::FasterXenomorphs:
             case ModernFeature::SpeedCompensation:
-            case ModernFeature::PauseWeaponSelect:
                 return NetworkRule::Shared;
             }
             return NetworkRule::Shared;
@@ -300,7 +293,6 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::SpeedCompensation: return "Speed Compensation";
             case ModernFeature::SaveAnywhere: return "Save Anywhere";
             case ModernFeature::LevelTimer: return "Level Timer";
-            case ModernFeature::PauseWeaponSelect: return "Pause Weapon Select";
             }
             return "";
         }
@@ -321,7 +313,6 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::SpeedCompensation: return "ModernSpeedCompensation";
             case ModernFeature::SaveAnywhere: return "ModernSaveAnywhere";
             case ModernFeature::LevelTimer: return "ModernLevelTimer";
-            case ModernFeature::PauseWeaponSelect: return "ModernPauseWeaponSelect";
             }
             return "ModernUnknown";
         }

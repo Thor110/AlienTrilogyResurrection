@@ -181,9 +181,9 @@ Changed in zip 103: **a review of the network, bot and trigger code** (no change
   download, not in the repo.
 
 Changed in zip 147 (version 0.9.6), to check:
-- **Pause Weapon Select** (Modern; on in the Convenience and Modernised presets): Enter or Right on a weapon in
-  the pause menu's list switches to it, the menu staying open (FUN_00044b48 cases 2-6, the original's). Uses the
-  same switch as the number keys.
+- **Weapon select in the pause menu** (always on since zip 171; it was the Modern option Pause Weapon Select):
+  Enter or Right on a weapon in the pause menu's list switches to it, the menu staying open (FUN_00044b48 cases
+  2-6, the original's). Uses the same switch as the number keys.
 - **The host's rules in a network game** (`Bootstrap/SessionRules.h`, sent in the Welcome, protocol 7): each
   Modern feature is Shared (the host's for everyone), Off, or Local (`ModernSettings::NetworkRuleFor`); the
   weapon pacing is shared; Disable Enemy Spawn, Ghost Mode and Disable Resupply Timer are off. In force for the
@@ -974,7 +974,7 @@ the original game. Every ALTEngine-only fix, done or planned, is listed here, so
 | Texture blanking: unused texture slots blanked (`data/TextureBlankList.json`) | applied at install, `.unblanked` copies kept | done (zip 120) |
 | The face hugger's two empty bottom rows filled (FINGERS.B16) | in the file: `data/EngineFilePatches.json`, `Patch/FINGERS.txt`; the three taller frames' heights in `FaceHugOverlay::FIXED_HEIGHTS` | done (zip 169); the load-time fill (`RepeatBottomRows`) removed |
 | The gaps above the doors | not yet | planned (below, "Later: patch in the gaps above the doors") |
-| Trimming the bytes nothing uses | not yet | planned (below, "Towards the end of the project") |
+| Trimming the bytes nothing uses (the padding trim) | `Formats/LevelTrim` (MAPT layout), the install's very last step, `.padded` copies kept; Testing > Padding Trim | done (zip 170); ALTViewer reads trimmed levels (`LevelTrim.cs`) |
 
 **The order (zip 168).** Applied one after another, each stage reading the files as the stage before leaves them,
 the same in ALTEngine (`Bootstrap/InstallPipeline.cpp`, RunPatches) and ALTViewer (the patch button); the four
@@ -986,7 +986,8 @@ global stages give byte-identical files in both. `Patch/README.txt` describes ea
 4. **missing faces** (global: `data/MissingFaces.json`, ALTViewer's `MissingFaces.cs`) - each level's first cell
    given its run, a copy of record 0 where it is seen, L211's floor, L232's copy's texture;
 5. **ALTEngine-only fixes** (the table above): the Level Cleanup, then the texture blanking, then the file fixes
-   (`data/EngineFilePatches.json`, CRC-checked before and after; FINGERS.B16).
+   (`data/EngineFilePatches.json`, CRC-checked before and after; FINGERS.B16), then, truly last, the padding trim
+   (`Formats/LevelTrim`: MAP0 -> MAPT; every offset named before it is in the untrimmed layout).
 
 Why this order holds: the byte patches (2, 3) never change a file's size, so their offsets hold against the files
 stage 1 leaves; the missing faces are checked by CRC against the file stages 1-3 leave (`crc`, and `facedCrc` the
@@ -1014,6 +1015,21 @@ reader (Duck `DUCK` video, PCM audio), so a cut-down LGPL build would be under 1
 the kept copies need not be kept; the music would be about half as FLAC.
 
 ## Towards the end of the project: trim the bytes nothing uses (ALTEngine only)
+
+**Done in zip 170.** `Formats/LevelTrim.h/.cpp`: the level chunk becomes MAPT, every record shorter by the bytes
+below (the table there and in `Patch/README.txt`). Expand puts them back - the always-the-same ones with their value,
+the never-read and level-start ones (header +34, cell +12, monster +9, pickup +7, lift +13..15) as 0 - and
+LevelLoader::Parse expands a MAPT file before reading it, so the game and every offset it reports (the Face Index
+Display's file offsets included) are the untrimmed layout. Trim refuses a level whose fixed bytes are not their usual
+values (left as it is, reported). The install's very last step (`ApplyPaddingTrim`), with the untrimmed file kept as
+`<file>.padded` and put back first at every start (`SetPaddedAside`), so every stage before meets untrimmed files;
+the trimmed copy is kept (`.trimmed`) and reused when unchanged. Testing > Padding Trim (on by default) off restores
+the untrimmed levels. Checked on the 45 levels shipped, faced and cleaned: each trims, expands back to the same bytes
+(less the zeroed ones) and loads the same; an install trims 1,930,078 bytes, a second start rewrites nothing, and
+off restores every level byte for byte. The dev tools that edit offsets (ALTLevelCleanupList, ALTTextureBlankList)
+refuse a trimmed level with a message saying so. ALTViewer: `LevelTrim.cs` (the same layout; checked to expand all
+45 the same as ALTEngine), used by the Level Viewer for every MAP0 read; its patch button hides for, and refuses, a
+trimmed install. What follows is the plan as it was.
 
 Edward's idea (zip 126). Every byte of MAP0 is now accounted for (Notes/unread-bytes-notes.txt), and some hold
 nothing: data the editor left that the game never reads, and runtime space the level start rebuilds anyway. A last

@@ -39,8 +39,8 @@ namespace ALTEngine::Screens
         // The Shoulder Lamp entry was used (FUN_00044b48 case 1).
         bool useLight = false;
 
-        // Modern, Pause Weapon Select: the weapon slot picked from the list
-        // (FUN_00044b48 cases 2-6), for the caller to switch to; -1 for none.
+        // The weapon slot picked from the list (FUN_00044b48 cases 2-6), for
+        // the caller to switch to; -1 for none.
         int selectWeapon = -1;
     };
 

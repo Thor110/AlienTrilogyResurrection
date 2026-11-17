@@ -199,6 +199,15 @@
             return values;
         }
         // Auto-detect dimensions based on the total pixel count in the image data
+        // A frame's height from its own pixels, when they hold whole rows more than the table above says. ALTEngine's
+        // copy of FINGERS.B16 has three frames one row taller than the original (the face hugger's art filled to the
+        // bottom of the screen - see Patch/FINGERS.txt): section 0 frames 2 and 3, section 1 frame 1. The width never
+        // changes, so the extra rows show as they are, and every other frame keeps the table's height.
+        public static int HeightFromData(int w, int h, byte[] frameData)
+        {
+            if (w <= 0 || frameData == null || frameData.Length <= w * h || frameData.Length % w != 0) { return h; }
+            return frameData.Length / w;
+        }
         public static (int w, int h) AutoDetectDimensions(string lastSelectedFile, int SelectedIndex, int FrameIndex)
         {
             int w = 0, h = 0;

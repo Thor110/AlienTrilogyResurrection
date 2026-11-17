@@ -34,7 +34,9 @@ namespace ALTViewer
             // faces to add (371GFX.B16, L900LEV.MAP) are still read by offset.
             bool facesIn = MissingFaces.AllApplied(gameDirectory);
             bool allDone = facesIn && last == 0xFA && liftPanel == 0x02;
-            if (filesPresent && !allDone) { button6.Visible = true; } // show patch button if any of the patches is still to be applied
+            // An ALTEngine install (LevelTrim.IsEngineInstall): its patches are already in, and its levels are cleaned and
+            // maybe trimmed, not the files ALTViewer's byte offsets name, so the button never shows for one.
+            if (filesPresent && !allDone && !LevelTrim.IsEngineInstall(gameDirectory)) { button6.Visible = true; } // show patch button if any of the patches is still to be applied
         }
         // create new form method
         private void newForm(Form form)
@@ -60,6 +62,11 @@ namespace ALTViewer
             //   4. the missing faces (MissingFaces.cs).
             // Every byte patch is written against the files without the missing faces, so any level that has them
             // (the button pressed before) has them taken back out first, exactly; they go back in at the end.
+            if (LevelTrim.IsEngineInstall(gameDirectory))
+            {
+                MessageBox.Show("This is an ALTEngine install: its patches are already in, and its levels are not the original game's files. ALTViewer's patches are for the original game. Nothing was patched.");
+                return;
+            }
             if (!MissingFaces.RemoveAll(gameDirectory))
             {
                 MessageBox.Show("A level's missing faces could not be taken back out: the file is not the expected version. Nothing was patched.");
