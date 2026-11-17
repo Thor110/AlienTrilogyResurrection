@@ -9,6 +9,12 @@ namespace ALTViewer
             InitializeComponent();
             gameDirectory = Utilities.CheckDirectory();
             if(gameDirectory == "") { MessageBox.Show("Game directory not found. Please ensure this program is in the correct directory."); Close(); return; }
+            if (Utilities.EngineNotInstalledYet(gameDirectory))
+            {
+                MessageBox.Show("Run ALTEngine first.\n\nALTViewer reads the game files ALTEngine installs (from the disc or an existing installation) on its first start, and they are not there yet.", "ALTEngine has not been run yet");
+                Close();
+                return;
+            }
             patchDirectory = Path.Combine(gameDirectory, "SECT90", "L906LEV.MAP"); // setup patchDirectory for the first patch
             string sect32File = Path.Combine(gameDirectory, "SECT32", "371GFX.B16");
             // Each check reads -1 instead of throwing when its file is missing or too short, so a partial or

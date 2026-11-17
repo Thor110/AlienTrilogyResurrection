@@ -120,6 +120,8 @@ namespace ALTEngine::Bootstrap
             "Mouse Sensitivity",
             "Invert Look",
             "HUD Size",
+            "Renderer",
+            "The graphics API the game draws with; takes effect the next time ALTEngine starts",
             "Modern",
             "Enable All",
             "Custom",

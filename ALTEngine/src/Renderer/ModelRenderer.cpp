@@ -2,6 +2,7 @@
 #include "../Bootstrap/FsUtil.h"
 #include "Mat4.h"
 #include "../Bootstrap/PlatformPaths.h"
+#include "../Bootstrap/RenderSettings.h"
 #include "../Formats/BndParser.h"
 #include "../Formats/BndTextureLoader.h"
 #include "../Formats/ModelLoader.h"
@@ -772,13 +773,25 @@ namespace ALTEngine::Renderer
         // silently failed against a null device (Edward, 2026).
         if (device) { return true; }
 
-        device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL,
-                                     false, nullptr);
+        // Options > Graphics > Renderer: the driver picked there, or SDL's
+        // own choice (Auto). One this machine cannot run falls back to Auto.
+        const SDL_GPUShaderFormat shippedFormats = SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL;
+        {
+            ALTEngine::Bootstrap::Config driverConfig;
+            const std::string driver = ALTEngine::Bootstrap::RenderSettings(driverConfig).GpuDriver();
+            if (!driver.empty())
+            {
+                device = SDL_CreateGPUDevice(shippedFormats, false, driver.c_str());
+                if (!device) { SDL_Log("ModelRenderer::Initialize: the %s renderer could not start (%s) - using Auto", driver.c_str(), SDL_GetError()); }
+            }
+        }
+        if (!device) { device = SDL_CreateGPUDevice(shippedFormats, false, nullptr); }
         if (!device)
         {
             SDL_Log("ModelRenderer::Initialize: SDL_CreateGPUDevice failed: %s", SDL_GetError());
             return false;
         }
+        SDL_Log("ModelRenderer: drawing with %s", SDL_GetGPUDeviceDriver(device));
 
         // The shader format decides which compiled file to load: .dxil from
         // the HLSL (dxc), .spv from the GLSL twin (glslangValidator) and .msl

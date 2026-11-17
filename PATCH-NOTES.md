@@ -102,6 +102,16 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
   (Graphics Viewer). Its patch button stays hidden on an ALTEngine install, whose patches are already in, and
   refuses one if pressed: its byte patches are for the original game's files.
 
+### New
+
+- **Options > Graphics > Renderer**: Auto (the default, SDL's own choice), or Vulkan, Direct3D 12 or Metal -
+  whichever this machine can run, so only those are listed. It takes effect the next time ALTEngine starts; one
+  that will not start there falls back to Auto. The log says which one is drawing. (There is no OpenGL: the
+  game's 3D is drawn through SDL's GPU API, which has none.)
+- **ALTViewer beside ALTEngine** finds the game files ALTEngine installed (its `altengine.cfg`, else
+  `GameData\CD`), and if ALTEngine has not been run yet, says so and closes: ALTEngine installs the files on its
+  first start.
+
 ### Changed
 
 - **Picking a weapon from the pause menu is always on**, as in the original: Enter (or Right) on a weapon in the

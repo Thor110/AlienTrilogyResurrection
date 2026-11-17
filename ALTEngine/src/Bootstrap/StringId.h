@@ -131,6 +131,8 @@ namespace ALTEngine::Bootstrap
         MouseSensitivity,
         InvertLook,
         HudSize,
+        Renderer,
+        DescRenderer,
         Modern,
         EnableAll,
         Custom,

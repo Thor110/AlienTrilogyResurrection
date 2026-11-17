@@ -386,6 +386,10 @@ namespace ALTEngine::Menu
                     {
                         selectByLabel(node, render.VSync() ? "On" : "Off");
                     }
+                    else if (node.label == "Renderer")
+                    {
+                        selectByLabel(node, RenderSettings::DriverLabel(render.GpuDriver()));
+                    }
                     else if (node.label == "Display Mode")
                     {
                         switch (render.GetDisplayMode())
@@ -559,6 +563,11 @@ namespace ALTEngine::Menu
             {
                 ALTEngine::Bootstrap::Config testingConfig;
                 ALTEngine::Bootstrap::TestingSettings(testingConfig).Set(option, leafLabel == "On");
+            }
+            else if (parentLabel == "Renderer")
+            {
+                // Read when the GPU device is made: the next start.
+                renderSettings.SetGpuDriver(RenderSettings::DriverForLabel(leafLabel));
             }
             else if (parentLabel == "VSync")
             {
@@ -1033,7 +1042,7 @@ namespace ALTEngine::Menu
                         // however it had actually been set. The value itself
                         // was being stored correctly the whole time; only the
                         // display was stale (Edward, 2026).
-                        if (parentLabel == "Quality" || parentLabel == "VSync" || parentLabel == "Display Mode")
+                        if (parentLabel == "Quality" || parentLabel == "VSync" || parentLabel == "Display Mode" || parentLabel == "Renderer")
                         {
                             RefreshGraphicsSelections((*optionsRootPtr));
                         }

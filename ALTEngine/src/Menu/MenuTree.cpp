@@ -229,7 +229,24 @@ namespace ALTEngine::Menu
                 hudSize.sliderValue = ALTEngine::Bootstrap::HudSizeSettings(hudConfig).Get();
             }
 
-            return List("Graphics", StringId::Graphics, { std::move(quality), std::move(resolution), std::move(vsync), std::move(displayMode), std::move(hudSize) });
+            // Renderer: Auto, then each of SDL's GPU drivers this machine can
+            // run (Vulkan, Direct3D 12, Metal) - the names are the APIs' own,
+            // not translated. Takes effect at the next start (RenderSettings).
+            MenuNode renderer = List("Renderer", StringId::Renderer, { Action("Auto") });
+            for (const std::string& driver : ALTEngine::Bootstrap::RenderSettings::AvailableGpuDrivers())
+            {
+                renderer.children.push_back(Action(ALTEngine::Bootstrap::RenderSettings::DriverLabel(driver)));
+            }
+            {
+                ALTEngine::Bootstrap::Config rendererConfig;
+                renderer.initialSelectedChild = FindChildIndexByLabel(renderer.children,
+                    ALTEngine::Bootstrap::RenderSettings::DriverLabel(ALTEngine::Bootstrap::RenderSettings(rendererConfig).GpuDriver()));
+                if (renderer.initialSelectedChild < 0) { renderer.initialSelectedChild = 0; }
+            }
+            renderer.isSettingsList = true;
+            renderer.descriptionStringId = static_cast<int>(StringId::DescRenderer);
+
+            return List("Graphics", StringId::Graphics, { std::move(quality), std::move(resolution), std::move(vsync), std::move(displayMode), std::move(renderer), std::move(hudSize) });
         }
 
         MenuNode LanguageMenu(ALTEngine::Bootstrap::Language current)
