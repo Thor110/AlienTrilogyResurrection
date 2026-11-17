@@ -1,9 +1,304 @@
 {
   "_source": "Ported from ALTViewer.cs button6_Click, auto-extracted (not hand-transcribed) to avoid offset transcription errors.",
+  "_stages": "Patches run in stages, in this order: the duplicate door/lift model removals ('modelRemovals', first, as every byte patch is written against the files without them), then every 'level' patch (geometry, objects, cells, lifts), then every 'texture' patch (texture indices, turns, flips, draw routines, the GFX sheets), each in file order. No level patch touches a byte a texture patch does. After these: the missing faces (data/MissingFaces.json), then ALTEngine's own (the Level Cleanup and the texture blanking). See Patch/README.txt.",
   "patches": [
     {
       "target": "SECT90/L906LEV.MAP",
-      "note": "L906LEV.MAP",
+      "stage": "level",
+      "note": "L906LEV.MAP - a misplaced triangle: its vertex list put right (ALTViewer's fix 1)",
+      "edits": [
+        {
+          "offset": "0x50BC8",
+          "bytes": [
+            "0xB4",
+            "0x22",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L901LEV.MAP",
+      "stage": "level",
+      "note": "L901LEV.MAP - Incorrect player store positioning",
+      "edits": [
+        {
+          "offset": "0x5BAD5",
+          "bytes": [
+            "0x15",
+            "0x29"
+          ]
+        },
+        {
+          "offset": "0x5BAE9",
+          "bytes": [
+            "0x16",
+            "0x29"
+          ]
+        },
+        {
+          "offset": "0x5BAFD",
+          "bytes": [
+            "0x17",
+            "0x29"
+          ]
+        },
+        {
+          "offset": "0x5BB11",
+          "bytes": [
+            "0x18",
+            "0x29"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT32/L371LEV.MAP",
+      "stage": "level",
+      "note": "L371LEV.MAP - inaccessible secret: lift 3's threshold (record byte 10) set to 1, so stepping on it at the top takes it down into the secret pit (trigger 5, a final-count add); its other add, the switch (trigger 6), is at the bottom - discovered by @bambamalicious, traced by Claude (2026). Plus two texture index fixes by @thor110",
+      "edits": [
+        {
+          "offset": "0x6F78E",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x274AC",
+          "bytes": [
+            "0xEA"
+          ]
+        },
+        {
+          "offset": "0x1EDE8",
+          "bytes": [
+            "0x23"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT11/L111LEV.MAP",
+      "stage": "level",
+      "note": "L111LEV.MAP - misplaced vertex coordinate (lift) - manually located by Edward, 2026",
+      "edits": [
+        {
+          "offset": "0x14EFA",
+          "bytes": [
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L900LEV.MAP",
+      "stage": "level",
+      "note": "L900LEV.MAP - misplaced vertex coordinate (lift), same bug as L111LEV.MAP at the identical offset - Edward, 2026",
+      "edits": [
+        {
+          "offset": "0x14EFA",
+          "bytes": [
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT11/L112LEV.MAP",
+      "stage": "level",
+      "note": "L112LEV.MAP - a corner of the sloped base under the hanging sign was covered twice: triangle 5843 (985, 981, 920) and, over exactly the same area, a tex 0 triangle 5849 (13158, 985, 13159) and a strip 5850 (13158, 13159, 981, 920). The two fought for the same pixels, showing pale tex 0 slivers. 5849 and 5850 are made zero-area by pointing every corner at vertex 985, leaving 5843 - see Patch/L112LEV.txt",
+      "edits": [
+        {
+          "offset": "0x3AFA8",
+          "bytes": [
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x3AFBC",
+          "bytes": [
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xD9",
+            "0x03",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L909LEV.MAP",
+      "stage": "level",
+      "note": "L909LEV.MAP - the start room stays sealed: the four cells past its doorway, (5,37)-(5,40), are attribute 1 again, a solid wall at load (0x282f5), as shipped. An earlier patch opened them for testing; the room is the multiplayer players' holding room (its lift carries developer graffiti, \"RIPLEY WOZ ERE\" and the like), and multiplayer starts and Level Select on a multiplayer map now put the player at a path node. This sets back an install the earlier patch changed; on a fresh one it is already in place - see Patch/L909LEV.txt (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x5083E",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x50E1E",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x513FE",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x519DE",
+          "bytes": [
+            "0x01"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L909LEV.MAP",
+      "stage": "level",
+      "note": "L909LEV.MAP - the second holding room, the start room's mirror at the corridor's east end (82-84, 37-40), is sealed as the first is: the four cells in front of its painted lift door, (80,37)-(80,40), had attribute 0, so a player could walk through the painted door, open the real door behind it (door 0 at (81,38)) and into a room the level never uses. Attribute 1, a solid wall at load, as (5,37)-(5,40) are at the other end. Both rooms are then trimmed by the Level Cleanup - see Patch/L909LEV.txt (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x50CEE",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x512CE",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x518AE",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x51E8E",
+          "bytes": [
+            "0x01"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L903LEV.MAP",
+      "stage": "level",
+      "note": "L903LEV.MAP - four cells lost their wall attribute when the level was made from L141LEV: two pillars at (11,43) and (11,48) could be walked into; restored to L141's values (Claude, 2026)",
+      "edits": [
+        {
+          "offset": "0x69002",
+          "bytes": [
+            "0x14"
+          ]
+        },
+        {
+          "offset": "0x69502",
+          "bytes": [
+            "0x14"
+          ]
+        },
+        {
+          "offset": "0x6AE52",
+          "bytes": [
+            "0x14"
+          ]
+        },
+        {
+          "offset": "0x6E862",
+          "bytes": [
+            "0x15"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT12/L161LEV.MAP",
+      "stage": "level",
+      "note": "L161LEV.MAP - face 3758 as shipped: (8645, 8646, 8655, -1), texture 1, routine 1, light 0x08 - the triangle of face 3757 drawn a second time. An earlier patch gave it over to the missing quad between faces 0, 29, 36 and 40; that quad is record 0, the first face of the first cell's run, which the Level Cleanup now gives back with the cell, so this sets 3758 back (on a fresh install it is already so) and the Level Cleanup takes it out as a duplicate. Tracked in Notes/uv-review-log.md",
+      "edits": [
+        {
+          "offset": "0x29E1C",
+          "bytes": [
+            "0xC5",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0xC6",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0xCF",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x29E2C",
+          "bytes": [
+            "0x01",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x29E2E",
+          "bytes": [
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x29E2F",
+          "bytes": [
+            "0x08"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L906LEV.MAP",
+      "stage": "texture",
+      "note": "L906LEV.MAP - the railings drawn see-through (ALTViewer's fixes 2-4), the bridge sections given their textures (fix 5) and textures flipped the right way",
       "edits": [
         {
           "offset": "0x51342",
@@ -39,15 +334,6 @@
           "offset": "0x22BF9",
           "bytes": [
             "0x04"
-          ]
-        },
-        {
-          "offset": "0x50BC8",
-          "bytes": [
-            "0xB4",
-            "0x22",
-            "0x00",
-            "0x00"
           ]
         },
         {
@@ -693,7 +979,8 @@
     },
     {
       "target": "SECT90/L905LEV.MAP",
-      "note": "L905LEV.MAP",
+      "stage": "texture",
+      "note": "L905LEV.MAP - the pipes drawn solid instead of see-through (ALTViewer's fixes 1 and 2)",
       "edits": [
         {
           "offset": "0x56ADA",
@@ -1017,6 +1304,7 @@
     },
     {
       "target": "SECT11/L111LEV.MAP",
+      "stage": "texture",
       "note": "L111LEV.MAP - incorrect texture flags",
       "edits": [
         {
@@ -1095,6 +1383,7 @@
     },
     {
       "target": "SECT90/L900LEV.MAP",
+      "stage": "texture",
       "note": "L111LEV.MAP - incorrect texture flags",
       "edits": [
         {
@@ -1173,6 +1462,7 @@
     },
     {
       "target": "SECT11/L111LEV.MAP",
+      "stage": "texture",
       "note": "L111LEV.MAP - incorrect texture flags",
       "edits": [
         {
@@ -1203,6 +1493,7 @@
     },
     {
       "target": "SECT90/L900LEV.MAP",
+      "stage": "texture",
       "note": "L111LEV.MAP - incorrect texture flags",
       "edits": [
         {
@@ -1233,6 +1524,7 @@
     },
     {
       "target": "SECT12/L162LEV.MAP",
+      "stage": "texture",
       "note": "L162LEV.MAP - D001 - incorrect texture index",
       "edits": [
         {
@@ -1245,6 +1537,7 @@
     },
     {
       "target": "SECT12/L161LEV.MAP",
+      "stage": "texture",
       "note": "L161LEV.MAP - D002 - incorrect texture index",
       "edits": [
         {
@@ -1268,65 +1561,8 @@
       ]
     },
     {
-      "target": "SECT90/L901LEV.MAP",
-      "note": "L901LEV.MAP - Incorrect player store positioning",
-      "edits": [
-        {
-          "offset": "0x5BAD5",
-          "bytes": [
-            "0x15",
-            "0x29"
-          ]
-        },
-        {
-          "offset": "0x5BAE9",
-          "bytes": [
-            "0x16",
-            "0x29"
-          ]
-        },
-        {
-          "offset": "0x5BAFD",
-          "bytes": [
-            "0x17",
-            "0x29"
-          ]
-        },
-        {
-          "offset": "0x5BB11",
-          "bytes": [
-            "0x18",
-            "0x29"
-          ]
-        }
-      ]
-    },
-    {
-      "target": "SECT32/L371LEV.MAP",
-      "note": "L371LEV.MAP - inaccessible secret: lift 3's threshold (record byte 10) set to 1, so stepping on it at the top takes it down into the secret pit (trigger 5, a final-count add); its other add, the switch (trigger 6), is at the bottom - discovered by @bambamalicious, traced by Claude (2026). Plus two texture index fixes by @thor110",
-      "edits": [
-        {
-          "offset": "0x6F78E",
-          "bytes": [
-            "0x01"
-          ]
-        },
-        {
-          "offset": "0x274AC",
-          "bytes": [
-            "0xEA"
-          ]
-        },
-        {
-          "offset": "0x1EDE8",
-          "bytes": [
-            "0x23"
-          ]
-        }
-      ]
-    },
-    {
       "target": "SECT32/371GFX.B16",
+      "stage": "texture",
       "note": "371GFX.B16 - graphics background fix",
       "edits": [
         {
@@ -21978,32 +22214,7 @@
     },
     {
       "target": "SECT11/L111LEV.MAP",
-      "note": "L111LEV.MAP - misplaced vertex coordinate (lift) - manually located by Edward, 2026",
-      "edits": [
-        {
-          "offset": "0x14EFA",
-          "bytes": [
-            "0x00",
-            "0x00"
-          ]
-        }
-      ]
-    },
-    {
-      "target": "SECT90/L900LEV.MAP",
-      "note": "L900LEV.MAP - misplaced vertex coordinate (lift), same bug as L111LEV.MAP at the identical offset - Edward, 2026",
-      "edits": [
-        {
-          "offset": "0x14EFA",
-          "bytes": [
-            "0x00",
-            "0x00"
-          ]
-        }
-      ]
-    },
-    {
-      "target": "SECT11/L111LEV.MAP",
+      "stage": "texture",
       "note": "L111LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38), and the face's texture turned a quarter-turn counter-clockwise by rotating its vertex list (8052, 8049, 8113 -> 8049, 8113, 8052) - see Patch/another-fix.txt Turned once more counter-clockwise in the UV review (Edward, 2026): now (8113, 8052, 8049), the one rotation not tried before - the original (8052, 8049, 8113) and the earlier quarter-turn (8049, 8113, 8052) both left the texture streaked.",
       "edits": [
         {
@@ -22037,6 +22248,7 @@
     },
     {
       "target": "SECT90/L900LEV.MAP",
+      "stage": "texture",
       "note": "L900LEV.MAP - incorrect texture index on one face (0x46DC4 = 0x38), and the face's texture turned a quarter-turn counter-clockwise by rotating its vertex list (8052, 8049, 8113 -> 8049, 8113, 8052), same bug as L111LEV.MAP at the identical offset - see Patch/another-fix.txt Turned once more counter-clockwise in the UV review (Edward, 2026): now (8113, 8052, 8049), the one rotation not tried before - the original (8052, 8049, 8113) and the earlier quarter-turn (8049, 8113, 8052) both left the texture streaked.",
       "edits": [
         {
@@ -22069,55 +22281,8 @@
       ]
     },
     {
-      "target": "SECT11/L112LEV.MAP",
-      "note": "L112LEV.MAP - a corner of the sloped base under the hanging sign was covered twice: triangle 5843 (985, 981, 920) and, over exactly the same area, a tex 0 triangle 5849 (13158, 985, 13159) and a strip 5850 (13158, 13159, 981, 920). The two fought for the same pixels, showing pale tex 0 slivers. 5849 and 5850 are made zero-area by pointing every corner at vertex 985, leaving 5843 - see Patch/L112LEV.txt",
-      "edits": [
-        {
-          "offset": "0x3AFA8",
-          "bytes": [
-            "0xD9",
-            "0x03",
-            "0x00",
-            "0x00",
-            "0xD9",
-            "0x03",
-            "0x00",
-            "0x00",
-            "0xD9",
-            "0x03",
-            "0x00",
-            "0x00",
-            "0xFF",
-            "0xFF",
-            "0xFF",
-            "0xFF"
-          ]
-        },
-        {
-          "offset": "0x3AFBC",
-          "bytes": [
-            "0xD9",
-            "0x03",
-            "0x00",
-            "0x00",
-            "0xD9",
-            "0x03",
-            "0x00",
-            "0x00",
-            "0xD9",
-            "0x03",
-            "0x00",
-            "0x00",
-            "0xD9",
-            "0x03",
-            "0x00",
-            "0x00"
-          ]
-        }
-      ]
-    },
-    {
       "target": "SECT11/L111LEV.MAP",
+      "stage": "texture",
       "note": "L111LEV.MAP - starting lift panel (face 10208, vertices 10759, 10760, 10756, 10755) mirrored the wrong way: flag byte 0x00 -> 0x02, its mirrored partner (Edward, 2026) - see Patch/L111LEV.txt",
       "edits": [
         {
@@ -22130,6 +22295,7 @@
     },
     {
       "target": "SECT90/L900LEV.MAP",
+      "stage": "texture",
       "note": "L900LEV.MAP - starting lift panel (face 10208, vertices 10759, 10760, 10756, 10755) mirrored the wrong way: flag byte 0x00 -> 0x02, its mirrored partner (Edward, 2026), same bug as L111LEV.MAP at the identical offset - see Patch/L900LEV.txt",
       "edits": [
         {
@@ -22142,6 +22308,7 @@
     },
     {
       "target": "SECT32/L351LEV.MAP",
+      "stage": "texture",
       "note": "L351LEV.MAP - resin wall top row: two corner faces rotated, two centre faces mirrored the wrong way (Claude, 2026)",
       "edits": [
         {
@@ -22214,6 +22381,7 @@
     },
     {
       "target": "SECT32/L391LEV.MAP",
+      "stage": "texture",
       "note": "L391LEV.MAP - queen's egg sack inner layer: 246 faces turned a quarter-turn, each strip now runs into the next as in L263LEV (Claude, 2026)",
       "edits": [
         {
@@ -27386,6 +27554,7 @@
     },
     {
       "target": "SECT12/L154LEV.MAP",
+      "stage": "texture",
       "note": "L154LEV.MAP - texture orientation: 1 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L154LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -27419,6 +27588,7 @@
     },
     {
       "target": "SECT12/L161LEV.MAP",
+      "stage": "texture",
       "note": "L161LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L161LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -27473,6 +27643,7 @@
     },
     {
       "target": "SECT21/L211LEV.MAP",
+      "stage": "texture",
       "note": "L211LEV.MAP - texture orientation: 3 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L211LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -27560,6 +27731,7 @@
     },
     {
       "target": "SECT22/L263LEV.MAP",
+      "stage": "texture",
       "note": "L263LEV.MAP - texture orientation: 1 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L263LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -27593,6 +27765,7 @@
     },
     {
       "target": "SECT31/L311LEV.MAP",
+      "stage": "texture",
       "note": "L311LEV.MAP - texture orientation: 3 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L311LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -27662,6 +27835,7 @@
     },
     {
       "target": "SECT31/L321LEV.MAP",
+      "stage": "texture",
       "note": "L321LEV.MAP - texture orientation: 19 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L321LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -28058,6 +28232,7 @@
     },
     {
       "target": "SECT31/L322LEV.MAP",
+      "stage": "texture",
       "note": "L322LEV.MAP - texture orientation: 4 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L322LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -28088,6 +28263,7 @@
     },
     {
       "target": "SECT31/L323LEV.MAP",
+      "stage": "texture",
       "note": "L323LEV.MAP - texture orientation: 5 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L323LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -28154,6 +28330,7 @@
     },
     {
       "target": "SECT31/L324LEV.MAP",
+      "stage": "texture",
       "note": "L324LEV.MAP - texture orientation: 5 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L324LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -28205,6 +28382,7 @@
     },
     {
       "target": "SECT31/L325LEV.MAP",
+      "stage": "texture",
       "note": "L325LEV.MAP - texture orientation: 4 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L325LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -28280,6 +28458,7 @@
     },
     {
       "target": "SECT31/L331LEV.MAP",
+      "stage": "texture",
       "note": "L331LEV.MAP - texture orientation: 5 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L331LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -28361,6 +28540,7 @@
     },
     {
       "target": "SECT32/L351LEV.MAP",
+      "stage": "texture",
       "note": "L351LEV.MAP - texture orientation: 10 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L351LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -28592,6 +28772,7 @@
     },
     {
       "target": "SECT32/L352LEV.MAP",
+      "stage": "texture",
       "note": "L352LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L352LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -28640,6 +28821,7 @@
     },
     {
       "target": "SECT32/L353LEV.MAP",
+      "stage": "texture",
       "note": "L353LEV.MAP - texture orientation: 4 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L353LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -28700,6 +28882,7 @@
     },
     {
       "target": "SECT32/L371LEV.MAP",
+      "stage": "texture",
       "note": "L371LEV.MAP - texture orientation: 11 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L371LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -28985,6 +29168,7 @@
     },
     {
       "target": "SECT32/L381LEV.MAP",
+      "stage": "texture",
       "note": "L381LEV.MAP - texture orientation: 1 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L381LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -29012,6 +29196,7 @@
     },
     {
       "target": "SECT32/L391LEV.MAP",
+      "stage": "texture",
       "note": "L391LEV.MAP - texture orientation: 3 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L391LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -29081,6 +29266,7 @@
     },
     {
       "target": "SECT90/L905LEV.MAP",
+      "stage": "texture",
       "note": "L905LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L905LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -29099,6 +29285,7 @@
     },
     {
       "target": "SECT90/L908LEV.MAP",
+      "stage": "texture",
       "note": "L908LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L908LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -29147,66 +29334,7 @@
     },
     {
       "target": "SECT90/L909LEV.MAP",
-      "note": "L909LEV.MAP - the start room stays sealed: the four cells past its doorway, (5,37)-(5,40), are attribute 1 again, a solid wall at load (0x282f5), as shipped. An earlier patch opened them for testing; the room is the multiplayer players' holding room (its lift carries developer graffiti, \"RIPLEY WOZ ERE\" and the like), and multiplayer starts and Level Select on a multiplayer map now put the player at a path node. This sets back an install the earlier patch changed; on a fresh one it is already in place - see Patch/L909LEV.txt (Claude, 2026)",
-      "edits": [
-        {
-          "offset": "0x5083E",
-          "bytes": [
-            "0x01"
-          ]
-        },
-        {
-          "offset": "0x50E1E",
-          "bytes": [
-            "0x01"
-          ]
-        },
-        {
-          "offset": "0x513FE",
-          "bytes": [
-            "0x01"
-          ]
-        },
-        {
-          "offset": "0x519DE",
-          "bytes": [
-            "0x01"
-          ]
-        }
-      ]
-    },
-    {
-      "target": "SECT90/L909LEV.MAP",
-      "note": "L909LEV.MAP - the second holding room, the start room's mirror at the corridor's east end (82-84, 37-40), is sealed as the first is: the four cells in front of its painted lift door, (80,37)-(80,40), had attribute 0, so a player could walk through the painted door, open the real door behind it (door 0 at (81,38)) and into a room the level never uses. Attribute 1, a solid wall at load, as (5,37)-(5,40) are at the other end. Both rooms are then trimmed by the Level Cleanup - see Patch/L909LEV.txt (Claude, 2026)",
-      "edits": [
-        {
-          "offset": "0x50CEE",
-          "bytes": [
-            "0x01"
-          ]
-        },
-        {
-          "offset": "0x512CE",
-          "bytes": [
-            "0x01"
-          ]
-        },
-        {
-          "offset": "0x518AE",
-          "bytes": [
-            "0x01"
-          ]
-        },
-        {
-          "offset": "0x51E8E",
-          "bytes": [
-            "0x01"
-          ]
-        }
-      ]
-    },
-    {
-      "target": "SECT90/L909LEV.MAP",
+      "stage": "texture",
       "note": "L909LEV.MAP - texture orientation: 5 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L909LEV.txt) (Claude, 2026)",
       "edits": [
         {
@@ -29308,37 +29436,8 @@
       ]
     },
     {
-      "target": "SECT90/L903LEV.MAP",
-      "note": "L903LEV.MAP - four cells lost their wall attribute when the level was made from L141LEV: two pillars at (11,43) and (11,48) could be walked into; restored to L141's values (Claude, 2026)",
-      "edits": [
-        {
-          "offset": "0x69002",
-          "bytes": [
-            "0x14"
-          ]
-        },
-        {
-          "offset": "0x69502",
-          "bytes": [
-            "0x14"
-          ]
-        },
-        {
-          "offset": "0x6AE52",
-          "bytes": [
-            "0x14"
-          ]
-        },
-        {
-          "offset": "0x6E862",
-          "bytes": [
-            "0x15"
-          ]
-        }
-      ]
-    },
-    {
       "target": "SECT11/L111LEV.MAP",
+      "stage": "texture",
       "note": "L111LEV.MAP - 4 crate faces with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L111LEV.txt) (Edward, 2026; Claude, 2026)",
       "edits": [
         {
@@ -29415,6 +29514,7 @@
     },
     {
       "target": "SECT90/L900LEV.MAP",
+      "stage": "texture",
       "note": "L900LEV.MAP - 4 crate faces (the same faces as L111LEV) with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L900LEV.txt) (Edward, 2026; Claude, 2026)",
       "edits": [
         {
@@ -29491,6 +29591,7 @@
     },
     {
       "target": "SECT12/L141LEV.MAP",
+      "stage": "texture",
       "note": "L141LEV.MAP - 10 Weyland-Yutani and grey crate faces with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L141LEV.txt) (Edward, 2026; Claude, 2026)",
       "edits": [
         {
@@ -29637,6 +29738,7 @@
     },
     {
       "target": "SECT90/L903LEV.MAP",
+      "stage": "texture",
       "note": "L903LEV.MAP - 10 Weyland-Yutani and grey crate faces (the same faces as L141LEV) with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L903LEV.txt) (Edward, 2026; Claude, 2026)",
       "edits": [
         {
@@ -29783,6 +29885,7 @@
     },
     {
       "target": "SECT12/L161LEV.MAP",
+      "stage": "texture",
       "note": "L161LEV.MAP - 1 the secretion-covered wall with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L161LEV.txt) (Edward, 2026; Claude, 2026)",
       "edits": [
         {
@@ -29817,6 +29920,7 @@
     },
     {
       "target": "SECT90/L906LEV.MAP",
+      "stage": "texture",
       "note": "L906LEV.MAP - 53 bridge faces with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L906LEV.txt) (Edward, 2026; Claude, 2026)",
       "edits": [
         {
@@ -31110,6 +31214,7 @@
     },
     {
       "target": "SECT32/L371LEV.MAP",
+      "stage": "texture",
       "note": "L371LEV.MAP - recess corners: in each of the level's 14 wall recesses, the top left and bottom right texture 35 corner triangles were mapped wrongly (right angle on vertex a, so the texture ran diagonally). Each is reversed to (c, b, a) and moved from draw routine 1 to routine 5, the original's triangle routine without back-face culling, so the right angle sits on the texture's corner and the texture is mirrored to match the other two corners and run on from the band - see Patch/L371LEV.txt (Claude, 2026)",
       "edits": [
         {
@@ -31872,6 +31977,7 @@
     },
     {
       "target": "SECT32/L371LEV.MAP",
+      "stage": "texture",
       "note": "L371LEV.MAP - UV review, round 1 (TESTING, Edward with the Face Index Display, 2026): recess corners at faces 5631/5636 (the recess at z 9984, texture 27) reversed to routine 5 like the other top left and bottom right corners; the top right and bottom left corners of four recesses (5640, 5628, 6820, 6815, 7609, 7603, 5014, 5002) mirrored to match them. A triangle can only show the half of its tile cut along x0y1-x1y0, and these need the other half, so each becomes a quad with its last corner repeated, routine 2 (mirrored): the real triangle is (a, b, c) and (a, c, d) has no area. Tracked in Notes/uv-review-log.md",
       "edits": [
         {
@@ -32148,6 +32254,7 @@
     },
     {
       "target": "SECT32/L371LEV.MAP",
+      "stage": "texture",
       "note": "L371LEV.MAP - UV review, round 2 (TESTING, Edward with the Face Index Display, 2026): the top right and bottom left corners of the other recesses (7587, 7581, 4525, 4513, 9906, 9911, 9889, 9884, 9535, 9270, 4905, 5175, 5222, 4946) mirrored to match the rest, each a quad with its last corner repeated, routine 2, as in round 1; and faces 6820 and 5628 moved from texture 27 to 35, the band's own. Tracked in Notes/uv-review-log.md",
       "edits": [
         {
@@ -32546,6 +32653,7 @@
     },
     {
       "target": "SECT32/L371LEV.MAP",
+      "stage": "texture",
       "note": "L371LEV.MAP - UV review, round 3 (TESTING, Edward with the Face Index Display, 2026): the top right and bottom left corners of three more recesses (5893, 6288, 5320, 5303, 9876, 9607) mirrored like rounds 1 and 2, each a quad with its last corner repeated, routine 2; and faces 6815 and 5640 moved from texture 27 to 35, the band's own. Tracked in Notes/uv-review-log.md",
       "edits": [
         {
@@ -32728,6 +32836,7 @@
     },
     {
       "target": "SECT32/L371LEV.MAP",
+      "stage": "texture",
       "note": "L371LEV.MAP - UV review, round 4 (TESTING, Edward with the Face Index Display, 2026): faces 6453, 6455, 5794 and 5792 texture 86 -> 94; face 7382 turned to face the room (it showed only from outside), its texture unchanged; the circle panel at z 11520 put together as its 3 x 3 picture (6062, 6064, 6075 the inner halves of their corner tiles, 6064 and 6075 moved to the circle's top tiles 1 and 3, 6069 no longer mirrored); and 14 pinched triangles (2580, 2583, 2244, 2241, 2077, 2078, 1457, 1456, 1636, 1458, 1460, 1459, 1637, 1461) turned so their right angle sits on the texture's. Tracked in Notes/uv-review-log.md",
       "edits": [
         {
@@ -33184,6 +33293,7 @@
     },
     {
       "target": "SECT11/L131LEV.MAP",
+      "stage": "texture",
       "note": "L131LEV.MAP - UV review (TESTING, Edward with the Face Index Display, 2026): face 6754 texture 154 -> 183, matching the pillar; face 6752 turned one step, (b, c, d, a), to match 7497. Tracked in Notes/uv-review-log.md",
       "edits": [
         {
@@ -33218,6 +33328,7 @@
     },
     {
       "target": "SECT12/L141LEV.MAP",
+      "stage": "texture",
       "note": "L141LEV.MAP - UV review (TESTING, Edward with the Face Index Display, 2026): face 2735 texture 223 -> 217 (the crate's own); face 2736 flipped horizontally - its texture lies on its side, so that is its v axis: (c, d, a, b) with routine 0 -> 2; face 2196 texture 0 -> 225. Tracked in Notes/uv-review-log.md",
       "edits": [
         {
@@ -33265,6 +33376,7 @@
     },
     {
       "target": "SECT90/L903LEV.MAP",
+      "stage": "texture",
       "note": "L903LEV.MAP - the same three faces as L141LEV.MAP (2735, 2736, 2196), same geometry at the same offsets. Tracked in Notes/uv-review-log.md",
       "edits": [
         {
@@ -33311,53 +33423,8 @@
       ]
     },
     {
-      "target": "SECT12/L161LEV.MAP",
-      "note": "L161LEV.MAP - face 3758 as shipped: (8645, 8646, 8655, -1), texture 1, routine 1, light 0x08 - the triangle of face 3757 drawn a second time. An earlier patch gave it over to the missing quad between faces 0, 29, 36 and 40; that quad is record 0, the first face of the first cell's run, which the Level Cleanup now gives back with the cell, so this sets 3758 back (on a fresh install it is already so) and the Level Cleanup takes it out as a duplicate. Tracked in Notes/uv-review-log.md",
-      "edits": [
-        {
-          "offset": "0x29E1C",
-          "bytes": [
-            "0xC5",
-            "0x21",
-            "0x00",
-            "0x00",
-            "0xC6",
-            "0x21",
-            "0x00",
-            "0x00",
-            "0xCF",
-            "0x21",
-            "0x00",
-            "0x00",
-            "0xFF",
-            "0xFF",
-            "0xFF",
-            "0xFF"
-          ]
-        },
-        {
-          "offset": "0x29E2C",
-          "bytes": [
-            "0x01",
-            "0x00"
-          ]
-        },
-        {
-          "offset": "0x29E2E",
-          "bytes": [
-            "0x01"
-          ]
-        },
-        {
-          "offset": "0x29E2F",
-          "bytes": [
-            "0x08"
-          ]
-        }
-      ]
-    },
-    {
       "target": "SECT21/L232LEV.MAP",
+      "stage": "texture",
       "note": "L232LEV.MAP - UV review (TESTING, Edward with the Face Index Display, 2026): pillar faces drawn with see-through textures given the solid pillar ones - 2521, 2522, 2505 and 2508 -> texture 164; 2183 -> 165; 2534 and 2207 -> 168. Tracked in Notes/uv-review-log.md",
       "edits": [
         {
@@ -33413,6 +33480,7 @@
     },
     {
       "target": "SECT11/L111LEV.MAP",
+      "stage": "texture",
       "note": "L111LEV.MAP - face 4150's texture flipped vertically (vertices turned half way round, (c, d, a, b), with draw routine 0 -> 2) and face 6528 given texture 194 and turned a quarter-turn counter-clockwise, (b, c, d, a) - Edward, 2026",
       "edits": [
         {
@@ -33474,6 +33542,7 @@
     },
     {
       "target": "SECT90/L900LEV.MAP",
+      "stage": "texture",
       "note": "L900LEV.MAP - the same two faces as L111LEV.MAP at the identical offsets: face 4150 flipped vertically ((c, d, a, b), routine 0 -> 2), face 6528 texture 194 turned a quarter-turn counter-clockwise - Edward, 2026",
       "edits": [
         {
@@ -33535,6 +33604,7 @@
     },
     {
       "target": "SECT12/141GFX.B16",
+      "stage": "texture",
       "note": "141GFX.B16 - the floor strip's missing slices, for the end room's floor: texture 223 (page 3 at 224,96) becomes the strip's second middle and 246 (page 3 at 192,192) its far end - slices 3 and 4 of the picture whose first two are 221 and 222, as L111's 301 and 302 are. Nothing in the level used either slot (faces, animated textures, door and lift models). Each texel is L141's own colour index, taken from 221/222 where L111's slices 299/300 match the surroundings of that texel of 301/302, so the slices keep L141's darker colours (Edward) and the weave runs on unbroken. Page 3's pixels are at TP03 + 8 = 0x30B0C. See Patch/L141LEV.txt (Claude, 2026) The far end slice's right edge carries the strip's grey outline: its last two columns are texture 221's first two, mirrored, as L111's 302 carries 299's (Edward, 2026).",
       "edits": [
         {
@@ -35909,6 +35979,7 @@
     },
     {
       "target": "SECT12/L141LEV.MAP",
+      "stage": "texture",
       "note": "L141LEV.MAP - the end room's floor (cells (27-30, 0-4), x -6914..-4866, z -26880..-24320) laid as the pattern its first row shows and as L111's spawn floor is laid (Edward, FaceLog, 2026): the floor is a strip picture 128 x 32 cut into four 32-texel slices - an end, two different middles, the other end - used in order and unturned (L111: textures 299, 300, 301, 302). L141's sheet held only the first two (221, 222), so the room repeated one middle and turned the ends about, and the weave broke at every join. The two missing slices are now in 141GFX/903GFX's unused slots 223 and 246 (see the GFX entries); each of the first four rows becomes 221, 222, 223, 246 across the room, each tile's corners turned (a rotation, so it still faces up) to run as row 1's do. The last row (faces 67, 97, 112, 127) becomes texture 73. See Patch/L141LEV.txt (Claude, 2026)",
       "edits": [
         {
@@ -36293,6 +36364,7 @@
     },
     {
       "target": "SECT90/903GFX.B16",
+      "stage": "texture",
       "note": "903GFX.B16 (as 141GFX.B16, whose page 3 it shares byte for byte) - the floor strip's missing slices, for the end room's floor: texture 223 (page 3 at 224,96) becomes the strip's second middle and 246 (page 3 at 192,192) its far end - slices 3 and 4 of the picture whose first two are 221 and 222, as L111's 301 and 302 are. Nothing in the level used either slot (faces, animated textures, door and lift models). Each texel is L141's own colour index, taken from 221/222 where L111's slices 299/300 match the surroundings of that texel of 301/302, so the slices keep L141's darker colours (Edward) and the weave runs on unbroken. Page 3's pixels are at TP03 + 8 = 0x30B0C. See Patch/L141LEV.txt (Claude, 2026) The far end slice's right edge carries the strip's grey outline: its last two columns are texture 221's first two, mirrored, as L111's 302 carries 299's (Edward, 2026).",
       "edits": [
         {
@@ -38667,6 +38739,7 @@
     },
     {
       "target": "SECT90/L903LEV.MAP",
+      "stage": "texture",
       "note": "L903LEV.MAP - the same room's floor as L141's (L903 is made from L141, the same faces and vertices) laid as the pattern its first row shows and as L111's spawn floor is laid (Edward, FaceLog, 2026): the floor is a strip picture 128 x 32 cut into four 32-texel slices - an end, two different middles, the other end - used in order and unturned (L111: textures 299, 300, 301, 302). L141's sheet held only the first two (221, 222), so the room repeated one middle and turned the ends about, and the weave broke at every join. The two missing slices are now in 141GFX/903GFX's unused slots 223 and 246 (see the GFX entries); each of the first four rows becomes 221, 222, 223, 246 across the room, each tile's corners turned (a rotation, so it still faces up) to run as row 1's do. The last row (faces 67, 97, 112, 127) becomes texture 73. See Patch/L141LEV.txt and Patch/L903LEV.txt (Claude, 2026)",
       "edits": [
         {

@@ -14,6 +14,10 @@ namespace ALTEngine::Formats
     struct PatchOperation
     {
         std::string targetFile;
+        // Which stage it belongs to: "level" (geometry, objects, cells, lifts)
+        // or "texture" (texture indices, turns, flips, draw routines, the GFX
+        // sheets). Every level patch runs before every texture patch.
+        std::string stage;
         std::string note;
         std::vector<BinaryEdit> edits;
     };

@@ -100,6 +100,41 @@ namespace ALTEngine::Game::LevelCleanup
     bool Apply(std::vector<uint8_t>& bytes, const Plan& plan, Report& report, std::string& error,
                std::vector<uint32_t>* oldRecordOfNew = nullptr);
 
+    // THE MISSING FACES (data/MissingFaces.json): a global fix, for the original
+    // game as much as ALTEngine, applied after every byte patch and before the
+    // Level Cleanup, whether the cleanup is on or not. Nothing is removed or
+    // renumbered but what the insertions themselves move:
+    //   - the level's first cell given its run back: its start 0 (which hides
+    //     the run) becomes 1, where the run's records 1.. already are, or where
+    //     a copy of record 0 - the cell's own first face - now goes in
+    //     (`recordZero`), every face after it moving up one;
+    //   - that copy's texture and draw routine replaced, where set (L232's
+    //     wall by the grate: texture 193 flipped, routine 2);
+    //   - faces the level lacks put in by their corners at the head of their
+    //     cell's run (Addition).
+    struct MissingFaces
+    {
+        int firstCell = -1;            // the first cell, given its run back; -1 none
+        bool recordZero = false;       // with a copy of record 0 at its head
+        int recordZeroTexture = -1;    // the copy's texture, or -1 as record 0's
+        int recordZeroRoutine = -1;    // the copy's draw routine, or -1 as record 0's
+        std::vector<Addition> add;
+    };
+
+    // Applies them to one level file in place; false (and `error`, `bytes`
+    // untouched) if the file isn't one this understands or its first cell's
+    // run is already given back.
+    bool ApplyMissingFaces(std::vector<uint8_t>& bytes, const MissingFaces& faces, Report& report, std::string& error);
+
+    // The reverse: takes `faces` back out of a file that has them, giving the
+    // file as the byte patches left it. Exact - the result is checked by
+    // putting the faces in again and comparing every byte - and false (bytes
+    // untouched) if that check fails. For a level that has its missing faces
+    // but no copy of itself without them (a game patched by ALTViewer and
+    // then installed from), so the byte patches meet the file they were
+    // written for.
+    bool RemoveMissingFaces(std::vector<uint8_t>& bytes, const MissingFaces& faces, std::string& error);
+
     // Record and cell lists as the list file writes them: "1-5,9,12-40".
     std::string EncodeList(const std::vector<uint32_t>& values);
     bool DecodeList(const std::string& text, std::vector<uint32_t>& values);

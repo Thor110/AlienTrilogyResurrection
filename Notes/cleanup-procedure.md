@@ -79,8 +79,9 @@ With Testing > Face Index Display on, the face under the crosshair shows its num
 it to `FaceLog.txt` beside the executable: the level, the face's vertices as the display shows them, then its
 number, texture, routine and corners. The corners place a face whether the level was cleaned or not. Faces to take
 out go into `data/LevelCleanupExtra.json` (`faces`, by face number with the cleanup off, or `points`, by corners);
-`rooms` names a door tile whose sealed room goes whole; `recordZero: false` keeps a level's record 0 out; `add`
-lists faces to put in, by corners, texture, routine, light and cell.
+`rooms` names a door tile whose sealed room goes whole. Face numbers there are as the file has them with the
+missing faces in (the Level Cleanup always runs after them). Faces to put IN are not the cleanup's: they are the
+global missing faces, `data/MissingFaces.json` (see `Patch/README.txt`).
 
 ## Checks
 

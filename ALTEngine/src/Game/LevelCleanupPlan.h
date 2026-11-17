@@ -51,6 +51,11 @@ namespace ALTEngine::Game::LevelCleanupPlan
         // is seen); false keeps it out, for a level where it is a stray named
         // by hand ("recordZero": false in data/LevelCleanupExtra.json).
         bool recordZero = true;
+        // The level's first cell has its run already (its start is 1): the
+        // planning leaves it alone. ALTLevelCleanupList plans on the files
+        // before the missing faces (data/MissingFaces.json), so it leaves
+        // this false and takes the first cell's verdict from that list.
+        bool firstCellGivenBack = false;
         // One flag per face record of the file: a cut-out face (routines 4, 5,
         // 6, 12, 13, 34 drawn as a cut-out) whose texture has no clear texel.
         // It blocks as an opaque face does. Empty: none.

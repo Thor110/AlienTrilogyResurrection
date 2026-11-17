@@ -969,26 +969,37 @@ the original game. Every ALTEngine-only fix, done or planned, is listed here, so
 | Fix | Where it lives now | Status |
 |---|---|---|
 | Level Cleanup: the faces no one can see taken out, cells never drawn cleared (ALTLevelCleanupList, `data/LevelCleanupList.json` and `LevelCleanupExtra.json`) | applied at install, `.untrimmed` copies kept | done (zips 103-118) |
-| Level Cleanup: each level's record 0 given back as a copy at the head of its first cell's run (`"recordZero"`), and L211's floor added (`"add"`) | the same | done (zips 116-118); L232's copy to get texture 193 flipped (see uv-review-log.md) |
+| ~~Level Cleanup: each level's record 0 given back, L211's floor added~~ | moved: now the global missing faces (`data/MissingFaces.json`, ALTViewer's `MissingFaces.cs`) | global since zip 168; L232's copy has texture 193 flipped |
 | Texture blanking: unused texture slots blanked (`data/TextureBlankList.json`) | applied at install, `.unblanked` copies kept | done (zip 120) |
 | The face hugger's two empty bottom rows filled (FINGERS.B16) | in the code, at load (`FaceHugOverlay::RepeatBottomRows`) | TEMPORARY: to become a file fix of FINGERS.B16 (section 5, and the B16 note above) |
 | The gaps above the doors | not yet | planned (below, "Later: patch in the gaps above the doors") |
 | Trimming the bytes nothing uses | not yet | planned (below, "Towards the end of the project") |
 
-**The order.** Edward's order, applied one after another, each step reading the file as the step before leaves it:
+**The order (zip 168).** Applied one after another, each stage reading the files as the stage before leaves them,
+the same in ALTEngine (`Bootstrap/InstallPipeline.cpp`, RunPatches) and ALTViewer (the patch button); the four
+global stages give byte-identical files in both. `Patch/README.txt` describes each for players.
 
-1. **level fixes** (global: geometry, objects, lifts, doors - Patches.json);
-2. **texture fixes** (global: the UV review, texture indices and turns - Patches.json, the sheets);
-3. **ALTEngine-only fixes** (the table above);
-4. **missing faces** (global: uv-review-log.md, "Missing faces - to add in the final pass").
+1. **duplicate model removals** (global: `modelRemovals` in Patches.json, `Patch/DUPLICATE-MODELS.txt`);
+2. **level fixes** (global: Patches.json entries with `"stage": "level"` - geometry, objects, lifts, doors);
+3. **texture fixes** (global: `"stage": "texture"` - the UV review, texture numbers and turns, the sheets);
+4. **missing faces** (global: `data/MissingFaces.json`, ALTViewer's `MissingFaces.cs`) - each level's first cell
+   given its run, a copy of record 0 where it is seen, L211's floor, L232's copy's texture;
+5. **ALTEngine-only fixes** (the table above): the Level Cleanup, then the texture blanking.
 
-This works because each step names what it changes in a way the steps before it don't upset: the byte patches
-(1 and 2) never change a file's size, so their offsets hold; the cleanup (3) works out its own face numbers from
-the file it is given; and a missing face (4) is named by its corners and its cell, not by a face number or an
-offset, so it goes in the same way whether or not step 3 has run. The one rule: **nothing after step 4 may name a
-face by number** (an insertion moves every later face up one), and anything that names a face by number before it
-(a Patches.json entry, the cleanup's list) is read against the file before the insertion. For the original game
-the same list is run without step 3.
+Why this order holds: the byte patches (2, 3) never change a file's size, so their offsets hold against the files
+stage 1 leaves; the missing faces are checked by CRC against the file stages 1-3 leave (`crc`, and `facedCrc` the
+result), so a patch changing under them is caught, not misapplied; the cleanup's list is read against the faced
+files (its CRCs are the faced ones, its face numbers too). ALTLevelCleanupList plans on the unfaced file (where the
+first cell's judgement is made) and writes the result in faced numbering.
+
+Re-running over a patched game: the byte patches are written against files without the missing faces, so a faced
+level is unfaced first - ALTEngine from its `.unfaced` copy, or, installed from a game ALTViewer patched (no copy),
+by taking them back out exactly (`LevelCleanup::RemoveMissingFaces`, checked against `crc`); ALTViewer always the
+latter (`MissingFaces.RemoveAll`). Both verified: an install from an ALTViewer-patched game gives the same 253 files,
+byte for byte, as one from the shipped files.
+
+The one rule left: **anything that names a face by number names it in the file its stage reads.** A Patches.json
+entry: before the missing faces. The cleanup's list and `LevelCleanupExtra.json`: after them.
 
 ## Install size (v0.9.4, Edward's measurements)
 

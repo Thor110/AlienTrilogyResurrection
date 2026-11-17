@@ -28,7 +28,13 @@ namespace ALTViewer
             bool filesPresent = first >= 0 && last >= 0 && scanFix >= 0 && pillars >= 0 && liftPanel >= 0 && exportFix >= 0 && endFloor >= 0;
             bool newestDone = filesPresent && new FileInfo(sect90Last).Length == 393852 && scanFix == 0xC5
                 && pillars == 0x14 && liftPanel == 0x02 && exportFix == 0xD6 && endFloor == 0x49;
-            if (filesPresent && (first == 0xFF || last != 0xFA || !newestDone)) { button6.Visible = true; } // show patch button if any of the patches is still to be applied
+            // The missing faces, the last global stage, go in after every byte patch and move the later records of
+            // most levels along, so the offsets above no longer read true once they are in. Their CRCs say it all
+            // instead: each faced level's is that of the fully patched file with its faces. Only the files with no
+            // faces to add (371GFX.B16, L900LEV.MAP) are still read by offset.
+            bool facesIn = MissingFaces.AllApplied(gameDirectory);
+            bool allDone = facesIn && last == 0xFA && liftPanel == 0x02;
+            if (filesPresent && !allDone) { button6.Visible = true; } // show patch button if any of the patches is still to be applied
         }
         // create new form method
         private void newForm(Form form)
@@ -49,6 +55,16 @@ namespace ALTViewer
         private void button6_Click(object sender, EventArgs e)
         {
             // TODO : remove patchDirectory variable and pass direct values
+            // The patches run as stages, in order, the same as ALTEngine's (see Patch/README.txt):
+            //   1. the duplicate door/lift model removals, 2. the level fixes, 3. the texture fixes,
+            //   4. the missing faces (MissingFaces.cs).
+            // Every byte patch is written against the files without the missing faces, so any level that has them
+            // (the button pressed before) has them taken back out first, exactly; they go back in at the end.
+            if (!MissingFaces.RemoveAll(gameDirectory))
+            {
+                MessageBox.Show("A level's missing faces could not be taken back out: the file is not the expected version. Nothing was patched.");
+                return;
+            }
             // Duplicate and unused door/lift models removed first: every patch below is written against the files
             // without them (see Notes/duplicate-level-models.md). Each removal checks the chunks are the expected ones
             // and does nothing if it has already been done.
@@ -1583,6 +1599,11 @@ namespace ALTViewer
             };
             BinaryUtility.ReplaceBytes(replacements, patchDirectory);
             //
+            // 4. The missing faces: last, over every byte patch above (see MissingFaces.cs).
+            if (!MissingFaces.ApplyAll(gameDirectory))
+            {
+                MessageBox.Show("Some levels' missing faces could not be put in: a level file is not the expected version. The other patches are applied.");
+            }
             button6.Visible = false; // hide button after patching
             MessageBox.Show("Patch applied successfully!");
         }

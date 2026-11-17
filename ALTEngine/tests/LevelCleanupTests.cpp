@@ -290,3 +290,56 @@ TEST_CASE("Level cleanup: faces to add that cannot be placed are refused")
     CHECK(!Game::LevelCleanup::Apply(bytes, plan, report, error));
     CHECK(bytes == shipped);
 }
+
+TEST_CASE("Missing faces: put in and taken back out, exactly")
+{
+    const auto shipped = ReadDemo("SECT11/L112LEV.MAP");
+    std::string error;
+    Game::LevelFileLayout::Layout lay;
+    REQUIRE(Game::LevelFileLayout::Read(shipped, lay, error));
+    REQUIRE(lay.CellStart(shipped, 4) == 0u);   // L112's first cell, its run hidden by a start of 0
+
+    Game::LevelCleanup::MissingFaces faces;
+    faces.firstCell = 4;
+    faces.recordZero = true;
+    faces.recordZeroTexture = 7;
+    faces.recordZeroRoutine = 2;
+    // And a face laid over another cell's first, the way L211's floor goes in.
+    size_t cell = lay.cells;
+    for (size_t c = lay.cells / 2; c < lay.cells; ++c)
+    {
+        const uint32_t s = lay.CellStart(shipped, c);
+        if (s != Game::LevelFileLayout::NO_RUN && s > 1 && s < lay.recordCount && lay.Corner(shipped, s, 3) >= 0) { cell = c; break; }
+    }
+    REQUIRE(cell < lay.cells);
+    const uint32_t start = lay.CellStart(shipped, cell);
+    Game::LevelCleanup::Addition add;
+    for (int k = 3; k >= 0; --k)
+    {
+        const size_t v = size_t(lay.Corner(shipped, start, k));
+        add.corners.push_back({ lay.Coordinate(shipped, v, 0), lay.Coordinate(shipped, v, 1), lay.Coordinate(shipped, v, 2) });
+    }
+    add.corners[0][1] += 7;   // a new vertex
+    add.texture = 12;
+    add.cellX = int(cell % size_t(lay.mapLength)); add.cellZ = int(cell / size_t(lay.mapLength));
+    faces.add.push_back(add);
+
+    auto bytes = shipped;
+    Game::LevelCleanup::Report report;
+    REQUIRE(Game::LevelCleanup::ApplyMissingFaces(bytes, faces, report, error));
+    Game::LevelFileLayout::Layout after;
+    REQUIRE(Game::LevelFileLayout::Read(bytes, after, error));
+    CHECK_EQ(int(after.recordCount), int(lay.recordCount) + 2);   // record 0's copy and the added face
+    CHECK_EQ(int(after.vertexCount), int(lay.vertexCount) + 1);
+    CHECK_EQ(after.CellStart(bytes, 4), 1u);
+    CHECK_EQ(int(after.Texture(bytes, 1)), 7);                     // the copy, given its own texture
+
+    auto back = bytes;
+    REQUIRE(Game::LevelCleanup::RemoveMissingFaces(back, faces, error));
+    CHECK(back == shipped);
+
+    // A file without them is refused, untouched.
+    auto plain = shipped;
+    CHECK(!Game::LevelCleanup::RemoveMissingFaces(plain, faces, error));
+    CHECK(plain == shipped);
+}

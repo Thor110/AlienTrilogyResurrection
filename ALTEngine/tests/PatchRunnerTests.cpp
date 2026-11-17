@@ -107,3 +107,36 @@ TEST_CASE("LevelLoader: an empty or cut-short level names the file")
     CHECK(message.find("cut short") != std::string::npos);
     std::filesystem::remove_all(root);
 }
+
+#include "Formats/PatchLoader.h"
+
+TEST_CASE("PatchLoader: every level patch runs before every texture patch, one operation per file and stage")
+{
+    const auto path = std::filesystem::temp_directory_path() / "altengine_patchloader_stages.json";
+    {
+        std::ofstream out(path);
+        out << R"({"patches": [
+            {"target": "A.MAP", "stage": "texture", "note": "t1", "edits": [{"offset": "0x10", "bytes": ["0x01"]}]},
+            {"target": "B.MAP", "stage": "level", "note": "l1", "edits": [{"offset": "0x20", "bytes": ["0x02"]}]},
+            {"target": "A.MAP", "stage": "level", "note": "l2", "edits": [{"offset": "0x30", "bytes": ["0x03"]}]},
+            {"target": "A.MAP", "stage": "texture", "note": "t2", "edits": [{"offset": "0x40", "bytes": ["0x04"]}]},
+            {"target": "C.MAP", "edits": [{"offset": "0x50", "bytes": ["0x05"]}]}
+        ]})";
+    }
+    const auto ops = ALTEngine::Formats::PatchLoader::Load(path);
+    REQUIRE(ops.size() == 4);
+    CHECK(ops[0].stage == "level" && ops[0].targetFile == "B.MAP");
+    CHECK(ops[1].stage == "level" && ops[1].targetFile == "A.MAP");
+    CHECK(ops[2].stage == "texture" && ops[2].targetFile == "A.MAP");
+    CHECK_EQ(ops[2].edits.size(), size_t(2));                         // t1 and t2 together, in order
+    CHECK(ops[3].stage == "texture" && ops[3].targetFile == "C.MAP");   // no stage given: a texture patch
+
+    {
+        std::ofstream out(path);
+        out << R"({"patches": [{"target": "A.MAP", "stage": "models", "edits": [{"offset": "0x10", "bytes": ["0x01"]}]}]})";
+    }
+    bool threw = false;
+    try { (void)ALTEngine::Formats::PatchLoader::Load(path); } catch (const std::runtime_error&) { threw = true; }
+    CHECK(threw);
+    std::filesystem::remove(path);
+}

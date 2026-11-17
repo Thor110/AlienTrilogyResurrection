@@ -187,6 +187,14 @@ Pillar faces drawn with textures that have see-through gaps, given the solid pil
 
 **Done in zip 118** (see what-remains.md, section 7): L161, L212, L242 and L243 are record 0, the first cell's first face, given back with the cell; L211's floor is added by the Level Cleanup after its removals (data/LevelCleanupExtra.json, "add"); L161's interim 3758 is set back.
 
+**Global since zip 168 (0.9.9).** The missing faces are no longer the Level Cleanup's: they are a stage of their own,
+`data/MissingFaces.json` (ALTViewer: `MissingFaces.cs`), run after every byte patch and before the cleanup, with the
+cleanup on or off, so the original game gets them too through ALTViewer's patch button. 36 levels have their first
+cell's run given back; on the 31 with a copy of record 0 (all but L321-L324 and L902) every face from record 1 on
+is ONE HIGHER than the numbers in this log, which were taken before (L211's floor adds one more from its cell's run on). L232's record 0
+copy is given texture 193 and routine 2 - **done**. The face numbers in this log stay as they were found; to find one
+in the game now, add one (or look it up by its corners).
+
 Holes in the levels where a face is missing. They are added once every other fix is in, because inserting a face renumbers every later face in its level (see engine-remaining-work.md, "How the original finds a cell's faces"). Each new record goes into the face run of the cell it sits in, so the original draws it with that cell; then the level's face count, the cells' run starts past it, and the MAP0 and FORM sizes all move up. None of this is patched yet, except L161's interim.
 
 | Level | Hole between faces | Corners (vertices) | New record | Texture | Routine | Light | Cell, and its run |

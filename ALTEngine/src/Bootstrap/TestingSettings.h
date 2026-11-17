@@ -21,10 +21,12 @@ namespace ALTEngine::Bootstrap
     // Disable Resupply Timer - the resupply levels' countdown stops and is
     //   hidden, so the level does not end when it would have run out.
     // Level Cleanup       - changes the level FILES, at the next start, after
-    //   every fix: faces that can never be seen are taken out and each level's
-    //   missing first-cell faces put back (Game::LevelCleanup). Off restores
-    //   the files as the fixes left them (the copy kept beside each, .untrimmed),
-    //   for working with the original face and vertex numbers. On by default
+    //   every fix: faces that can never be seen are taken out
+    //   (Game::LevelCleanup). The missing faces are not part of it: they are a
+    //   global fix, put in whether it is on or off (data/MissingFaces.json).
+    //   Off restores the files as the fixes left them (the copy kept beside
+    //   each, .untrimmed), for working with face and vertex numbers as the
+    //   original game, patched, has them. On by default
     //   (until it has been tested enough to stop being an option). Not part of
     //   "All Testing Options", since it rewrites files.
     //

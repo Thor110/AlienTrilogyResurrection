@@ -1,5 +1,6 @@
 #include "PatchLoader.h"
 
+#include <algorithm>
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -42,10 +43,12 @@ namespace ALTEngine::Formats
 
             for (auto& op : ops)
             {
-                auto it = indexByTarget.find(op.targetFile);
+                // One operation per file and stage.
+                const std::string key = op.stage + "|" + op.targetFile;
+                auto it = indexByTarget.find(key);
                 if (it == indexByTarget.end())
                 {
-                    indexByTarget[op.targetFile] = merged.size();
+                    indexByTarget[key] = merged.size();
                     merged.push_back(std::move(op));
                     continue;
                 }
@@ -82,6 +85,11 @@ namespace ALTEngine::Formats
             PatchOperation op;
             op.targetFile = patchJson.at("target").get<std::string>();
             op.note = patchJson.value("note", "");
+            op.stage = patchJson.value("stage", "texture");
+            if (op.stage != "level" && op.stage != "texture")
+            {
+                throw std::runtime_error("PatchLoader::Load: patch for '" + op.targetFile + "' has an unknown stage '" + op.stage + "'");
+            }
 
             for (const auto& editJson : patchJson.at("edits"))
             {
@@ -103,6 +111,11 @@ namespace ALTEngine::Formats
             ops.push_back(std::move(op));
         }
 
+        // The stages in order - every level patch, then every texture patch -
+        // each keeping the file's own order.
+        std::stable_sort(ops.begin(), ops.end(), [](const PatchOperation& a, const PatchOperation& b) {
+            return a.stage == "level" && b.stage != "level";
+        });
         return MergeByTarget(std::move(ops));
     }
 }

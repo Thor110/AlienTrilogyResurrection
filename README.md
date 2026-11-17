@@ -108,6 +108,7 @@ The road map for this project.
 	- [Patched an issue on L371LEV where two faces had incorrect textures.](#L371LEV-Fix-2)
 	- [Patched an issue on L371LEV where one of the textures unused tiles showed up at the edges of some faces.](#L371LEV-Fix-3)
 	- [Patched an issue on L371LEV where the corner triangles of 14 wall recesses had their textures turned (28 faces).](#L371LEV-Fix-8)
+	- [Patched the missing faces: each level's first cell, never drawn by the original, and L211's missing floor.](#patches)
 	- [Plus the texture scan fixes, the walk-through pillars on L903LEV and the duplicate door and lift model removal: see the full list.](#patches)
 - [✅ 8 : Easter Eggs](#easter-eggs) ( ??% Complete )
 	- [Grade 33 Steel](#easter-egg-1)
@@ -381,6 +382,10 @@ A preview of the lift L000 from L232LEV.
 ## Patches
 
 I am also looking at making patches for any issues I find in the original game.
+
+The fixes run in stages, always in the same order, each on the files as the stage before leaves them: the duplicate door and lift models taken out, the level fixes (shape, objects, lifts), the texture fixes, then the missing faces. These four suit the original game as well, and ALTViewer's patch button applies all of them; ALTEngine then adds its own (the Level Cleanup and the texture blanking). [Patch/README.txt](Patch/README.txt) explains each stage.
+
+The missing faces: on every level, the first cell of the map was never drawn by the original (an off-by-one in its level files), which leaves holes on some levels - the floors on L212, L242 and L243, a wall on L161, the boiler room wall by the grate on L232 - and L211 lacks a floor face altogether. They are now put in, for the original game too.
 
 Fixes marked "texture scan" were found by ALTLevelScan, which looks for faces whose texture does not run on from the faces around them. Each one was rendered before and after and kept only after review; the scan number (for example 321-1) identifies each one for screenshots. The exact bytes for every fix are listed in the Patch folder, and both ALTEngine and ALTViewer apply them.
 

@@ -63,7 +63,8 @@ namespace ALTEngine::Game::LevelCleanupPlan
 
         // Steps 1, 2 and 5.
         bool OutOfViewAndFacingAway(const std::vector<uint8_t>& bytes, const Layout& lay, const Formats::LevelGeometry& level,
-                                    const std::vector<uint8_t>& reach, bool recordZeroAllowed, LevelCleanup::Plan& plan)
+                                    const std::vector<uint8_t>& reach, bool recordZeroAllowed, bool firstCellGivenBack,
+                                    LevelCleanup::Plan& plan)
         {
             const size_t recordCount = lay.recordCount, cells = lay.cells;
             const int mapLength = lay.mapLength, mapWidth = lay.mapWidth;
@@ -158,8 +159,14 @@ namespace ALTEngine::Game::LevelCleanupPlan
 
             // The first cell: the first with start 0. Its run is the file's
             // first, from record 0 - which that start hides.
+            // Once the missing faces have given it back (its start is 1 then),
+            // there is none to find: the first cell with start 0 would be some
+            // empty one.
             size_t firstCell = cells;
-            for (size_t c = 0; c < cells; ++c) { if (cellStart(c) == 0) { firstCell = c; break; } }
+            if (!firstCellGivenBack)
+            {
+                for (size_t c = 0; c < cells; ++c) { if (cellStart(c) == 0) { firstCell = c; break; } }
+            }
 
             // Each reachable cell's view walk: the cells it draws are
             // drawable, and each face of theirs that faces the eye's cell is seen.
@@ -415,7 +422,7 @@ namespace ALTEngine::Game::LevelCleanupPlan
         if (level.collisionGrid.size() != lay.cells) { error = "the cell grid is not where the header puts it"; return false; }
 
         const auto reach = Reachable(level, options.multiplayer, options.skipFirstNode);
-        if (!OutOfViewAndFacingAway(bytes, lay, level, reach, options.recordZero, plan)) { error = "could not judge the faces"; return false; }
+        if (!OutOfViewAndFacingAway(bytes, lay, level, reach, options.recordZero, options.firstCellGivenBack, plan)) { error = "could not judge the faces"; return false; }
 
         std::set<uint32_t> remove(plan.remove.begin(), plan.remove.end());
 

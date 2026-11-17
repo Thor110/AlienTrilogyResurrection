@@ -93,7 +93,7 @@ switches on 11 levels are of this kind: L131, L141 (10), L213, L231, L232, L262,
 ## 4. L232: a missing texture in the boiler room, near a grate
 
 - **Reported by:** a player on Discord (0.9.7), with report 3
-- **Status:** found; listed for the final step of the level fixes
+- **Status:** fixed in 0.9.9
 - **Report:** "By the way, in this level, a texture is missing in the boiler room, near a grate."
 
 **What it is.** Edward found the hole (Face Index Display, Level Cleanup off): the wall between faces 179, 3, 1
@@ -101,8 +101,9 @@ and 7. It is the level's record 0 (vertices 6552, 6553, 6550, 6551, texture 194)
 first cell, which the original never draws. With Level Cleanup on (the default) ALTEngine already puts it back,
 with its shipped texture 194; with it off, it is missing.
 
-**To do (final step).** Give record 0's copy texture 193, flipped horizontally (routine 2), as Edward picked.
-Listed in `Notes/uv-review-log.md`, "Missing faces - to add in the final pass". Not patched until then.
+**Fixed (0.9.9).** The missing faces are now a global stage of their own (`data/MissingFaces.json`, ALTViewer's
+`MissingFaces.cs`), run after every byte patch with or without the Level Cleanup, so the wall is there in the
+original game too. Record 0's copy is given texture 193, flipped horizontally (routine 2), as Edward picked.
 
 ---
 

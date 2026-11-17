@@ -22,9 +22,19 @@
 //                         ../Notes/level-cleanup-lift-remainder.md)
 //     --level <digits>    only this level, e.g. 321 (the others are dropped)
 //
-// The CD folder must hold the level files as the fixes leave them (an
-// install with Level Cleanup off): each plan is kept with the CRC32 of the
-// file it was worked out from, and is applied only to a file with that CRC.
+//     --faces <file>      the missing faces (default data/MissingFaces.json)
+//
+// It plans on each level as the byte patches leave it, BEFORE the missing
+// faces: an install keeps that copy beside the level as <file>.unfaced, which
+// is read when there; otherwise the level itself must be that version (its
+// CRC is the one MissingFaces.json lists). The judging is unchanged from when
+// the cleanup gave the first cell back itself; the first cell and record 0's
+// copy are now MissingFaces.json's to decide (`recordZero` follows it), and
+// the plan written is for the level WITH the missing faces in: its removals
+// renumbered past each face put in, its crc the faced file's. Faces named by
+// hand in LevelCleanupExtra.json are numbered as the Face Index Display shows
+// them with Level Cleanup off - with the missing faces in - and are turned
+// back to the planning's numbering here.
 
 #include "Formats/BndTextureLoader.h"
 #include "Formats/ModelRemoval.h"
@@ -48,6 +58,11 @@ namespace G = ALTEngine::Game;
 
 namespace
 {
+    // The list's own description (also in data/LevelCleanupList.json).
+    constexpr const char* ABOUT =
+        "Level Cleanup plans (ALTEngine only), made by ALTLevelCleanupList from the level files as Patches.json and "
+        "MissingFaces.json leave them. Each applies only to a file with its crc. Remake this file whenever a fix or a "
+        "missing face changes a level.";
     // The cut-out faces whose texture has no clear texel (the palette words
     // the renderer keys out, BndTextureLoader::LoadLevelPages): they hide
     // what is behind them as an opaque face does. Animated faces name an
@@ -100,6 +115,7 @@ int main(int argc, char** argv)
     fs::path outPath = "data/LevelCleanupList.json";
     fs::path extraPath = "data/LevelCleanupExtra.json";
     fs::path remainderPath = "../Notes/level-cleanup-lift-remainder.md";
+    fs::path facesPath = "data/MissingFaces.json";
     std::string only;
     for (int i = 2; i + 1 < argc; i += 2)
     {
@@ -108,6 +124,7 @@ int main(int argc, char** argv)
         else if (a == "--level") { only = argv[i + 1]; }
         else if (a == "--extra") { extraPath = argv[i + 1]; }
         else if (a == "--remainder") { remainderPath = argv[i + 1]; }
+        else if (a == "--faces") { facesPath = argv[i + 1]; }
         else { std::fprintf(stderr, "unknown option %s\n", a.c_str()); return 2; }
     }
 
@@ -124,6 +141,13 @@ int main(int argc, char** argv)
             std::printf("faces by hand from %s\n", extraPath.string().c_str());
         }
     }
+    nlohmann::json missing = nlohmann::json::object();
+    {
+        std::ifstream in(facesPath);
+        if (!in) { std::fprintf(stderr, "%s: missing - the missing faces are needed to number the plans\n", facesPath.string().c_str()); return 2; }
+        try { in >> missing; }
+        catch (const std::exception& e) { std::fprintf(stderr, "%s: %s\n", facesPath.string().c_str(), e.what()); return 2; }
+    }
     std::string remainder = "# Level Cleanup: lift faces kept\n\n"
         "Written by ALTLevelCleanupList. The faces the lift crawl found behind a sealed lift's door that a sight line\n"
         "still reaches, so the cleanup keeps them. Check them in play; any that should go can be named in\n"
@@ -137,9 +161,82 @@ int main(int argc, char** argv)
         const std::string name = relative.filename().string();     // L321LEV.MAP
         const std::string digits = name.substr(1, 3);
         if (!only.empty() && digits != only) { continue; }
-        std::ifstream in(cd / relative, std::ios::binary);
+        // The level before the missing faces: the install's .unfaced copy if
+        // there is one.
+        fs::path source = cd / relative;
+        {
+            fs::path unfaced = source;
+            unfaced += ".unfaced";
+            std::error_code ec;
+            if (fs::exists(unfaced, ec)) { source = unfaced; }
+        }
+        std::ifstream in(source, std::ios::binary);
         std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         const auto t0 = std::chrono::steady_clock::now();
+        const std::string facesKey = relative.generic_string();
+
+        // Its missing faces, put in step by step so where each goes is known.
+        G::LevelCleanup::MissingFaces faces;
+        const bool hasFaces = missing.contains("levels") && missing["levels"].contains(facesKey);
+        if (hasFaces)
+        {
+            const auto& m = missing["levels"][facesKey];
+            if (m.value("crc", 0u) != F::Crc32(bytes.data(), bytes.size()))
+            {
+                std::printf("%s: FAILED - not the file MissingFaces.json lists (the plan is made on the level before its missing faces)\n", facesKey.c_str());
+                ++failed;
+                continue;
+            }
+            faces.firstCell = m.value("firstCell", -1);
+            faces.recordZero = m.value("recordZero", false);
+            faces.recordZeroTexture = m.value("recordZeroTexture", -1);
+            faces.recordZeroRoutine = m.value("recordZeroRoutine", -1);
+            std::string addError;
+            if (m.contains("add") && !G::LevelCleanup::ReadAdditions(m["add"].dump(), faces.add, addError))
+            {
+                std::printf("%s: FAILED - %s\n", facesKey.c_str(), addError.c_str());
+                ++failed;
+                continue;
+            }
+        }
+        std::vector<uint8_t> faced = bytes;
+        std::vector<uint32_t> inserts;      // where each added face went, in order
+        {
+            std::string faceError;
+            G::LevelCleanup::Report faceReport;
+            G::LevelCleanup::MissingFaces cellOnly = faces;
+            cellOnly.add.clear();
+            bool ok = cellOnly.firstCell < 0 || G::LevelCleanup::ApplyMissingFaces(faced, cellOnly, faceReport, faceError);
+            for (size_t i = 0; ok && i < faces.add.size(); ++i)
+            {
+                G::LevelFileLayout::Layout fl;
+                ok = G::LevelFileLayout::Read(faced, fl, faceError);
+                if (!ok) { break; }
+                const auto& a = faces.add[i];
+                inserts.push_back(fl.CellStart(faced, size_t(a.cellZ) * size_t(fl.mapLength) + size_t(a.cellX)));
+                G::LevelCleanup::MissingFaces one;
+                one.add = { a };
+                ok = G::LevelCleanup::ApplyMissingFaces(faced, one, faceReport, faceError);
+            }
+            if (!ok) { std::printf("%s: FAILED - its missing faces: %s\n", facesKey.c_str(), faceError.c_str()); ++failed; continue; }
+        }
+        // Records of the file before them <-> with them.
+        const bool copied = faces.firstCell >= 0 && faces.recordZero;
+        auto toFaced = [&](uint32_t r) {
+            uint32_t n = r + (copied && r >= 1 ? 1u : 0u);
+            for (uint32_t at : inserts) { if (n >= at) { ++n; } }
+            return n;
+        };
+        auto toUnfaced = [&](uint32_t n, bool& ok) {
+            ok = true;
+            for (size_t i = inserts.size(); i-- > 0;)
+            {
+                if (n == inserts[i]) { ok = false; return 0u; }   // a face put in: nothing to plan
+                if (n > inserts[i]) { --n; }
+            }
+            if (copied && n >= 1) { if (n == 1) { ok = false; return 0u; } --n; }
+            return n;
+        };
 
         G::LevelCleanupPlan::Options options;
         options.multiplayer = digits[0] == '9';
@@ -161,9 +258,10 @@ int main(int argc, char** argv)
         if (extra.contains("levels") && extra["levels"].contains(key))
         {
             const auto& e = extra["levels"][key];
-            if (e.contains("faces")) { for (const auto& f : e["faces"]) { options.byHand.push_back(f.get<uint32_t>() + 1); } }   // face n is record n + 1
-            if (e.contains("recordZero") && e["recordZero"].is_boolean()) { options.recordZero = e["recordZero"].get<bool>(); }
-            if (e.contains("rooms")) { for (const auto& f : e["rooms"]) { options.roomDoors.push_back(f.get<uint32_t>() + 1); } }
+            // Face n is record n + 1, numbered with the missing faces in.
+            bool ok = true;
+            if (e.contains("faces")) { for (const auto& f : e["faces"]) { const uint32_t r = toUnfaced(f.get<uint32_t>() + 1, ok); if (ok) { options.byHand.push_back(r); } } }
+            if (e.contains("rooms")) { for (const auto& f : e["rooms"]) { const uint32_t r = toUnfaced(f.get<uint32_t>() + 1, ok); if (ok) { options.roomDoors.push_back(r); } } }
             if (e.contains("points"))
             {
                 std::vector<std::array<double, 3>> points;
@@ -188,23 +286,28 @@ int main(int argc, char** argv)
             }
         }
 
-        // Faces to add, after the removals: passed through as they are.
-        std::vector<G::LevelCleanup::Addition> additions;
-        if (extra.contains("levels") && extra["levels"].contains(key) && extra["levels"][key].contains("add")
-            && !G::LevelCleanup::ReadAdditions(extra["levels"][key]["add"].dump(), additions, error))
-        {
-            std::printf("%s: FAILED - %s\n", relative.generic_string().c_str(), error.c_str());
-            ++failed;
-            continue;
-        }
+        // (Faces added by corners are the missing faces' now, a global fix:
+        // data/MissingFaces.json, already in the files this reads.)
 
+        // Record 0's copy is MissingFaces.json's call now.
+        options.recordZero = copied;
         G::LevelCleanup::Plan plan;
         G::LevelCleanupPlan::Details details;
         G::LevelCleanup::Report report;
-        std::vector<uint8_t> check = bytes;
         const bool planned = G::LevelCleanupPlan::Make(bytes, options, plan, error, &details);
-        plan.add = additions;
-        if (!planned || !G::LevelCleanup::Apply(check, plan, report, error))
+        if (planned && (plan.firstCell != faces.firstCell || plan.recordZero != faces.recordZero))
+        {
+            std::printf("%s: note - the judging %s the first cell (record 0 %s), MissingFaces.json %s it (record 0 %s)\n", facesKey.c_str(),
+                        plan.firstCell >= 0 ? "gives back" : "leaves", plan.recordZero ? "copied" : "not",
+                        faces.firstCell >= 0 ? "gives back" : "leaves", faces.recordZero ? "copied" : "not");
+        }
+        // The plan for the level with its missing faces in: the same faces out,
+        // renumbered; the first cell and the additions are done already.
+        G::LevelCleanup::Plan facedPlan;
+        facedPlan.clear = plan.clear;
+        for (uint32_t r : plan.remove) { facedPlan.remove.push_back(toFaced(r)); }
+        std::vector<uint8_t> check = faced;
+        if (!planned || !G::LevelCleanup::Apply(check, facedPlan, report, error))
         {
             std::printf("%s: FAILED - %s\n", relative.generic_string().c_str(), error.c_str());
             ++failed;
@@ -237,26 +340,21 @@ int main(int argc, char** argv)
                     corners += b;
                 }
                 const std::string cell = owner[r] >= 0 ? std::to_string(owner[r] % L) + "," + std::to_string(owner[r] / L) : "-";
-                remainder += "| " + std::to_string(r - 1) + " | " + cell + " | " + std::to_string(lay.Texture(bytes, r)) + " | "
+                remainder += "| " + std::to_string(toFaced(r) - 1) + " | " + cell + " | " + std::to_string(lay.Texture(bytes, r)) + " | "
                            + std::to_string(lay.Routine(bytes, r)) + " | " + corners + " |\n";
             }
         }
         std::printf("%s: %d faces (%d out of view, %d facing away, %d in lifts, %d hidden, %d by hand), %d vertices%s%s - %.1fs\n",
                     relative.generic_string().c_str(), report.facesRemoved, plan.outOfView, plan.facingAway, plan.inLifts, plan.hidden, plan.byHand,
                     report.verticesRemoved,
-                    report.firstCellRestored ? (", first cell's " + std::to_string(report.firstCellFaces) + " given back"
-                                                + (plan.recordZero ? " (record 0's among them)" : "")).c_str() : "",
-                    report.facesAdded ? (", " + std::to_string(report.facesAdded) + " added").c_str() : "",
+                    "", "",
                     seconds);
         removed += size_t(report.facesRemoved);
 
         nlohmann::ordered_json entry;
-        entry["crc"] = F::Crc32(bytes.data(), bytes.size());
-        entry["remove"] = G::LevelCleanup::EncodeList(plan.remove);
-        entry["clear"] = G::LevelCleanup::EncodeList(plan.clear);
-        if (plan.firstCell >= 0) { entry["firstCell"] = plan.firstCell; }
-        if (plan.recordZero) { entry["recordZero"] = true; }
-        if (!plan.add.empty()) { entry["add"] = nlohmann::ordered_json::parse(G::LevelCleanup::WriteAdditions(plan.add)); }
+        entry["crc"] = F::Crc32(faced.data(), faced.size());
+        entry["remove"] = G::LevelCleanup::EncodeList(facedPlan.remove);
+        entry["clear"] = G::LevelCleanup::EncodeList(facedPlan.clear);
         entry["outOfView"] = plan.outOfView;
         entry["facingAway"] = plan.facingAway;
         entry["inLifts"] = plan.inLifts;
@@ -266,8 +364,7 @@ int main(int argc, char** argv)
     }
 
     nlohmann::ordered_json root;
-    root["about"] = "Level Cleanup plans, made by ALTLevelCleanupList from the level files as Patches.json leaves them. "
-                    "Each applies only to a file with its crc. Remake this file whenever a fix changes a level.";
+    root["about"] = ABOUT;
     root["levels"] = levels;
     if (only.empty())
     {

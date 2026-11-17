@@ -94,6 +94,148 @@ namespace ALTEngine::Bootstrap
             }
         }
 
+        // THE MISSING FACES (data/MissingFaces.json; Game::LevelCleanup::
+        // ApplyMissingFaces): a global fix, applied after the byte patches and
+        // before the Level Cleanup, on or off. Beside each level it changed:
+        // <file>.unfaced, the level as the byte patches leave it. Every start
+        // puts that back first (the faced one set aside as <file>.faced) so the
+        // byte patches meet the file they were written for; afterwards the
+        // faced copy goes back if it is exactly what the list makes (its
+        // facedCrc), or the faces are put in again.
+        nlohmann::json LoadMissingFaces()
+        {
+            nlohmann::json list;
+            std::ifstream in(ExecutableDirectory() / "data" / "MissingFaces.json");
+            if (in) { try { in >> list; } catch (...) { list = nlohmann::json(); } }
+            if (!list.is_object() || !list.contains("levels") || !list["levels"].is_object()) { return nlohmann::json(); }
+            return list;
+        }
+
+        bool ReadMissingFaces(const nlohmann::json& entry, ALTEngine::Game::LevelCleanup::MissingFaces& faces, std::string& error)
+        {
+            faces.firstCell = entry.contains("firstCell") && entry["firstCell"].is_number_integer() ? entry["firstCell"].get<int>() : -1;
+            faces.recordZero = entry.contains("recordZero") && entry["recordZero"].is_boolean() && entry["recordZero"].get<bool>();
+            faces.recordZeroTexture = entry.contains("recordZeroTexture") && entry["recordZeroTexture"].is_number_integer() ? entry["recordZeroTexture"].get<int>() : -1;
+            faces.recordZeroRoutine = entry.contains("recordZeroRoutine") && entry["recordZeroRoutine"].is_number_integer() ? entry["recordZeroRoutine"].get<int>() : -1;
+            return !entry.contains("add") || ALTEngine::Game::LevelCleanup::ReadAdditions(entry["add"].dump(), faces.add, error);
+        }
+
+        void SetFacedAside(const std::filesystem::path& cdDirectory)
+        {
+            std::error_code ec;
+            const nlohmann::json list = LoadMissingFaces();
+            for (const auto& relative : ALTEngine::Game::LevelCleanup::LevelFiles(cdDirectory))
+            {
+                const auto file = cdDirectory / relative;
+                const auto unfaced = With(file, ".unfaced");
+                if (!std::filesystem::exists(unfaced, ec))
+                {
+                    // Faced with no copy of itself without them - ALTViewer's
+                    // patch button put them in, and this was installed from
+                    // that game: they are taken back out, exactly, so the
+                    // byte patches meet the file they were written for.
+                    const std::string key = relative.generic_string();
+                    if (list.is_null() || !list["levels"].contains(key)) { continue; }
+                    const auto& entry = list["levels"][key];
+                    std::vector<uint8_t> bytes;
+                    if (!entry.contains("facedCrc") || !ReadAll(file, bytes)
+                        || ALTEngine::Formats::Crc32(bytes.data(), bytes.size()) != entry["facedCrc"].get<uint32_t>()) { continue; }
+                    ALTEngine::Game::LevelCleanup::MissingFaces faces;
+                    std::string error;
+                    const bool undone = ReadMissingFaces(entry, faces, error) && ALTEngine::Game::LevelCleanup::RemoveMissingFaces(bytes, faces, error);
+                    if (undone && entry.contains("crc") && ALTEngine::Formats::Crc32(bytes.data(), bytes.size()) != entry["crc"].get<uint32_t>())
+                    {
+                        std::cout << "Missing faces: taking them out of " << file.string() << " does not give the file they were listed for - left as it is.\n";
+                        continue;
+                    }
+                    if (!undone || !WriteAll(file, bytes))
+                    {
+                        std::cout << "Missing faces: could not take them out of " << file.string() << ": " << error << "\n";
+                    }
+                    continue;
+                }
+                const auto faced = With(file, ".faced");
+                std::filesystem::remove(faced, ec);
+                if (std::filesystem::exists(file, ec)) { std::filesystem::rename(file, faced, ec); }
+                std::filesystem::rename(unfaced, file, ec);
+                if (ec) { std::cout << "Missing faces: could not restore " << file.string() << ": " << ec.message() << "\n"; }
+            }
+        }
+
+        void ApplyMissingFaces(const std::filesystem::path& cdDirectory)
+        {
+            namespace LC = ALTEngine::Game::LevelCleanup;
+            const nlohmann::json list = LoadMissingFaces();
+            if (list.is_null())
+            {
+                std::cout << "Missing faces: data/MissingFaces.json is missing or cannot be read - none put in.\n";
+                return;
+            }
+            int put = 0, kept = 0, skipped = 0;
+            std::error_code ec;
+            for (const auto& relative : LC::LevelFiles(cdDirectory))
+            {
+                const auto file = cdDirectory / relative;
+                const auto facedCopy = With(file, ".faced");
+                const std::string key = relative.generic_string();
+                const auto& levels = list["levels"];
+                if (!levels.contains(key)) { std::filesystem::remove(facedCopy, ec); continue; }
+                const auto& entry = levels[key];
+                auto crcOf = [&](const char* name) {
+                    return entry.contains(name) && entry[name].is_number_unsigned() ? entry[name].get<uint32_t>() : 0u;
+                };
+                std::vector<uint8_t> bytes;
+                if (!ReadAll(file, bytes)) { continue; }
+                const uint32_t source = ALTEngine::Formats::Crc32(bytes.data(), bytes.size());
+                if (source != crcOf("crc"))
+                {
+                    std::cout << "  [skipped]  " << key << " - its missing faces were listed for another version of the file\n";
+                    std::filesystem::remove(facedCopy, ec);
+                    ++skipped;
+                    continue;
+                }
+                // The faced copy from last time, if it is still the right one.
+                std::vector<uint8_t> cached;
+                if (std::filesystem::exists(facedCopy, ec) && ReadAll(facedCopy, cached)
+                    && ALTEngine::Formats::Crc32(cached.data(), cached.size()) == crcOf("facedCrc"))
+                {
+                    std::filesystem::rename(file, With(file, ".unfaced"), ec);
+                    if (!ec)
+                    {
+                        std::filesystem::rename(facedCopy, file, ec);
+                        if (ec) { std::error_code back; std::filesystem::rename(With(file, ".unfaced"), file, back); }
+                    }
+                    if (ec) { std::cout << "Missing faces: could not swap " << file.string() << ": " << ec.message() << "\n"; }
+                    ++kept;
+                    continue;
+                }
+                std::filesystem::remove(facedCopy, ec);
+                LC::MissingFaces faces;
+                std::string error;
+                if (!ReadMissingFaces(entry, faces, error))
+                {
+                    std::cout << "  [FAILED]   " << key << " - " << error << "\n";
+                    continue;
+                }
+                LC::Report report;
+                std::vector<uint8_t> original = bytes;
+                if (!LC::ApplyMissingFaces(bytes, faces, report, error))
+                {
+                    std::cout << "  [FAILED]   " << key << " - " << error << "\n";
+                    continue;
+                }
+                if (!WriteAll(With(file, ".unfaced"), original) || !WriteAll(file, bytes))
+                {
+                    std::cout << "  [FAILED]   " << key << " - could not write the level\n";
+                    std::filesystem::remove(With(file, ".unfaced"), ec);
+                    continue;
+                }
+                ++put;
+            }
+            std::cout << "Missing faces: " << put << " levels given theirs, " << kept << " already"
+                      << (skipped ? ", " + std::to_string(skipped) + " skipped" : std::string()) << ".\n";
+        }
+
         void ApplyLevelCleanup(const std::filesystem::path& cdDirectory, bool enabled)
         {
             const auto statePath = cdDirectory / "LevelCleanup.json";
@@ -380,10 +522,18 @@ namespace ALTEngine::Bootstrap
 
     void RunPatches(const std::filesystem::path& cdDirectory)
     {
-        // Update Fixes -> Boolean -> Trim -> Add Faces: the fixes always run
-        // against the level files as shipped, so a cleaned level is put back
-        // first (see ApplyLevelCleanup).
+        // THE STAGES, in order (Patch/README.txt):
+        //   1. the duplicate door/lift model removals,
+        //   2. the level fixes and 3. the texture fixes (Patches.json's
+        //      "level" then "texture" byte patches),
+        //   4. the missing faces (MissingFaces.json),
+        //   5. ALTEngine's own: the Level Cleanup, then the texture blanking.
+        // 1-4 are global (ALTViewer's patch button makes the same files); 5 is
+        // ALTEngine's alone. The byte patches always meet the files as shipped
+        // (less the removed models), so every later stage's work is put aside
+        // first, last stage first.
         SetCleanedAside(cdDirectory);
+        SetFacedAside(cdDirectory);
         SetBlankedAside(cdDirectory);
 
         std::filesystem::path patchesJson = ExecutableDirectory() / "data" / "Patches.json";
@@ -453,6 +603,7 @@ namespace ALTEngine::Bootstrap
         std::cout << "Patches: " << applied << " applied, " << alreadyApplied
                    << " already applied, " << failed << " failed.\n";
 
+        ApplyMissingFaces(cdDirectory);
         Config config;
         ApplyLevelCleanup(cdDirectory, TestingSettings(config).IsOn(TestingOption::LevelCleanup));
         // Last: the texture blanking, against the sheets as the fixes leave them.

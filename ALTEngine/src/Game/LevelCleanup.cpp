@@ -345,6 +345,141 @@ namespace ALTEngine::Game::LevelCleanup
         return true;
     }
 
+    bool ApplyMissingFaces(std::vector<uint8_t>& bytes, const MissingFaces& faces, Report& report, std::string& error)
+    {
+        report = {};
+        report.bytesBefore = report.bytesAfter = bytes.size();
+        std::vector<uint8_t> original = bytes;
+        Layout lay;
+        if (!Read(bytes, lay, error)) { return false; }
+        if (faces.firstCell >= 0)
+        {
+            if (size_t(faces.firstCell) >= lay.cells) { error = "the first cell is past the map"; return false; }
+            if (lay.CellStart(bytes, size_t(faces.firstCell)) != 0)
+            {
+                error = "the first cell's run is given back already (its start is not 0)";
+                return false;
+            }
+            const bool zeroAlone = (lay.Light(bytes, 0) & RUN_END) != 0;
+            bool copied = false;
+            if (faces.recordZero)
+            {
+                Plan plan;
+                plan.firstCell = faces.firstCell;
+                plan.recordZero = true;
+                copied = CopyRecordZero(bytes, lay, plan);
+                if (!copied) { error = "record 0 could not be copied"; bytes = std::move(original); return false; }
+                if (!Read(bytes, lay, error)) { bytes = std::move(original); return false; }
+                const size_t copy = lay.records + RECORD_SIZE;
+                if (faces.recordZeroTexture >= 0) { PutLe16(bytes, copy + 16, uint16_t(faces.recordZeroTexture)); }
+                if (faces.recordZeroRoutine >= 0) { bytes[copy + 18] = uint8_t(faces.recordZeroRoutine); }
+            }
+            // The run starts at 1: the copy, or (without it) the rest of record
+            // 0's run where it goes on into record 1.
+            if (lay.recordCount > 1 && (copied || !zeroAlone))
+            {
+                PutLe32(bytes, lay.grid + size_t(faces.firstCell) * CELL_SIZE, 1u);
+                report.firstCellRestored = true;
+                for (size_t r = 1; r < lay.recordCount && lay.RecordA(bytes, r) != -1; ++r)
+                {
+                    ++report.firstCellFaces;
+                    if (lay.Light(bytes, r) & RUN_END) { break; }
+                }
+            }
+        }
+        for (const Addition& add : faces.add)
+        {
+            size_t at = 0;
+            if (!AddFace(bytes, add, report, error, at)) { bytes = std::move(original); return false; }
+        }
+        report.bytesAfter = bytes.size();
+        return true;
+    }
+
+    namespace
+    {
+        // Takes record `at` and the last `freshVertices` vertices out, the runs
+        // after it moving down one (all but `cell`'s, which starts at `at`).
+        bool TakeOutFace(std::vector<uint8_t>& bytes, size_t at, int freshVertices, size_t cell, bool keepCellStart)
+        {
+            Layout lay;
+            std::string error;
+            if (!Read(bytes, lay, error) || at == 0 || at >= lay.recordCount || freshVertices < 0 || size_t(freshVertices) > lay.vertexCount) { return false; }
+            std::vector<uint8_t> out(bytes.begin(), bytes.begin() + std::ptrdiff_t(lay.records - size_t(freshVertices) * VERTEX_SIZE));
+            out.insert(out.end(), bytes.begin() + std::ptrdiff_t(lay.records), bytes.begin() + std::ptrdiff_t(lay.records + at * RECORD_SIZE));
+            out.insert(out.end(), bytes.begin() + std::ptrdiff_t(lay.records + (at + 1) * RECORD_SIZE), bytes.end());
+            PutLe16(out, lay.data + 0, uint16_t(lay.vertexCount - freshVertices));
+            PutLe16(out, lay.data + 2, uint16_t(lay.recordCount - 1));
+            const size_t grid = lay.grid - size_t(freshVertices) * VERTEX_SIZE - RECORD_SIZE;
+            for (size_t c = 0; c < lay.cells; ++c)
+            {
+                const uint32_t st = Le32(out, grid + c * CELL_SIZE);
+                if (st == NO_RUN || st == 0) { continue; }
+                if (c == cell) { PutLe32(out, grid + c * CELL_SIZE, keepCellStart ? st : 0u); continue; }
+                if (st > at) { PutLe32(out, grid + c * CELL_SIZE, st - 1); }
+            }
+            PutBe32(out, lay.map0 + 4, uint32_t(lay.map0Size - size_t(freshVertices) * VERTEX_SIZE - RECORD_SIZE));
+            PutBe32(out, 4, uint32_t(out.size() - 8));
+            bytes = std::move(out);
+            return true;
+        }
+
+        // Every way back from the faces added (each may have made 0-4 new
+        // vertices), tried until one gives exactly `faced` going forward.
+        bool UndoAdditions(const std::vector<uint8_t>& faced, const MissingFaces& faces, size_t i, std::vector<uint8_t>& out)
+        {
+            if (i == 0) { out = faced; return true; }
+            const Addition& add = faces.add[i - 1];
+            Layout lay;
+            std::string error;
+            if (!Read(faced, lay, error)) { return false; }
+            const size_t cell = size_t(add.cellZ) * size_t(lay.mapLength) + size_t(add.cellX);
+            if (cell >= lay.cells) { return false; }
+            const uint32_t at = lay.CellStart(faced, cell);
+            // Most new vertices first: with fewer taken out, the ones left behind
+            // are found again when the face is put back, and that checks out too.
+            for (int fresh = int(add.corners.size()); fresh >= 0; --fresh)
+            {
+                std::vector<uint8_t> before = faced;
+                if (!TakeOutFace(before, at, fresh, cell, true)) { continue; }
+                std::vector<uint8_t> again = before;
+                Report report;
+                MissingFaces one;
+                one.add = { add };
+                if (!ApplyMissingFaces(again, one, report, error) || again != faced) { continue; }
+                if (UndoAdditions(before, faces, i - 1, out)) { return true; }
+            }
+            return false;
+        }
+    }
+
+    bool RemoveMissingFaces(std::vector<uint8_t>& bytes, const MissingFaces& faces, std::string& error)
+    {
+        std::vector<uint8_t> work;
+        if (!UndoAdditions(bytes, faces, faces.add.size(), work)) { error = "the faces added could not be taken back out"; return false; }
+        if (faces.firstCell >= 0)
+        {
+            Layout lay;
+            if (!Read(work, lay, error)) { return false; }
+            if (size_t(faces.firstCell) >= lay.cells || lay.CellStart(work, size_t(faces.firstCell)) != 1) { error = "the first cell's run is not given back"; return false; }
+            if (faces.recordZero)
+            {
+                // Record 0's copy out: the first cell back to start 0.
+                if (!TakeOutFace(work, 1, 0, size_t(faces.firstCell), false)) { error = "record 0's copy could not be taken out"; return false; }
+            }
+            else
+            {
+                PutLe32(work, lay.grid + size_t(faces.firstCell) * CELL_SIZE, 0u);
+            }
+        }
+        // Checked: the faces put in again give exactly the file there was.
+        std::vector<uint8_t> again = work;
+        Report report;
+        if (!ApplyMissingFaces(again, faces, report, error) || again != bytes) { error = "taking the missing faces out does not give the file back"; return false; }
+        bytes = std::move(work);
+        return true;
+    }
+
     std::string WriteAdditions(const std::vector<Addition>& add)
     {
         nlohmann::ordered_json list = nlohmann::ordered_json::array();

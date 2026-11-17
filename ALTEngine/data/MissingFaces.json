@@ -1,0 +1,251 @@
+{
+ "about": "THE MISSING FACES - a global fix, for the original game as much as ALTEngine (ALTViewer's patch button puts them in too). Applied after every byte patch in Patches.json and before ALTEngine's Level Cleanup, whether the cleanup is on or not. Per level, against the file as Patches.json leaves it (crc; facedCrc is the result): firstCell - the level's first cell, whose run start of 0 hides its faces, given its run back (start 1); recordZero - with a copy of record 0, that cell's own first face, put in at record 1 (every later face moves up one); recordZeroTexture / recordZeroRoutine - the copy's texture and draw routine, where they need setting; add - faces the level lacks, by their corners, at the head of their cell's run. Why each is here: Notes/uv-review-log.md, 'Missing faces'. A face number given for a level here is as the Face Index Display shows it with Level Cleanup off after this step.",
+ "levels": {
+  "SECT11/L112LEV.MAP": {
+   "crc": 1989134357,
+   "facedCrc": 3205131769,
+   "firstCell": 4,
+   "recordZero": true
+  },
+  "SECT11/L122LEV.MAP": {
+   "crc": 1530446754,
+   "facedCrc": 1682891609,
+   "firstCell": 0,
+   "recordZero": true
+  },
+  "SECT11/L131LEV.MAP": {
+   "crc": 3884340009,
+   "facedCrc": 1428333324,
+   "firstCell": 26,
+   "recordZero": true
+  },
+  "SECT12/L141LEV.MAP": {
+   "crc": 4141684449,
+   "facedCrc": 2422310100,
+   "firstCell": 26,
+   "recordZero": true
+  },
+  "SECT12/L154LEV.MAP": {
+   "crc": 2584166585,
+   "facedCrc": 3317076202,
+   "firstCell": 0,
+   "recordZero": true
+  },
+  "SECT12/L155LEV.MAP": {
+   "crc": 2980542523,
+   "facedCrc": 2847551485,
+   "firstCell": 48,
+   "recordZero": true
+  },
+  "SECT12/L161LEV.MAP": {
+   "crc": 679480806,
+   "facedCrc": 2396946546,
+   "firstCell": 8,
+   "recordZero": true
+  },
+  "SECT21/L211LEV.MAP": {
+   "crc": 4192331437,
+   "facedCrc": 1280085049,
+   "firstCell": 49,
+   "recordZero": true,
+   "add": [
+    {
+     "corners": [
+      [
+       3072,
+       2562,
+       -12288
+      ],
+      [
+       3072,
+       2562,
+       -11776
+      ],
+      [
+       3584,
+       2818,
+       -11776
+      ],
+      [
+       3584,
+       2818,
+       -12544
+      ]
+     ],
+     "texture": 264,
+     "routine": 0,
+     "light": 11,
+     "cell": [
+      49,
+      19
+     ]
+    }
+   ]
+  },
+  "SECT21/L212LEV.MAP": {
+   "crc": 2250133938,
+   "facedCrc": 1631892741,
+   "firstCell": 16,
+   "recordZero": true
+  },
+  "SECT21/L213LEV.MAP": {
+   "crc": 2553703237,
+   "facedCrc": 2582565006,
+   "firstCell": 34,
+   "recordZero": true
+  },
+  "SECT21/L222LEV.MAP": {
+   "crc": 2127922344,
+   "facedCrc": 3920706040,
+   "firstCell": 23,
+   "recordZero": true
+  },
+  "SECT21/L231LEV.MAP": {
+   "crc": 2831262223,
+   "facedCrc": 3688215826,
+   "firstCell": 17,
+   "recordZero": true
+  },
+  "SECT21/L232LEV.MAP": {
+   "crc": 4119414795,
+   "facedCrc": 856674123,
+   "firstCell": 58,
+   "recordZero": true,
+   "recordZeroTexture": 193,
+   "recordZeroRoutine": 2
+  },
+  "SECT22/L242LEV.MAP": {
+   "crc": 2586218406,
+   "facedCrc": 3876743189,
+   "firstCell": 68,
+   "recordZero": true
+  },
+  "SECT22/L243LEV.MAP": {
+   "crc": 2872433776,
+   "facedCrc": 491197799,
+   "firstCell": 68,
+   "recordZero": true
+  },
+  "SECT22/L262LEV.MAP": {
+   "crc": 1603118920,
+   "facedCrc": 2467454820,
+   "firstCell": 18,
+   "recordZero": true
+  },
+  "SECT22/L263LEV.MAP": {
+   "crc": 4196742763,
+   "facedCrc": 820467995,
+   "firstCell": 7,
+   "recordZero": true
+  },
+  "SECT31/L321LEV.MAP": {
+   "crc": 2978209991,
+   "facedCrc": 1819026048,
+   "firstCell": 31
+  },
+  "SECT31/L322LEV.MAP": {
+   "crc": 3387146605,
+   "facedCrc": 646469357,
+   "firstCell": 31
+  },
+  "SECT31/L323LEV.MAP": {
+   "crc": 531932268,
+   "facedCrc": 3591579943,
+   "firstCell": 31
+  },
+  "SECT31/L324LEV.MAP": {
+   "crc": 920124314,
+   "facedCrc": 3325284774,
+   "firstCell": 31
+  },
+  "SECT31/L325LEV.MAP": {
+   "crc": 3078140684,
+   "facedCrc": 2550253938,
+   "firstCell": 31,
+   "recordZero": true
+  },
+  "SECT32/L351LEV.MAP": {
+   "crc": 144427606,
+   "facedCrc": 466973683,
+   "firstCell": 39,
+   "recordZero": true
+  },
+  "SECT32/L352LEV.MAP": {
+   "crc": 2152738337,
+   "facedCrc": 4264356022,
+   "firstCell": 26,
+   "recordZero": true
+  },
+  "SECT32/L353LEV.MAP": {
+   "crc": 2717136165,
+   "facedCrc": 1801123470,
+   "firstCell": 26,
+   "recordZero": true
+  },
+  "SECT32/L371LEV.MAP": {
+   "crc": 3825528277,
+   "facedCrc": 547128797,
+   "firstCell": 26,
+   "recordZero": true
+  },
+  "SECT32/L381LEV.MAP": {
+   "crc": 785167144,
+   "facedCrc": 4066065535,
+   "firstCell": 67,
+   "recordZero": true
+  },
+  "SECT32/L391LEV.MAP": {
+   "crc": 1272690200,
+   "facedCrc": 462066372,
+   "firstCell": 5,
+   "recordZero": true
+  },
+  "SECT90/L901LEV.MAP": {
+   "crc": 4088838093,
+   "facedCrc": 1603093008,
+   "firstCell": 0,
+   "recordZero": true
+  },
+  "SECT90/L902LEV.MAP": {
+   "crc": 3679448150,
+   "facedCrc": 1551266186,
+   "firstCell": 17
+  },
+  "SECT90/L903LEV.MAP": {
+   "crc": 1472812060,
+   "facedCrc": 2698303836,
+   "firstCell": 26,
+   "recordZero": true
+  },
+  "SECT90/L904LEV.MAP": {
+   "crc": 87501089,
+   "facedCrc": 4123518204,
+   "firstCell": 73,
+   "recordZero": true
+  },
+  "SECT90/L905LEV.MAP": {
+   "crc": 3823277167,
+   "facedCrc": 2466143860,
+   "firstCell": 0,
+   "recordZero": true
+  },
+  "SECT90/L906LEV.MAP": {
+   "crc": 744375940,
+   "facedCrc": 1075113189,
+   "firstCell": 23,
+   "recordZero": true
+  },
+  "SECT90/L907LEV.MAP": {
+   "crc": 3350833458,
+   "facedCrc": 1490072908,
+   "firstCell": 17,
+   "recordZero": true
+  },
+  "SECT90/L909LEV.MAP": {
+   "crc": 3973014089,
+   "facedCrc": 1954829313,
+   "firstCell": 26,
+   "recordZero": true
+  }
+ }
+}
