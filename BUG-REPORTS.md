@@ -110,7 +110,7 @@ original game too. Record 0's copy is given texture 193, flipped horizontally (r
 ## 5. Face hugger on the face: part of the view shows in the bottom-left corner
 
 - **Reported by:** a player on Discord (0.9.7)
-- **Status:** open, screenshot needed
+- **Status:** fixed in 0.9.6 (the filled rows), in the file since 0.9.9
 - **Report:** "In general, from the very beginning of the game - when you are attacked by a facehugger - a small
   portion of the image remains visible in the bottom-left corner; this isn't present in the original game,
   which I often play via DOSBox."
@@ -131,6 +131,10 @@ bottom row is drawn only in the middle, x 152 to 172 of the 320-wide view (the c
 half's frames start at x 38 to 62 - so the bottom corners show the view in every frame, by the art's own shape,
 not through a gap in it. If the original shows nothing there, the difference is more likely in where the
 original's view ends (its 200-row screen, under the panels) than in the art. Still wants a screenshot of both.
+
+**Resolved (Edward, 0.9.9).** The corner was the strip of empty rows under the art, the one the two filled rows
+close: the report predates that fill reaching every frame. With the rows now part of ALTEngine's FINGERS.B16, it
+is fixed.
 
 ---
 
