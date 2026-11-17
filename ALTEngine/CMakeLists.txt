@@ -410,6 +410,20 @@ target_link_libraries(ALTEngine PRIVATE PkgConfig::FFMPEG)
 target_link_libraries(ALTEngine PRIVATE alt_warnings)
 target_link_libraries(ALTEngine PRIVATE nlohmann_json::nlohmann_json)
 
+# The command window. Windows opens one behind the game for a console
+# program; the release has none (a windowed program, WIN32_EXECUTABLE), and
+# what the window would show - the boot's readout, the patches, SDL's log -
+# goes to altengine.log beside the executable instead (main.cpp). For
+# testing: cmake -DALTENGINE_CONSOLE=ON brings the window back.
+option(ALTENGINE_CONSOLE "Windows: open the command window behind the game (its log) instead of writing altengine.log" OFF)
+if (WIN32)
+    if (ALTENGINE_CONSOLE)
+        target_compile_definitions(ALTEngine PRIVATE ALTENGINE_CONSOLE=1)
+    else()
+        set_target_properties(ALTEngine PROPERTIES WIN32_EXECUTABLE TRUE)
+    endif()
+endif()
+
 if (WIN32 AND DXC_EXECUTABLE)
     add_dependencies(ALTEngine CompileModelShaders)
 endif()

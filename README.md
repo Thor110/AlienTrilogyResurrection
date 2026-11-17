@@ -224,6 +224,8 @@ cmake --build out/build/windows-release
 
 To gather a release from that build, run `tools\make_release.bat` from the `ALTEngine` folder (`/zip` also packs it). It copies only what the game needs into `out\build\ALTEngine-v<version>`: the executable and its DLLs, the licences, `data`, and the language, override and custom folders. The version number is in `ALTEngine\VERSION`.
 
+On Windows the game opens no command window. Everything it would have shown (the boot's readout, the patches, the renderer in use, any errors) goes to `altengine.log` beside `ALTEngine.exe`, made afresh at every start; that is the file to send with a bug report. For testing, configure with `-DALTENGINE_CONSOLE=ON` to bring the command window back.
+
 Linux (Ubuntu 24.04 or similar; SDL3 is built from source the first time, as Ubuntu has no package for it):
 
 ```

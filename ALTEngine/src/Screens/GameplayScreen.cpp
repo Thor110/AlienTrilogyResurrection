@@ -670,11 +670,11 @@ namespace ALTEngine::Screens
         bool zoneCulling = false;
         std::vector<int> markedCreatureBuffer;
         float pendingMouseYaw = 0.0f;   // angle units, accumulated between player ticks
-        int tickMouseYaw = 0;
+        int tickMouseYaw = 0;              // the mouse turn the last tick took in (drawn in full, not blended)
         // The lamp's or goggles' full-on sound, held on a general voice
         // (FUN_0003cfd0 -> FUN_00040b2c with EBX 0x1fff, 0x29e09) so the weapon's
         // cues on the player's channel neither cut it nor are cut by it.
-        int lightFullSound = -1;           // the mouse turn the last tick took in (drawn in full, not blended)
+        int lightFullSound = -1;
         float pendingMouseY = 0.0f;     // raw mouse Y, drives the original's mouse-forward
         bool playerCamSeeded = false;
 

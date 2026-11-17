@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <iostream>
 #include <optional>
 
@@ -29,6 +30,15 @@
 #include "Screens/MultiplayerScreens.h"
 #include "Net/Session.h"
 
+// SDL's entry point: on Windows a windowed program starts at WinMain, which
+// SDL provides and which calls main below (the release has no command
+// window - see ALTENGINE_CONSOLE in CMakeLists.txt). Elsewhere it changes
+// nothing.
+#include <SDL3/SDL_main.h>
+#if defined(_WIN32) && !defined(ALTENGINE_CONSOLE)
+#include <io.h>
+#endif
+
 #include <algorithm>
 #include "Screens/SaveSlotScreen.h"
 #include "Screens/EndLevelPromptScreen.h"
@@ -53,8 +63,34 @@ namespace
     // before any early-exit path so that's not a dead end while debugging.
     void PauseBeforeExit()
     {
+#if defined(_WIN32) && !defined(ALTENGINE_CONSOLE)
+        // No command window to keep open: the readout is in altengine.log.
+        return;
+#else
         std::cout << "\nPress Enter to close...";
         std::cin.get();
+#endif
+    }
+
+    // THE COMMAND WINDOW, TURNED OFF (Windows release; ALTENGINE_CONSOLE in
+    // CMakeLists.txt turns it back on for testing). Everything it showed -
+    // std::cout and std::cerr, and SDL's log, which on Windows only reaches a
+    // console - goes to altengine.log beside the executable, made afresh at
+    // every start, so a player can still send it with a bug report.
+    void LogToFileWithoutConsole()
+    {
+#if defined(_WIN32) && !defined(ALTENGINE_CONSOLE)
+        const std::filesystem::path logPath = ALTEngine::Bootstrap::ExecutableDirectory() / "altengine.log";
+        if (_wfreopen(logPath.wstring().c_str(), L"w", stdout))
+        {
+            std::setvbuf(stdout, nullptr, _IONBF, 0);   // all of it there, even if the game stops short
+            _dup2(_fileno(stdout), _fileno(stderr));
+            std::setvbuf(stderr, nullptr, _IONBF, 0);
+        }
+        SDL_SetLogOutputFunction([](void*, int, SDL_LogPriority, const char* message) {
+            std::fprintf(stdout, "%s\n", message);
+        }, nullptr);
+#endif
     }
 
     enum class CampaignEnd { BackToMenu, WindowClosed };
@@ -173,9 +209,11 @@ int main(int, char**)
 #ifndef ALTENGINE_VERSION
 #define ALTENGINE_VERSION "unknown"
 #endif
-    // The boot's readout, on the game window (MU/TH/UR style) as well as the
-    // command window: finding the game, installing it, the patches. Ends,
-    // and gives the window back, after RunPatches below.
+    // The boot's readout, on the game window (MU/TH/UR style) as well as
+    // altengine.log (or the command window, in a console build): finding the
+    // game, installing it, the patches. Ends, and gives the window back, after
+    // RunPatches below.
+    LogToFileWithoutConsole();
     std::optional<ALTEngine::Bootstrap::MuthurConsole> muthur;
     muthur.emplace("MU/TH/UR 9000 - ALTENGINE " ALTENGINE_VERSION);
     std::cout << "ALTEngine " ALTENGINE_VERSION " boot starting...\n";

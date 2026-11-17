@@ -114,6 +114,9 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
 
 ### Changed
 
+- **No command window on Windows.** The window that opened behind the game is gone; what it showed now goes to
+  `altengine.log` beside `ALTEngine.exe`, made afresh at every start - the file to send with a bug report. (A
+  build configured with `-DALTENGINE_CONSOLE=ON` brings the window back, for testing.)
 - **Picking a weapon from the pause menu is always on**, as in the original: Enter (or Right) on a weapon in the
   list switches to it. It was the Modern option Pause Weapon Select, which is gone.
 
