@@ -22,7 +22,7 @@ namespace ALTEngine::Screens
     // so they butt together at the anchor rather than overlapping, and their
     // widths run 60, 52, 56, 64 against 60, 64, 56, 52 - the same set reversed,
     // which is what a mirrored pair looks like. Four frames each, 88 to 92 pixels
-    // tall (see RepeatBottomRows for the two rows added under the art).
+    // tall as shipped (see FIXED_HEIGHTS for ALTEngine's fixed FINGERS.B16).
     //
     // WHERE THEY COME FROM: animations 16 and 17 of the HUGGER's own table, read
     // through the pairs at +0x80/+0x84 and +0x88/+0x8c. Their frames are not in
@@ -68,10 +68,29 @@ namespace ALTEngine::Screens
                 return out;
             };
 
-            return Load(cdDirectory,
-                        toFrames(hugger->anims[AD::OVERLAY_HALF_A]),
-                        toFrames(hugger->anims[AD::OVERLAY_HALF_B]));
+            // The fixed file first (its three taller frames), then the file as
+            // shipped, should the fix not have been made (see FIXED_HEIGHTS).
+            auto halfA = toFrames(hugger->anims[AD::OVERLAY_HALF_A]);
+            auto halfB = toFrames(hugger->anims[AD::OVERLAY_HALF_B]);
+            auto fixedA = halfA, fixedB = halfB;
+            for (size_t i = 0; i < fixedA.size() && i < 4; ++i) { fixedA[i].height = FIXED_HEIGHTS[0][i]; }
+            for (size_t i = 0; i < fixedB.size() && i < 4; ++i) { fixedB[i].height = FIXED_HEIGHTS[1][i]; }
+            return Load(cdDirectory, fixedA, fixedB) || Load(cdDirectory, halfA, halfB);
         }
+
+        // ALTENGINE-ONLY FIX, IN THE FILE (stage 5, data/EngineFilePatches.json,
+        // Patch/FINGERS.txt). Every one of the eight frames ended its art two
+        // sprite rows (four view rows) short of the bottom of the view, so a
+        // strip of the world showed under the creature (Edward, 2026). ALTEngine's
+        // copy of FINGERS.B16 has the two rows under each frame's art filled with
+        // copies of its last two rows; three frames had one empty row and are
+        // one row taller in the fixed file. Their heights are in the executable's
+        // tables, not the file, so the fixed heights are here: half A's frames,
+        // then half B's (shipped: 92, 88, 88, 88 and 88, 88, 88, 92). Only these
+        // heights differ; the offsets and every frame's place in the file are
+        // unchanged. Before zip 169 the rows were filled at load
+        // (RepeatBottomRows) - REMOVED, the file carries the fix now.
+        static constexpr int FIXED_HEIGHTS[HALF_COUNT][4] = { { 92, 89, 88, 88 }, { 88, 88, 89, 93 } };
 
         bool Load(const std::filesystem::path& cdDirectory,
                   const std::vector<ALTEngine::Formats::EnemySpriteSet::Frame>& halfA,
@@ -84,58 +103,8 @@ namespace ALTEngine::Screens
 
             halves[0] = sprites.DecodeAnimation(halfA);
             halves[1] = sprites.DecodeAnimation(halfB);
-            for (auto& half : halves)
-            {
-                for (auto& f : half) { RepeatBottomRows(f); }
-            }
             loaded = !halves[0].empty() && !halves[1].empty();
             return loaded;
-        }
-
-        // OURS (ALTEngine only; FINGERS.B16 is not changed). Every one of the
-        // eight frames ends its drawn art on row 236 of the 240-row view once
-        // the creature has arrived: the frames run to 238-242, but each ends in
-        // one to three empty rows (Edward, 2026, from FINGERS.B16 itself), so
-        // a strip of the world showed under the creature. Two sprite rows are
-        // four view rows at DRAW_SCALE: the two rows under the art are filled
-        // with copies of its last two rows, in order (one row repeated looks
-        // stretched - Edward), the frame growing only where it has fewer than
-        // two empty rows (three frames have one). The offsets are unchanged,
-        // so nothing moves.
-        //
-        // TEMPORARY (Edward): to be taken out of the code and done as a file
-        // fix to ALTEngine's own FINGERS.B16 once the patches are split into
-        // global and ALTEngine-only ones - see Notes/what-remains.md, "Larger
-        // features". That needs a frame encoder, and the grown frames' heights
-        // and the later frames' offsets changed in EnemyAnimData.
-        static constexpr int REPEATED_ROWS = 2;
-        static void RepeatBottomRows(ALTEngine::Formats::EnemySpriteSet::Frame& f)
-        {
-            if (f.width <= 0 || f.height < REPEATED_ROWS) { return; }
-            const size_t w = static_cast<size_t>(f.width);
-            if (f.pixels.size() != w * static_cast<size_t>(f.height)) { return; }
-
-            // The last row with anything drawn on it.
-            int last = f.height - 1;
-            auto rowEmpty = [&](int row) {
-                for (size_t x = 0; x < w; ++x) { if (f.pixels[static_cast<size_t>(row) * w + x] != 0) { return false; } }
-                return true;
-            };
-            while (last >= 0 && rowEmpty(last)) { --last; }
-            if (last < REPEATED_ROWS - 1) { return; }
-
-            const int needed = last + 1 + REPEATED_ROWS;
-            if (needed > f.height)
-            {
-                f.pixels.resize(w * static_cast<size_t>(needed), 0);
-                f.height = needed;
-            }
-            for (int k = 0; k < REPEATED_ROWS; ++k)
-            {
-                const auto from = f.pixels.begin() + static_cast<std::ptrdiff_t>(static_cast<size_t>(last - REPEATED_ROWS + 1 + k) * w);
-                std::copy(from, from + static_cast<std::ptrdiff_t>(w),
-                          f.pixels.begin() + static_cast<std::ptrdiff_t>(static_cast<size_t>(last + 1 + k) * w));
-            }
         }
 
         bool Ready() const { return loaded; }

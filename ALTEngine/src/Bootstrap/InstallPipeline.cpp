@@ -520,6 +520,77 @@ namespace ALTEngine::Bootstrap
         }
     }
 
+    namespace
+    {
+        // ALTENGINE-ONLY FILE FIXES (data/EngineFilePatches.json): stage 5,
+        // never part of ALTViewer's patch button. Each file is checked by its
+        // CRC-32 before (as shipped) and after (as fixed); one already fixed is
+        // skipped, one that is neither is left alone and reported. The first is
+        // the face hugger's art, FINGERS.B16 (Patch/FINGERS.txt).
+        void ApplyEngineFilePatches(const std::filesystem::path& cdDirectory)
+        {
+            const auto listPath = ExecutableDirectory() / "data" / "EngineFilePatches.json";
+            nlohmann::json list;
+            {
+                std::ifstream in(listPath);
+                if (!in) { std::cout << "ALTEngine file fixes: " << listPath.string() << " is missing - none made.\n"; return; }
+                try { in >> list; } catch (...) { list = nlohmann::json(); }
+            }
+            if (!list.is_object() || !list.contains("files") || !list["files"].is_array())
+            {
+                std::cout << "ALTEngine file fixes: " << listPath.string() << " cannot be read - none made.\n";
+                return;
+            }
+            auto hexValue = [](char c) -> int {
+                if (c >= '0' && c <= '9') { return c - '0'; }
+                if (c >= 'a' && c <= 'f') { return c - 'a' + 10; }
+                if (c >= 'A' && c <= 'F') { return c - 'A' + 10; }
+                return -1;
+            };
+            size_t made = 0, already = 0;
+            for (const auto& entry : list["files"])
+            {
+                if (!entry.is_object() || !entry.contains("target") || !entry.contains("crc") || !entry.contains("patchedCrc")
+                    || !entry.contains("edits") || !entry["edits"].is_array()) { continue; }
+                const std::string target = entry["target"].get<std::string>();
+                const auto file = cdDirectory / target;
+                std::vector<uint8_t> bytes;
+                if (!ReadAll(file, bytes)) { std::cout << "ALTEngine file fixes: " << target << " not found.\n"; continue; }
+                const uint32_t crc = ALTEngine::Formats::Crc32(bytes.data(), bytes.size());
+                if (crc == entry["patchedCrc"].get<uint32_t>()) { ++already; continue; }
+                if (crc != entry["crc"].get<uint32_t>())
+                {
+                    std::cout << "ALTEngine file fixes: " << target << " is not the file the fix was made for - left as it is.\n";
+                    continue;
+                }
+                bool ok = true;
+                for (const auto& edit : entry["edits"])
+                {
+                    const std::string offsetText = edit.value("offset", "");
+                    const std::string hex = edit.value("hex", "");
+                    size_t offset = 0;
+                    try { offset = static_cast<size_t>(std::stoull(offsetText, nullptr, 16)); } catch (...) { ok = false; break; }
+                    if (hex.size() % 2 != 0 || offset + hex.size() / 2 > bytes.size()) { ok = false; break; }
+                    for (size_t i = 0; i < hex.size() / 2 && ok; ++i)
+                    {
+                        const int hi = hexValue(hex[2 * i]), lo = hexValue(hex[2 * i + 1]);
+                        if (hi < 0 || lo < 0) { ok = false; break; }
+                        bytes[offset + i] = static_cast<uint8_t>(hi * 16 + lo);
+                    }
+                }
+                if (!ok || ALTEngine::Formats::Crc32(bytes.data(), bytes.size()) != entry["patchedCrc"].get<uint32_t>())
+                {
+                    std::cout << "ALTEngine file fixes: " << target << " - the fix does not give the expected file; left as it is.\n";
+                    continue;
+                }
+                if (!WriteAll(file, bytes)) { std::cout << "ALTEngine file fixes: could not write " << target << ".\n"; continue; }
+                ++made;
+                std::cout << "  [applied]  " << target << " (ALTEngine only)\n";
+            }
+            std::cout << "ALTEngine file fixes: " << made << " made, " << already << " already made.\n";
+        }
+    }
+
     void RunPatches(const std::filesystem::path& cdDirectory)
     {
         // THE STAGES, in order (Patch/README.txt):
@@ -527,7 +598,8 @@ namespace ALTEngine::Bootstrap
         //   2. the level fixes and 3. the texture fixes (Patches.json's
         //      "level" then "texture" byte patches),
         //   4. the missing faces (MissingFaces.json),
-        //   5. ALTEngine's own: the Level Cleanup, then the texture blanking.
+        //   5. ALTEngine's own: the Level Cleanup, then the texture blanking,
+        //      then its file fixes (EngineFilePatches.json: FINGERS.B16).
         // 1-4 are global (ALTViewer's patch button makes the same files); 5 is
         // ALTEngine's alone. The byte patches always meet the files as shipped
         // (less the removed models), so every later stage's work is put aside
@@ -608,6 +680,7 @@ namespace ALTEngine::Bootstrap
         ApplyLevelCleanup(cdDirectory, TestingSettings(config).IsOn(TestingOption::LevelCleanup));
         // Last: the texture blanking, against the sheets as the fixes leave them.
         ApplyTextureBlanking(cdDirectory, TestingSettings(config).IsOn(TestingOption::LevelCleanup));
+        ApplyEngineFilePatches(cdDirectory);
     }
 
     bool InstallFromDisc(const std::filesystem::path& discRoot, const std::filesystem::path& destination)

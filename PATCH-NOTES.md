@@ -79,7 +79,7 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
 2. the level fixes (geometry, objects, lifts, doors);
 3. the texture fixes (texture numbers, turns, flips, the texture sheets);
 4. **the missing faces** - new in the global fixes;
-5. ALTEngine only: the Level Cleanup and the texture blanking.
+5. ALTEngine only: the Level Cleanup, the texture blanking, and ALTEngine's own file fixes.
 
 - **The missing faces are now fixed for the original game too.** On 36 levels the first cell of the map never
   had its faces drawn (an off-by-one in the original's level files); some of those faces fill real holes, like
@@ -88,6 +88,9 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
   whether the cleanup is on or off, and ALTViewer's patch button puts them in for the original game.
 - **L232: the missing wall in the boiler room, by the grate** (reported on Discord), is in, with the texture
   Edward picked (193, flipped).
+- **The face hugger's art is fixed in ALTEngine's copy of FINGERS.B16** (ALTEngine only). The two rows under
+  the creature, filled since 0.9.6 so it reaches the bottom of the screen, were made in code every time the art
+  loaded; they are now in the file itself, the same pictures (`Patch/FINGERS.txt`).
 - With the faces in, face numbers on most levels are one higher than before from the first cell's faces on
   (the Face Index Display shows the new numbers).
 - ALTViewer's patch button can be pressed again over a patched game: it takes the missing faces out, checks the

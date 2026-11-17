@@ -125,6 +125,13 @@ screen.
 or below them. That decides the fix: fill the see-through corner, or move the art down. To fold into the
 planned file fix of FINGERS.B16 (the ALTEngine-only patch).
 
+**Update (0.9.9).** The two filled rows are now in ALTEngine's copy of FINGERS.B16 (`Patch/FINGERS.txt`), the
+same pictures as before, so this report is unchanged by it. Measured from the fixed frames: at rest the art's
+bottom row is drawn only in the middle, x 152 to 172 of the 320-wide view (the creature's tail), and the left
+half's frames start at x 38 to 62 - so the bottom corners show the view in every frame, by the art's own shape,
+not through a gap in it. If the original shows nothing there, the difference is more likely in where the
+original's view ends (its 200-row screen, under the panels) than in the art. Still wants a screenshot of both.
+
 ---
 
 ## 6. Smart gun: firing again and again, its firing sound stops

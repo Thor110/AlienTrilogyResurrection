@@ -227,7 +227,8 @@ last two rows, growing a frame only where it has one empty row (A1, B2, B3, +1 e
 frames have room inside them (two or three empty rows), but A1, B2 and B3 have one, so they would need to grow
 by a row - and a frame's size is in the executable's tables (EnemyAnimData), not the file. The frames are also
 compressed, so any change means re-encoding them (there is no encoder yet) and moving the later frames' offsets,
-which are in the same tables. Until then the load-time fix stands.
+which are in the same tables. Until then the load-time fix stands. **Done in zip 169** without moving any offset:
+each frame re-compressed fits in its old space (Patch/FINGERS.txt).
 
 Changed in zip 150, to check:
 - **Mouse Sensitivity scales both axes** (Edward): the mouse's Y now goes through it too - Free Look's pitch
@@ -828,10 +829,10 @@ level's end every tick, which changes nothing; the port doesn't.
 ## 5. Larger features
 
 - **Multiplayer:** see 4b.
-- **The face hug overlay's bottom rows as a file fix** (Edward, zip 154): once the patches are split into global
-  and ALTEngine-only ones, take `FaceHugOverlay::RepeatBottomRows` out of the code and make the same change to
-  ALTEngine's copy of FINGERS.B16 instead. Needs a frame encoder (the frames are compressed), A1, B2 and B3 one
-  row taller and the later frames' offsets moved in EnemyAnimData. Details under zip 154 above.
+- ~~**The face hug overlay's bottom rows as a file fix**~~ - **done in zip 169**: ALTEngine's FINGERS.B16 carries
+  them (`data/EngineFilePatches.json`, `Patch/FINGERS.txt`) and `RepeatBottomRows` is gone. Every re-compressed
+  frame fits in its old space, so no offset moved; only A1, B2 and B3's heights (+1) are in the code
+  (`FaceHugOverlay::FIXED_HEIGHTS`), with the shipped heights as the fallback for an unfixed file.
 - **The Modern options, reorganised** (Edward, zip 148): move Disable Resupply Timer from Testing into Modern
   (which preset is open), and split the Modern list into categories once it grows further.
 - **Direct-to-window rendering.**
@@ -971,7 +972,7 @@ the original game. Every ALTEngine-only fix, done or planned, is listed here, so
 | Level Cleanup: the faces no one can see taken out, cells never drawn cleared (ALTLevelCleanupList, `data/LevelCleanupList.json` and `LevelCleanupExtra.json`) | applied at install, `.untrimmed` copies kept | done (zips 103-118) |
 | ~~Level Cleanup: each level's record 0 given back, L211's floor added~~ | moved: now the global missing faces (`data/MissingFaces.json`, ALTViewer's `MissingFaces.cs`) | global since zip 168; L232's copy has texture 193 flipped |
 | Texture blanking: unused texture slots blanked (`data/TextureBlankList.json`) | applied at install, `.unblanked` copies kept | done (zip 120) |
-| The face hugger's two empty bottom rows filled (FINGERS.B16) | in the code, at load (`FaceHugOverlay::RepeatBottomRows`) | TEMPORARY: to become a file fix of FINGERS.B16 (section 5, and the B16 note above) |
+| The face hugger's two empty bottom rows filled (FINGERS.B16) | in the file: `data/EngineFilePatches.json`, `Patch/FINGERS.txt`; the three taller frames' heights in `FaceHugOverlay::FIXED_HEIGHTS` | done (zip 169); the load-time fill (`RepeatBottomRows`) removed |
 | The gaps above the doors | not yet | planned (below, "Later: patch in the gaps above the doors") |
 | Trimming the bytes nothing uses | not yet | planned (below, "Towards the end of the project") |
 
@@ -984,7 +985,8 @@ global stages give byte-identical files in both. `Patch/README.txt` describes ea
 3. **texture fixes** (global: `"stage": "texture"` - the UV review, texture numbers and turns, the sheets);
 4. **missing faces** (global: `data/MissingFaces.json`, ALTViewer's `MissingFaces.cs`) - each level's first cell
    given its run, a copy of record 0 where it is seen, L211's floor, L232's copy's texture;
-5. **ALTEngine-only fixes** (the table above): the Level Cleanup, then the texture blanking.
+5. **ALTEngine-only fixes** (the table above): the Level Cleanup, then the texture blanking, then the file fixes
+   (`data/EngineFilePatches.json`, CRC-checked before and after; FINGERS.B16).
 
 Why this order holds: the byte patches (2, 3) never change a file's size, so their offsets hold against the files
 stage 1 leaves; the missing faces are checked by CRC against the file stages 1-3 leave (`crc`, and `facedCrc` the

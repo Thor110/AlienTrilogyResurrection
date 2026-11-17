@@ -1,5 +1,9 @@
 #include "TestWorld.h"
 #include "TestFramework.h"
+#include "Formats/EnemyAnimData.h"
+#include <nlohmann/json.hpp>
+#include <filesystem>
+#include <fstream>
 
 #include "Screens/CreatureTasks.h"
 #include "Screens/Enemies.h"
@@ -423,27 +427,42 @@ TEST_CASE("Vent: its held sound stops whenever the jet does, a hit back to dorma
     CHECK(stopped);
 }
 
-TEST_CASE("Face hug overlay: the two rows under the art repeat its last two, growing the frame only if needed")
+TEST_CASE("Face hug overlay: ALTEngine's FINGERS.B16 fix changes three heights and fits the file as shipped")
 {
+    // The fill under the art is in ALTEngine's copy of FINGERS.B16 now (data/EngineFilePatches.json), not done at
+    // load. Only three frames are taller in the fixed file, each by one row; the rest keep their shipped height.
+    namespace AD = ALTEngine::Formats::EnemyAnimData;
     using ALTEngine::Screens::FaceHugOverlay;
-    // Art in rows 0-1, two empty rows under it: filled in place.
-    ALTEngine::Formats::EnemySpriteSet::Frame f;
-    f.width = 2; f.height = 4; f.offsetY = -53;
-    f.pixels = { 1, 2, 3, 4, 0, 0, 0, 0 };
-    FaceHugOverlay::RepeatBottomRows(f);
-    CHECK_EQ(f.height, 4);
-    CHECK(f.pixels == std::vector<uint8_t>({ 1, 2, 3, 4, 1, 2, 3, 4 }));
-    CHECK_EQ(f.offsetY, -53);   // nothing moves
-    // One empty row: the frame grows by one.
-    ALTEngine::Formats::EnemySpriteSet::Frame g;
-    g.width = 2; g.height = 3;
-    g.pixels = { 5, 6, 7, 8, 0, 0 };
-    FaceHugOverlay::RepeatBottomRows(g);
-    CHECK_EQ(g.height, 4);
-    CHECK(g.pixels == std::vector<uint8_t>({ 5, 6, 7, 8, 5, 6, 7, 8 }));
-    // A frame whose pixels don't match its size is left alone.
-    ALTEngine::Formats::EnemySpriteSet::Frame bad;
-    bad.width = 4; bad.height = 2; bad.pixels = { 1, 2 };
-    FaceHugOverlay::RepeatBottomRows(bad);
-    CHECK_EQ(bad.height, 2);
+    const AD::Creature* hugger = AD::ForType(2);
+    REQUIRE(hugger != nullptr);
+    int taller = 0;
+    for (int half = 0; half < FaceHugOverlay::HALF_COUNT; ++half)
+    {
+        const AD::Anim& anim = hugger->anims[half == 0 ? AD::OVERLAY_HALF_A : AD::OVERLAY_HALF_B];
+        REQUIRE(anim.count == 4);
+        for (int i = 0; i < 4; ++i)
+        {
+            const int grown = FaceHugOverlay::FIXED_HEIGHTS[half][i] - anim.frames[i].h;
+            CHECK(grown == 0 || grown == 1);
+            taller += grown;
+        }
+    }
+    CHECK_EQ(taller, 3);
+
+    // The fix itself: one file, checked by CRC before and after, every edit inside the file as shipped (17152 bytes).
+    std::ifstream in(std::filesystem::path(ALT_TEST_DATA_ROOT) / "EngineFilePatches.json");
+    REQUIRE(in.good());
+    nlohmann::json list;
+    in >> list;
+    REQUIRE(list.contains("files") && list["files"].size() == 1);
+    const auto& fix = list["files"][0];
+    CHECK(fix["target"].get<std::string>() == "NME/FINGERS.B16");
+    CHECK(fix["crc"].get<uint32_t>() != fix["patchedCrc"].get<uint32_t>());
+    for (const auto& edit : fix["edits"])
+    {
+        const std::string hex = edit["hex"].get<std::string>();
+        const size_t offset = static_cast<size_t>(std::stoull(edit["offset"].get<std::string>(), nullptr, 16));
+        CHECK(hex.size() % 2 == 0);
+        CHECK(offset + hex.size() / 2 <= size_t(17152));
+    }
 }

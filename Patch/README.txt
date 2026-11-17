@@ -15,7 +15,7 @@ them, so each one is written against a known file.
   2. Level fixes                                                   global
   3. Texture fixes                                                 global
   4. Missing faces                                                 global
-  5. The Level Cleanup, then the texture blanking                  ALTEngine only
+  5. The Level Cleanup, the texture blanking, the file fixes       ALTEngine only
 
 Global fixes correct mistakes in the shipped files and suit the original game as well as ALTEngine: ALTViewer's
 patch button puts all four into an installed copy of the original. ALTEngine-only fixes are made for ALTEngine
@@ -72,19 +72,23 @@ and are never offered for the original game.
    must be exactly the expected file). Pressing ALTViewer's button again, or installing ALTEngine from a game
    ALTViewer patched, first takes the faces back out, exactly, then checks the byte patches, then puts them back.
 
-5. ALTEngine only: the Level Cleanup and the texture blanking
+5. ALTEngine only: the Level Cleanup, the texture blanking and ALTEngine's file fixes
 
    The Level Cleanup (Options > Testing > Level Cleanup, on by default) takes out the faces no one can ever see
    (behind walls, outside the map, under floors) and the cells never drawn: ALTEngine/data/LevelCleanupList.json,
    made by ALTLevelCleanupList, with Edward's hand-picked additions in LevelCleanupExtra.json. Turned off, the
    files go back to how stages 1-4 left them. The texture blanking (data/TextureBlankList.json) clears the texture
-   slots no level uses. Both keep a copy of the file before them (.untrimmed, .unblanked). Planned for this stage:
-   the face hugger's art (FINGERS.B16) filled to the bottom of the screen, the gaps above the doors, and trimming
-   the bytes nothing uses (Notes/what-remains.md, section 7b).
+   slots no level uses. Both keep a copy of the file before them (.untrimmed, .unblanked).
+
+   ALTEngine's file fixes (data/EngineFilePatches.json) change files for ALTEngine alone, each checked by its
+   CRC before and after. The first is the face hugger's art, FINGERS.B16, filled to the bottom of the screen
+   (FINGERS.txt). Planned for this stage: the gaps above the doors, and trimming the bytes nothing uses
+   (Notes/what-remains.md, section 7b).
 
 
 THE OTHER FILES HERE
 
+  FINGERS.txt                                    the face hugger's art (ALTEngine only, stage 5)
   UNPATCHED-NOTES.txt, UNPATCHED-FIX-LIFTS.txt   problems found and not patched (yet), with why
   another-fix.txt, new-fix.txt                   ALTViewer's earliest fixes, as first written up
   LxxxLEV-Dnnn.txt, L906LEV-D000.txt             a level's door model looked at on its own
