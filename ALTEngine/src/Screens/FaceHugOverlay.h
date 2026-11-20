@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Formats/EnemyAnimData.h"
+#include "../Formats/EnemyAnimSequences.h"
 #include "../Formats/EnemySpriteSet.h"
 #include "../Formats/SpriteAnimator.h"
 #include "../Renderer/HudPanel.h"
@@ -112,7 +113,7 @@ namespace ALTEngine::Screens
 
         // True once the climb has finished - the point at which the creature
         // itself is spent. The overlay outlasts it.
-        bool Arrived() const { return y <= REST_Y; }
+        bool Arrived() const { return originalY <= ORIGINAL_REST_Y; }
 
         // True once it has slid back off - the point LAB_00030918 waits for
         // before landing the creature and killing it.
@@ -124,10 +125,17 @@ namespace ALTEngine::Screens
         {
             if (!loaded) { return; }
             active = true;
-            frame = 0;
-            timer = 0;
-            y = START_Y;
+            originalY = ORIGINAL_START_Y;
             phase = Phase::Climbing;
+            // Both halves' animators started on the hugger's sequences 16 and
+            // 17 and run once straight away, as FUN_000303ec does: four
+            // frames, four ticks each, looping for the whole hug (it used to
+            // play them once, seven ticks a frame, and hold the last).
+            for (int half = 0; half < HALF_COUNT; ++half)
+            {
+                ALTEngine::Formats::SpriteAnim::Start(animators[half], Sequence(half));
+                ALTEngine::Formats::SpriteAnim::Tick(animators[half], Sequence(half));
+            }
         }
 
         void End() { active = false; }
@@ -142,8 +150,10 @@ namespace ALTEngine::Screens
         // for the hug's 0x40, then down.
         static constexpr int DurationTicks()
         {
-            const int travel = START_Y - REST_Y;
-            return HUG_TICKS + (travel + FALL_STEP - 1) / FALL_STEP + 1;
+            // The fall from where the climb stops (0x74) back to 0x154, and
+            // the tick that sees it there.
+            const int climbEnd = ORIGINAL_START_Y - ((ORIGINAL_START_Y - ORIGINAL_REST_Y + CLIMB_STEP - 1) / CLIMB_STEP) * CLIMB_STEP;
+            return HUG_TICKS + (ORIGINAL_START_Y - climbEnd + FALL_STEP - 1) / FALL_STEP + 1;
         }
         static constexpr int HUG_TICKS = 0x40;   // FUN_00033cbc's +0xc, 0x33d26
 
@@ -153,23 +163,23 @@ namespace ALTEngine::Screens
         {
             if (!active) { return; }
 
-            // The three phases, as FUN_000307c0 runs them.
+            // FUN_000307c0: both animators a tick (FUN_00028a6c), then the
+            // three phases, in the original's own rows.
+            for (int half = 0; half < HALF_COUNT; ++half)
+            {
+                ALTEngine::Formats::SpriteAnim::Tick(animators[half], Sequence(half));
+            }
+            ++clock;
             if (phase == Phase::Climbing)
             {
                 // Up to the rest position and held there until let go.
-                if (y > REST_Y) { y -= CLIMB_STEP; }
+                if (originalY > ORIGINAL_REST_Y) { originalY -= CLIMB_STEP; }
             }
             else if (phase == Phase::Falling)
             {
-                if (y < START_Y) { y += FALL_STEP; }
+                if (originalY < ORIGINAL_START_Y) { originalY += FALL_STEP; }
                 else { phase = Phase::Done; active = false; }
             }
-
-            if (++timer < TICKS_PER_FRAME) { return; }
-            timer = 0;
-            const int count = static_cast<int>(halves[0].size());
-            if (count <= 0) { return; }
-            if (frame + 1 < count) { frame++; }   // holds on the last frame
         }
 
         // The two halves to draw this tick, with their own draw offsets applied to
@@ -192,7 +202,7 @@ namespace ALTEngine::Screens
             for (int half = 0; half < HALF_COUNT; ++half)
             {
                 if (halves[half].empty()) { continue; }
-                size_t index = static_cast<size_t>(frame);
+                size_t index = animators[half].frameIndex;
                 if (index >= halves[half].size()) { index = halves[half].size() - 1; }
 
                 const auto& f = halves[half][index];
@@ -203,7 +213,10 @@ namespace ALTEngine::Screens
                 // The offsets scale with the art, so the halves keep meeting at
                 // the anchor instead of pulling apart.
                 piece.x = ANCHOR_X + static_cast<int>(f.offsetX * DRAW_SCALE);
-                piece.y = CurrentY() + static_cast<int>(f.offsetY * DRAW_SCALE);
+                // FUN_0003065c adds the game clock's low four bits to both
+                // edges: the halves bob down 0..15 rows and snap back every 16
+                // ticks.
+                piece.y = CurrentY() + ToOurRows(clock & 0xf) + static_cast<int>(f.offsetY * DRAW_SCALE);
                 piece.width = f.width * DRAW_SCALE;
                 piece.height = f.height * DRAW_SCALE;
                 out.push_back(piece);
@@ -247,7 +260,8 @@ namespace ALTEngine::Screens
             return rgba;
         }
 
-        int CurrentY() const { return y; }
+        // The original's row mapped onto ours: 0x78 is REST_Y, 0x154 START_Y.
+        int CurrentY() const { return REST_Y + ToOurRows(originalY - ORIGINAL_REST_Y); }
 
     private:
         // 0xa0 from FUN_000303ec - the centre of a 320-wide screen, and the point
@@ -301,26 +315,38 @@ namespace ALTEngine::Screens
         static constexpr int START_Y = VIEW_HEIGHT
                                      + static_cast<int>(-TYPICAL_OFFSET_Y * DRAW_SCALE);
 
-        // Rows a tick, straight from FUN_000307c0 - it falls off twice as fast as
-        // it climbs on. The travel is longer in our taller space, so at the same
-        // step rate the whole thing takes proportionally longer, which is the
-        // right way round: it was too fast before because it had less distance to
-        // cover.
+        // THE CRAWL RUNS IN THE ORIGINAL'S ROWS (FUN_000307c0): from 0x154 up
+        // 8 a tick while above 0x78 (28 ticks, stopping at 0x74), and back
+        // down 0x10 a tick (14 ticks), then one more to see it there. Those
+        // rows are mapped linearly onto REST_Y..START_Y to draw, so the
+        // positions stay the ones derived above and the timing is the
+        // original's. (Moving our own 176 rows at the same steps took 22 and
+        // 11 ticks, and the hugger died three ticks early.)
+        static constexpr int ORIGINAL_START_Y = 0x154;
+        static constexpr int ORIGINAL_REST_Y = 0x78;
         static constexpr int CLIMB_STEP = 8;
         static constexpr int FALL_STEP = 0x10;
+        static constexpr int ToOurRows(int originalRows)
+        {
+            return originalRows * (START_Y - REST_Y) / (ORIGINAL_START_Y - ORIGINAL_REST_Y);
+        }
 
         // WHAT ENDS THE CLIMB is the hug task's own count (see LetGo): 0x40
         // passes from the pounce, climbing included.
 
-        // Paced so the four frames play across the climb.
-        static constexpr int TICKS_PER_FRAME = 7;        ALTEngine::Formats::EnemySpriteSet sprites;
+        // The two halves' scripts: the hugger's sequences 16 and 17.
+        static ALTEngine::Formats::SpriteAnim::SequenceView Sequence(int half)
+        {
+            const auto& sq = ALTEngine::Formats::EnemyAnimSequences::HUGGER_SEQUENCES[half == 0 ? 16 : 17];
+            return { sq.data, sq.count };
+        }        ALTEngine::Formats::EnemySpriteSet sprites;
         std::vector<ALTEngine::Formats::EnemySpriteSet::Frame> halves[HALF_COUNT];
         bool loaded = false;
         bool active = false;
-        int frame = 0;
-        int timer = 0;
+        ALTEngine::Formats::SpriteAnim::Animator animators[HALF_COUNT];
+        int clock = 0;   // the bob's clock (the original's DAT_000b0bb8)
         enum class Phase { Climbing, Falling, Done };
         Phase phase = Phase::Climbing;
-        int y = START_Y;
+        int originalY = ORIGINAL_START_Y;
     };
 }

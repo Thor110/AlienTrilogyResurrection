@@ -74,7 +74,7 @@ TEST_CASE("Egg: the released monster is alerted and leaping at the player")
     std::vector<EN::Enemy> roster(2);
     roster[0].monsterIndex = 0; roster[0].type = 1; roster[0].active = true;
     roster[1].monsterIndex = 1; roster[1].type = 2; roster[1].active = false;
-    REQUIRE(EN::ReleaseFromEgg(roster, 1, 100.0f, 32.0f, 200.0f, 0x400));
+    REQUIRE(EN::ReleaseFromEgg(roster, roster, 1, 100.0f, 32.0f, 200.0f, 0x400));
     const auto& h = roster[1];
     CHECK(h.active);
     CHECK_EQ(h.facing, 0x400);
@@ -83,8 +83,29 @@ TEST_CASE("Egg: the released monster is alerted and leaping at the player")
     CHECK(h.leaping);
     CHECK_EQ(h.vy, 0x60);
     CHECK(h.leapX > 63.0f);                  // 0x40 along a quarter turn: +x
-    CHECK(!EN::ReleaseFromEgg(roster, 1, 0, 0, 0, 0));   // already out
-    CHECK(!EN::ReleaseFromEgg(roster, 0xff, 0, 0, 0, 0));
+    CHECK(!EN::ReleaseFromEgg(roster, roster, 1, 0, 0, 0, 0));   // already out, and no room left for a copy
+    CHECK(!EN::ReleaseFromEgg(roster, roster, 0xff, 0, 0, 0, 0));
+}
+
+TEST_CASE("Egg: a record already in play still lets a creature out - a copy, at the end (FUN_00035530 always spawns)")
+{
+    std::vector<EN::Enemy> roster(2);
+    roster[0].monsterIndex = 0; roster[0].type = 1; roster[0].active = true;
+    roster[1].monsterIndex = 1; roster[1].type = 2; roster[1].active = true;   // out from the level's start
+    const auto templates = roster;
+    roster.reserve(roster.size() + EN::MAX_SPAWNED_COPIES);
+    auto* h = EN::ReleaseFromEgg(roster, templates, 1, 100.0f, 32.0f, 200.0f, 0x400);
+    REQUIRE(h);
+    CHECK_EQ(roster.size(), 3u);
+    CHECK(h == &roster[2]);
+    CHECK(h->spawnedCopy);
+    CHECK_EQ(h->monsterIndex, 1);
+    CHECK(h->leaping);
+    CHECK_EQ(h->x, 100.0f);
+    // A vent's record never gets a copy: its task reads the record's count.
+    roster[0].type = 0x10;
+    std::vector<EN::Enemy> ventTemplates = roster;
+    CHECK(!EN::SpawnCopy(roster, ventTemplates, 0));
 }
 
 #include "Screens/ParticleSystem.h"
@@ -185,12 +206,12 @@ TEST_CASE("Monster trigger: a negative amount takes an active vent below its thr
     std::vector<EN::Enemy> roster(1);
     roster[0].monsterIndex = 4; roster[0].type = 0x12;
     roster[0].triggerThreshold = 2;
-    CHECK(!EN::TriggerSpawn(roster, 4, 1));
-    CHECK(EN::TriggerSpawn(roster, 4, 1));
+    CHECK(!EN::TriggerSpawn(roster, roster, 4, 1));
+    CHECK(EN::TriggerSpawn(roster, roster, 4, 1));
     CHECK(roster[0].active);
-    CHECK(!EN::TriggerSpawn(roster, 4, 1));  // at its threshold: refused
+    CHECK(!EN::TriggerSpawn(roster, roster, 4, 1));  // at its threshold: refused
     CHECK_EQ(roster[0].triggerCount, 2);
-    CHECK(!EN::TriggerSpawn(roster, 4, 0xff));   // -1
+    CHECK(!EN::TriggerSpawn(roster, roster, 4, 0xff));   // -1
     CHECK_EQ(roster[0].triggerCount, 1);
     CHECK(roster[0].active);                 // still out; the vent itself switches off
 }
@@ -255,7 +276,7 @@ TEST_CASE("Colonist: its burster comes out harder than a hugger from an egg")
 {
     std::vector<EN::Enemy> roster(1);
     roster[0].monsterIndex = 3; roster[0].type = 3;
-    auto* b = EN::ReleaseFromEgg(roster, 3, 0, 64, 0, 0, CO::BURSTER_SPEED, CO::BURSTER_LIFT);
+    auto* b = EN::ReleaseFromEgg(roster, roster, 3, 0, 64, 0, 0, CO::BURSTER_SPEED, CO::BURSTER_LIFT);
     REQUIRE(b);
     CHECK_EQ(b->vy, 0x78);
     CHECK(std::fabs(b->leapZ + 0x60) < 0.5f);   // bearing 0: straight down -Z at 0x60
@@ -465,4 +486,14 @@ TEST_CASE("Face hug overlay: ALTEngine's FINGERS.B16 fix changes three heights a
         CHECK(hex.size() % 2 == 0);
         CHECK(offset + hex.size() / 2 <= size_t(17152));
     }
+}
+
+TEST_CASE("Face hug: the crawl lasts the original's ticks - the 0x40 hold, 14 down, and the tick that sees it off")
+{
+    using ALTEngine::Screens::FaceHugOverlay;
+    CHECK_EQ(FaceHugOverlay::DurationTicks(), 0x40 + 14 + 1);
+    // Its fingers' scripts loop (OP_LOOP 0 at the end), four ticks a frame.
+    const auto& s16 = ALTEngine::Formats::EnemyAnimSequences::HUGGER_SEQUENCES[16];
+    CHECK_EQ(s16.data[0], 4);
+    CHECK_EQ(s16.data[s16.count - 1], 0x8200);
 }

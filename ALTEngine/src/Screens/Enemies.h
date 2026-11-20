@@ -128,6 +128,7 @@ namespace ALTEngine::Screens
         {
             int type = 0;
             int monsterIndex = -1;      // its record in level.monsters
+            bool spawnedCopy = false;   // a second creature from the same record (SpawnCopy)
 
             float x = 0, y = 0, z = 0;
             int facing = 0;             // 4096-per-turn, from the 8-direction byte
@@ -197,6 +198,7 @@ namespace ALTEngine::Screens
             // FUN_0003231c's clear straight line to the player, and
             // FUN_00033a1c's zone test. Every attack needs both.
             bool lineOfFire = true;
+            bool groundLine = true;     // FUN_0003231c, worked out for the gunners as well when it can matter
             bool eitherLine = true;     // the ray or the ground line (waking)
             bool zoneVisible = true;
             // Standing in a cell with no face (a duct): FUN_00033a70 notices
@@ -381,6 +383,32 @@ namespace ALTEngine::Screens
             enemy.spawnGuard = true;
         }
 
+        // FUN_0002e638 takes a free slot from 0x80 every time it spawns - it
+        // never asks whether the record's creature is already out. An egg on
+        // L232 whose hugger record was in play from the start still lets a
+        // hugger out (eggs 8-15 hold records 16-23, all 0/0); so does a
+        // trigger or crate landing its count on a threshold a second time. The
+        // roster has one Enemy per record, so such a spawn is a copy of the
+        // record as the level built it, added at the end. Vents are left out:
+        // their task reads the record's shared count each tick (FUN_000358a4),
+        // which a copy cannot share, and one already out simply resumes.
+        inline constexpr size_t MAX_SPAWNED_COPIES = 0x80;
+        inline Enemy* SpawnCopy(std::vector<Enemy>& enemies, const std::vector<Enemy>& templates, int monsterIndex)
+        {
+            const Enemy* source = nullptr;
+            for (const Enemy& t : templates) { if (t.monsterIndex == monsterIndex) { source = &t; break; } }
+            if (!source || monsterIndex < 0) { return nullptr; }
+            if (source->type >= 0x10 && source->type <= 0x13) { return nullptr; }
+            if (enemies.size() >= enemies.capacity()) { return nullptr; }   // never reallocate
+            enemies.push_back(*source);
+            Enemy& copy = enemies.back();
+            copy.spawnedCopy = true;
+            copy.active = true;
+            copy.alive = true;
+            BringIntoPlay(copy);
+            return &copy;
+        }
+
         // Builds the roster for a level. Monsters parked off-map start inactive
         // - they are crate contents, and something has to let them out.
         inline std::vector<Enemy> Build(const ALTEngine::Formats::LevelGeometry& level,
@@ -388,7 +416,10 @@ namespace ALTEngine::Screens
                                         float originX, float originZ)
         {
             std::vector<Enemy> enemies;
-            enemies.reserve(level.monsters.size());
+            // Room for the creatures made after load (SpawnCopy) without the
+            // vector ever moving: callers hold references into it while they
+            // let one out.
+            enemies.reserve(level.monsters.size() + MAX_SPAWNED_COPIES);
 
             for (size_t i = 0; i < level.monsters.size(); ++i)
             {
@@ -418,11 +449,13 @@ namespace ALTEngine::Screens
                 enemy.triggerCount = record.triggerCount;
                 enemy.facing = FacingFromRotation(record.rotation);
 
-                // The record's own thresholds - bytes 18/19 and 16/17. No longer
-                // guessed, and no longer needing a melee special case: a hugger's
-                // are 768 and 1536 because that is what the level says.
-                if (record.nearThreshold > 0) { enemy.nearThreshold = record.nearThreshold; }
-                if (record.middleThreshold > 0) { enemy.middleThreshold = record.middleThreshold; }
+                // The record's own thresholds - bytes 18/19 and 16/17 - copied
+                // as they are, zero included (FUN_0002e638: +0x4a and +0x48 take
+                // the words with no test). A zero used to keep a 0x800/0x1000
+                // default, which left the 27 vents whose stop point is 0 (L112's
+                // steam pipes among them) jetting without their pause.
+                enemy.nearThreshold = record.nearThreshold;
+                enemy.middleThreshold = record.middleThreshold;
 
                 // FUN_0002e638 clamps two of the record's fields, for every type
                 // but 0x10-0x13: the mode-1 threshold (+0x4a) to at least 0x600,
@@ -466,17 +499,24 @@ namespace ALTEngine::Screens
                 // whatever triggers it.
                 enemy.active = ActiveAtStart(record);
                 if (enemy.active) { BringIntoPlay(enemy); }
+                // The vents' arms put +0x4e back to 0 (0x2f05f, 0x2f0a3): a pipe
+                // with health can be burst from its first tick.
+                if (record.type >= 0x10 && record.type <= 0x13) { enemy.hitCooldown = 0; enemy.spawnGuard = false; }
 
                 enemy.facingOctant = record.rotation & 7;
 
-                // A colonist is pushed 0x40 out of its wall along its facing,
-                // stood 0x40 over the floor, and holds the monster its speed
-                // word names.
+                // A colonist is pushed along its facing by its record's bytes
+                // 12/13 (the signed word at +0x50, 0x2ed0a: `mov esi,[ebx+0x4e];
+                // sar esi,0x10`), stood 0x40 over the floor, and holds the
+                // monster its speed word names. The push differs by colonist -
+                // L161's are 0x78, 0, 5, 0x64 and 0x0a; most of L351's are
+                // negative, into their wall. It was a flat 0x40 out.
                 if (record.type == 10)
                 {
                     namespace CO = CreatureTasks::Colonist;
-                    enemy.x += static_cast<float>(CO::PUSH_X[enemy.facingOctant] * CO::SPAWN_PUSH);
-                    enemy.z += static_cast<float>(CO::PUSH_Z[enemy.facingOctant] * CO::SPAWN_PUSH);
+                    const int push = static_cast<int16_t>(record.wakeRange);
+                    enemy.x += static_cast<float>(CO::PUSH_X[enemy.facingOctant] * push);
+                    enemy.z += static_cast<float>(CO::PUSH_Z[enemy.facingOctant] * push);
                     enemy.lastX = enemy.x;
                     enemy.lastZ = enemy.z;
                     enemy.y += CO::SPAWN_LIFT;
@@ -542,8 +582,11 @@ namespace ALTEngine::Screens
             enemy.ai.idleTimer = 0;
             enemy.ai.state = CreatureAI::ACT;
             enemy.leaping = true;
-            enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * static_cast<float>(speed);
-            enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * static_cast<float>(speed);
+            // FUN_00032f78's integer velocity, floored.
+            int lx = 0, lz = 0;
+            ALTEngine::Game::OriginalMath::RotateYaw(speed, enemy.facing + 0x800, lx, lz);
+            enemy.leapX = static_cast<float>(lx);
+            enemy.leapZ = static_cast<float>(lz);
             enemy.vy = static_cast<float>(lift);
             enemy.actAnimation = animation;
             if (animation >= 0) { RestartAnimation(enemy, animation); }
@@ -556,17 +599,22 @@ namespace ALTEngine::Screens
         //
         // `facing` is the crate's rotation, which the original copies into the
         // monster's own two heading fields (<< 9) before starting the jump-out.
-        inline bool Release(std::vector<Enemy>& enemies, int monsterIndex,
+        inline bool Release(std::vector<Enemy>& enemies, const std::vector<Enemy>& templates, int monsterIndex,
                             float x, float y, float z, int facing)
         {
-            for (Enemy& enemy : enemies)
+            for (Enemy& owner : enemies)
             {
-                if (enemy.monsterIndex != monsterIndex) { continue; }
-                if (enemy.active) { return false; }
+                if (owner.monsterIndex != monsterIndex) { continue; }
 
-                enemy.triggerCount++;
-                if (enemy.triggerCount < enemy.triggerThreshold) { return false; }
+                // Counted up and clamped to the threshold; at it, a creature
+                // comes out - the record's own if it has not been in play, a
+                // copy if it has (SpawnCopy).
+                if (owner.triggerCount < owner.triggerThreshold) { owner.triggerCount++; }
+                if (owner.triggerCount < owner.triggerThreshold) { return false; }
 
+                Enemy* spawned = owner.active ? SpawnCopy(enemies, templates, monsterIndex) : &owner;
+                if (!spawned) { return false; }
+                Enemy& enemy = *spawned;
                 enemy.active = true;
                 BringIntoPlay(enemy);
                 enemy.x = enemy.lastX = x;
@@ -601,7 +649,7 @@ namespace ALTEngine::Screens
         // below its threshold, which switches it off (FUN_000358a4). A count
         // already at its threshold takes no positive amount, and a count
         // pushed past it - or wrapped below zero - is clamped to it.
-        inline bool TriggerSpawn(std::vector<Enemy>& enemies, int monsterIndex, int amount)
+        inline bool TriggerSpawn(std::vector<Enemy>& enemies, const std::vector<Enemy>& templates, int monsterIndex, int amount)
         {
             const int delta = static_cast<int8_t>(amount & 0xff);
             for (Enemy& enemy : enemies)
@@ -614,7 +662,9 @@ namespace ALTEngine::Screens
                 {
                     enemy.triggerCount = enemy.triggerThreshold;
                 }
-                if (enemy.triggerCount != enemy.triggerThreshold || enemy.active) { return false; }
+                if (enemy.triggerCount != enemy.triggerThreshold) { return false; }
+                // Already out (or dead): FUN_0002f224 spawns again all the same.
+                if (enemy.active) { return SpawnCopy(enemies, templates, monsterIndex) != nullptr; }
 
                 enemy.active = true;
                 BringIntoPlay(enemy);
@@ -630,16 +680,20 @@ namespace ALTEngine::Screens
         // A colonist's burster goes through the same routine and then
         // FUN_00035624 sends it out harder - 0x60 along and 0x78 up - which
         // `speed` and `lift` carry. Returns the monster let out, or null.
-        inline Enemy* ReleaseFromEgg(std::vector<Enemy>& enemies, int monsterIndex,
+        inline Enemy* ReleaseFromEgg(std::vector<Enemy>& enemies, const std::vector<Enemy>& templates, int monsterIndex,
                                      float x, float y, float z, int bearing,
                                      int speed = CreatureTasks::EggRelease::SPEED,
                                      int lift = CreatureTasks::EggRelease::LIFT)
         {
             if (monsterIndex < 0 || monsterIndex == 0xff) { return nullptr; }
-            for (Enemy& enemy : enemies)
+            for (Enemy& owner : enemies)
             {
-                if (enemy.monsterIndex != monsterIndex) { continue; }
-                if (enemy.active) { return nullptr; }
+                if (owner.monsterIndex != monsterIndex) { continue; }
+                // A record already out gets a copy (SpawnCopy): FUN_00035530
+                // always spawns.
+                Enemy* spawned = owner.active ? SpawnCopy(enemies, templates, monsterIndex) : &owner;
+                if (!spawned) { return nullptr; }
+                Enemy& enemy = *spawned;
                 enemy.active = true;
                 // OURS: no spawn grace (BringIntoPlay) for a hugger leaping
                 // from an egg or a colonist's burster. The original's
@@ -796,7 +850,9 @@ namespace ALTEngine::Screens
             const int view = (facingOctant - viewOctant) & 7;
             enemy.walkView = view;
             PlayAnimation(enemy, view);
-            enemy.mirrored = view >= 5 && enemy.type != 1 && enemy.type != 10 && enemy.type != 13;
+            // Types 1, 10 and 13 have no arm in that table: their mirror bit is
+            // left as it was, not cleared.
+            if (enemy.type != 1 && enemy.type != 10 && enemy.type != 13) { enemy.mirrored = view >= 5; }
         }
 
         // FUN_00033cbc's animation for an attack, by type and band (the near
@@ -806,7 +862,11 @@ namespace ALTEngine::Screens
         // goes back to the chase instead (0x33ec8, 0x33ed9).
         inline constexpr int NO_ATTACK = -2;
 
-        inline int ActAnimation(int type, int mode, int random, bool& armGrenade, bool* mirrored = nullptr)
+        // `random` is the first draw (FUN_000100ec), taken only where the
+        // original takes one - the queen, and the handler in the middle band;
+        // `second` is the queen's second draw in the middle band, for picks 0
+        // and 1 (0x33ec8, 0x33ed9), -1 when not taken. ActDraws says which.
+        inline int ActAnimation(int type, int mode, int random, bool& armGrenade, bool* mirrored = nullptr, int second = -1)
         {
             armGrenade = false;
             if (mirrored) { *mirrored = false; }
@@ -824,7 +884,7 @@ namespace ALTEngine::Screens
                 // 12, 11, 14, or 14 drawn mirrored (+0xb6 bit 5); in the middle
                 // band the first two only half the time.
                 const int pick = random & 3;
-                const bool coin = ((random >> 2) & 1) != 0;
+                const bool coin = second >= 0 ? (second & 1) != 0 : ((random >> 2) & 1) != 0;
                 if (pick == 3) { if (mirrored) { *mirrored = true; } return 14; }
                 if (pick == 2) { return 14; }
                 if (nearBand) { return pick == 0 ? 12 : 11; }
@@ -843,6 +903,12 @@ namespace ALTEngine::Screens
             default: return EnemyBehaviour::ActingAnimation(type);
             }
         }
+
+        // How many random draws FUN_00033cbc makes for this act: the queen one,
+        // plus a second in the middle band when the first picks 0 or 1; the
+        // handler one in the middle band; everyone else none.
+        inline bool ActDrawsFirst(int type, int mode) { return type == 7 || (type == 0x0e && mode >= 2); }
+        inline bool ActDrawsSecond(int type, int mode, int first) { return type == 7 && mode >= 2 && (first & 3) < 2; }
 
         // FUN_0002f4b0 itself, which starts the animation over even when it is
         // the one already playing.
@@ -880,9 +946,18 @@ namespace ALTEngine::Screens
             }
             else if (enemy.state != EnemyBehaviour::STATE_ACTING)
             {
-                // A hit (state 6) puts it back to dormant (0x359c2).
+                // A hit (state 6, 0x359c2): back to dormant with both counters
+                // and the hit cooldown cleared, and nothing more this tick -
+                // FUN_000358a4 returns 0, which stops its sound. The cooldown
+                // FUN_000310ac set is gone a tick later, so a pipe with health
+                // takes automatic fire at the rate it comes.
                 enemy.state = EnemyBehaviour::STATE_ACTING;
                 enemy.vent.state = VT::DORMANT;
+                enemy.vent.cycle = 0;
+                enemy.vent.emitCounter = 0;
+                enemy.hitCooldown = 0;
+                enemy.ventSoundStop = true;
+                return;
             }
 
             const VT::Output out = VT::Step(enemy.vent, in);
@@ -1103,6 +1178,7 @@ namespace ALTEngine::Screens
             a.separationY = static_cast<int>(std::lround(enemy.separationY));
             a.bearingToPlayer = BearingTo(enemy, playerX, playerZ);
             a.lineToPlayer = enemy.lineOfFire;
+            a.groundLine = enemy.groundLine;
             a.eitherLine = enemy.eitherLine;
             a.zoneVisible = enemy.zoneVisible;
             a.inDuct = enemy.inDuct;
@@ -1247,8 +1323,11 @@ namespace ALTEngine::Screens
                 if (melee)
                 {
                     enemy.leaping = true;
-                    enemy.leapX = PlayerCamera::Sin(enemy.facing) / 4096.0f * EB::LeapSpeed(enemy.type);
-                    enemy.leapZ = -PlayerCamera::Cos(enemy.facing) / 4096.0f * EB::LeapSpeed(enemy.type);
+                    // FUN_00032f78's integer velocity, floored (0x33d46).
+                    int lx = 0, lz = 0;
+                    ALTEngine::Game::OriginalMath::RotateYaw(EB::LeapSpeed(enemy.type), enemy.facing + 0x800, lx, lz);
+                    enemy.leapX = static_cast<float>(lx);
+                    enemy.leapZ = static_cast<float>(lz);
                     if (enemy.vy == 0.0f) { enemy.vy = EB::LEAP_LIFT; }
                 }
                 else
@@ -1260,7 +1339,9 @@ namespace ALTEngine::Screens
                 if (Scripted(enemy))
                 {
                     bool arm = false, mirror = false;
-                    enemy.actAnimation = ActAnimation(enemy.type, enemy.mode, world.random ? world.random() : 0, arm, &mirror);
+                    const int first = world.random && ActDrawsFirst(enemy.type, enemy.mode) ? world.random() : 0;
+                    const int second = world.random && ActDrawsSecond(enemy.type, enemy.mode, first) ? world.random() : -1;
+                    enemy.actAnimation = ActAnimation(enemy.type, enemy.mode, first, arm, &mirror, second);
                     if (enemy.actAnimation == NO_ATTACK)
                     {
                         enemy.actAnimation = -1;
@@ -1459,13 +1540,34 @@ namespace ALTEngine::Screens
                 if (enemy.pounceTicks > 0) { --enemy.pounceTicks; }
                 if (enemy.overlayFinished)
                 {
+                    // Lands near the player and expires there (LAB_00030918,
+                    // 0x3093d-0x30a22): the player's position plus
+                    // (rand & 0x3ff) - 0x200 on x, then on z; refused if the
+                    // cell is occupied or 0x14 and up, or its floor is 0x100 or
+                    // more from the player's height - then it tries again next
+                    // tick with fresh draws. Stood 0x20 over that floor.
+                    namespace EB = EnemyBehaviour;
+                    if (world.landingCell && world.random)
+                    {
+                        const int lx = static_cast<int>(std::lround(playerX)) + (world.random() & 0x3ff) - EB::POUNCE_LANDING_SPREAD;
+                        const int lz = static_cast<int>(std::lround(playerZ)) + (world.random() & 0x3ff) - EB::POUNCE_LANDING_SPREAD;
+                        float floorY = 0.0f;
+                        if (!world.landingCell(lx, lz, floorY)
+                            || std::fabs(playerY - floorY) >= static_cast<float>(EB::POUNCE_LANDING_MAX_FLOOR_STEP))
+                        {
+                            return;
+                        }
+                        enemy.x = enemy.lastX = static_cast<float>(lx);
+                        enemy.z = enemy.lastZ = static_cast<float>(lz);
+                        enemy.y = floorY + static_cast<float>(EB::POUNCE_LANDING_STAND_HEIGHT);
+                    }
+                    else
+                    {
+                        enemy.x = playerX;
+                        enemy.z = playerZ;
+                    }
                     enemy.pouncing = false;
                     pounceLockHeld = false;
-
-                    // Lands next to the player and expires there, as
-                    // LAB_00030918 does.
-                    enemy.x = playerX;
-                    enemy.z = playerZ;
                     enemy.state = EnemyBehaviour::STATE_DYING;
                     enemy.health = 0;
                 }
@@ -1540,6 +1642,10 @@ namespace ALTEngine::Screens
                 // it keeps its own death animation, and here its sprites).
                 enemy.onCeiling = false;
                 enemy.ai.ceilingCrawler = false;
+                // A rise is turned into a fall for every creature (FUN_00030b04,
+                // before its switch); the push below keeps it (FUN_00032f78
+                // saves and restores +0x32).
+                if (enemy.vy > 0.0f) { enemy.vy = -enemy.vy; }
                 if (EnemyBehaviour::PushedOnDeath(enemy.type)
                     && enemy.standingAttribute < EnemyBehaviour::RAMP_ATTRIBUTE_MIN)
                 {
@@ -1548,18 +1654,13 @@ namespace ALTEngine::Screens
                     enemy.pushX = static_cast<float>(px);
                     enemy.pushZ = static_cast<float>(pz);
                 }
-                else if (enemy.vy > 0.0f) { enemy.vy = -enemy.vy; }
                 enemy.stepX = enemy.pushX;
                 enemy.stepZ = enemy.pushZ;
-                if (enemy.type == 7 && enemy.drop != 0xff)
-                {
-                    enemy.deathChain = enemy.drop;
-                    enemy.drop = 0xff;
-                }
-                // FUN_00030b04 (0x30b78): any other creature with a pickup
-                // throws it out as it dies (FUN_0003bc9c); eggs, type 7 and
-                // the vents don't.
-                else if (enemy.type != 1 && enemy.drop != 0xff)
+                // FUN_00030b04 (0x30b78): any creature with a pickup throws it
+                // out as it dies (FUN_0003bc9c); eggs, type 7 and the vents
+                // don't. The queen's +0x72 is her command chain, which waits
+                // for her death to play out (STATE_DEAD below, her state 8).
+                if (enemy.type != 7 && enemy.type != 1 && enemy.drop != 0xff)
                 {
                     enemy.dropPickup = enemy.drop;
                     enemy.drop = 0xff;
@@ -1612,6 +1713,14 @@ namespace ALTEngine::Screens
                     else if (enemy.standingAttribute < EB::RAMP_ATTRIBUTE_MIN)
                     {
                         enemy.pushX = enemy.pushZ = 0.0f;
+                    }
+                    // The queen's state 8 (0x36395): her command chain runs once
+                    // her death has played (state 7 waits for its end, +0xb6 bit
+                    // 4), not on the killing blow.
+                    if (enemy.type == 7 && enemy.bodyDown && enemy.drop != 0xff)
+                    {
+                        enemy.deathChain = enemy.drop;
+                        enemy.drop = 0xff;
                     }
                 }
                 else { enemy.pushX = enemy.pushZ = 0.0f; }

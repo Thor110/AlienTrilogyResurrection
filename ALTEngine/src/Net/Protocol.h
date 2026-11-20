@@ -20,7 +20,7 @@ namespace ALTEngine::Net
     // Every datagram: "ALT" + a version byte, a type byte, then the fields,
     // little-endian. A datagram that doesn't start so, or whose fields run
     // short, is dropped.
-    inline constexpr uint8_t PROTOCOL_VERSION = 8;   // 4: game modes, co-operative level ends; 5: the shared world; 6: throws; 7: the host's rules; 8: Keep Items gone (the rules' bits moved)
+    inline constexpr uint8_t PROTOCOL_VERSION = 9;   // 4: game modes, co-operative level ends; 5: the shared world; 6: throws; 7: the host's rules; 8: Keep Items gone (the rules' bits moved); 9: a creature's record
     // THE HANDSHAKE (Join and Reject) is read whatever the protocol byte says,
     // so a machine running another version of ALTEngine can be told why it
     // is turned away instead of timing out. Their layouts must never change:
@@ -243,6 +243,10 @@ namespace ALTEngine::Net
         int16_t health = 0;
         // The sound its animation cued since the last message, or 0xff.
         uint8_t sound = 0xff;
+        // Its record in level.monsters: a creature spawned from a record
+        // already in play sits past the records, and a guest makes its own
+        // from this (Enemies::SpawnCopy).
+        uint16_t record = 0xffff;
     };
     // Up to this many a datagram, so one stays well inside a network packet.
     inline constexpr size_t MAX_CREATURES_PER_MESSAGE = 48;

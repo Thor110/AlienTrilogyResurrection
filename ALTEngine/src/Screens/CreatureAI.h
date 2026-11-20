@@ -110,6 +110,9 @@ namespace ALTEngine::Screens::CreatureAI
         std::function<bool(int node, int& x, int& z)> nodePosition;
         // FUN_000100ec.
         std::function<int()> random;
+        // The face hugger's landing (LAB_00030918): the cell is empty (+0x0c 0)
+        // and below attribute 0x14; gives its floor.
+        std::function<bool(int x, int z, float& floorY)> landingCell;
     };
 
     // The creature's side of it. The caller copies these in and out of its
@@ -141,7 +144,8 @@ namespace ALTEngine::Screens::CreatureAI
         int mode = 4;               // +0x73
         int separationY = 0;        // +0x14
         int bearingToPlayer = 0;    // +0x54
-        bool lineToPlayer = false;  // FUN_0003231c
+        bool lineToPlayer = false;  // FUN_0003231c (the gunners' FUN_00032aec)
+        bool groundLine = false;    // FUN_0003231c for every type - the gunners' contact tests use it
         bool eitherLine = false;    // FUN_00032aec or FUN_0003231c (waking, 0x34551)
         bool zoneVisible = false;   // FUN_00033a1c's first half
         bool inDuct = false;        // its cell has no face (cell dword 0 after load)
@@ -436,6 +440,9 @@ namespace ALTEngine::Screens::CreatureAI
         a.idleTimer = LOST_LINE_IDLE;
     }
 
+    // The soldiers, the synthetic and the handler (0x0b-0x0e), who shoot.
+    inline bool IsGunnerType(int type) { return type >= 0x0b && type <= 0x0e; }
+
     inline void Step(Agent& a, World& w, int playerX, int playerZ)
     {
         a.startAct = false;
@@ -463,6 +470,14 @@ namespace ALTEngine::Screens::CreatureAI
                 if (PickNearPlayer(a, w, playerX, playerZ) || PickTowardPlayer(a, w) || PickSideStep(a, w))
                 {
                     a.state = MOVE;
+                    return;
+                }
+                // Nowhere to go: a gunner within 0x600 of the player's height
+                // opens fire from where it stands - at contact range, or along
+                // its ray (0x344c2-0x34506).
+                if (IsGunnerType(a.type) && a.separationY <= CONTACT_VERTICAL && (a.mode == 0 || a.lineToPlayer))
+                {
+                    a.state = ATTACK;
                 }
                 return;
             }
@@ -475,7 +490,8 @@ namespace ALTEngine::Screens::CreatureAI
             }
             if (SeesInCone(a))
             {
-                if (a.mode == 0 && a.separationY <= CONTACT_VERTICAL && a.lineToPlayer) { a.state = ATTACK; }
+                // The ground line here for every type, the gunners too (0x3453f).
+                if (a.mode == 0 && a.separationY <= CONTACT_VERTICAL && a.groundLine) { a.state = ATTACK; }
                 else if (a.eitherLine) { a.alerted = true; }
             }
             return;
@@ -518,11 +534,21 @@ namespace ALTEngine::Screens::CreatureAI
                 a.state = CHASE;
                 return;
             }
-            if (a.separationY <= Reach(a) && a.lineToPlayer)
+            // 0x3477d-0x34860: at contact range, within reach and with a
+            // ground line, anything attacks; otherwise a gunner fires along
+            // its ray with no height test (from a balcony, or up out of a pit),
+            // and the rest need reach and the ground line.
             {
-                TurnToward(a, a.bearingToPlayer);
-                if (a.facing == a.target) { Act(a); }
-                return;
+                bool attack = false;
+                if (a.mode == 0 && a.separationY <= Reach(a) && a.groundLine) { attack = true; }
+                else if (IsGunnerType(a.type)) { attack = a.lineToPlayer; }
+                else { attack = a.separationY <= Reach(a) && a.groundLine; }
+                if (attack)
+                {
+                    TurnToward(a, a.bearingToPlayer);
+                    if (a.facing == a.target) { Act(a); }
+                    return;
+                }
             }
             a.state = CHASE;
             return;
@@ -543,24 +569,33 @@ namespace ALTEngine::Screens::CreatureAI
             }
             if (a.mode < 3)
             {
-                if (a.mode == 0 && (a.queen || (a.separationY <= CONTACT_VERTICAL && a.lineToPlayer)))
+                // At contact range with the ground line (0x3493f): again.
+                if (a.mode == 0 && (a.queen || (a.separationY <= CONTACT_VERTICAL && a.groundLine)))
                 {
                     Face(a, a.bearingToPlayer);
                     Act(a);
                     return;
                 }
-                if (a.lineToPlayer)
-                {
-                    Face(a, a.bearingToPlayer);
-                    Act(a);
-                    return;
-                }
-                if (PickNearPlayer(a, w, playerX, playerZ))
-                {
+                auto moveNearPlayer = [&]() {
+                    if (!PickNearPlayer(a, w, playerX, playerZ)) { return false; }
                     a.attackTimer = WANDER_ATTACK_TIMER;
                     Face(a, Game::OriginalMath::Bearing(a.x - a.waypointX, a.z - a.waypointZ));
                     a.state = MOVE;
-                    return;
+                    return true;
+                };
+                if (IsGunnerType(a.type))
+                {
+                    // A gunner fires again at once only from the near band;
+                    // from the middle band it first tries to close in, and
+                    // fires along its ray only if it can't (0x34995-0x34a8f).
+                    if (a.mode == 1 && a.lineToPlayer) { Face(a, a.bearingToPlayer); Act(a); return; }
+                    if (moveNearPlayer()) { return; }
+                    if (a.lineToPlayer) { Face(a, a.bearingToPlayer); Act(a); return; }
+                }
+                else
+                {
+                    if (a.lineToPlayer) { Face(a, a.bearingToPlayer); Act(a); return; }
+                    if (moveNearPlayer()) { return; }
                 }
             }
             else if (PickNearPlayer(a, w, playerX, playerZ))

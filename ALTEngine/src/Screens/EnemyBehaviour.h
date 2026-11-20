@@ -794,8 +794,8 @@ namespace ALTEngine::Screens
         //
         // Read from LAB_00030918's tail, and it changes the whole behaviour:
         //
-        //   - it picks a landing spot near the player, jittered by a couple of
-        //     units either way from playerPos - 0x200
+        //   - it picks a landing spot near the player: playerPos - 0x200 plus
+        //     (rand & 0x3ff), on x and then on z (two draws)
         //   - it REJECTS that spot if the cell is occupied (+0xc non-zero), if the
         //     cell's attribute is 0x14 or above (a wall), or if the floor there
         //     differs from the player's by 0x100 or more - so it will not land

@@ -679,14 +679,15 @@ guard (keep the old position when the clamped cell's floor is over 0x100 above t
 Left from that audit, to look at:
 1. **Weapon pacing - done (zip 167, Edward):** the default is now 2, the original under -so (the weapon every
    pass); it was 3, two passes of three, firing and the weapon's animation at 2/3 of the world's speed.
-2. Gunners (types 0xb-0xe): CHASE falls back to ATTACK when all pickers fail; ATTACK fires on the ray with no
-   reach test in any mode below 3; the end of ACT repositions from the middle band; mode-0 contact uses the
-   ground line (0x344c2, 0x3477d, 0x34930, 0x34534).
+2. **Gunners (types 0xb-0xe) - done (zip 175):** CHASE falls back to ATTACK when all pickers fail; ATTACK fires
+   on the ray with no reach test in any mode below 3; the end of ACT fires again from the near band but first
+   tries to close in from the middle band; mode-0 contact uses the ground line (0x344c2, 0x3477d, 0x34930,
+   0x34534).
 3. Rounds hit before creatures move in a pass (task priority 0x28 before 0x32): the port runs creatures first,
    so every flinch, push and death lands a tick late.
 4. The egg's hit by its phase, and its recovery waiting out the hit cooldown (0x311f7, 0x357ea).
-5. The hugger's landing spot after a hug: random within +-0x200 of the player, retried until clear
-   (0x3093d-0x30a28; the constants exist, unused).
+5. **The hugger's landing spot after a hug - done (zip 175):** random within +-0x200 of the player, retried
+   until clear (0x3093d-0x30a28).
 6. The light flash is lost on a frame with two or more ticks (below about 35 fps); the eye's bob, pitch and the
    world's objects aren't interpolated between ticks.
 7. The player's step: the original floors each part of the move separately (sar 12); the port rounds the sum.

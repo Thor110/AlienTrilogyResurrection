@@ -54,6 +54,28 @@ off: rates, timing, rounding and the order things happen in.
 - Their timers keep counting while they flinch, as in the original.
 - The queen notices you only in her sight cone.
 - **On Hard, the dead come back.** As in the original: a body left lying while you're far away gets up again.
+- **Eggs always let a hugger out.** The original makes a new creature every time something spawns one; it
+  never checks whether that creature is already in play. On L232 eight eggs hold huggers that are in play from
+  the start, so those eggs opened with nothing inside. The same goes for a trigger or crate that spawns a
+  creature a second time.
+- **Steam and flame vents pause.** 27 vents (L112's steam pipes among them) have a stop point of 0, which was
+  being replaced by a default, so they jetted without the gap you wait for. A pipe with health can now be
+  burst from its first moment and takes automatic fire at the rate it comes; it was shrugging off hits for 16
+  ticks after each one.
+- **Soldiers, synthetics and handlers fire as the original's do.** One that can't find a way forward opens
+  fire from where it stands; one on a balcony or down in a pit fires up or down at you; one that has fired
+  from a distance first tries to close in. Their rounds now hit crates, barrels and switches, are stopped by
+  water and acid floors, pass through gaps a round fits through, set off the triggers that respond to them,
+  and shatter on walls.
+- **The face hug:** the fingers keep wriggling for the whole hug (they played once and froze), the creature
+  climbs and falls at the original's pace, bobs as it holds on, keeps hurting until it has slid fully off,
+  and drops to the floor beside you rather than exactly where you stand.
+- **The queen's death** sets off what it opens only once her death has played out, not on the killing shot.
+- A creature shot dead in mid-leap falls at once instead of carrying on upward.
+- Ceiling creatures carry on under a lower stretch of ceiling (the original's test against it never fires).
+- Creatures settle onto stairs and steps on the same tick as the original, not one ahead.
+- Colonists sit where their level puts them: each one's distance from its wall is in the level file, and many
+  sit into it. They were all moved a fixed 0x40 out.
 
 **The world**
 - **Doors make their sounds** (opening, closing, the thud). A door opening also makes the noise that wakes

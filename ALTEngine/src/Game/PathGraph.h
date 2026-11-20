@@ -14,15 +14,13 @@ namespace ALTEngine::Game
     // Every link is in range and appears in both directions (156 and 168 link
     // ends respectively, none one-way), so it is an undirected graph.
     //
-    // nodeState is carried through but not acted on: ALTViewer's reading is
-    // "0 active, 2 inactive pending action, 3 one-way only", but with every
-    // link symmetric the one-way meaning is not visible in the data, and what
-    // activates a state-2 node has not been traced. Nothing here gates on it.
+    // nodeState is carried through but not acted on. It is not a state: it
+    // is the node's half-cell offset (bits 1 and 2 add 0x100 on x and z), as
+    // FlowField::Position reads it (FUN_00033114 / FUN_00033234).
     //
-    // NOT WIRED INTO THE AI YET. Enemies still walk straight at the player
-    // (Screens/Enemies.h). How the original's movers consult these nodes has
-    // not been traced, so this is the foundation to build that on, not a guess
-    // at the behaviour.
+    // A DATA CHECK ONLY, NOT THE AI. The creatures follow the original's own
+    // flow field over these nodes (FlowField.h, FUN_000281cc); this graph is
+    // kept for its tests, which check the network's shape on the demo levels.
     class PathGraph
     {
     public:

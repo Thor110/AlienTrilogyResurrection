@@ -175,7 +175,7 @@ namespace ALTEngine::Net
                 {
                     const auto& e = m.entries[i];
                     w.U16(e.index); w.U16(e.flags); w.F32(e.x); w.F32(e.y); w.F32(e.z);
-                    w.U16(e.facing); w.I16(e.animation); w.U8(e.frame); w.U8(e.state); w.I16(e.health); w.U8(e.sound);
+                    w.U16(e.facing); w.I16(e.animation); w.U8(e.frame); w.U8(e.state); w.I16(e.health); w.U8(e.sound); w.U16(e.record);
                 }
             },
             [&](const CreatureDamage& m) {
@@ -286,7 +286,7 @@ namespace ALTEngine::Net
             for (auto& e : m.entries)
             {
                 e.index = r.U16(); e.flags = r.U16(); e.x = r.F32(); e.y = r.F32(); e.z = r.F32();
-                e.facing = r.U16(); e.animation = r.I16(); e.frame = r.U8(); e.state = r.U8(); e.health = r.I16(); e.sound = r.U8();
+                e.facing = r.U16(); e.animation = r.I16(); e.frame = r.U8(); e.state = r.U8(); e.health = r.I16(); e.sound = r.U8(); e.record = r.U16();
             }
             result = m; break;
         }

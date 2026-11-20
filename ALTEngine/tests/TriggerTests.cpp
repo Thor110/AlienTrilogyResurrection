@@ -191,10 +191,11 @@ TEST_CASE("Triggers: spawn triggers release L111's waiting monsters")
     // as many times as they allow.
     LevelGeometry level = LevelLoader::Load(AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
     auto enemies = ALTEngine::Screens::Enemies::Build(level, 0, 0.0f, 0.0f);
+    const auto templates = enemies;
     Triggers::System system(level);
     Triggers::Handlers handlers;
     handlers.spawnMonster = [&](int monster, int amount) {
-        ALTEngine::Screens::Enemies::TriggerSpawn(enemies, monster, amount);
+        ALTEngine::Screens::Enemies::TriggerSpawn(enemies, templates, monster, amount);
     };
 
     for (int id : { 6, 11, 12 })

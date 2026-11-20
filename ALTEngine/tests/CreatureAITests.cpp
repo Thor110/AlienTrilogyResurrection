@@ -40,6 +40,7 @@ namespace
         a.mode = AI::Band(a, distance);
         a.zoneVisible = true;
         a.lineToPlayer = true;
+        a.groundLine = true;
         a.eitherLine = true;
         a.bearingToPlayer = 0;
         a.wakeRange = 0x1800;
@@ -303,4 +304,41 @@ TEST_CASE("CreatureAI: waiting, a creature is woken by either line in its cone -
     OpenWorld w;
     AI::Step(a, w.world, 0, -0x1000);
     CHECK(a.alerted);
+}
+
+TEST_CASE("CreatureAI: a boxed-in gunner opens fire where it stands; anything else waits (0x344c2)")
+{
+    OpenWorld w;
+    w.world.cellOpenOrPlayer = [](int, int) { return false; };
+    w.world.cellOpen = [](int, int) { return false; };
+    AI::Agent gunner = Creature(0x800, 0x0b);
+    gunner.state = AI::CHASE;
+    gunner.alerted = true;
+    gunner.separationY = 0x200;
+    Tick(gunner, w, 0, -0x800);
+    CHECK_EQ(gunner.state, AI::ATTACK);
+
+    AI::Agent warrior = Creature(0x800, 6);
+    warrior.state = AI::CHASE;
+    warrior.alerted = true;
+    warrior.separationY = 0x200;
+    Tick(warrior, w, 0, -0x800);
+    CHECK_EQ(warrior.state, AI::CHASE);
+}
+
+TEST_CASE("CreatureAI: a gunner fires along its ray from far above or below; a warrior needs reach (0x347d2)")
+{
+    OpenWorld w;
+    AI::Agent gunner = Creature(0x500, 0x0c);
+    gunner.state = AI::ATTACK;
+    gunner.separationY = 0x900;     // a balcony away
+    gunner.groundLine = false;
+    Tick(gunner, w, 0, -0x500);
+    CHECK_EQ(gunner.state, AI::ACT);
+
+    AI::Agent warrior = Creature(0x500, 6);
+    warrior.state = AI::ATTACK;
+    warrior.separationY = 0x900;
+    Tick(warrior, w, 0, -0x500);
+    CHECK_EQ(warrior.state, AI::CHASE);
 }

@@ -193,7 +193,6 @@ namespace ALTEngine::Screens::CreatureTasks
         enum State { LOOKING = 0, CRYING = 2, BURSTING = 3, BURST = 4 };
 
         inline constexpr int FRONT = 4;
-        inline constexpr int SPAWN_PUSH = 0x40;
         inline constexpr int SPAWN_LIFT = 0x40;
         inline constexpr int SPAWN_ANIMATION = 0x0c;
         inline constexpr int ANIM_LOOK = 8;           // + the eighth

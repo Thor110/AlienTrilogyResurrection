@@ -149,6 +149,7 @@ namespace ALTEngine::Screens::LevelSnapshot
             { "animation", e.animation }, { "animationFrame", e.animationFrame },
             { "animationEnded", e.animationEnded }, { "bodyRemoved", e.bodyRemoved },
             { "type", e.type }, { "onCeiling", e.onCeiling },
+            { "record", e.monsterIndex }, { "copy", e.spawnedCopy },
         };
     }
 

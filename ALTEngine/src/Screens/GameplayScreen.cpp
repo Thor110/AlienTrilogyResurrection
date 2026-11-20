@@ -555,6 +555,9 @@ namespace ALTEngine::Screens
         // The objects' destruction delays (Damage::Target::fuse).
         ALTEngine::Screens::Particles::Rng fuseRng;
         std::vector<ALTEngine::Screens::Enemies::Enemy> enemies;
+        // Each record as the level built it, for a creature spawned from a
+        // record already in play (Enemies::SpawnCopy).
+        std::vector<ALTEngine::Screens::Enemies::Enemy> enemyTemplates;
 
         // The trigger the player last fired, so a trigger runs once on entry
         // rather than every tick it is stood on.
@@ -879,9 +882,20 @@ namespace ALTEngine::Screens
                 }
 
                 const auto& e = j["enemies"];
-                if (e.is_array() && e.size() == enemies.size())
+                // One entry a record, then any creature spawned from a record
+                // already in play (Enemies::SpawnCopy), rebuilt from its record.
+                if (e.is_array() && e.size() >= enemies.size())
                 {
-                    for (size_t i = 0; i < e.size(); ++i) { LS::LoadEnemy(enemies[i], e[i]); }
+                    const size_t records = enemies.size();
+                    for (size_t i = 0; i < records; ++i) { LS::LoadEnemy(enemies[i], e[i]); }
+                    for (size_t i = records; i < e.size(); ++i)
+                    {
+                        const int record = e[i].value("record", -1);
+                        if (auto* copy = ALTEngine::Screens::Enemies::SpawnCopy(enemies, enemyTemplates, record))
+                        {
+                            LS::LoadEnemy(*copy, e[i]);
+                        }
+                    }
                 }
                 minimapVisited = bytesFromHex(j.value("minimap", std::string{}));
                 minimapAreas = bytesFromHex(j.value("minimapAreas", std::string{}));
@@ -1573,6 +1587,7 @@ namespace ALTEngine::Screens
                         // out - every one of them looks its monster up by
                         // index and does nothing when it is not there.
                         if (testingNoEnemies) { enemies.clear(); }
+                        enemyTemplates = enemies;
                         // Multiplayer: the Synthetic records are the other
                         // players' bodies, parked outside the map, not
                         // creatures. Kept in place (triggers find monsters by
@@ -1772,7 +1787,7 @@ namespace ALTEngine::Screens
         triggerHandlers.spawnMonster = [&](int monster, int amount) {
             // A co-operative guest's creatures are the host's: it lets them out.
             if (session && session->CoopGuest()) { return; }
-            if (ALTEngine::Screens::Enemies::TriggerSpawn(enemies, monster, amount))
+            if (ALTEngine::Screens::Enemies::TriggerSpawn(enemies, enemyTemplates, monster, amount))
             {
                 // A creature let out into a duct behind a wall vent is not
                 // alerted (FUN_0002f224 only spawns it): it notices the player
@@ -2226,7 +2241,23 @@ namespace ALTEngine::Screens
                         if (!levelReady) { break; }
                         for (const auto& c : e.creatures.entries)
                         {
+                            // One the host spawned from a record already in
+                            // play: made here from the same record, in order.
+                            while (c.index >= enemies.size() && c.index < enemies.capacity() && c.record < enemyTemplates.size())
+                            {
+                                auto* copy = ALTEngine::Screens::Enemies::SpawnCopy(enemies, enemyTemplates, c.record);
+                                if (!copy) { break; }
+                                copy->active = copy->alive = false;   // until its own entry says otherwise
+                            }
                             if (c.index >= enemies.size()) { continue; }
+                            // A slot filled ahead of its own entry, from another
+                            // record: made again from this one.
+                            if (c.index >= enemyTemplates.size() && c.record < enemyTemplates.size()
+                                && enemies[c.index].monsterIndex != static_cast<int>(c.record))
+                            {
+                                enemies[c.index] = enemyTemplates[c.record];
+                                enemies[c.index].spawnedCopy = true;
+                            }
                             namespace NT = ALTEngine::Net;
                             namespace EN = ALTEngine::Screens::Enemies;
                             auto& enemy = enemies[c.index];
@@ -2394,6 +2425,7 @@ namespace ALTEngine::Screens
                         creatureFlagsSent[i] = flags;
                         NT::CreatureEntry c;
                         c.index = static_cast<uint16_t>(i);
+                        c.record = static_cast<uint16_t>(en.monsterIndex < 0 ? 0xffff : en.monsterIndex);
                         c.flags = flags;
                         c.x = en.x; c.y = en.y; c.z = en.z;
                         c.facing = static_cast<uint16_t>(en.facing & 0xfff);
@@ -3537,6 +3569,18 @@ namespace ALTEngine::Screens
                         };
                         aiWorld.cellOpenOrPlayer = [&](int x, int z) { return walkableAt(x, z, true); };
                         aiWorld.cellOpen = [&](int x, int z) { return walkableAt(x, z, false); };
+                        aiWorld.landingCell = [&](int x, int z, float& floorY) {
+                            const int gx = ToGridSpaceX(static_cast<float>(x), originX);
+                            const int gz = ToGridSpaceZ(static_cast<float>(z), originZ);
+                            if (gx < 0 || gz < 0) { return false; }
+                            const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
+                            if (!cell || cell->attribute >= 0x14) { return false; }
+                            const int index = ALTEngine::Formats::CellIndex(level, gx >> 9, gz >> 9);
+                            if (index >= 0 && static_cast<size_t>(index) < occupancy.size()
+                                && occupancy[static_cast<size_t>(index)] != 0) { return false; }
+                            floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
+                            return true;
+                        };
                         aiWorld.lineTo = [&](int x, int z, int distance) {
                             if (!aiCreature) { return false; }
                             namespace CS = ALTEngine::Game::CreatureSight;
@@ -3585,15 +3629,9 @@ namespace ALTEngine::Screens
                             // ground, and its headroom counts the 0x20.
                             const float standing = bodyY;
                             // A creature on the ceiling measures the ceiling
-                            // instead (FUN_000315f0's +0x6c bit 8 arm): no fall
-                            // of it by more than 0x200, the probes within 0x200
-                            // of one another, and no headroom test.
-                            float standingCeiling = 0.0f;
-                            if (hanging)
-                            {
-                                const auto* here = ALTEngine::Formats::CellAt(level, ToGridSpaceX(x, originX) >> 9, ToGridSpaceZ(z, originZ) >> 9);
-                                standingCeiling = here ? static_cast<float>(here->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT : 0.0f;
-                            }
+                            // instead (FUN_000315f0's +0x6c bit 8 arm): the
+                            // probes within 0x200 of one another, and no
+                            // headroom or height test.
                             float probeHeight[3] = { 0.0f, 0.0f, 0.0f };
                             const float lead = (velocity >= 0.0f) ? EB::MOVE_PROBE_LEAD
                                                                   : -EB::MOVE_PROBE_LEAD;
@@ -3639,7 +3677,12 @@ namespace ALTEngine::Screens
                                                         * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT;
                                 if (hanging)
                                 {
-                                    if (ceilingHere < standingCeiling && standingCeiling - ceilingHere > EB::CEILING_STEP) { return false; }
+                                    // No height refusal for a ceiling crawler:
+                                    // the original's (0x31847) asks for a probe
+                                    // below the creature AND more than 0x200
+                                    // above it, which never holds. Only the
+                                    // spread test below (0x200 for it) and the
+                                    // wall and occupancy tests can stop it.
                                     probeHeight[side + 1] = ceilingHere;
                                     continue;
                                 }
@@ -3793,6 +3836,9 @@ namespace ALTEngine::Screens
                                     return CS::LineOfFire3D(level, q);
                                 };
                                 enemy.lineOfFire = rayLooker ? rayLine() : groundLine();
+                                // The gunners' contact tests use the ground line
+                                // (0x3453f, 0x34799), only at contact range.
+                                enemy.groundLine = rayLooker ? (enemy.mode == 0 && groundLine()) : enemy.lineOfFire;
                                 // Waking (the chase, not yet alerted, the player
                                 // in its cone): either line will do, for every
                                 // type (0x34551-0x3457d: FUN_00032aec, else
@@ -3841,8 +3887,17 @@ namespace ALTEngine::Screens
                             {
                                 namespace CT = ALTEngine::Screens::CreatureTasks;
                                 const bool colonist = enemy.type == 10;
+                                // FUN_00035530 writes the source's cell into the
+                                // record and FUN_0002e638 spawns at that cell's
+                                // centre, on its floor - which for a colonist
+                                // pushed off its cell is not where it stands.
+                                const int releaseGX = (ToGridSpaceX(enemy.x, originX) >> 9) * 512 + 256;
+                                const int releaseGZ = (ToGridSpaceZ(enemy.z, originZ) >> 9) * 512 + 256;
+                                const float releaseX = static_cast<float>(releaseGX) - originX;
+                                const float releaseZ = static_cast<float>(releaseGZ) - originZ;
+                                const float releaseY = ALTEngine::Formats::FindFloorHeightGridSpace(level, releaseGX, releaseGZ);
                                 auto* released = ALTEngine::Screens::Enemies::ReleaseFromEgg(
-                                    enemies, enemy.releaseMonster, enemy.x, enemy.y, enemy.z,
+                                    enemies, enemyTemplates, enemy.releaseMonster, releaseX, releaseY, releaseZ,
                                     ALTEngine::Screens::Enemies::BearingTo(enemy, aiX, aiZ),
                                     colonist ? CT::Colonist::BURSTER_SPEED : CT::EggRelease::SPEED,
                                     colonist ? CT::Colonist::BURSTER_LIFT : CT::EggRelease::LIFT);
@@ -4068,14 +4123,29 @@ namespace ALTEngine::Screens
                             // both measured against the floor the move began on.
                             {
                                 namespace EB = ALTEngine::Screens::EnemyBehaviour;
-                                const float startFloor = ALTEngine::Formats::FindFloorHeightGridSpace(
-                                    level, ToGridSpaceX(enemy.x, originX), ToGridSpaceZ(enemy.z, originZ));
+                                const int startGX = ToGridSpaceX(enemy.x, originX);
+                                const int startGZ = ToGridSpaceZ(enemy.z, originZ);
+                                const float startFloor = ALTEngine::Formats::FindFloorHeightGridSpace(level, startGX, startGZ);
                                 const bool crawler = enemy.ai.ceilingCrawler;
-                                // The creature's height for the tests: the
-                                // original's vertical step comes first in the
-                                // mover (0x31f7b), standing it at the old floor
-                                // + 0x20, or moving it by its vertical speed.
-                                const float bodyY = enemy.vy == 0.0f ? startFloor + EB::STAND_CLEARANCE : enemy.y + enemy.vy;
+                                // Stand on the floor - or, mid-leap, rise and fall
+                                // under gravity - FIRST, on the cell the move
+                                // starts in: FUN_00031f3c's vertical half
+                                // (0x31f7b-0x32011) samples the floor and ceiling
+                                // before either axis step and decides the height,
+                                // landing and ceiling contact there; the steps
+                                // then test against that height. It used to run
+                                // after the move on the new cell, a tick ahead on
+                                // stairs. A colonist's task never calls the
+                                // mover: it stays where its spawn put it.
+                                if (enemy.type != 10)
+                                {
+                                    const auto* startCell = ALTEngine::Formats::CellAt(level, startGX >> 9, startGZ >> 9);
+                                    const float startCeiling = startCell
+                                        ? static_cast<float>(startCell->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT
+                                        : startFloor + 0x10000;
+                                    ALTEngine::Screens::Enemies::SettleVertical(enemy, startFloor, startCeiling, stepHalfHeight);
+                                }
+                                const float bodyY = enemy.y;
                                 if (enemy.stepX != 0.0f)
                                 {
                                     const int gx = ToGridSpaceX(enemy.x, originX);
@@ -4135,23 +4205,7 @@ namespace ALTEngine::Screens
                             enemy.lastX = enemy.x;
                             enemy.lastZ = enemy.z;
 
-                            // Stand on the floor - or, mid-leap, rise and fall
-                            // under gravity (FUN_00031f3c's vertical half). A
-                            // colonist's task never calls the mover: it stays
-                            // where its spawn put it, 0x40 up its wall.
-                            if (enemy.type != 10)
-                            {
-                                const int gx = ToGridSpaceX(enemy.x, originX);
-                                const int gz = ToGridSpaceZ(enemy.z, originZ);
-                                const float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
-                                const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
-                                const float ceilingY = cell
-                                    ? static_cast<float>(cell->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT
-                                    : floorY + 0x10000;
-                                const float halfHeight = static_cast<float>(
-                                    ALTEngine::Game::ProjectileCollision::CreatureExtents(enemy.type).y);
-                                ALTEngine::Screens::Enemies::SettleVertical(enemy, floorY, ceilingY, halfHeight);
-                            }
+                            // (The vertical settle ran before the steps, above.)
                             if (enemy.pendingDamage > 0 && !aiLocal)
                             {
                                 // Co-operative: another machine's player. They
@@ -4323,6 +4377,14 @@ namespace ALTEngine::Screens
                                 {
                                     faceHug.LetGo();
                                     if (!faceHug.Ready() && !coopGuest) { enemy.overlayFinished = true; }
+                                    // It still hurts while it slides off (LAB_00030918,
+                                    // 0x30a6f-0x30a7e): the drain stops only when the
+                                    // crawl reports itself off (+0x10 == 2).
+                                    else if (!faceHug.Finished())
+                                    {
+                                        hudState.ApplyHealthDamage(1, ALTEngine::Screens::GameOverSequence::CAUSE_ENEMY_ATTACK);
+                                        checkPlayerDeath();
+                                    }
                                 }
                             }
                             if (faceHug.Finished())
@@ -4361,7 +4423,11 @@ namespace ALTEngine::Screens
                                 // Let it out AT THE CRATE. Like the held
                                 // pickups, a crate's monster is parked off the
                                 // playable map until something opens the box.
-                                if (!ALTEngine::Screens::Enemies::Release(enemies, crate.drop1,
+                                // A co-operative guest's creatures are the host's:
+                                // its own release would make one the host never
+                                // sends (the host's word brings this one in).
+                                if (coopGuest) { return; }
+                                if (!ALTEngine::Screens::Enemies::Release(enemies, enemyTemplates, crate.drop1,
                                                                           dropX, dropY, dropZ,
                                                                           crate.rotation))
                                 {
@@ -4684,6 +4750,24 @@ namespace ALTEngine::Screens
                             const int gx = ToGridSpaceX(px, originX);
                             const int gz = ToGridSpaceZ(pz, originZ);
 
+                            // A round stopped by an object chips it; one with no
+                            // health left goes a few ticks later (FUN_00036e9c).
+                            auto damageObject = [&](const PCol::CellResult& cell) {
+                                if (cell.objectHit < 0) { return; }
+                                for (D::Target& target : damageTargets)
+                                {
+                                    if (target.crateIndex != cell.objectHit || target.destroyed) { continue; }
+                                    if (target.indestructible) { break; }
+                                    target.health -= cell.damage;
+                                    if (target.health > 0) { break; }
+
+                                    target.state = D::STATE_DYING;
+                                    target.destroyed = true;
+                                    target.fuse = fuseRng.Bits(7) + 1;
+                                    break;
+                                }
+                            };
+
                             // ---- blood ----------------------------------------
                             // Acid burns the player it lands on; any drop that
                             // reaches the floor leaves a splat and is gone.
@@ -4714,21 +4798,24 @@ namespace ALTEngine::Screens
                             }
 
                             // ---- a creature's round (the arm at 0x2de7e) -------
-                            // The world first: a wall, floor or ceiling stops
-                            // it with a puff. Then the player (FUN_0002a8f8):
-                            // 0 to 0x400 above the feet and 0x100 across, 1
-                            // damage, cause 3.
+                            // The cell first, through the same test the player's
+                            // rounds use (FUN_0002a448) as the original's type 5:
+                            // walls, liquids, the objects it stops on and chips
+                            // (0x1c takes 1 << 4), the floor and the ceiling. A
+                            // stop shatters it (FUN_0002ad10 -> FUN_0002abe0,
+                            // three fragments) and nothing else. It used to take
+                            // the player's walking test - every gap under 0x300 a
+                            // wall, objects and liquids not there at all.
+                            // Then the player (FUN_0002a8f8): 0 to 0x400 above the
+                            // feet and 0x100 across, 1 damage, cause 3. Then the
+                            // cell's flag-8 triggers (FUN_00041784).
                             if (hitType == P::TYPE_ENEMY_ROUND)
                             {
-                                const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
-                                const float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
-                                const bool solid = !cell || ALTEngine::Formats::IsCellBlocking(level, gx, gz)
-                                    || py < floorY
-                                    || py > static_cast<float>(cell->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT;
-                                if (solid)
+                                const PCol::CellResult cell = PCol::TestCell(level, gx, gz, py, PCol::TYPE_GRENADE, 1);
+                                if (cell.blocked)
                                 {
-                                    explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_IMPACT, clearX, clearY, clearZ);
-                                    return 2;
+                                    if (!coopGuest) { damageObject(cell); }
+                                    return 1;
                                 }
                                 const float above = py - playerFeetY;
                                 if (above >= 0.0f && above <= P::VENT_TOUCH_HEIGHT
@@ -4747,6 +4834,11 @@ namespace ALTEngine::Screens
                                     checkPlayerDeath();
                                     return 2;
                                 }
+                                if (!coopGuest)
+                                {
+                                    triggers.OnShotEnterCell(roundLatch, ALTEngine::Formats::CellIndex(level, gx >> 9, gz >> 9),
+                                                             triggerHandlers, ALTEngine::Game::Triggers::Source::EnemyThrow);
+                                }
                                 return 0;
                             }
 
@@ -4757,22 +4849,7 @@ namespace ALTEngine::Screens
                             const PCol::CellResult cell = PCol::TestCell(level, gx, gz, py, hitType, def.speed);
                             if (cell.blocked)
                             {
-                                if (cell.objectHit >= 0)
-                                {
-                                    for (D::Target& target : damageTargets)
-                                    {
-                                        if (target.crateIndex != cell.objectHit || target.destroyed) { continue; }
-                                        if (target.indestructible) { break; }
-                                        target.health -= cell.damage;
-                                        if (target.health > 0) { break; }
-
-                                        target.state = D::STATE_DYING;
-                                        target.destroyed = true;
-                                        // It goes a few ticks later (FUN_00036e9c).
-                                        target.fuse = fuseRng.Bits(7) + 1;
-                                        break;
-                                    }
-                                }
+                                damageObject(cell);
 
                                 // Impact sound by where it landed - brick, metal or
                                 // water - and the puff at the last clear position,
