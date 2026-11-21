@@ -92,6 +92,73 @@ off: rates, timing, rounding and the order things happen in.
 **Multiplayer**
 - Bots move, turn and fire at the players' own rate (they were twice as fast).
 
+### Every routine, compared again
+
+A review of every routine in the original against ALTEngine's, one block of the program at a time.
+
+**Missions**
+- **The chapter films play**: S1_2 before the first level of chapter 2, S2_3 before chapter 3, and GAMEOVER
+  when the last level is done, as in the original. They were never played.
+- The bonus levels and L321-L325 go straight on, with no Mission Assessment and no end-of-level prompt, as in
+  the original.
+- **Replaying a failed mission** gives back what the original does: the pistol, plus the ammunition you started
+  the level with added to what you have left (within each weapon's limits), and your starting grenades, charges,
+  health and armour. It used to restore the start exactly.
+
+**The player and weapons**
+- Holding strafe with a turn key strafes straight, as in the original (it also walked forwards or back).
+- Weapon keys do nothing while a weapon is being raised or lowered; the first key pressed in a tick wins.
+  "Next weapon" waits until the weapon is idle.
+- **"Run Mode"** shows at the top left while Caps Lock's run is on, as in the original.
+- **The Pause/Break key** freezes the game with "P A U S E D" on screen and the music held, until it is pressed
+  again (not in a network game). Escape still opens the pause menu.
+- The use key works triggers on its press, not while held.
+- The pulse rifle stays in your hands while it has grenades left. A weapon that runs dry with nothing else to go
+  to drops to the pistol with one round, as in the original, rather than reloading.
+- The smart gun's spare rounds (with one or two targets locked) fly at the original's speeds.
+
+**Items, objects and effects**
+- **Items thrown out of a crate or a creature** now fall, bounce and stop against walls the original's way:
+  they bounce three times, lower each time, and stop sideways on the first landing. They can be picked up
+  while still in the air. (They used to fall with a made-up gravity, never bounce, and could not be collected
+  until they landed.)
+- A broken crate makes one explosion at itself, as in the original; only the two wall types go up in the
+  scattered six. Objects 0x21-0x25 are drawn at their own size.
+- A round's shattered pieces fly outwards in all directions and fall back down; they spread less over water.
+- Blood and casings fall after they move, not before, as in the original. Grenades and charges move before
+  their fuse is checked, so they go off where they have moved to.
+- On Hard the player's tracer rounds aren't drawn, and creatures' rounds are drawn only on Easy, as in the
+  original.
+- A grenade or charge hits a creature only in an area of the map it can reach, the same test a round has.
+- An explosion's blast reaches the original's cells: the inner ring skips low cells under a ceiling (attribute
+  6), and the outer ring follows any open inner cell.
+- Lights (light mode 4) are flat, as in the original, and lights and animated textures wrap round as the
+  original's do.
+
+**Creatures**
+- A creature's sight and hearing use this tick's distance, not the last tick's.
+- A hugger out of an egg starts 0x20 above the floor, and a colonist's burster 0x40.
+- A face hugger on your face bobs at the original's speed.
+- A vent hit while switched off, out of sight or far away stays in its hit state until it can act, as in the
+  original. The queen's death sets off her commands a tick after her death has played.
+
+**Doors and lifts**
+- "Door powered up" and "Door activated" show as in the original: activated when the door's last switch is
+  thrown (not in a network game), powered up for the ones before.
+- A lift's wait is a byte, as in the original's.
+
+**Sound**
+- **Volumes follow the original's curve.** Most sounds are at full volume from slider 6 up; a creature's or a
+  vent's sound is full close to and fades only a little with distance. ALTEngine's sounds were about half as
+  loud close to.
+- Footsteps, pickups and other fixed-volume sounds can overlap themselves, as in the original.
+- Seven sounds at once besides your own, as in the original; when all seven are busy, a new sound is dropped
+  rather than cutting another off.
+
+**Multiplayer**
+- A hit from another player names them as the attacker even when it does no damage; a frag goes to the player
+  who hit you last.
+
 ### The level fixes, in stages
 
 Every fix to the game's files now runs in a fixed order, each stage working on the files as the stage before

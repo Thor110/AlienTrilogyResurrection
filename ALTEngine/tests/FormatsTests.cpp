@@ -106,17 +106,14 @@ TEST_CASE("Lights: mode 3 pulses for ever at its own times; modes 2 and 5 flicke
     CHECK_EQ(static_cast<int>(waiting.Records()[2].on), 1);
 }
 
-TEST_CASE("Lights: a gouraud record takes lit on its first corner and unlit on its second")
+TEST_CASE("Lights: a gouraud (mode 4) record shows its lit triple, flat - no face handler reads past the first")
 {
     LightTable table;
     LightRecord g = Light(4, 48, 24);
     for (int c = 0; c < 3; ++c) { g.corner2[c] = 12; g.corner3[c] = 0; }
     table.Reset({ g });
     const auto& e = table.ColourFor(0);
-    CHECK_EQ(static_cast<int>(e.corner[0].r), 60);
-    CHECK_EQ(static_cast<int>(e.corner[1].r), 30);
-    CHECK_EQ(static_cast<int>(e.corner[2].r), 15);
-    CHECK_EQ(static_cast<int>(e.corner[3].r), 0);
+    for (int i = 0; i < 4; ++i) { CHECK_EQ(static_cast<int>(e.corner[i].r), 60); }
 }
 
 TEST_CASE("Lights: a blink record waits for its switch, then blinks with its durations")

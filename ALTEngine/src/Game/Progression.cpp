@@ -69,6 +69,16 @@ namespace ALTEngine::Game::Progression
         return -1;
     }
 
+    bool SkipsAssessment(int campaignIndex)
+    {
+        if (IsBonusLevel(campaignIndex)) { return true; }
+        switch (campaignIndex)
+        {
+        case 0x17: case 0x19: case 0x1c: case 0x1f: case 0x21: return true;
+        default: return false;
+        }
+    }
+
     bool IsBonusLevel(int campaignIndex)
     {
         for (int b : BONUS_LEVELS) { if (b == campaignIndex) { return true; } }

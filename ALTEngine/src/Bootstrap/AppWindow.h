@@ -44,8 +44,8 @@ namespace ALTEngine::Bootstrap
         // after another instead of together, and dropped any that
         // arrived while it was busy.
         //
-        // Returns an idle voice, or steals the one closest to finishing
-        // when all are busy. nullptr if no window exists yet or the
+        // Returns an idle voice, or nullptr when all are busy (the sound is
+        // dropped, as the original's), when no window exists yet or the
         // device couldn't open.
         SDL_AudioStream* AcquireSfxVoice();
 
@@ -59,11 +59,14 @@ namespace ALTEngine::Bootstrap
         void SetSfxGain(float gain);
         float SfxGain() const { return sfxGain; }
 
-        static constexpr int SFX_VOICE_COUNT = 12;
+        // The original opens up to 8 sample handles (0x5ae51): 0 the player's,
+        // 1-7 the pool its play routines walk.
+        static constexpr int SFX_VOICE_COUNT = 8;
 
         // A voice held by a looping sound (a vent's jet) until released:
         // AcquireSfxVoice never hands it out or cuts it off meanwhile. At most
-        // MAX_RESERVED_SFX_VOICES at once, so one-off sounds always have room;
+        // MAX_RESERVED_SFX_VOICES at once, so one-off sounds always have room
+        // (OURS: the original's held sounds take pool voices like any other);
         // nullptr when none is free.
         static constexpr int MAX_RESERVED_SFX_VOICES = 6;
         SDL_AudioStream* ReserveSfxVoice();

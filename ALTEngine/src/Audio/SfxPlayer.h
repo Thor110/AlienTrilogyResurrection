@@ -96,7 +96,7 @@ namespace ALTEngine::Audio
         // lines are not in the level's slot table.
         static void PlayStem(const std::string& stem, float volume, const std::filesystem::path& cdDirectory)
         {
-            PlayFile(stem, cdDirectory, volume, true);
+            PlayFile(stem, cdDirectory, GainForFraction(volume, Slider()), true);
         }
 
         // Samples are read once and kept. Call between levels to release them.
@@ -105,12 +105,33 @@ namespace ALTEngine::Audio
         // The Options SFX volume, 0..10. Applies to every voice at once.
         static void SetVolume(int volume0to10);
 
+        // A voice's gain the original's way (0x5b032): the level v (out of
+        // 0x3fff) times the master (the slider x 10, FUN_00040bfc), as
+        // ((v >> 3) * master) >> 10, held at 0x63 - so 0x63 is full. The
+        // fixed-volume paths use v = 0x3e80, which is full from slider 6 up;
+        // a positional sound is full from v of about 0x1fb0.
+        static constexpr int FIXED_LEVEL = 0x3e80;
+        static float Gain(int level, int slider)
+        {
+            int out = ((level >> 3) * (slider * 10)) >> 10;
+            if (out > 0x63) { out = 0x63; }
+            if (out < 0) { out = 0; }
+            return static_cast<float>(out) / static_cast<float>(0x63);
+        }
+        // For a volume given as a fraction of 0x3fff (DistanceVolume's).
+        static float GainForFraction(float fraction, int slider)
+        {
+            return Gain(static_cast<int>(fraction * 0x3fff), slider);
+        }
+        static int Slider();
+
     private:
         // The sample for a stem, loaded on first use; empty if missing.
         static const std::vector<uint8_t>& Sample(const std::string& stem, const std::filesystem::path& cdDirectory);
 
-        // `once`: not while the same sample is still playing (the game's rule).
+        // `gain`: the voice's gain, final (see Gain). `once`: not while the
+        // same sample is still playing (the positional path's rule).
         static void PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory,
-                             float volume = 1.0f, bool once = false);
+                             float gain, bool once);
     };
 }

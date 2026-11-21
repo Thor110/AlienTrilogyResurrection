@@ -29,6 +29,8 @@ namespace ALTEngine::Game::Blast
             if (cell.attribute > D::BLAST_MAX_ATTRIBUTE) { return -1; }
             const int step = static_cast<int>(cell.floorHeight) - static_cast<int>(origin.floorHeight);
             if (step > D::BLAST_MAX_HEIGHT_STEP || step < -D::BLAST_MAX_HEIGHT_STEP) { return -1; }
+            // A low attribute-6 cell (under 8 units of headroom) stops it too.
+            if (cell.attribute == 6 && static_cast<int>(cell.ceilingHeight) - static_cast<int>(cell.floorHeight) < 8) { return -1; }
             return index;
         };
 
@@ -40,8 +42,12 @@ namespace ALTEngine::Game::Blast
         }
         for (const auto& outer : D::BLAST_RING2)
         {
+            // FUN_000368c8 tests only the inner eight; an outer cell is taken
+            // as it is whenever its inner one is open, whatever its own floor,
+            // attribute or height - so a blast reaches two cells onto a ledge
+            // its inner cell borders.
             if (!ringOneOpen[outer.parent]) { continue; }
-            const int cell = reachable(outer.offset.dx, outer.offset.dz);
+            const int cell = Formats::CellIndex(level, ox + outer.offset.dx, oz + outer.offset.dz);
             if (cell >= 0) { rings.outer.push_back(cell); }
         }
         return rings;

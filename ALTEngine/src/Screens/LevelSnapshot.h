@@ -83,7 +83,7 @@ namespace ALTEngine::Screens::LevelSnapshot
     inline nlohmann::json SaveDoor(const Game::DoorState& d)
     {
         return { { "progress", d.progress }, { "counter", d.counter }, { "phase", static_cast<int>(d.phase) },
-                 { "unlockProgress", d.unlockProgress }, { "switchOperated", d.switchOperated },
+                 { "unlockProgress", d.unlockProgress },
                  { "isOpen", d.isOpen }, { "holdCounter", d.holdCounter } };
     }
 
@@ -94,7 +94,6 @@ namespace ALTEngine::Screens::LevelSnapshot
         d.counter = std::clamp(j.value("counter", d.progress), 0, d.travel);
         d.phase = static_cast<Game::DoorState::Phase>(std::clamp(j.value("phase", 0), 0, 4));
         d.unlockProgress = j.value("unlockProgress", d.unlockProgress);
-        d.switchOperated = j.value("switchOperated", d.switchOperated);
         d.isOpen = j.value("isOpen", d.phase == Game::DoorState::Phase::Open);
         d.holdCounter = j.value("holdCounter", j.value("cooldown", d.holdCounter));
     }

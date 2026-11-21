@@ -946,21 +946,22 @@ namespace ALTEngine::Screens
             }
             else if (enemy.state != EnemyBehaviour::STATE_ACTING)
             {
-                // A hit (state 6, 0x359c2): back to dormant with both counters
-                // and the hit cooldown cleared, and nothing more this tick -
-                // FUN_000358a4 returns 0, which stops its sound. The cooldown
-                // FUN_000310ac set is gone a tick later, so a pipe with health
-                // takes automatic fire at the rate it comes.
+                // A hit: the task's state-6 arm (VT::Step, after its cull
+                // checks) puts it back to dormant with the hit cooldown
+                // cleared, and FUN_000358a4 returns 0, which stops its sound.
+                // The cooldown FUN_000310ac set is gone a tick later, so a pipe
+                // with health takes automatic fire at the rate it comes.
+                in.hit = true;
+            }
+
+            const VT::Output out = VT::Step(enemy.vent, in);
+            if (out.hitReset)
+            {
                 enemy.state = EnemyBehaviour::STATE_ACTING;
-                enemy.vent.state = VT::DORMANT;
-                enemy.vent.cycle = 0;
-                enemy.vent.emitCounter = 0;
                 enemy.hitCooldown = 0;
                 enemy.ventSoundStop = true;
                 return;
             }
-
-            const VT::Output out = VT::Step(enemy.vent, in);
             enemy.ventEmit = out.emit;
             enemy.ventSound = out.startSound;
             enemy.ventSoundStop = out.stopSound;
@@ -1372,6 +1373,21 @@ namespace ALTEngine::Screens
         // the vents, 0x10-0x13) has its task: the common one (CreatureAI.h,
         // the queen as a variant of it), the egg's, the colonist's or a vent's
         // (CreatureTasks.h). A type with none of them does nothing.
+        // FUN_00032154: the axis separations, the distance (FUN_000320f8, its
+        // table square root) and the band - this tick's, which the task's
+        // line tests then use (0x34316 before 0x3453f). GameplayScreen calls
+        // it before working out the lines, Tick again (same result).
+        inline void Perceive(Enemy& enemy, float playerX, float playerY, float playerZ)
+        {
+            enemy.separationX = std::fabs(playerX - enemy.x);
+            enemy.separationY = std::fabs(playerY - enemy.y);
+            enemy.separationZ = std::fabs(playerZ - enemy.z);
+            enemy.distance = ALTEngine::Game::OriginalMath::Distance(
+                static_cast<int>(std::lround(playerX - enemy.x)), static_cast<int>(std::lround(playerZ - enemy.z)));
+            enemy.mode = EnemyBehaviour::ModeForDistance(
+                enemy.distance, enemy.nearThreshold, enemy.middleThreshold);
+        }
+
         inline void Tick(Enemy& enemy, float playerX, float playerY, float playerZ,
                          CreatureAI::World& world, bool playerNoise = false)
         {
@@ -1404,16 +1420,7 @@ namespace ALTEngine::Screens
             }
             if (enemy.hitCooldown == 0) { enemy.spawnGuard = false; }
 
-            // Perception - the axis separations and the banded distance.
-            enemy.separationX = std::fabs(playerX - enemy.x);
-            enemy.separationY = std::fabs(playerY - enemy.y);
-            enemy.separationZ = std::fabs(playerZ - enemy.z);
-            // FUN_000320f8's distance, with its table square root.
-            enemy.distance = ALTEngine::Game::OriginalMath::Distance(
-                static_cast<int>(std::lround(playerX - enemy.x)), static_cast<int>(std::lround(playerZ - enemy.z)));
-
-            enemy.mode = EnemyBehaviour::ModeForDistance(
-                enemy.distance, enemy.nearThreshold, enemy.middleThreshold);
+            Perceive(enemy, playerX, playerY, playerZ);
 
             // A vent's task is the whole of it: it never moves, attacks or
             // animates, and its own cycle runs at any distance.
@@ -1692,6 +1699,9 @@ namespace ALTEngine::Screens
                 else if (CreatureAI::UsesCommonTask(enemy.type) || enemy.type == 7)
                 {
                     namespace EB = EnemyBehaviour;
+                    // State 8 is entered on the tick the death ends; its
+                    // first run is the tick after.
+                    const bool inStateEight = enemy.bodyDown;
                     if (!enemy.bodyDown)
                     {
                         if (enemy.animationEnded)
@@ -1714,10 +1724,11 @@ namespace ALTEngine::Screens
                     {
                         enemy.pushX = enemy.pushZ = 0.0f;
                     }
-                    // The queen's state 8 (0x36395): her command chain runs once
-                    // her death has played (state 7 waits for its end, +0xb6 bit
-                    // 4), not on the killing blow.
-                    if (enemy.type == 7 && enemy.bodyDown && enemy.drop != 0xff)
+                    // The queen's state 8 (0x36395): her command chain runs on
+                    // her first tick in it - the tick after her death has
+                    // played (state 7 waits for its end, +0xb6 bit 4) - not on
+                    // the killing blow.
+                    if (enemy.type == 7 && inStateEight && enemy.drop != 0xff)
                     {
                         enemy.deathChain = enemy.drop;
                         enemy.drop = 0xff;

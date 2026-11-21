@@ -28,8 +28,8 @@ namespace ALTEngine::Screens
     // components then get a further +/-8 of jitter, so two items out of the same
     // crate do not travel together.
     //
-    // Vertical launch is a flat 0x40 (psVar2[5]) and the lifetime-ish field
-    // psVar2[0x12] is 0x20. The spawn height is the floor plus a per-type offset
+    // Vertical launch is a flat 0x40 (psVar2[5]) and the bounce word
+    // psVar2[0x12] is 0x20 (see Step). The spawn height is the floor plus a per-type offset
     // from DAT_000acde8, which is 64 for every type except 20, which gets 96.
     namespace DroppedPickups
     {
@@ -103,8 +103,79 @@ namespace ALTEngine::Screens
             return flight;
         }
 
-        // Gravity is OURS - the original's fall is handled by the shared entity
-        // update, which has not been read. Marked.
-        inline constexpr float GRAVITY = 6.0f;
+        // One pass of an item in the air, FUN_0003c258 (run on alternate
+        // ticks). Grid-space position; `bounce` is the word at +0x24, which
+        // the throw sets to DROP_LIFETIME (0x20).
+        //
+        //   x then z: moved by the speed, unless the cell moved into has no
+        //   faces, holds an object (+0xc > 0x13), is a wall (attribute
+        //   0x14-0x2c), is more than 0x100 above or below the floor it left,
+        //   or is attribute 6 with its ceiling under the item's y + 0x80 - then
+        //   it is put back against that cell's edge (the last unit of the cell
+        //   before it going forward, the first of the one after going back).
+        //   z is tested from the x it ended on.
+        //   y: the speed is added first. Below its rest height (floor + the
+        //   type's DropHeight) it lands: the bounce word drops by 8 and is the
+        //   new upward speed, or 0 once it is under 4, and the sideways speeds
+        //   are zeroed. In the air the speed drops by 4, except that 4 becomes
+        //   -2. At rest it follows the floor.
+        struct Body
+        {
+            int x = 0, y = 0, z = 0;
+            int vx = 0, vy = 0, vz = 0;
+            int bounce = DROP_LIFETIME;
+        };
+
+        // Returns true while it is still moving.
+        template <typename CellFn, typename FloorFn, typename CeilingFn>
+        inline bool Step(Body& b, int pickupType, CellFn&& cellAt, FloorFn&& floorAt, CeilingFn&& ceilingAt)
+        {
+            const int startFloor = floorAt(b.x, b.z);
+            auto blocked = [&](int x, int z) {
+                const auto* cell = cellAt(x, z);
+                if (!cell) { return true; }
+                if ((cell->faceRun0 | cell->faceRun1 | cell->faceRun2 | cell->faceRun3) == 0) { return true; }
+                if (cell->occupancy > 0x13) { return true; }
+                if (cell->attribute > 0x13 && cell->attribute < 0x2d) { return true; }
+                if (cell->attribute < 0x14)
+                {
+                    const int rise = floorAt(x, z) - startFloor;
+                    if (rise > 0x100 || rise < -0x100) { return true; }
+                    if (cell->attribute == 6 && ceilingAt(x, z) < b.y + 0x80) { return true; }
+                }
+                return false;
+            };
+            auto clampTo = [](int moved, int speed) {
+                const int cellStart = moved & ~0x1ff;
+                return speed < 0 ? cellStart + 0x200 : cellStart - 1;
+            };
+            if (b.vx != 0)
+            {
+                const int nx = b.x + b.vx;
+                b.x = blocked(nx, b.z) ? clampTo(nx, b.vx) : nx;
+            }
+            if (b.vz != 0)
+            {
+                const int nz = b.z + b.vz;
+                b.z = blocked(b.x, nz) ? clampTo(nz, b.vz) : nz;
+            }
+
+            const int rest = floorAt(b.x, b.z) + DropHeight(pickupType);
+            if (b.vy == 0) { b.y = rest; }
+            else
+            {
+                b.y += b.vy;
+                if (b.y < rest)
+                {
+                    b.y = rest;
+                    b.bounce -= 8;
+                    b.vy = b.bounce < 4 ? 0 : b.bounce;
+                    b.vx = 0;
+                    b.vz = 0;
+                }
+                else { b.vy = b.vy == 4 ? -2 : b.vy - 4; }
+            }
+            return b.vx != 0 || b.vy != 0 || b.vz != 0;
+        }
     }
 }

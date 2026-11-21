@@ -35,6 +35,10 @@ namespace ALTEngine::Game::Progression
     // the 35).
     int CampaignIndex(const std::string& levelDigits);
     bool IsBonusLevel(int campaignIndex);
+    // No assessment and no Continue / Save / Quit after this level: a bonus
+    // level, or one of the five chapter-3 core levels L321-L325 (FUN_00014e34
+    // and FUN_00014e9c: indices 0x17, 0x19, 0x1c, 0x1f, 0x21).
+    bool SkipsAssessment(int campaignIndex);
 
     // What a level tallies for its assessment, by type: creature types
     // 1-14 (and the vents, 0x10-0x13), then object types 0x14-0x24. A

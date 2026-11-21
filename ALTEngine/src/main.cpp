@@ -25,6 +25,8 @@
 #include "Menu/MenuController.h"
 #include "Renderer/ModelPreview.h"
 #include "Renderer/ModelRenderer.h"
+#include "Screens/PickupSystem.h"
+#include "Screens/GameOverSequence.h"
 #include "Screens/GameplayScreen.h"
 #include "Screens/MissionBriefingScreen.h"
 #include "Screens/MultiplayerScreens.h"
@@ -452,19 +454,25 @@ int main(int, char**)
                 std::cout << "Level time " << FormatRunTime(played.levelSeconds) << ", run "
                           << FormatRunTime(runSeconds) << "\n";
             }
-            if (MissionAssessmentScreen::Run(cdDirectory, stats, language).windowClosed) { return CampaignEnd::WindowClosed; }
+            // After a bonus level, and after each of L321-L325, the original
+            // shows neither the assessment nor the Continue / Save / Quit
+            // prompt (FUN_00014f44, 0x15057-0x150f3: straight to the fade-out);
+            // the grading still decides what comes next.
+            const bool quietEnd = campaignIndex >= 0 && PG::SkipsAssessment(campaignIndex);
+            if (!quietEnd && MissionAssessmentScreen::Run(cdDirectory, stats, language).windowClosed) { return CampaignEnd::WindowClosed; }
             std::cout << "Assessment: aliens " << assessment.aliensPercent << "%, secrets " << assessment.secretsPercent
                       << "%, mission " << assessment.missionPercent << "% (needs more than "
                       << assessment.requiredPercent << "%), grade " << assessment.grade << "\n";
 
             std::optional<ALTEngine::Formats::LevelListEntry> next;
+            int nextIndex = -1;
             if (campaignIndex >= 0)
             {
-                const int nextIndex = PG::NextCampaignIndex(campaignIndex, assessment.grade);
+                nextIndex = PG::NextCampaignIndex(campaignIndex, assessment.grade);
                 if (nextIndex == campaignIndex)
                 {
                     std::cout << "Mission failed - level " << dotted << " again.\n";
-                    playerInventory = levelStartInventory;
+                    playerInventory = ALTEngine::Screens::Pickups::RetryInventory(levelStartInventory, playerInventory);
                 }
                 if (nextIndex < PG::CAMPAIGN_LENGTH)
                 {
@@ -486,6 +494,16 @@ int main(int, char**)
             }
             if (!next)
             {
+                // The campaign's end: GAMEOVER.AVI, the ending (video 12, when
+                // the level number reaches 0x23 - single player only).
+                if (campaignIndex >= 0 && nextIndex >= PG::CAMPAIGN_LENGTH)
+                {
+                    if (!ALTEngine::Screens::GameOverSequence::PlayOne(cdDirectory, language,
+                                                                       ALTEngine::Screens::GAME_COMPLETE_VIDEO))
+                    {
+                        return CampaignEnd::WindowClosed;
+                    }
+                }
                 std::cout << "No level after " << dotted << " - back to the main menu.\n";
                 return CampaignEnd::BackToMenu;
             }
@@ -506,11 +524,21 @@ int main(int, char**)
                 ALTEngine::Bootstrap::ModernSettings modern(modernConfig);
                 skipPrompt = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SkipEndLevelScreen);
             }
-            if (!skipPrompt)
+            if (!skipPrompt && !quietEnd)
             {
                 EndLevelPromptResult prompt = EndLevelPromptScreen::Run(cdDirectory);
                 if (prompt.windowClosed) { return CampaignEnd::WindowClosed; }
                 if (prompt.choice == EndLevelPromptChoice::Quit) { return CampaignEnd::BackToMenu; }
+            }
+            // A new chapter opens with its film (FUN_00010e38): S1_2.AVI as
+            // the level number becomes 12, S2_3.AVI as it becomes 22 (videos
+            // 10 and 11). They were never played.
+            if (nextIndex == 12 || nextIndex == 22)
+            {
+                if (!ALTEngine::Screens::GameOverSequence::PlayOne(cdDirectory, language, nextIndex == 12 ? "S1_2" : "S2_3"))
+                {
+                    return CampaignEnd::WindowClosed;
+                }
             }
             digits = next->digits;
         }

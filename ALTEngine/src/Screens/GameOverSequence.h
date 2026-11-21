@@ -55,11 +55,10 @@ namespace ALTEngine::Screens
     // (Edward, 2026, after checking), which fits the code: FUN_00015a68 plays
     // exactly one video and chains nothing after it.
     //
-    // So it belongs to whatever decides there is no next level - a completion
-    // check the port does not have yet. There is a level list in
-    // data/LevelManifest.json and a Level Select that walks it, but nothing that
-    // advances from one level to the next in play, so there is no place to hang
-    // this on. When that arrives, GAMEOVER goes at the end of it, NOT here.
+    // So it belongs to whatever decides there is no next level: main.cpp's
+    // campaign loop plays it when the next index reaches the end of the
+    // campaign (after level 0x23 in the original), alongside the chapter films
+    // S1_2 and S2_3 - NOT here.
     inline constexpr const char* GAME_COMPLETE_VIDEO = "GAMEOVER";
     namespace GameOverSequence
     {

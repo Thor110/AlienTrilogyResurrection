@@ -218,10 +218,11 @@ namespace ALTEngine::Formats
         void ToggleLight(size_t index, int delta)
         {
             if (index >= lights.size()) { return; }
-            int value = static_cast<int>(lights[index].variant) + delta;
-            if (value < 0) { value = 0; }
-            if (value > lights[index].variantMax) { value = lights[index].variantMax; }
-            lights[index].variant = static_cast<uint8_t>(value);
+            // A byte add with only an upper clamp, compared unsigned
+            // (FUN_00029d44): taken below 0 it wraps past the maximum and is
+            // held there; added past 0xff it wraps low and is kept.
+            const uint8_t value = static_cast<uint8_t>(lights[index].variant + delta);
+            lights[index].variant = value > lights[index].variantMax ? lights[index].variantMax : value;
         }
 
         // Raises the one-shot brightness flash the original uses for
@@ -363,10 +364,19 @@ namespace ALTEngine::Formats
 
                 if (light.mode == 4)
                 {
+                    // FLAT ON SCREEN. FUN_00029be0 does build four corners for
+                    // mode 4, but no face handler reads past the first: every
+                    // level-face routine (0x19af0, 0x1b5c8, 0x1b980, 0x1d64c,
+                    // 0x1ef20, 0x1f274, 0x20c14, 0x23d00, and the far table at
+                    // 0x25710 on) stores only the entry's first triple into
+                    // the primitive's single colour slot (+8), and the fills
+                    // never interpolate. So a mode-4 face shows `lit`, flat. It
+                    // used to be shaded corner to corner, a gradient the
+                    // original never draws.
                     out.corner[0] = ScaleTriple(light.lit, global);
-                    out.corner[1] = ScaleTriple(light.unlit, global);
-                    out.corner[2] = ScaleTriple(light.corner2, global);
-                    out.corner[3] = ScaleTriple(light.corner3, global);
+                    out.corner[1] = out.corner[0];
+                    out.corner[2] = out.corner[0];
+                    out.corner[3] = out.corner[0];
                 }
                 else
                 {

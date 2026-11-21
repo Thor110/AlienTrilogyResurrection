@@ -37,9 +37,9 @@ namespace ALTEngine::Game
         uint8_t threshold = 1;
         uint8_t unlockProgress = 0;
 
-        // The last unlock came from a switch. Only picks the message shown when
-        // the door starts to move.
-        bool switchOperated = false;
+        // The notice the last command earned, shown on the next Tick
+        // (FUN_00029594 / FUN_00029610 print it as the count is added).
+        int pendingNotice = 0;   // a DoorNotice
 
         // Lifts will run this same state machine; the notice needs to know which.
         bool isLift = false;
@@ -94,7 +94,8 @@ namespace ALTEngine::Game
         // be the final increment, so a door needing two activations cannot be
         // opened by its own trigger until something else (a switch) has
         // supplied the first.
-        bool ApplyCommand(DoorState& door, bool isOpenCommand, int amount, bool viaSwitch);
+        // `network`: a network game, where reaching the threshold prints nothing.
+        bool ApplyCommand(DoorState& door, bool isOpenCommand, int amount, bool viaSwitch, bool network = false);
 
         // One fixed tick for one door. Writes the current height into the grid.
         DoorNotice Tick(DoorState& door, Formats::LevelGeometry& level, float playerX, float playerZ);

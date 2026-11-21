@@ -113,10 +113,10 @@ namespace ALTEngine::Formats
         {
             if (animatorIndex >= animators.size()) { return; }
             Animator& a = animators[animatorIndex];
-            int value = static_cast<int>(a.variant) + delta;
-            if (value < 0) { value = 0; }
-            if (value > a.variantMax) { value = a.variantMax; }
-            a.variant = static_cast<uint8_t>(value);
+            // A byte add with only an upper clamp, compared unsigned
+            // (FUN_00042fcc): below 0 wraps past the maximum and is held there.
+            const uint8_t value = static_cast<uint8_t>(a.variant + delta);
+            a.variant = value > a.variantMax ? static_cast<uint8_t>(a.variantMax) : value;
         }
 
         // The descriptor index a flag-8 face using this animator should draw.

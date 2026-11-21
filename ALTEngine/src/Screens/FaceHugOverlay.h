@@ -169,7 +169,9 @@ namespace ALTEngine::Screens
             {
                 ALTEngine::Formats::SpriteAnim::Tick(animators[half], Sequence(half));
             }
-            ++clock;
+            // The bob's clock is the timer interrupt's (0x10bb8, 69.74 Hz):
+            // two counts a tick.
+            clock += 2;
             if (phase == Phase::Climbing)
             {
                 // Up to the rest position and held there until let go.

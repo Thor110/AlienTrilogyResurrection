@@ -119,8 +119,15 @@ namespace ALTEngine::Screens
         // Counts the hits that came off health, for the remark each draws
         // (FUN_0003e618 runs on that path only, not armour's).
         int healthHits = 0;
+        // Multiplayer: the player whose hit this was (DAT_00402d60), -1 for
+        // anything else. Every damage routine clears it on entry, before its
+        // cooldown test (FUN_0003e3e4, 3e4a8, 3e5a8, 3e5d4), and only the
+        // network hit sets it again after - so a player who hit you is not
+        // credited with a later death by acid, a pit or a creature.
+        int attacker = -1;
         bool ApplyDamage(int amount, int cause)
         {
+            attacker = -1;
             if (damageCooldown > 0 || terrainShield > 0 || waitingAtExit) { return false; }
             lastDamageCause = cause;
             pendingSound = (armourItem > 0 && cause == 3) ? ARMOUR_STRUCK_SOUND : -1;
@@ -148,6 +155,7 @@ namespace ALTEngine::Screens
         // not help. What a pit uses.
         bool ApplyHealthDamage(int amount, int cause)
         {
+            attacker = -1;
             if (damageCooldown > 0 || terrainShield > 0 || waitingAtExit) { return false; }
             lastDamageCause = cause;
             healthHits++;
@@ -171,6 +179,7 @@ namespace ALTEngine::Screens
         {
             if (attribute == 10)
             {
+                attacker = -1;
                 damageCooldown = 0;
                 terrainShield = 0;
                 ApplyHealthDamage(health, 5);

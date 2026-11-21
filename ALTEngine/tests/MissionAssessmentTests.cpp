@@ -70,6 +70,18 @@ TEST_CASE("Sound: FUN_00040c38's distance volumes by mode")
     CHECK(SfxPlayer::CreatureVolume(0, 0) == SfxPlayer::DistanceVolume(1, 0, 0));
 }
 
+TEST_CASE("Sound: the original's volume curve (0x5b032), full at 0x63")
+{
+    using ALTEngine::Audio::SfxPlayer;
+    CHECK(SfxPlayer::Gain(SfxPlayer::FIXED_LEVEL, 10) == 1.0f);
+    CHECK(SfxPlayer::Gain(SfxPlayer::FIXED_LEVEL, 6) == 1.0f);        // fixed paths are full from slider 6
+    CHECK(SfxPlayer::Gain(SfxPlayer::FIXED_LEVEL, 5) == 97 / 99.0f); // (0x7d0 * 50) >> 10
+    CHECK(SfxPlayer::Gain(0, 10) == 0.0f);
+    CHECK(SfxPlayer::Gain(0x1fb0, 10) == 99 / 99.0f);
+    CHECK(SfxPlayer::Gain(0x1bff, 10) == 87 / 99.0f);                // a creature at its distance cap
+    CHECK(SfxPlayer::Gain(0x3fff, 0) == 0.0f);
+}
+
 TEST_CASE("Lights: the lamp reports full strength once, 32 ticks on (sound 0x18)")
 {
     ALTEngine::Formats::LightTable table;

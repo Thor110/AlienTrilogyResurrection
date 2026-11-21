@@ -124,6 +124,11 @@ namespace ALTEngine::Audio
         // sliders).
         static void SetVolume(int volume0to10);
 
+        // Holds or releases the music where it is: the original's Pause
+        // key stops the CD track and resumes it on the second press
+        // (FUN_0004f7b0 / FUN_0004f81c). PlayLooped releases it.
+        static void SetPaused(bool pause);
+
         // Must be called once per frame - see class comment.
         static void Update();
     };

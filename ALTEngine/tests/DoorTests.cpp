@@ -116,8 +116,9 @@ TEST_CASE("Doors: a two-step door cannot be opened by its own trigger first")
     door.threshold = 2;
     CHECK(!Doors::ApplyCommand(door, /*open*/ true, 1, false));
     CHECK(Doors::ApplyCommand(door, /*unlock*/ false, 1, /*viaSwitch*/ true));
-    CHECK(door.switchOperated);
+    CHECK(door.pendingNotice == static_cast<int>(ALTEngine::Game::DoorNotice::DoorPoweredUp));   // short of two
     CHECK(Doors::ApplyCommand(door, true, 1, false));
+    CHECK(door.pendingNotice == static_cast<int>(ALTEngine::Game::DoorNotice::DoorActivated));   // reached it
 }
 
 TEST_CASE("Doors: something standing just in front of the doorway keeps it from closing")

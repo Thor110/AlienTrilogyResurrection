@@ -73,16 +73,27 @@ namespace ALTEngine::Game::Doors
         return doors;
     }
 
-    bool ApplyCommand(DoorState& door, bool isOpenCommand, int amount, bool viaSwitch)
+    bool ApplyCommand(DoorState& door, bool isOpenCommand, int amount, bool viaSwitch, bool network)
     {
+        (void)viaSwitch;
         // Flags 0x08/0x10 (opening, closing) refuse; a door that is shut, open
         // or holding takes the count.
         if (door.phase == DoorState::Phase::Opening || door.phase == DoorState::Phase::Closing) { return false; }
         if (door.unlockProgress >= door.threshold) { return false; }
         if (isOpenCommand && door.unlockProgress < door.threshold - 1) { return false; }
 
-        door.switchOperated = viaSwitch;
         door.unlockProgress = static_cast<uint8_t>(door.unlockProgress + amount);
+        // The notice comes with the count, not with the door setting off
+        // (0x295c4-0x29602): reaching the threshold is "Door activated" (not
+        // in a network game), falling short "Door powered up" - so a door that
+        // takes two switches says powered up on the first and activated on the
+        // second. It used to show one notice as the door moved, "powered up"
+        // for any door a switch finished.
+        if (!door.isLift)
+        {
+            if (door.unlockProgress != door.threshold) { door.pendingNotice = static_cast<int>(DoorNotice::DoorPoweredUp); }
+            else if (!network) { door.pendingNotice = static_cast<int>(DoorNotice::DoorActivated); }
+        }
         return true;
     }
 
@@ -130,7 +141,8 @@ namespace ALTEngine::Game::Doors
 
     DoorNotice Tick(DoorState& door, Formats::LevelGeometry& level, float playerX, float playerZ)
     {
-        DoorNotice notice = DoorNotice::None;
+        DoorNotice notice = static_cast<DoorNotice>(door.pendingNotice);
+        door.pendingNotice = 0;
         door.sound = -1;
         door.madeNoise = false;
         constexpr int OPEN_SOUND = 0x2a;   // 3101open, setting off
@@ -146,9 +158,7 @@ namespace ALTEngine::Game::Doors
                 door.phase = DoorState::Phase::Opening;
                 sound(OPEN_SOUND, 1);       // 0x2926b
                 door.madeNoise = true;      // 0x29243
-                notice = door.isLift ? DoorNotice::LiftActivated
-                       : door.switchOperated ? DoorNotice::DoorPoweredUp
-                       : DoorNotice::DoorActivated;
+                if (door.isLift) { notice = DoorNotice::LiftActivated; }
             }
             break;
 

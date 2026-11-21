@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "Formats/LevelLoader.h"
 #include "Screens/DroppedPickups.h"
 #include "Screens/PickupSystem.h"
 #include "Screens/PlayerInventoryState.h"
@@ -230,6 +231,40 @@ TEST_CASE("Pickups: each type's size and height, from DAT_000acbb8 and DAT_000ac
     CHECK_EQ(DroppedPickups::DrawScale(21), 2.0f);
     CHECK_EQ(DroppedPickups::DropHeight(20), 96);
     CHECK_EQ(DroppedPickups::DropHeight(9), 64);
+}
+
+TEST_CASE("Pickups: a thrown item falls, bounces and stops at a wall (FUN_0003c258)")
+{
+    // A flat open floor at 0, with a wall from x 0x400 on.
+    ALTEngine::Formats::CollisionNode open{};
+    open.faceRun0 = 1;
+    ALTEngine::Formats::CollisionNode wall = open;
+    wall.attribute = 0x14;
+    auto cellAt = [&](int x, int) -> const ALTEngine::Formats::CollisionNode* { return x >= 0x400 ? &wall : &open; };
+    auto floorAt = [](int, int) { return 0; };
+    auto ceilingAt = [](int, int) { return 0x1000; };
+
+    DroppedPickups::Body b;
+    b.x = 0x3f0; b.y = 0x40; b.z = 0x100; b.vx = 0x18; b.vy = 0x40;
+    CHECK(DroppedPickups::Step(b, 9, cellAt, floorAt, ceilingAt));
+    CHECK_EQ(b.x, 0x3ff);          // against the wall cell's edge
+    CHECK_EQ(b.y, 0x80);
+    CHECK_EQ(b.vy, 0x3c);          // speed added, then 4 off
+
+    b.vy = 4; b.y = 0x100;
+    DroppedPickups::Step(b, 9, cellAt, floorAt, ceilingAt);
+    CHECK_EQ(b.vy, -2);            // 4 becomes -2
+
+    b.y = 0x41; b.vy = -6; b.vx = 3;
+    DroppedPickups::Step(b, 9, cellAt, floorAt, ceilingAt);
+    CHECK_EQ(b.y, 0x40);           // landed at its height
+    CHECK_EQ(b.bounce, 0x18);
+    CHECK_EQ(b.vy, 0x18);          // and bounces with the bounce word
+    CHECK_EQ(b.vx, 0);
+
+    b.bounce = 8; b.y = 0x41; b.vy = -6;
+    CHECK(!DroppedPickups::Step(b, 9, cellAt, floorAt, ceilingAt));
+    CHECK_EQ(b.vy, 0);             // under 4: it stays down
 }
 
 TEST_CASE("Inventory: a lamp is used before goggles, one at a time (FUN_00044b48)")

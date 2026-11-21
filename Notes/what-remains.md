@@ -213,7 +213,9 @@ failed mission replayed with the end-of-attempt loadout; the pistol in hand at e
 `PlayerInventoryState::health/armour` carry (the HUD takes them at the start and hands them back on
 LevelComplete); `PlayerInventoryState::StartLevel` clears what FUN_000402f8 clears (the speed, shield and ID
 badges are the level's own state already); the weapon marked equipped is in hand at the start; main.cpp keeps
-the level-start loadout and restores it on a failed mission; saves keep health and armour. Co-operative games
+the level-start loadout and, on a failed mission, rebuilds from it as FUN_00017a68 does (zip 176: not a copy -
+the start's ammo is added onto what the attempt left, within the pickup caps, every weapon but the pistol
+disowned first; Pickups::RetryInventory); saves keep health and armour. Co-operative games
 carry the same way (the original's network games reset fully each level, but co-op is the port's own story
 mode); deathmatch starts each game fresh. Death goes to the menu, which starts afresh, as the original's does.
 
@@ -697,6 +699,41 @@ Left from that audit, to look at:
 9. Speed Compensation (Modern) runs lights, animators, messages and switch timers at half rate; the noise timer
    runs every tick (the original once a frame).
 10. The seismic charge and grenade aren't tied to the weapon pass; the reload clip sounds look port-own.
+
+### Every routine, round 4 (zip 176, v0.9.9)
+Fifteen agents compared each block of the program with the port. Fixed in zip 176, each checked in the
+disassembly: strafe + turn (0x3f0xx `mov edx,4/8`); weapon keys gated on the switch, first key wins; Next Weapon
+only when idle; "Run Mode" (FUN_0003e698); the Pause/Break freeze (FUN_0004f7b0/4f81c/101f8, font A at
+(0x84,0x70), music held); use key on its press for triggers; the pulse rifle kept with grenades; a dry weapon
+with nothing to change to -> pistol with one round; smart gun spare speeds; pickups' flight (FUN_0003c258,
+DroppedPickups::Step) and collection in the air; one crate explosion, scatter only for 0x15/0x1d; 0x21-0x25 at
+scale 1; fragments' gravity, rest height and radial spread (0x2e2dd, FUN_0002b534); gravity after the move and
+explosives moved first (FUN_00047524 at 0x2d958); tracers by difficulty (FUN_0002d6ec / FUN_00013078); the
+explosive's zone test (FUN_0002a628); the blast rings (FUN_000368c8); light mode 4 flat and the byte wraps
+(light toggle, command 9); door notices; the lift's byte dwell; release heights from eggs and colonists;
+perception before the lines; the hug bob; the vent's hit arm after its culls; the queen's chain on her first
+state-8 tick; the chapter films and GAMEOVER (main.cpp); no assessment for bonus levels and L321-L325
+(Progression::SkipsAssessment); the retry inventory (FUN_00017a68, Pickups::RetryInventory); the attacker
+reset on every damage entry; the sound curve (0x5b032: ((v>>3)*slider*10)>>10, held at 0x63), the fixed path's
+overlap (FUN_0005b0a6), 7 pool voices + the player's, a new sound dropped when all are busy.
+
+Left from that review, to look at:
+1. **Screen fades** (FUN_0004eec0 in, 5 steps of 0x55 off each colour; FUN_0004eefc out, 25 steps of 11, or 44
+   for a primitive with a channel over 0x7e; FUN_0004f020 applies them per primitive): level start and end,
+   briefing, assessment, death, splash. Not ported at all.
+2. **The muzzle test** (FUN_0002b534): a player's round is tested at the muzzle and one step on before it is
+   linked, freed silently on a hit. The port starts it at the muzzle untested, so it reaches one step less and
+   misses a target pressed against the muzzle. Needs a silent mode in the particle callback.
+3. **Save names** (FUN_000170fc / FUN_00015c70): the original asks for a name; the port uses DefaultName.
+4. **The map without the Auto Mapper** (FUN_00043078): no crates, and doors in the outline colour. The port's
+   map was matched to screenshots by count (Edward) - check which mapper state they were taken in first.
+5. **Crate shards** (FUN_000464ec): the original zeroes the centre and makes only two corners relative, so every
+   piece starts at the crate's origin - spiky shards. The port's are clean quarters. Visual; compare first.
+6. The queen's 2x from an explosive depends on its +0x1d byte, which the throw never sets (the reused slot's
+   value); the port always doubles, as a fresh slot does.
+7. Decisions for Edward, not changed: the carried-item stack's place and art (the original's right column), the
+   message font (font A), font A's digit advance, the assessment's count skip, the briefing's typewriter, the
+   mouse rate (the original halves X), the attract demos, deathmatch's weapon loss and the results screen.
 
 ## 3. Code health
 

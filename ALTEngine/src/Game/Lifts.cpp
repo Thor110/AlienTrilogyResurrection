@@ -117,7 +117,10 @@ namespace ALTEngine::Game::Lifts
             break;
 
         case Phase::Wait:
-            if (--lift.dwellCounter != 0) { break; }
+            // A byte (`dec byte [rec+0x16]; jne`, 0x41ed0): a dwell of 0 wraps
+            // to 0xff and waits 256 ticks rather than never ending.
+            lift.dwellCounter = (lift.dwellCounter - 1) & 0xff;
+            if (lift.dwellCounter != 0) { break; }
             if (lift.flags & AT_TOP) { SetOffDown(lift, r); }
             else { SetOffUp(lift, r); }
             break;

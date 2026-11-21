@@ -266,5 +266,38 @@ namespace ALTEngine::Screens
                 return false;
             }
         }
+            // A failed mission played again (FUN_00017c58 -> FUN_00017a68). Not a
+        // copy of the level-start loadout: from what the attempt ended with,
+        // every weapon but the pistol is disowned and the pistol emptied
+        // (0x10ab4 &= 0x83, 0x10abe/0x10ac0 = 0); then each weapon held at the
+        // start has its start ammo ADDED back through the pickup routine
+        // (FUN_000387c0, within its caps) - so leftover shotgun, pulse rifle,
+        // flamethrower and smartgun ammo is kept on top. A pulse rifle that
+        // started empty has its loaded rounds wiped (0x17b7f-0x17b90).
+        // Grenades, seismic charges, health and armour are the start's.
+        inline PlayerInventoryState RetryInventory(const PlayerInventoryState& start, const PlayerInventoryState& end)
+        {
+            PlayerInventoryState out = end;
+            for (int i = 1; i < 5; ++i) { out.ByIndex(i)->available = false; }
+            out.pistol.rounds = 0;
+            out.pistol.units = 0;
+            const int magCap[5] = { PISTOL_MAG_CAP, SHOTGUN_CAP, MAG_CAP, FLAMETHROWER_CAP, MAG_CAP };
+            const int unitCap[5] = { PISTOL_UNIT_CAP, 0, UNIT_CAP, 0, UNIT_CAP };
+            for (int i = 0; i < 5; ++i)
+            {
+                const WeaponState* from = start.ByIndex(i);
+                WeaponState* to = out.ByIndex(i);
+                if (!from || !to || !from->available) { continue; }
+                to->available = true;
+                to->rounds = Clamp(to->rounds + from->rounds, magCap[i]);
+                if (unitCap[i] > 0) { to->units = Clamp(to->units + from->units, unitCap[i]); }
+                if (i == 2 && from->rounds == 0 && from->units == 0) { to->rounds = 0; }
+            }
+            out.pulseRifle.grenades = start.pulseRifle.grenades;
+            out.seismicCharges = start.seismicCharges;
+            out.health = start.health;
+            out.armour = start.armour;
+            return out;
+        }
     }
 }

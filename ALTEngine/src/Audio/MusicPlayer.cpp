@@ -32,6 +32,7 @@ namespace ALTEngine::Audio
         size_t feedPosition = 0; // how far into `buffer` we've queued so far
         SDL_AudioSpec spec{};
         bool active = false;
+        bool paused = false; // SetPaused: the stream's device is held
         int volume = 8; // 0-10, matches MenuNode::sliderValue's own default/scale
 
         void FeedMore()
@@ -81,6 +82,7 @@ namespace ALTEngine::Audio
         if (SDL_AudioStream* stream = ALTEngine::Bootstrap::AppWindow::Instance().MusicAudioStream(spec))
         {
             SDL_SetAudioStreamGain(stream, static_cast<float>(volume) / 10.0f);
+            if (paused) { SDL_ResumeAudioStreamDevice(stream); paused = false; }
         }
 
         FeedMore(); // start filling immediately rather than waiting for the next Update()
@@ -93,6 +95,15 @@ namespace ALTEngine::Audio
 
         SDL_AudioStream* stream = ALTEngine::Bootstrap::AppWindow::Instance().MusicAudioStream(spec);
         if (stream) { SDL_SetAudioStreamGain(stream, static_cast<float>(volume) / 10.0f); }
+    }
+
+    void MusicPlayer::SetPaused(bool pause)
+    {
+        if (pause == paused || (pause && !active)) { return; }
+        SDL_AudioStream* stream = ALTEngine::Bootstrap::AppWindow::Instance().MusicAudioStream(spec);
+        if (!stream) { return; }
+        if (pause) { SDL_PauseAudioStreamDevice(stream); } else { SDL_ResumeAudioStreamDevice(stream); }
+        paused = pause;
     }
 
     void MusicPlayer::Stop()

@@ -3,6 +3,7 @@
 #include "PlayerCamera.h"
 
 #include <cmath>
+#include <functional>
 #include <cstdint>
 #include <vector>
 
@@ -197,12 +198,17 @@ namespace ALTEngine::Screens
 
         inline constexpr int FRAGMENT_STRENGTH = 0x10;
 
-        // FUN_0002abe0's spread, chosen by its second argument. What that
-        // argument distinguishes is NOT traced - a wall hit versus a body hit is
-        // the obvious guess but nothing confirms it, so both are kept and named
-        // after their values rather than after a meaning.
+        // FUN_0002abe0's spread, chosen by its second argument, which its
+        // caller FUN_0002ad10 sets from the cell the round died in: 0 for an
+        // ordinary cell (wide), 1 for attribute 9 and 2 for attribute 8, the
+        // liquids (tight - a splash).
         inline constexpr int FRAGMENT_SPREAD_WIDE = 0x40;   // arg == 0
         inline constexpr int FRAGMENT_SPREAD_TIGHT = 0x10;  // arg != 0
+        // The fragment's fall (the arm at 0x2e2dd): 4 a tick, with 4 stepping to
+        // -2 so it never stalls at 0; a liquid cell stops it 0x180 (attribute 9)
+        // or 0x100 (8) over its floor, any other at the floor; once stopped it
+        // is gone the pass after.
+        inline constexpr int FRAGMENT_GRAVITY = 4;
 
         // Shell casing, from FUN_0002b37c.
         //
@@ -605,15 +611,20 @@ namespace ALTEngine::Screens
                     p->y = source.y;
                     p->z = source.z;
 
+                    // (0, rise, away) turned by a random yaw (FUN_00026a20,
+                    // 0x2ac91-0x2acd9): straight out from the hit in every
+                    // direction alike. The third draw goes to the fragment's
+                    // +0x18, not its velocity; it used to be added sideways,
+                    // stretching the spray along one world axis.
                     const int yaw = rng.Bits(PlayerCamera::ANGLE_MASK);
                     const float s = static_cast<float>(PlayerCamera::Sin(yaw)) / PlayerCamera::TRIG_ONE;
                     const float c = static_cast<float>(PlayerCamera::Cos(yaw)) / PlayerCamera::TRIG_ONE;
 
-                    const float lateral = static_cast<float>(rng.Bits(0x1f) + 0x10);
+                    (void)rng.Bits(0x1f);
                     const float rise = static_cast<float>(rng.Bits(0x0f) + 0x10);
                     const float away = static_cast<float>(spread + rng.Bits(0x1f));
 
-                    p->vx = lateral * s;
+                    p->vx = away * s;
                     p->vy = rise;
                     p->vz = -away * c;
                 }
@@ -737,6 +748,11 @@ namespace ALTEngine::Screens
             // outside Tick).
             const Particle* Ticking() const { return ticking; }
 
+            // Where a fragment over (x, z) comes to rest, and whether that cell
+            // is a liquid (attribute 8 or 9). Set by the screen; without it
+            // fragments are not stopped and shatters spread wide.
+            std::function<float(float x, float z, bool& liquid)> restHeight;
+
             template <typename BlockedFn>
             void Tick(BlockedFn blocked)
             {
@@ -771,15 +787,25 @@ namespace ALTEngine::Screens
                     // round on its last tick never travels that tick.
                     if (p.life > 0 && --p.life == 0) { p.alive = false; continue; }
 
-                    // Tumble, and fall if this is something with weight.
+                    // A fragment (0x2e2dd): gone once it has stopped; moved,
+                    // then stopped dead at its rest height, else falling.
+                    if (p.type == TYPE_FRAGMENT)
+                    {
+                        if (p.vy == 0.0f && p.vx == 0.0f && p.vz == 0.0f) { p.alive = false; continue; }
+                        p.x += p.vx; p.y += p.vy; p.z += p.vz;
+                        bool liquid = false;
+                        if (restHeight && p.y < restHeight(p.x, p.z, liquid)) { p.vx = p.vy = p.vz = 0.0f; continue; }
+                        p.vy = (p.vy == static_cast<float>(FRAGMENT_GRAVITY)) ? -2.0f : p.vy - static_cast<float>(FRAGMENT_GRAVITY);
+                        continue;
+                    }
+
+                    // Tumble (the fall is applied after the move, below).
                     if (p.spinX != 0 || p.spinY != 0 || p.spinZ != 0)
                     {
                         p.angleX = (p.angleX + p.spinX) & PlayerCamera::ANGLE_MASK;
                         p.angleY = (p.angleY + p.spinY) & PlayerCamera::ANGLE_MASK;
                         p.angleZ = (p.angleZ + p.spinZ) & PlayerCamera::ANGLE_MASK;
                     }
-                    if (p.falls) { p.vy -= CASING_GRAVITY; }
-                    if (p.isBlood) { p.vy -= BLOOD_GRAVITY; }
 
                     const bool isProjectile = (p.type == TYPE_PISTOL || p.type == TYPE_SHOTGUN
                                             || p.type == TYPE_PULSE || p.type == TYPE_FLAME
@@ -862,13 +888,23 @@ namespace ALTEngine::Screens
                     {
                         Particle hit = p;   // copy: Shatter reuses the pool and may move memory
                         p.alive = false;
-                        if (shatter) { Shatter(hit, true); }
+                        if (shatter)
+                        {
+                            bool liquid = false;
+                            if (restHeight) { (void)restHeight(hit.x, hit.z, liquid); }
+                            Shatter(hit, !liquid);
+                        }
                         continue;
                     }
 
                     p.x = nx;
                     p.y = ny;
                     p.z = nz;
+                    // Weight, after the move: the original moves every particle
+                    // first (FUN_00047524, 0x2d958) and only then takes 4 off a
+                    // drop of blood (0x2e171) or 6 off a casing (0x2e3df).
+                    if (p.falls) { p.vy -= CASING_GRAVITY; }
+                    if (p.isBlood) { p.vy -= BLOOD_GRAVITY; }
                 }
                 ticking = nullptr;
             }

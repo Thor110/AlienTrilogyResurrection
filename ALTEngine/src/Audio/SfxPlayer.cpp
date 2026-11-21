@@ -33,6 +33,12 @@ namespace ALTEngine::Audio
             return playing;
         }
 
+        // Silenced while the global gain is held at 0 (a network catch-up).
+        float Audible(float gain)
+        {
+            return ALTEngine::Bootstrap::AppWindow::Instance().SfxGain() > 0.0f ? gain : 0.0f;
+        }
+
         const std::unordered_map<SfxId, std::string> kMenuSounds = {
             { SfxId::MenuMove,   "0101sele" },
             { SfxId::MenuSelect, "0102sele" },
@@ -81,7 +87,7 @@ namespace ALTEngine::Audio
         return it->second;
     }
 
-    void SfxPlayer::PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory, float volume,
+    void SfxPlayer::PlayFile(const std::string& stem, const std::filesystem::path& cdDirectory, float gain,
                               bool once)
     {
         if (stem.empty()) { return; }
@@ -103,7 +109,7 @@ namespace ALTEngine::Audio
         if (!voice) { return; }
         playing[voice] = &sample;
         // Voices are shared, so every sound sets its own gain.
-        SDL_SetAudioStreamGain(voice, app.SfxGain() * volume);
+        SDL_SetAudioStreamGain(voice, Audible(gain));
         SDL_PutAudioStreamData(voice, sample.data(), static_cast<int>(sample.size()));
         // A one-shot is complete: flushed, the voice reads empty once it has
         // played. Without it SDL keeps the resampler's last few frames queued
@@ -117,7 +123,7 @@ namespace ALTEngine::Audio
     {
         auto it = kMenuSounds.find(id);
         if (it == kMenuSounds.end()) { return; }
-        PlayFile(it->second, cdDirectory, 1.0f, false);
+        PlayFile(it->second, cdDirectory, Gain(FIXED_LEVEL, Slider()), false);
     }
 
     void SfxPlayer::PlaySlot(int slotId, const char* levelCode, const std::filesystem::path& cdDirectory)
@@ -126,8 +132,10 @@ namespace ALTEngine::Audio
         if (!name || name[0] == '\0') { return; }
 
         // A looping sample through here plays once; the sounds held while
-        // something runs (a vent's jet) go through StartLoop.
-        PlayFile(name, cdDirectory, 1.0f, true);
+        // something runs (a vent's jet) go through StartLoop. The fixed-volume
+        // path (FUN_0005b0a6) does not look for the sample already playing, so
+        // footsteps and pickups overlap themselves.
+        PlayFile(name, cdDirectory, Gain(FIXED_LEVEL, Slider()), false);
     }
 
     void SfxPlayer::PlayPlayerSlot(int slotId, const char* levelCode, const std::filesystem::path& cdDirectory)
@@ -148,7 +156,7 @@ namespace ALTEngine::Audio
         if (looping && playing[voice] == &sample && SDL_GetAudioStreamQueued(voice) > 0) { return; }
         SDL_ClearAudioStream(voice);
         playing[voice] = &sample;
-        SDL_SetAudioStreamGain(voice, app.SfxGain());
+        SDL_SetAudioStreamGain(voice, Audible(Gain(FIXED_LEVEL, Slider())));
         SDL_PutAudioStreamData(voice, sample.data(), static_cast<int>(sample.size()));
         // Flushed so it reads finished once played (see PlayFile): the
         // flamethrower's loop is started again after its 5.7 seconds, as the
@@ -183,7 +191,7 @@ namespace ALTEngine::Audio
     {
         const char* name = SfxBank::SlotName(levelCode, slotId);
         if (!name || name[0] == '\0') { return; }
-        PlayFile(name, cdDirectory, volume, true);
+        PlayFile(name, cdDirectory, GainForFraction(volume, Slider()), true);
     }
 
     namespace
@@ -215,7 +223,7 @@ namespace ALTEngine::Audio
         const int handle = nextHandle++ & 0x3fffffff;
         HeldSounds()[handle] = HeldSound{ voice, &sample, SfxBank::Loops(name) };
         VoiceSamples()[voice] = &sample;
-        SDL_SetAudioStreamGain(voice, app.SfxGain() * volume);
+        SDL_SetAudioStreamGain(voice, Audible(GainForFraction(volume, Slider())));
         SDL_PutAudioStreamData(voice, sample.data(), static_cast<int>(sample.size()));
         // A held sound that doesn't loop plays once: flushed, it reads finished
         // and frees its voice (see PlayFile).
@@ -270,9 +278,14 @@ namespace ALTEngine::Audio
 
 
 
+    namespace { int sfxSlider = 10; }
+
+    int SfxPlayer::Slider() { return sfxSlider; }
+
     void SfxPlayer::SetVolume(int volume0to10)
     {
-        ALTEngine::Bootstrap::AppWindow::Instance().SetSfxGain(static_cast<float>(volume0to10) / 10.0f);
+        sfxSlider = volume0to10 < 0 ? 0 : (volume0to10 > 10 ? 10 : volume0to10);
+        ALTEngine::Bootstrap::AppWindow::Instance().SetSfxGain(static_cast<float>(sfxSlider) / 10.0f);
     }
 
     void SfxPlayer::ClearCache()

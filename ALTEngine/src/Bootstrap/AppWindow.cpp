@@ -148,19 +148,15 @@ namespace ALTEngine::Bootstrap
     {
         if (!OpenSfxVoices()) { return nullptr; }
 
-        SDL_AudioStream* best = nullptr;
-        int bestQueued = 0;
         for (size_t i = 1; i < sfxVoices.size(); ++i)   // voice 0 is the player's
         {
             SDL_AudioStream* voice = sfxVoices[i];
             if (!voice || sfxReserved[i]) { continue; }
-            const int queued = SDL_GetAudioStreamQueued(voice);
-            if (queued == 0) { return voice; }
-            if (!best || queued < bestQueued) { best = voice; bestQueued = queued; }
+            if (SDL_GetAudioStreamQueued(voice) == 0) { return voice; }
         }
-        // Every voice busy: cut off the one nearest its end.
-        if (best) { SDL_ClearAudioStream(best); }
-        return best;
+        // Every voice busy: the new sound is dropped, as the original's play
+        // routines return when no channel reads done (FUN_0005aed9/5b0a6).
+        return nullptr;
     }
 
     SDL_AudioStream* AppWindow::ReserveSfxVoice()

@@ -368,6 +368,7 @@ namespace ALTEngine::Screens
             // In flight, having just been thrown out of a crate.
             float vx = 0, vy = 0, vz = 0;
             bool falling = false;
+            int bounce = 0;   // +0x24, DroppedPickups::Step
 
             // Waiting for a trigger. A pickup whose record byte 6 is non-zero
             // and that no crate holds appears when Spawn Pickup commands
@@ -495,7 +496,13 @@ namespace ALTEngine::Screens
         // cell, sized on first use. Owning an Auto Mapper bypasses it entirely.
         // Run Mode's latch (DAT_000ad584 bit 1) and its key's last state.
         bool runModeToggled = false;
+        // The Pause/Break key's freeze (FUN_0004f7b0, FUN_0004f81c): a press
+        // stops the game where it stands, with "P A U S E D" over the last
+        // frame and the music held, until the next press. Not in a network
+        // game (the original tests its network bit first).
+        bool pauseFrozen = false;
         bool runModeWasDown = false;
+        bool useWasDownForTrigger = false;   // the use key's previous state, for its press
         std::vector<uint8_t> minimapVisited;   // each cell's seen bit (byte 7, bit 0)
         std::vector<uint8_t> minimapAreas;     // the discovered areas (DAT_00245bb4)
 
@@ -706,7 +713,6 @@ namespace ALTEngine::Screens
         // Multiplayer: where a player killed comes back (the level's start),
         // and who last hit us, for the frag.
         float spawnX = 0.0f, spawnZ = 0.0f, spawnFeetY = 0.0f, spawnYaw = 0.0f;
-        int lastNetAttacker = -1;
         // Multiplayer: the random draw for spawn nodes (Game::MultiplayerSpawn),
         // and the host's bots (Game::Bots).
         std::minstd_rand spawnRandom{ std::random_device{}() };
@@ -1208,7 +1214,10 @@ namespace ALTEngine::Screens
                         // object, which looked wrong; it is the switches' only.
                         const bool switchObject = crate.type == 0x16 || crate.type == 0x18
                             || crate.type == 0x1a || crate.type == 0x1b;
-                        const float objectScale = (crate.type == 0x17 || crate.type == CRYOPOD_OBJECT_TYPE) ? 1.0f : 0.875f;
+                        // 0x21-0x25 are drawn inline by their own task
+                        // (0x37a54) with no scale call either: full size.
+                        const float objectScale = (crate.type == 0x17 || crate.type == CRYOPOD_OBJECT_TYPE
+                                                   || (crate.type >= 0x21 && crate.type <= 0x25)) ? 1.0f : 0.875f;
                         placed.scaleX = switchObject ? 0xc00 / 4096.0f : objectScale;
                         placed.scaleY = switchObject ? 0xd98 / 4096.0f : objectScale;
                         placed.scaleZ = switchObject ? 0xc00 / 4096.0f : objectScale;
@@ -1728,9 +1737,9 @@ namespace ALTEngine::Screens
                 // or against us for anything else - and we come back at a
                 // random path node with fresh health (Game::MultiplayerSpawn).
                 const auto me = static_cast<uint8_t>(session->LocalSlot());
-                const auto killer = lastNetAttacker >= 0 ? static_cast<uint8_t>(lastNetAttacker) : me;
+                const auto killer = hudState.attacker >= 0 ? static_cast<uint8_t>(hudState.attacker) : me;
                 session->SendFrag(killer, me);
-                lastNetAttacker = -1;
+                hudState.attacker = -1;
                 hudState.dead = false;
                 hudState.health = 100;
                 camera.x = spawnX; camera.z = spawnZ; camera.yaw = spawnYaw;
@@ -1768,7 +1777,8 @@ namespace ALTEngine::Screens
             // (Triggers::OnPlayerTick): an unlock on walking up, the final
             // opening (6) only with the use key, as FUN_00040ff0 has it.
             (void)source;
-            return ALTEngine::Game::Doors::ApplyCommand(doorStates[static_cast<size_t>(doorIndex)], isOpen, amount, viaSwitch);
+            return ALTEngine::Game::Doors::ApplyCommand(doorStates[static_cast<size_t>(doorIndex)], isOpen, amount, viaSwitch,
+                                                         session && session->Connected());
         };
         triggerHandlers.toggleLight = [&](int light, int delta) {
             // Arms (or advances) a light record's variant counter - what brings
@@ -1986,6 +1996,7 @@ namespace ALTEngine::Screens
                     if (w.b >= 0) { live.cellIndex = w.b; }
                     live.vx = w.vx; live.vy = w.vy; live.vz = w.vz;
                     live.falling = true;
+                    live.bounce = ALTEngine::Screens::DroppedPickups::DROP_LIFETIME;
                     if (live.placedIndex < placedObjects.size())
                     {
                         auto& placed = placedObjects[live.placedIndex];
@@ -2030,6 +2041,14 @@ namespace ALTEngine::Screens
                         hudMessages.Show((me.name.empty() ? std::string("YOU") : me.name) + ": " + text);
                     }
                 }
+                else if (!session && levelReady && event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat
+                         && event.key.scancode == SDL_SCANCODE_PAUSE
+                         && keyBindings.GetKey(ALTEngine::Bootstrap::InputAction::Pause) != SDL_SCANCODE_PAUSE)
+                {
+                    pauseFrozen = !pauseFrozen;
+                    ALTEngine::Audio::MusicPlayer::SetPaused(pauseFrozen);
+                }
+                else if (pauseFrozen && event.type == SDL_EVENT_KEY_DOWN) {}
                 else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == keyBindings.GetKey(ALTEngine::Bootstrap::InputAction::Pause))
                 {
                     SDL_SetWindowRelativeMouseMode(app.Window(), false);
@@ -2131,6 +2150,13 @@ namespace ALTEngine::Screens
             // - the menu does the same in its own loop.
             ALTEngine::Audio::MusicPlayer::Update();
             dt = std::min(dt, 0.1f); // clamp so a stall/hitch doesn't teleport the camera
+            if (pauseFrozen)
+            {
+                // Frozen: no time passes and the mouse's movement is dropped.
+                dt = 0.0f;
+                float discardDx = 0.0f, discardDy = 0.0f;
+                SDL_GetRelativeMouseState(&discardDx, &discardDy);
+            }
 
             // Multiplayer: what the other players did since the last frame.
             if (session)
@@ -2152,11 +2178,13 @@ namespace ALTEngine::Screens
                         // The original's type 8: a quarter of it, through the
                         // armour (FUN_0003e5c4 with cause 5). Co-operative has
                         // no friendly fire.
+                        // Even a hit worth nothing after the quarter is taken:
+                        // it starts the cooldown and is credited (case 8).
                         const int amount = e.hit.damage / 4;
-                        if (amount > 0 && !hudState.dead && !session->Coop())
+                        if (!hudState.dead && !session->Coop())
                         {
-                            lastNetAttacker = e.hit.attacker;
                             hudState.ApplyDamage(amount, 5);
+                            hudState.attacker = e.hit.attacker;
                             checkPlayerDeath();
                         }
                         break;
@@ -2640,11 +2668,12 @@ namespace ALTEngine::Screens
                 // tick below, so a 144 Hz machine does not feed the fixed-rate
                 // movement code more input than a 30 Hz one.
                 //
-                // The original adds its mouse X straight to yaw, 1:1, in
-                // 4096-per-turn units (FUN_0003efcc, DAT_00404656). Converting
-                // through the existing radians-based sensitivity keeps the
-                // Controls > Mouse Sensitivity slider producing exactly the
-                // feel it did before this change.
+                // The original adds its mouse X to yaw in 4096-per-turn units
+                // (FUN_0003efcc, DAT_00404656) after halving the driver's
+                // mickeys (FUN_00060320: INT 33h 0Bh, `sar eax,1`) - half a
+                // unit a mickey. A mickey and a modern mouse's count are not
+                // the same distance, so the rate is left to the Controls >
+                // Mouse Sensitivity slider rather than copied per count.
                 pendingMouseYaw += mouseDx * sensitivity
                     * (static_cast<float>(ALTEngine::Screens::PlayerCamera::ANGLE_UNITS) / 6.28318530718f);
                 pendingMouseY += mouseDy * sensitivityScale;
@@ -2667,16 +2696,24 @@ namespace ALTEngine::Screens
                         InputAction::SelectWeapon5,
                     };
 
+                    // FUN_0004d438 (0x4d6e2-0x4d897): a key is heard only while
+                    // no switch is under way (state 4 lowering, 5 raising), for
+                    // a weapon held and not already in hand, and the first such
+                    // key in the row is the one taken. The remark for keys 3 and
+                    // 4 is inside that test - a key ignored mid-switch says
+                    // nothing.
+                    bool keyTaken = false;
                     for (int i = 0; i < 5; ++i)
                     {
                         const bool down = keys[keyBindings.GetKey(selectKeys[i])];
-                        if (down && !weaponKeyWasDown[static_cast<size_t>(i)])
+                        if (down && !weaponKeyWasDown[static_cast<size_t>(i)] && !keyTaken && !weaponSwitch.Busy())
                         {
                             // Only start a swap for a weapon that is actually
                             // held and is not the one already in hand.
                             const int slot = ALTEngine::Screens::PlayerInventoryState::SlotForSelectKey(i);
                             if (slot != selectedWeapon && inventory.Selectable(slot))
                             {
+                                keyTaken = true;
                                 weaponSwitch.Begin(slot);
                                 // FUN_0004d438: keys 3 and 4 draw a remark
                                 // half the time.
@@ -2692,7 +2729,10 @@ namespace ALTEngine::Screens
                     }
 
                     const bool nextDown = keys[keyBindings.GetKey(InputAction::NextWeapon)];
-                    if (nextDown && !weaponKeyWasDown[5])
+                    // Next weapon only from an idle weapon - not mid-shot,
+                    // mid-reload or mid-switch (0x10aac == 0, FUN_00038c78).
+                    if (nextDown && !weaponKeyWasDown[5] && !keyTaken && !weaponSwitch.Busy()
+                        && weaponRuntime.state == ALTEngine::Screens::WeaponSystem::STATE_IDLE)
                     {
                         const int next = inventory.NextSelectable(selectedWeapon);
                         if (next != selectedWeapon) { weaponSwitch.Begin(next); }
@@ -2797,6 +2837,21 @@ namespace ALTEngine::Screens
                     pcInput.strafeRight = keys[keyBindings.GetKey(InputAction::StrafeRight)] || (strafeMod && turnRightKey);
                     pcInput.turnLeft = !strafeMod && turnLeftKey;
                     pcInput.turnRight = !strafeMod && turnRightKey;
+                    // A modified turn REPLACES the direction word, it is not
+                    // added to it (FUN_0004d438, 0x4d55e / 0x4d58c: `mov edx, 4`
+                    // or `mov edx, 8`): forward, back, the strafe keys and the
+                    // other turn are dropped, so Strafe + Turn + Forward is a pure
+                    // sidestep. Left is tested first and wins.
+                    if (strafeMod && turnLeftKey)
+                    {
+                        pcInput.forward = pcInput.backward = pcInput.strafeRight = false;
+                        pcInput.strafeLeft = true;
+                    }
+                    else if (strafeMod && turnRightKey)
+                    {
+                        pcInput.forward = pcInput.backward = pcInput.strafeLeft = false;
+                        pcInput.strafeRight = true;
+                    }
 
                     // RunModifier is a hold; RunMode is a toggle. The original
                     // flips a latched bit (DAT_000ad584 ^= 2) on each press of
@@ -3253,8 +3308,12 @@ namespace ALTEngine::Screens
                             // The pulse rifle's later rounds go faster, so a burst
                             // strings out, as do untargeted smartgun rounds; the
                             // flamethrower has its own scatter (see SpawnProjectile).
+                            // The smartgun's spare rounds count DOWN: the ones
+                            // left after the targets go at (left-1)*0x80 ... 0
+                            // over the player's speed (FUN_0002c1d4's last loop).
+                            const int burstIndex = (projectileType == P::TYPE_SMARTGUN) ? (shots - shot - 1) : shot;
                             const int launchSpeed = (projectileType == P::TYPE_FLAME)
-                                ? playerCam.speed : playerCam.speed + shot * P::BurstSpeedStep;
+                                ? playerCam.speed : playerCam.speed + burstIndex * P::BurstSpeedStep;
                             P::Particle* round = particles.SpawnProjectile(
                                 projectileType, camera.x, camera.y, camera.z,
                                 playerCam.viewYaw, firingPitch, launchSpeed);
@@ -3318,9 +3377,11 @@ namespace ALTEngine::Screens
                     {
                         const int best = inventory.BestOtherSelectable(selectedWeapon);
                         if (!weaponSwitch.Busy()) { WS::UpdateIdle(weaponRuntime, inventory, best >= 0); }
-                        if (weaponRuntime.state == WS::STATE_EMPTY && best >= 0 && !weaponSwitch.Busy())
+                        // With nothing else to go to, the pistol (FUN_00038fb4).
+                        const int target = best >= 0 ? best : 0;
+                        if (weaponRuntime.state == WS::STATE_EMPTY && target != selectedWeapon && !weaponSwitch.Busy())
                         {
-                            weaponSwitch.Begin(best);
+                            weaponSwitch.Begin(target);
                         }
                     }
                     WS::TickNoise(weaponRuntime);
@@ -3790,6 +3851,10 @@ namespace ALTEngine::Screens
 
                             if (enemy.active && enemy.alive)
                             {
+                                // This tick's distance and band first: the lines
+                                // below are measured with them (0x34316 before
+                                // 0x3453f). They were a tick old.
+                                ALTEngine::Screens::Enemies::Perceive(enemy, aiX, aiFeet, aiZ);
                                 namespace CS = ALTEngine::Game::CreatureSight;
                                 const int egx = ToGridSpaceX(enemy.x, originX);
                                 const int egz = ToGridSpaceZ(enemy.z, originZ);
@@ -3895,7 +3960,10 @@ namespace ALTEngine::Screens
                                 const int releaseGZ = (ToGridSpaceZ(enemy.z, originZ) >> 9) * 512 + 256;
                                 const float releaseX = static_cast<float>(releaseGX) - originX;
                                 const float releaseZ = static_cast<float>(releaseGZ) - originZ;
-                                const float releaseY = ALTEngine::Formats::FindFloorHeightGridSpace(level, releaseGX, releaseGZ);
+                                // Stood 0x20 over that floor (FUN_0002e638), a
+                                // burster 0x40 (FUN_00035624, 0x3564f).
+                                const float releaseY = ALTEngine::Formats::FindFloorHeightGridSpace(level, releaseGX, releaseGZ)
+                                    + static_cast<float>(enemy.type == 10 ? CT::Colonist::SPAWN_LIFT : 0x20);
                                 auto* released = ALTEngine::Screens::Enemies::ReleaseFromEgg(
                                     enemies, enemyTemplates, enemy.releaseMonster, releaseX, releaseY, releaseZ,
                                     ALTEngine::Screens::Enemies::BearingTo(enemy, aiX, aiZ),
@@ -3957,6 +4025,7 @@ namespace ALTEngine::Screens
                                     live.vy = flight.vy;
                                     live.vz = flight.vz;
                                     live.falling = true;
+                                    live.bounce = ALTEngine::Screens::DroppedPickups::DROP_LIFETIME;
                                     if (live.placedIndex < placedObjects.size())
                                     {
                                         auto& placed = placedObjects[live.placedIndex];
@@ -4282,27 +4351,35 @@ namespace ALTEngine::Screens
                             if (!live.falling || live.placedIndex >= placedObjects.size()) { continue; }
                             auto& placed = placedObjects[live.placedIndex];
 
-                            live.vy -= ALTEngine::Screens::DroppedPickups::GRAVITY;
-                            placed.x += live.vx;
-                            placed.y += live.vy;
-                            placed.z += live.vz;
-
-                            const float floor = ALTEngine::Formats::FindFloorHeightGridSpace(
-                                level, ToGridSpaceX(placed.x, originX), ToGridSpaceZ(placed.z, originZ));
-                            const float rest = floor + static_cast<float>(
-                                ALTEngine::Screens::DroppedPickups::DropHeight(live.type));
-                            if (placed.y <= rest)
-                            {
-                                // Landed, at its type's height above the floor
-                                // like any other item (FUN_0003c258). Its cell is
-                                // wherever it came to rest, not where the crate was.
-                                placed.y = rest;
-                                live.falling = false;
-                                const int gx = ToGridSpaceX(placed.x, originX) >> 9;
-                                const int gz = ToGridSpaceZ(placed.z, originZ) >> 9;
-                                const int landed = ALTEngine::Formats::CellIndex(level, gx, gz);
-                                if (landed >= 0) { live.cellIndex = landed; }
-                            }
+                            // FUN_0003c258 - see DroppedPickups::Step.
+                            namespace DP = ALTEngine::Screens::DroppedPickups;
+                            DP::Body body;
+                            body.x = ToGridSpaceX(placed.x, originX);
+                            body.y = static_cast<int>(std::lround(placed.y));
+                            body.z = ToGridSpaceZ(placed.z, originZ);
+                            body.vx = static_cast<int>(live.vx);
+                            body.vy = static_cast<int>(live.vy);
+                            body.vz = static_cast<int>(live.vz);
+                            body.bounce = live.bounce;
+                            live.falling = DP::Step(body, live.type,
+                                [&](int x, int z) { return ALTEngine::Formats::CellAt(level, x >> 9, z >> 9); },
+                                [&](int x, int z) { return static_cast<int>(ALTEngine::Formats::FindFloorHeightGridSpace(level, x, z)); },
+                                [&](int x, int z) {
+                                    const auto* c = ALTEngine::Formats::CellAt(level, x >> 9, z >> 9);
+                                    return c ? static_cast<int>(c->ceilingHeight) * ALTEngine::Formats::WORLD_UNITS_PER_HEIGHT_UNIT : 0;
+                                });
+                            placed.x += static_cast<float>(body.x - ToGridSpaceX(placed.x, originX));
+                            placed.y = static_cast<float>(body.y);
+                            placed.z += static_cast<float>(body.z - ToGridSpaceZ(placed.z, originZ));
+                            live.vx = static_cast<float>(body.vx);
+                            live.vy = static_cast<float>(body.vy);
+                            live.vz = static_cast<float>(body.vz);
+                            live.bounce = body.bounce;
+                            // Its cell is wherever it is now, so it can be
+                            // picked up in the air (the cell pointer +0x1c is
+                            // rewritten every pass).
+                            const int landed = ALTEngine::Formats::CellIndex(level, body.x >> 9, body.z >> 9);
+                            if (landed >= 0) { live.cellIndex = landed; }
                         }
                         if (halfPass) { explosions.Tick(); }
                         if (halfPass) shatter.Tick([&](float sx, float sz) {
@@ -4467,6 +4544,7 @@ namespace ALTEngine::Screens
                                     live.vy = flight.vy;
                                     live.vz = flight.vz;
                                     live.falling = true;
+                                    live.bounce = ALTEngine::Screens::DroppedPickups::DROP_LIFETIME;
 
                                     if (live.placedIndex < placedObjects.size())
                                     {
@@ -4624,11 +4702,24 @@ namespace ALTEngine::Screens
                             else if (!isWindow)
                             {
                                 playBlastSound(ALTEngine::Formats::SoundIds::CRATE_BREAK, target.x, target.z);
-                                // A crate breaks into six scattered pieces, on
-                                // an axis chosen by which way it faces - see
-                                // ExplosionEffects::SpawnScatter.
-                                explosions.SpawnScatter(target.x, target.y, target.z,
-                                                        target.facing, target.objectType);
+                                // An object with a model - a crate, a double
+                                // crate, 0x21-0x25 - gets one effect at itself
+                                // (the crate task, 0x37cc9: FUN_0002aaf0 at its
+                                // own position) before its faces shatter. Only
+                                // the modelless walls 0x15 and 0x1d go up in
+                                // the scattered six (FUN_00037dd0, called from
+                                // their task at 0x38027 alone); every broken
+                                // object used to get those.
+                                if (target.objectType == 0x15 || target.objectType == 0x1d)
+                                {
+                                    explosions.SpawnScatter(target.x, target.y, target.z,
+                                                            target.facing, target.objectType);
+                                }
+                                else
+                                {
+                                    explosions.Spawn(ALTEngine::Formats::ExplosionGraphics::EFFECT_CRATE,
+                                                     target.x, target.y, target.z);
+                                }
                             }
                         };
 
@@ -4742,6 +4833,14 @@ namespace ALTEngine::Screens
                         // How a particle meets the world, in the original's own order
                         // - see Game/ProjectileCollision.h. Returns 0 to keep going,
                         // 1 to stop (a round shatters), 2 to stop without shattering.
+                        particles.restHeight = [&](float x, float z, bool& liquid) {
+                            const int gx = ToGridSpaceX(x, originX), gz = ToGridSpaceZ(z, originZ);
+                            const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
+                            const float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(level, gx, gz);
+                            const int attribute = cell ? cell->attribute : 0;
+                            liquid = attribute == 8 || attribute == 9;
+                            return floorY + (attribute == 9 ? 0x180 : attribute == 8 ? 0x100 : 0);
+                        };
                         if (halfPass)
                         particles.Tick([&](float px, float py, float pz, int hitType, int hitLife,
                                            float clearX, float clearY, float clearZ, int& roundLatch) -> int {
@@ -5109,6 +5208,11 @@ namespace ALTEngine::Screens
                             {
                                 PlayerExplosive& e = playerExplosives[ei];
                                 bool gone = false;
+                                // Moved first, with every particle (FUN_00047524,
+                                // 0x2d958): the fuse, the cell and the creature
+                                // are tested where it has moved to, and it goes
+                                // off there (0x2da19).
+                                e.x += e.vx; e.y += e.vy; e.z += e.vz;
                                 const int gx = ToGridSpaceX(e.x, originX);
                                 const int gz = ToGridSpaceZ(e.z, originZ);
                                 const auto* cell = ALTEngine::Formats::CellAt(level, gx >> 9, gz >> 9);
@@ -5126,6 +5230,16 @@ namespace ALTEngine::Screens
                                         if (!PCol::CreatureTargetable(enemy.state)) { continue; }
                                         if (!PCol::OverlapsCreature(e.x, e.y, e.z, enemy.x, enemy.y, enemy.z,
                                                                     enemy.type, ALTEngine::Screens::Particles::TYPE_PULSE)) { continue; }
+                                        // The zone test a round has (0x2a6fb): the
+                                        // two cells share a bit of their +8 word.
+                                        const int enemyCell = ALTEngine::Formats::CellIndex(
+                                            level, ToGridSpaceX(enemy.x, originX) >> 9, ToGridSpaceZ(enemy.z, originZ) >> 9);
+                                        if (!PCol::ShareZone(level, ALTEngine::Formats::CellIndex(level, gx >> 9, gz >> 9), enemyCell)) { continue; }
+                                        // The queen's 2x is the explosive's strength
+                                        // doubled while its life is at least half
+                                        // its +0x1d byte, which the throw never sets
+                                        // (it is the reused slot's): a clean slot's
+                                        // 0 always doubles.
                                         const int damage = (enemy.type == ALTEngine::Game::Blast::IMMUNE_CREATURE_TYPE)
                                             ? EXPLOSIVE_HIT_DAMAGE * 2 : enemy.health;
                                         if (!e.remote) { damageCreature(enemy, damage); }
@@ -5172,7 +5286,6 @@ namespace ALTEngine::Screens
                                     {
                                         e.vy -= 1.0f;   // 0x2dcf9: one a tick
                                     }
-                                    if (!gone) { e.x += e.vx; e.y += e.vy; e.z += e.vz; }
                                     // FUN_0002cf14 turns a charge every tick it runs.
                                     if (!gone && e.charge) { e.spin = (e.spin + 0x20) & 0xfff; }
                                 }
@@ -5262,7 +5375,14 @@ namespace ALTEngine::Screens
                     // (FUN_00040ff0, from the mover at 0x3e3d1): walking on
                     // runs it, a failed chain tries again next tick, and the
                     // use key throws its switches and opens its doors.
-                    const bool useHeldForTrigger = keys[keyBindings.GetKey(InputAction::Use)];
+                    // The key's PRESS, not its hold: the mover passes the
+                    // newly-pressed mask (DAT_000b0cc4, `~previous & current`),
+                    // so a switch or door is worked on the tick the key goes
+                    // down while standing on its cell - holding it while walking
+                    // on does nothing, and a refused door is not retried.
+                    const bool useDownNow = keys[keyBindings.GetKey(InputAction::Use)];
+                    const bool useHeldForTrigger = useDownNow && !useWasDownForTrigger;
+                    if (playerTicksThisFrame > 0) { useWasDownForTrigger = useDownNow; }
                     // Once for a frame that ran a tick, never more often than
                     // the ticks: run every frame, a chain that failed was tried
                     // again at the frame rate, and the commands before the one
@@ -5283,7 +5403,7 @@ namespace ALTEngine::Screens
                         // As often as the ticks, and not while dying (0x3c5d7:
                         // refused while cc0 has 0x20, 0x40 or 0x80000).
                         if (playerTicksThisFrame == 0 || playerDead) { break; }
-                        if (live.collected || live.contained || live.waitingOnTrigger || live.falling) { continue; }
+                        if (live.collected || live.contained || live.waitingOnTrigger) { continue; }
                         if (live.placedIndex >= placedObjects.size()) { continue; }
                         {
                             const auto& item = placedObjects[live.placedIndex];
@@ -5728,11 +5848,11 @@ namespace ALTEngine::Screens
                             //     pulse rifle (2)  teal    -> white
                             //     smartgun (4)     cyan    -> white
                             //     a creature's (5) dark red -> white
-                            // The shotgun's pellets (1) are never drawn. Types
-                            // 0, 2 and 4 are left out at the lowest detail
-                            // setting and type 5 at any but the highest
-                            // (DAT_000a63fc); the port has no such setting,
-                            // so it draws them all, as the highest does.
+                            // The shotgun's pellets (1) are never drawn. By the
+                            // difficulty (FUN_00013078, DAT_000a63fc - the
+                            // getter spawn health uses): types 0, 2 and 4 are
+                            // not drawn on the hardest, and type 5 - a
+                            // creature's round - only on the easiest.
                             //
                             // The streak used to be a strip centred on the
                             // round and turned by an angle a quarter-turn out,
@@ -5743,6 +5863,13 @@ namespace ALTEngine::Screens
                             // one of the original's pixels wide at each end,
                             // in two halves to carry the colour's run.
                             if (particle.type == P::TYPE_SHOTGUN) { continue; }
+                            {
+                                const int difficulty = static_cast<int>(difficultySettings.Get());
+                                const bool playerRound = particle.type == P::TYPE_PISTOL
+                                    || particle.type == P::TYPE_PULSE || particle.type == P::TYPE_SMARTGUN;
+                                if (playerRound && difficulty == 2) { continue; }
+                                if (particle.type == P::TYPE_ENEMY_ROUND && difficulty != 0) { continue; }
+                            }
                             uint8_t light0[3] = { 160, 160, 160 }, light1[3] = { 255, 255, 255 };
                             ModelRenderer::LevelLightCorner(cacheKey, 0, light0);
                             ModelRenderer::LevelLightCorner(cacheKey, 1, light1);
@@ -6225,6 +6352,27 @@ namespace ALTEngine::Screens
                                                     ALTEngine::Renderer::HUD_FONT_FIRST_DESCRIPTOR, 1.0f, 1.0f, 0, colour);
                                 }
 
+                                // "Run Mode" while the Caps Lock run is latched
+                                // (FUN_0003e698, 0x3e7dd: string 134, green, at
+                                // (8, 8), or (8, 0xe7) in a network game). It was
+                                // never drawn.
+                                // "P A U S E D" while the Pause key holds the game
+                                // (FUN_000101f8: string 0x39c at (0x84, 0x70)
+                                // through FUN_00043604, glyphs from descriptor
+                                // 23 - font A).
+                                if (pauseFrozen)
+                                {
+                                    hud.DrawHudText(renderer, "P A U S E D", 0x84, 0x70,
+                                                    ALTEngine::Renderer::HUD_FONT_FIRST_DESCRIPTOR, 1.0f, 1.0f);
+                                }
+                                if (runModeToggled)
+                                {
+                                    const bool net = session && session->Connected();
+                                    hud.DrawHudText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::GsRunMode, language),
+                                                    8, net ? 0xe7 : 8, ALTEngine::Renderer::HUD_FONT_C_FIRST_DESCRIPTOR, 1.0f, 1.0f,
+                                                    ALTEngine::Renderer::HUD_FONT_C_LETTER_SPACING, SDL_Color{ 0, 255, 0, 255 });
+                                }
+
                                 // Testing: Face Index Display - the picked face's
                                 // number, texture, draw routine and file offset,
                                 // and its vertex list, centred at the top.
@@ -6482,6 +6630,7 @@ namespace ALTEngine::Screens
         if (syncing) { app.SetSfxGain(syncSavedGain); }
         if (syncBackground) { SDL_DestroyTexture(syncBackground); syncBackground = nullptr; }
         ALTEngine::Audio::SfxPlayer::StopAllLoops();
+        ALTEngine::Audio::MusicPlayer::SetPaused(false); // a freeze left on by a window close
         if (frameTexture) { SDL_DestroyTexture(frameTexture); frameTexture = nullptr; }
 
         result.aliensTotal = static_cast<int>(enemies.size());

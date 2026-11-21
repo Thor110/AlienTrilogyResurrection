@@ -393,6 +393,7 @@ namespace ALTEngine::Screens::CreatureTasks
             int distance = 0;
             bool hasHealth = false;   // +0x58 > 0
             bool burst = false;       // destroyed this tick (state 7)
+            bool hit = false;         // in its hit reaction (state 6)
         };
 
         struct Output
@@ -403,6 +404,7 @@ namespace ALTEngine::Screens::CreatureTasks
             bool stopSound = false;   // the task's FUN_00040aec: the jet's sound ends
             bool switchOffNotice = false;
             bool explode = false;
+            bool hitReset = false;    // the state-6 arm ran: back to dormant
         };
 
         inline Output StepEmitter(Vent& v, const Input& in);
@@ -432,6 +434,19 @@ namespace ALTEngine::Screens::CreatureTasks
                 return out;
             }
             if (!in.visible || in.distance > SIMULATION_CUTOFF) { return out; }
+
+            // A hit (state 6, 0x359c2) - reached only past the checks above, so
+            // a vent hit while switched off, out of view or past 0x1e00 stays
+            // in its hit state: back to dormant with both counters cleared,
+            // and nothing more this tick.
+            if (in.hit)
+            {
+                v.state = DORMANT;
+                v.cycle = 0;
+                v.emitCounter = 0;
+                out.hitReset = true;
+                return out;
+            }
 
             if (in.burst)
             {

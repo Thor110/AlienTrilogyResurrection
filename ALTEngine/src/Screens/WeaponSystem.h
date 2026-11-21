@@ -298,6 +298,11 @@ namespace ALTEngine::Screens
                 return;
             }
 
+            // The pulse rifle with no bullets left stays in hand while it has
+            // grenades: it can still launch them (FUN_0003efcc arm 2,
+            // 0x3fda5-0x3fe30, tests 0x10ac8 before going to state 4).
+            if (runtime.weapon == 2 && held->grenades > 0) { return; }
+
             // Nothing left in the magazine and no spare units.
             //
             // THESE ARE TWO DIFFERENT OUTCOMES, and collapsing them into
@@ -316,10 +321,16 @@ namespace ALTEngine::Screens
             // has no animation, so nothing ever ended to return it to idle, and
             // TryPrimaryFire only fires from idle. One shot and the weapon was
             // dead (Edward, 2026).
+            //
+            // That reload is the PISTOL's alone. Any other weapon run dry with
+            // nothing else to go to tops the pistol up to one round and goes
+            // empty - lowered at once and swapped for the pistol (arms 1, 3, 4
+            // at 0x3feb3 / 0x3ff35 / 0x3ffab, then FUN_00038fb4) - not through
+            // a reload of its own first, which it used to play.
             if (!canSwitchAway)
             {
                 if (inventory.pistol.rounds == 0) { inventory.pistol.rounds = 1; }
-                runtime.SetState(STATE_RELOAD);
+                runtime.SetState(runtime.weapon == 0 ? STATE_RELOAD : STATE_EMPTY);
                 return;
             }
             runtime.SetState(STATE_EMPTY);

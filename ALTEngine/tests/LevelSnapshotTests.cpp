@@ -41,14 +41,12 @@ TEST_CASE("Save Anywhere: doors and lifts keep where they had got to")
     door.travel = 30;
     door.progress = 17;
     door.phase = ALTEngine::Game::DoorState::Phase::Opening;
-    door.switchOperated = true;
     door.unlockProgress = 2;
     ALTEngine::Game::DoorState back;
     back.travel = 30;
     LS::LoadDoor(back, LS::SaveDoor(door));
     CHECK_EQ(back.progress, 17);
     CHECK(back.phase == ALTEngine::Game::DoorState::Phase::Opening);
-    CHECK(back.switchOperated);
     CHECK_EQ(back.unlockProgress, 2);
 
     ALTEngine::Game::Lifts::Lift lift;
