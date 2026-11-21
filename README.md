@@ -138,7 +138,7 @@ Thanks to CybeRingu for the suggestion to add co-operative to the multiplayer mo
 
 Thanks to Drelvak who is working on Diablo 1 first person for the inspiration, while watching their videos I was reminded that HUD scaling is something people like and often forget to implement.
 
-Thanks to TrialMacamaeu for testing the project.
+Thanks to TrialMacameau for testing the project.
 
 ## Engine Reimplementation
 
