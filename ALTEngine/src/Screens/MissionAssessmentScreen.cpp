@@ -1,4 +1,5 @@
 #include "MissionAssessmentScreen.h"
+#include "ScreenFadeDraw.h"
 #include "MenuBackground.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Bootstrap/AppWindow.h"
@@ -248,8 +249,41 @@ namespace ALTEngine::Screens
         unsigned tickCount = 0;
         bool counted = false;
 
+        // One frame of the screen, drawn the same way each time - the fade
+        // out draws it again.
+        auto drawFrame = [&]() {
+                if (canvas) { SDL_SetRenderTarget(renderer, canvas); }
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                SDL_RenderClear(renderer);
+                if (background) { SDL_RenderTexture(renderer, background, nullptr, nullptr); }
+
+                const SDL_Color white{ 255, 255, 255, 255 };
+                if (stats.coop) { DrawCentred(renderer, font, "CO-OPERATIVE", COOP_TAG_Y, SDL_Color{ 120, 230, 150, 255 }); }
+                DrawCentred(renderer, font, title, TITLE_Y, white);
+                for (int i = 0; i < 3; ++i)
+                {
+                    const SDL_Color c = Tint(colours[size_t(std::clamp(shown[size_t(i)], 0, 100))]);
+                    DrawSegments(renderer, shown[size_t(i)], ROW_BAR_Y[i], segmentPalette);
+                    DrawDescriptor(renderer, font, BAR_FRAME_DESCRIPTOR, float(BAR_X), float(ROW_BAR_Y[i]), white, true);
+                    DrawText(renderer, font, Figure(shown[size_t(i)]), FIGURE_X, ROW_FIGURE_Y[i], c);
+                    DrawText(renderer, font, labels[size_t(i)], labelX, ROW_LABEL_Y[i], c);
+                }
+                if (stats.showTimes) { DrawCentred(renderer, font, times, TIMES_Y, white); }
+                if (counted) { DrawCentred(renderer, font, prompt, stats.showTimes ? TIMES_PROMPT_Y : PROMPT_Y, white); }
+
+                if (canvas)
+                {
+                    SDL_SetRenderTarget(renderer, nullptr);
+                    DrawMenuBackground(renderer, canvas, SCREEN_W, SCREEN_H);
+                }
+        };
+
         MissionAssessmentResult result;
         bool running = true;
+        ALTEngine::Formats::ScreenFade::State fade;
+        ALTEngine::Formats::ScreenFade::StartIn(fade);
+        ScreenFadeDraw::Clock fadeClock;
+        fadeClock.Start();
         Uint64 last = SDL_GetTicks();
         double frameClock = 0.0;
         while (running)
@@ -284,33 +318,17 @@ namespace ALTEngine::Screens
             }
             if (counted) { frameClock = 0.0; }
 
-            if (canvas) { SDL_SetRenderTarget(renderer, canvas); }
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-            SDL_RenderClear(renderer);
-            if (background) { SDL_RenderTexture(renderer, background, nullptr, nullptr); }
-
-            const SDL_Color white{ 255, 255, 255, 255 };
-            if (stats.coop) { DrawCentred(renderer, font, "CO-OPERATIVE", COOP_TAG_Y, SDL_Color{ 120, 230, 150, 255 }); }
-            DrawCentred(renderer, font, title, TITLE_Y, white);
-            for (int i = 0; i < 3; ++i)
-            {
-                const SDL_Color c = Tint(colours[size_t(std::clamp(shown[size_t(i)], 0, 100))]);
-                DrawSegments(renderer, shown[size_t(i)], ROW_BAR_Y[i], segmentPalette);
-                DrawDescriptor(renderer, font, BAR_FRAME_DESCRIPTOR, float(BAR_X), float(ROW_BAR_Y[i]), white, true);
-                DrawText(renderer, font, Figure(shown[size_t(i)]), FIGURE_X, ROW_FIGURE_Y[i], c);
-                DrawText(renderer, font, labels[size_t(i)], labelX, ROW_LABEL_Y[i], c);
-            }
-            if (stats.showTimes) { DrawCentred(renderer, font, times, TIMES_Y, white); }
-            if (counted) { DrawCentred(renderer, font, prompt, stats.showTimes ? TIMES_PROMPT_Y : PROMPT_Y, white); }
-
-            if (canvas)
-            {
-                SDL_SetRenderTarget(renderer, nullptr);
-                DrawMenuBackground(renderer, canvas, SCREEN_W, SCREEN_H);
-            }
+            drawFrame();
+            // FUN_00014f44 fades the screen in as it opens (FUN_0004eec0).
+            ScreenFadeDraw::Overlay(renderer, fade);
             SDL_RenderPresent(renderer);
             SDL_Delay(1);
+            fadeClock.Advance(fade);
         }
+
+        // And fades it out on the way out (FUN_00014628's FUN_0004eefc, waited
+        // for in full).
+        if (!result.windowClosed && !ScreenFadeDraw::RunFadeOut(renderer, fade, drawFrame)) { result.windowClosed = true; }
 
         if (canvas) { SDL_DestroyTexture(canvas); }
         if (font.texture) { SDL_DestroyTexture(font.texture); }

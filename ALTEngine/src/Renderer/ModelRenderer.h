@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Formats/ScreenFade.h"
+
 #include <SDL3/SDL.h>
 
 #include "../Formats/BndTextureLoader.h"
@@ -311,6 +313,11 @@ namespace ALTEngine::Renderer
         // Returns true if the buffers were rebuilt, which is useful mainly
         // for logging and tests.
         static bool TickLevelLights(const std::string& cacheKey, int randomBits);
+
+        // The screen fade (Formats::ScreenFade) on everything drawn with a
+        // colour: the level's faces, the models, the sprites. Set it every
+        // frame; the level's vertices go up again only when it changes.
+        static void SetScreenFade(const ALTEngine::Formats::ScreenFade::State& fade);
 
         // Applies script command 0 (ToggleLight) to one light record,
         // which is what arms a blink record - a mode 1 or 3 light does

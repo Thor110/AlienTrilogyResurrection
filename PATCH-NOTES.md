@@ -155,6 +155,13 @@ A review of every routine in the original against ALTEngine's, one block of the 
 - Seven sounds at once besides your own, as in the original; when all seven are busy, a new sound is dropped
   rather than cutting another off.
 
+**Screen fades**
+- **The original's fades are in.** A level fades in as it starts and fades out however it ends (the exit,
+  death, quitting from the pause menu); the Mission Assessment and the end-of-level prompt fade in and out, with
+  the original's moment of black between them. As in the original, it is not a black curtain: each colour is
+  taken down by a fixed amount a frame, so bright things (the HUD, your gun, lit walls) go first and dim
+  corners last. Glass, flames and steam are drawn without that colour in the original and stay as they are.
+
 **Multiplayer**
 - A hit from another player names them as the attacker even when it does no damage; a frag goes to the player
   who hit you last.

@@ -50,6 +50,7 @@
 #include "../Renderer/HudRenderer.h"
 #include "../Renderer/Minimap.h"
 #include "../Audio/MusicPlayer.h"
+#include "ScreenFadeDraw.h"
 #include "../Bootstrap/ModernSettings.h"
 #include "../Bootstrap/GameplaySettings.h"
 #include "../Renderer/ModelPreview.h"
@@ -2022,11 +2023,41 @@ namespace ALTEngine::Screens
         // returning if gameplay is still running.
         if (levelReady) { SDL_SetWindowRelativeMouseMode(app.Window(), true); }
 
-        while (running)
+        // THE SCREEN FADES (Formats::ScreenFade). FUN_00010960 fades the level
+        // in as its loop starts, and whichever way the loop ends - the exit,
+        // death, quitting - fades it out over 17 more passes (DAT_000b0cbc
+        // counted up 0x100 a pass past 0x1000, 0x10b7f), by when every colour
+        // is black. OURS: the world holds still for those passes; the original
+        // runs them with the last input held.
+        namespace SF = ALTEngine::Formats::ScreenFade;
+        SF::State screenFade;
+        SF::StartIn(screenFade);
+        ALTEngine::Screens::ScreenFadeDraw::Clock fadeClock;
+        fadeClock.Start();
+        constexpr int END_FADE_PASSES = 17;
+        bool endFading = false;
+        bool endFadeDone = false;
+        // Whether the loop goes on: once it has been told to stop, the fade out
+        // runs first (not for a closed window).
+        auto keepGoing = [&]() {
+            if (running || endFading) { return true; }
+            if (endFadeDone || result.outcome == GameplayOutcome::WindowClosed || !levelReady) { return false; }
+            endFading = true;
+            SF::StartOut(screenFade);
+            return true;
+        };
+
+        while (keepGoing())
         {
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
+                // Fading out: nothing but closing the window is heard.
+                if (endFading)
+                {
+                    if (event.type == SDL_EVENT_QUIT) { result.outcome = GameplayOutcome::WindowClosed; endFading = false; }
+                    continue;
+                }
                 if (event.type == SDL_EVENT_QUIT) { result.outcome = GameplayOutcome::WindowClosed; running = false; }
                 else if (session && event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat
                          && event.key.scancode >= SDL_SCANCODE_F2 && event.key.scancode <= SDL_SCANCODE_F9)
@@ -2137,7 +2168,7 @@ namespace ALTEngine::Screens
                     lastTicks = SDL_GetTicks(); // don't count time spent in the pause menu as a movement frame
                 }
             }
-            if (!running) { break; }
+            if (!running && !endFading) { continue; }   // to the fade out, or out
 
             Uint64 nowTicks = SDL_GetTicks();
             float dt = static_cast<float>(nowTicks - lastTicks) / 1000.0f;
@@ -2150,7 +2181,15 @@ namespace ALTEngine::Screens
             // - the menu does the same in its own loop.
             ALTEngine::Audio::MusicPlayer::Update();
             dt = std::min(dt, 0.1f); // clamp so a stall/hitch doesn't teleport the camera
-            if (pauseFrozen)
+            // One fade step a frame of the original's (FUN_0004ef64); none while
+            // the Pause key holds the game (FUN_0004f81c spins without it).
+            if (!pauseFrozen) { fadeClock.Advance(screenFade); }
+            if (endFading && (!SF::Busy(screenFade) || screenFade.step <= SF::OUT_STEPS - END_FADE_PASSES))
+            {
+                endFading = false;
+                endFadeDone = true;
+            }
+            if (pauseFrozen || endFading)
             {
                 // Frozen: no time passes and the mouse's movement is dropped.
                 dt = 0.0f;
@@ -6203,6 +6242,8 @@ namespace ALTEngine::Screens
                 // Kept between frames: a new frame-sized buffer each frame
                 // was a needless allocation and clear.
                 static std::vector<uint8_t> pixels;
+                ModelRenderer::SetScreenFade(screenFade);
+                hud.SetFade(SF::NeutralFactor(screenFade));
                 ModelRenderer::RenderLevelToRgba(cacheKey, view, windowW, windowH,
                                                  zoneCulling ? drawnObjects : placedObjects, placedSprites, pixels);
                 placedObjects.resize(staticObjectCount); // drop this frame's particles again
@@ -6297,6 +6338,8 @@ namespace ALTEngine::Screens
                             {
                                 rgb[0] = rgb[1] = rgb[2] = 1.0f;
                             }
+                            // The weapon's colour is its light's: the fade comes off it.
+                            SF::ApplyMultiplier(screenFade, rgb[0], rgb[1], rgb[2]);
                             weaponView.SetTint(rgb[0], rgb[1], rgb[2]);
                             lightFlashRaised = false;
                         }
@@ -6565,6 +6608,18 @@ namespace ALTEngine::Screens
                                                   drawn.w + hudScaleX * 2.0f, drawn.h };
                                 hud.DrawEdgeStripsPixels(renderer, framed,
                                                          ALTEngine::Renderer::HUD_MINIMAP_STRIP_H * hudScaleY);
+                                // The screen fade over the map and its strips
+                                // (neutral, as the HUD's panels).
+                                if (!SF::Identity(screenFade))
+                                {
+                                    const float strip = ALTEngine::Renderer::HUD_MINIMAP_STRIP_H * hudScaleY;
+                                    const Uint8 v = static_cast<Uint8>(std::lround(SF::NeutralFactor(screenFade) * 255.0f));
+                                    const SDL_FRect shade{ framed.x, framed.y - strip, framed.w, framed.h + strip * 2.0f };
+                                    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_MUL);
+                                    SDL_SetRenderDrawColor(renderer, v, v, v, 255);
+                                    SDL_RenderFillRect(renderer, &shade);
+                                    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+                                }
                             }
                         }
                     }
@@ -6631,6 +6686,7 @@ namespace ALTEngine::Screens
         if (syncBackground) { SDL_DestroyTexture(syncBackground); syncBackground = nullptr; }
         ALTEngine::Audio::SfxPlayer::StopAllLoops();
         ALTEngine::Audio::MusicPlayer::SetPaused(false); // a freeze left on by a window close
+        ModelRenderer::SetScreenFade(SF::State{});   // the menus' previews draw unfaded
         if (frameTexture) { SDL_DestroyTexture(frameTexture); frameTexture = nullptr; }
 
         result.aliensTotal = static_cast<int>(enemies.size());

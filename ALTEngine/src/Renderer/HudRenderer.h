@@ -72,6 +72,12 @@ namespace ALTEngine::Renderer
 
         void Unload();
 
+        // The screen fade on the panels, the overlay and the text, which are
+        // neutral (0x80) primitives in the original: 0..1, what a neutral
+        // colour comes out as (Formats::ScreenFade::NeutralFactor). The
+        // weapon is not touched - its light tint carries the fade itself.
+        void SetFade(float neutralFactor) { fadeFactor = neutralFactor; }
+
         // Set before Draw each frame; Draw puts the item stack at its itemTop.
         void SetLeftColumn(const HudLeftColumn& layout) { leftColumn = layout; }
 
@@ -166,6 +172,7 @@ namespace ALTEngine::Renderer
         HudLeftColumn leftColumn = LayoutHudLeftColumn(ALTEngine::Screens::PlayerHudState{}, false, false);
         // The original's 320x240 HUD surface. Created on first use and kept for
         // the renderer's lifetime; Draw() is const, hence mutable.
+        float fadeFactor = 1.0f;
         mutable SDL_Texture* hudTarget = nullptr;
         // The layers over it, each 320x240: the panels (cut into corners when
         // scaled), the camera overlay, and the text.

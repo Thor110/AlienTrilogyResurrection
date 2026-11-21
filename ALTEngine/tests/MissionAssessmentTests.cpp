@@ -96,3 +96,51 @@ TEST_CASE("Lights: the lamp reports full strength once, 32 ticks on (sound 0x18)
     CHECK_EQ(fullAt, 32);
     CHECK(!table.TakeEquipmentFull());
 }
+
+#include "Formats/ScreenFade.h"
+
+TEST_CASE("Screen fades: FUN_0004eec0 / FUN_0004eefc / FUN_0004f020")
+{
+    namespace SF = ALTEngine::Formats::ScreenFade;
+    SF::State s;
+    CHECK(SF::Identity(s));
+
+    // In: 340, 255, 170, 85 off, then nothing; five frames.
+    SF::StartIn(s);
+    int r = 0x80, g = 0x80, b = 0x80;
+    SF::Apply(s, r, g, b);
+    CHECK_EQ(r, 0);
+    SF::Step(s); SF::Step(s); SF::Step(s);   // step 4: 85 off
+    r = 0x80; g = 0xff; b = 0x10;
+    SF::Apply(s, r, g, b);
+    CHECK_EQ(r, 0x80 - 0x55);
+    CHECK_EQ(g, 0xff - 0x55);
+    CHECK_EQ(b, 0);
+    SF::Step(s);                              // step 5: whole
+    CHECK(SF::Identity(s));
+    CHECK(SF::Busy(s));
+    SF::Step(s);
+    CHECK(!SF::Busy(s));
+
+    // Out: 11 a step, or 44 for a colour with a channel over 0x7e.
+    SF::StartOut(s);
+    CHECK(SF::Identity(s));
+    SF::Step(s); SF::Step(s);                 // step 23: 2 steps in
+    r = 0x7e; g = 0x40; b = 0x00;
+    SF::Apply(s, r, g, b);
+    CHECK_EQ(r, 0x7e - 22);
+    CHECK_EQ(g, 0x40 - 22);
+    r = 0x80; g = 0x40; b = 0x00;
+    SF::Apply(s, r, g, b);
+    CHECK_EQ(r, 0x80 - 88);
+    CHECK_EQ(g, 0);
+    CHECK(SF::NeutralFactor(s) == (0x80 - 88) / 128.0f);
+    for (int i = 0; i < 23; ++i) { SF::Step(s); }
+    CHECK(!SF::Busy(s));
+    CHECK(s.heldBlack);                       // black until the next fade in
+    r = g = b = 0xff;
+    SF::Apply(s, r, g, b);
+    CHECK_EQ(r + g + b, 0);
+    SF::StartIn(s);
+    CHECK(!s.heldBlack);
+}

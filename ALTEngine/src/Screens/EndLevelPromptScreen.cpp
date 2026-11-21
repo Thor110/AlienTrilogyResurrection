@@ -2,6 +2,7 @@
 #include "MenuBackground.h"
 #include "MenuStyle.h"
 #include "SaveSlotScreen.h"
+#include "ScreenFadeDraw.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
@@ -28,6 +29,9 @@ namespace ALTEngine::Screens
     {
         using namespace MenuStyle;
         constexpr std::array<const char*, 3> ITEMS{ "Continue game", "Save Game", "Quit Game" };
+        // The passes FUN_00014f44 runs on a black screen between the
+        // assessment's fade out and the prompt's fade in (0x15147-0x15158).
+        constexpr int ASSESSMENT_TO_PROMPT_BLACK = 0x1e;
     }
 
     EndLevelPromptResult EndLevelPromptScreen::Run(const std::filesystem::path& cdDirectory)
@@ -45,6 +49,36 @@ namespace ALTEngine::Screens
         int cursor = 0;
         EndLevelPromptResult result;
         bool running = true;
+
+        // FUN_00014f44: after the assessment has faded out, 30 passes of black
+        // (the fade's hold), then the prompt fades in.
+        if (!ScreenFadeDraw::HoldBlack(renderer, ASSESSMENT_TO_PROMPT_BLACK))
+        {
+            if (background) { SDL_DestroyTexture(background); }
+            return { true, EndLevelPromptChoice::Continue };
+        }
+        ALTEngine::Formats::ScreenFade::State fade;
+        ALTEngine::Formats::ScreenFade::StartIn(fade);
+        ScreenFadeDraw::Clock fadeClock;
+        fadeClock.Start();
+
+        auto drawFrame = [&]() {
+                DrawMenuBackground(renderer, background, bgW, bgH);
+
+                int scale = ComputeMenuScale(renderer);
+                int lineHeight = TextHeight(scale) + scale * 6;
+                int windowW = 0, windowH = 0;
+                SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+                int startY = windowH / 2 - lineHeight;
+
+                for (int i = 0; i < 3; ++i)
+                {
+                    Color color = (i == cursor) ? SelectedTextColor() : COLOR_DIM;
+                    int textX = (windowW - TextWidth(ITEMS[static_cast<size_t>(i)], scale)) / 2;
+                    DrawBitmapText(renderer, ITEMS[static_cast<size_t>(i)], textX, startY + i * lineHeight, scale, color);
+                }
+        };
+
 
         while (running)
         {
@@ -84,23 +118,14 @@ namespace ALTEngine::Screens
             }
             if (!running) { break; }
 
-            DrawMenuBackground(renderer, background, bgW, bgH);
-
-            int scale = ComputeMenuScale(renderer);
-            int lineHeight = TextHeight(scale) + scale * 6;
-            int windowW = 0, windowH = 0;
-            SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-            int startY = windowH / 2 - lineHeight;
-
-            for (int i = 0; i < 3; ++i)
-            {
-                Color color = (i == cursor) ? SelectedTextColor() : COLOR_DIM;
-                int textX = (windowW - TextWidth(ITEMS[static_cast<size_t>(i)], scale)) / 2;
-                DrawBitmapText(renderer, ITEMS[static_cast<size_t>(i)], textX, startY + i * lineHeight, scale, color);
-            }
-
+            drawFrame();
+            ScreenFadeDraw::Overlay(renderer, fade);
             SDL_RenderPresent(renderer);
+            fadeClock.Advance(fade);
         }
+
+        // Out in full on the way out (FUN_00014f44's last FUN_0004eefc).
+        if (!result.windowClosed && !ScreenFadeDraw::RunFadeOut(renderer, fade, drawFrame)) { result.windowClosed = true; }
 
         if (background) { SDL_DestroyTexture(background); }
         return result;

@@ -7,6 +7,7 @@
 #include "../Formats/BndTextureLoader.h"
 #include "../Formats/ModelLoader.h"
 #include "../Formats/RenderMesh.h"
+#include "../Formats/ScreenFade.h"
 #include "../Formats/ObjLoader.h"
 
 #include <cctype>
@@ -92,6 +93,9 @@ namespace ALTEngine::Renderer
             // The animated faces' vertex runs in cpuVertices, so an animator
             // moving rewrites only those (TickLevelLights).
             std::vector<ALTEngine::Formats::RenderMesh::FaceVertices> animatedFaces;
+            // Takes the screen fade on its colours (SetScreenFade). Not the
+            // translucent fill, which never reads them (span 0x5db67).
+            bool fades = true;
         };
 
         struct LoadedLevel
@@ -280,6 +284,8 @@ namespace ALTEngine::Renderer
         SDL_GPUTextureFormat depthFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
         std::unordered_map<ModelCacheKey, LoadedModel, ModelCacheKeyHash> loadedModels;
         std::unordered_map<std::string, LoadedLevel> loadedLevels;
+        // The screen fade every primitive's colour goes through (FUN_0004f020).
+        ALTEngine::Formats::ScreenFade::State screenFade;
 
         // Offscreen render target cache - recreated only if the requested
         // size changes, since the menu is expected to call RenderToRgba
@@ -365,7 +371,7 @@ namespace ALTEngine::Renderer
         struct VertexRange { const LevelSubGroup* group; uint32_t first; uint32_t count; };
 
         // `count` vertices from `data` into `buffer` from vertex `first`.
-        struct VertexSpan { SDL_GPUBuffer* buffer; const ALTEngine::Formats::RenderVertex* data; uint32_t first; uint32_t count; };
+        struct VertexSpan { SDL_GPUBuffer* buffer; const ALTEngine::Formats::RenderVertex* data; uint32_t first; uint32_t count; bool fade = false; };
         // All of them through the one kept transfer buffer, in one copy pass.
         void UploadVertexSpans(const std::vector<VertexSpan>& spans)
         {
@@ -391,9 +397,19 @@ namespace ALTEngine::Renderer
             auto* mapped = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device, vertexUploadBuffer, cycle));
             if (!mapped) { return; }
             size_t offset = 0;
+            const bool fading = !ALTEngine::Formats::ScreenFade::Identity(screenFade);
             for (const auto& span : spans)
             {
                 std::memcpy(mapped + offset, span.data, size_t(span.count) * STRIDE);
+                // The kept vertices stay as lit; what goes up carries the fade.
+                if (fading && span.fade)
+                {
+                    auto* out = reinterpret_cast<ALTEngine::Formats::RenderVertex*>(mapped + offset);
+                    for (uint32_t k = 0; k < span.count; ++k)
+                    {
+                        ALTEngine::Formats::ScreenFade::ApplyMultiplier(screenFade, out[k].r, out[k].g, out[k].b);
+                    }
+                }
                 offset += size_t(span.count) * STRIDE;
             }
             SDL_UnmapGPUTransferBuffer(device, vertexUploadBuffer);
@@ -420,7 +436,7 @@ namespace ALTEngine::Renderer
             spans.reserve(ranges.size());
             for (const auto& r : ranges)
             {
-                spans.push_back({ r.group->vertexBuffer, r.group->cpuVertices.data() + r.first, r.first, r.count });
+                spans.push_back({ r.group->vertexBuffer, r.group->cpuVertices.data() + r.first, r.first, r.count, r.group->fades });
             }
             UploadVertexSpans(spans);
         }
@@ -431,7 +447,7 @@ namespace ALTEngine::Renderer
             spans.reserve(uploads.size());
             for (const auto& [group, vertices] : uploads)
             {
-                spans.push_back({ group->vertexBuffer, vertices->data(), 0, static_cast<uint32_t>(vertices->size()) });
+                spans.push_back({ group->vertexBuffer, vertices->data(), 0, static_cast<uint32_t>(vertices->size()), group->fades });
             }
             UploadVertexSpans(spans);
         }
@@ -1638,6 +1654,7 @@ namespace ALTEngine::Renderer
             if (!translucentMeshes[i].vertices.empty())
             {
                 loadedLevel.translucentGroups[i] = UploadMeshWithTexture(translucentMeshes[i], textureSet.textures[i]);
+                loadedLevel.translucentGroups[i].fades = false;
                 if (loadedLevel.translucentGroups[i].vertexBuffer) { anyGroupUsed = true; AttachCulling(loadedLevel.translucentGroups[i], translucentMeshes[i]); }
             }
             // The opaque faces' copy: every texel drawn, palette word 0 as the
@@ -1959,6 +1976,29 @@ namespace ALTEngine::Renderer
         }
         ReuploadVerticesBatch(uploads);
         return true;
+    }
+
+    void ModelRenderer::SetScreenFade(const ALTEngine::Formats::ScreenFade::State& fade)
+    {
+        if (fade == screenFade) { return; }
+        screenFade = fade;
+        if (!device) { return; }
+        // Every kept level vertex goes up again through the fade (the models'
+        // and sprites' colours take it as they are drawn).
+        std::vector<VertexUpload> uploads;
+        for (auto& [key, level] : loadedLevels)
+        {
+            if (level.geometryOverridden) { continue; }
+            for (auto* groups : { &level.groups, &level.cutoutGroups })
+            {
+                for (LevelSubGroup& group : *groups)
+                {
+                    if (!group.vertexBuffer || group.cpuVertices.empty()) { continue; }
+                    uploads.emplace_back(&group, &group.cpuVertices);
+                }
+            }
+        }
+        ReuploadVerticesBatch(uploads);
     }
 
     void ModelRenderer::ToggleLevelLight(const std::string& cacheKey, int lightIndex, int delta)
@@ -2374,6 +2414,7 @@ namespace ALTEngine::Renderer
                     for (const auto& c : entry.corner) { sum[0] += c.r; sum[1] += c.g; sum[2] += c.b; }
                     for (int k = 0; k < 3; ++k) { tint[k] = sum[k] / (4.0f * ALTEngine::Formats::LIGHT_COLOUR_NEUTRAL); }
                 }
+                ALTEngine::Formats::ScreenFade::ApplyMultiplier(screenFade, tint[0], tint[1], tint[2]);
                 float fog[8] = { fogEnabled, fogStart, fogRange, 0.0f, tint[0], tint[1], tint[2], 0.0f };
                 SDL_PushGPUFragmentUniformData(cmd, 0, fog, sizeof(fog));
             }
@@ -2513,6 +2554,12 @@ namespace ALTEngine::Renderer
                             vertex.x = px[corner]; vertex.y = py[corner]; vertex.z = pz[corner];
                             vertex.u = u[corner];  vertex.v = v[corner];
                             vertex.r = sprite.r;   vertex.g = sprite.g;  vertex.b = sprite.b;
+                            // The screen fade, except on the half-blended
+                            // ones, which ignore their colour.
+                            if (!sprite.halfBlend)
+                            {
+                                ALTEngine::Formats::ScreenFade::ApplyMultiplier(screenFade, vertex.r, vertex.g, vertex.b);
+                            }
                             verts.push_back(vertex);
                         }
                         indices.push_back(base + 0); indices.push_back(base + 1); indices.push_back(base + 2);

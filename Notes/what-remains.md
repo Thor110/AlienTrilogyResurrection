@@ -718,9 +718,16 @@ reset on every damage entry; the sound curve (0x5b032: ((v>>3)*slider*10)>>10, h
 overlap (FUN_0005b0a6), 7 pool voices + the player's, a new sound dropped when all are busy.
 
 Left from that review, to look at:
-1. **Screen fades** (FUN_0004eec0 in, 5 steps of 0x55 off each colour; FUN_0004eefc out, 25 steps of 11, or 44
-   for a primitive with a channel over 0x7e; FUN_0004f020 applies them per primitive): level start and end,
-   briefing, assessment, death, splash. Not ported at all.
+1. **Screen fades - done (zip 177).** Formats/ScreenFade.h holds FUN_0004eec0/4eefc/4ef64/4f020: in, 5 steps
+   of 0x55 off each colour; out, 25 steps of 11 (44 for a colour with a channel over 0x7e); black held after
+   an out. Applied per colour to the level's vertices (on upload), the models' tints, the sprites (not the
+   half-blended ones) and the weapon's light; the HUD's layers, tracker and map at the neutral rate; 2D
+   screens by a multiply over the frame (ScreenFadeDraw). Wired: the level (in at the start; out for 17
+   passes on every end but a closed window - the world held still meanwhile, where the original runs it with
+   the last input), the Mission Assessment (in, out in full), the end-level prompt (30 passes black, in, out).
+   Not wired: the menus and splash screens (FUN_00010c8c, FUN_000402c0), the save/load screens (FUN_00012d44,
+   FUN_00013284, FUN_00016dc8), the multiplayer results (FUN_0001560c, not ported). One step a drawn frame,
+   at most 34.87 a second.
 2. **The muzzle test** (FUN_0002b534): a player's round is tested at the muzzle and one step on before it is
    linked, freed silently on a hit. The port starts it at the muzzle untested, so it reaches one step less and
    misses a target pressed against the muzzle. Needs a silent mode in the particle callback.

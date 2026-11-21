@@ -790,6 +790,9 @@ namespace ALTEngine::Renderer
         };
 
         SDL_RenderTexture(renderer, hudTarget, nullptr, &full);
+        // The screen fade on the neutral layers (SetFade).
+        const Uint8 fade = static_cast<Uint8>(std::lround(std::clamp(fadeFactor, 0.0f, 1.0f) * 255.0f));
+        for (SDL_Texture* layer : { panelTarget, overlayTarget, textTarget }) { SDL_SetTextureColorMod(layer, fade, fade, fade); }
         if (hudScale == 1.0f)
         {
             SDL_RenderTexture(renderer, panelTarget, nullptr, &full);
@@ -806,6 +809,7 @@ namespace ALTEngine::Renderer
         SDL_RenderTexture(renderer, overlayTarget, nullptr, &full);
         if (hudScale == 1.0f) { SDL_RenderTexture(renderer, textTarget, nullptr, &full); }
         else { blitPart(textTarget, 0.0f, 0.0f, HUD_VIRTUAL_WIDTH, HUD_VIRTUAL_HEIGHT, HUD_CORNER_TOP_LEFT); }
+        for (SDL_Texture* layer : { panelTarget, overlayTarget, textTarget }) { SDL_SetTextureColorMod(layer, 255, 255, 255); }
     }
 
     void HudRenderer::DrawEdgeStrips(SDL_Renderer* renderer, int left, int right, int top, int bottom,
@@ -987,6 +991,10 @@ namespace ALTEngine::Renderer
         };
 
         SDL_SetTextureAlphaMod(sheet, static_cast<Uint8>(HUD_TRACKER_ALPHA));
+        // The screen fade (SetFade): the dish, its strips and the contacts are
+        // neutral primitives like the panels.
+        const Uint8 fade = static_cast<Uint8>(std::lround(std::clamp(fadeFactor, 0.0f, 1.0f) * 255.0f));
+        SDL_SetTextureColorMod(sheet, fade, fade, fade);
 
         for (const Quad& q : quads)
         {
@@ -1014,6 +1022,7 @@ namespace ALTEngine::Renderer
         }
 
         SDL_SetTextureAlphaMod(sheet, 255);
+        SDL_SetTextureColorMod(sheet, 255, 255, 255);
 
         // Contacts. Range gate, world-to-cell shift and rotation by the player's
         // facing, all as FUN_0003a008 does - so the dish is always
@@ -1027,7 +1036,7 @@ namespace ALTEngine::Renderer
         // BLENDMODE_NONE because the message panel drawn earlier leaves BLEND set,
         // which washed these out.
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_SetRenderDrawColor(renderer, fade, fade, fade, 255);
         float sinYaw = std::sin(-playerYaw);
         float cosYaw = std::cos(-playerYaw);
 
