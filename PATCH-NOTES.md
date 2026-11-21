@@ -178,6 +178,13 @@ A review of every routine in the original against ALTEngine's, one block of the 
   difficulty; any key ends it. "DEMO" blinks at the top of the screen, as in the original.
 - **A round fired at a creature right against the gun now hits it.** The original tests a new round at the
   muzzle and one step out before it flies; ALTEngine now does the same.
+- **The demos play at the pace they were recorded at**: with the original's speed compensation on (and
+  without Faster Xenomorphs), whatever your own setting. Under the one-pass pacing the creatures got twice
+  the time against each recorded keypress, and the first face hugger was on the player before the first shot.
+- **The creatures move on the same pass as the gun fires**, the second of each pair, as in the original
+  (they were on the first).
+- **A gunshot's (or a door's) noise lasts as long as in the original.** With speed compensation on it was
+  dying away twice as fast, so creatures stopped hearing it early.
 - **The scores after a deathmatch**: the original's results screen - who killed whom, each player's own
   deaths taken off in their own column, and the total, highest first, in each player's colour. Any key, or
   twenty seconds, goes on. (It has room for all eight of ALTEngine's players.)

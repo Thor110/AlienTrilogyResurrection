@@ -336,7 +336,8 @@ namespace ALTEngine::Screens
             runtime.SetState(STATE_EMPTY);
         }
 
-        // FUN_0003e698 decrements DAT_000b0adc by one per tick.
+        // FUN_0003e698 decrements DAT_000b0adc by one per drawn frame (it runs
+        // on the last pass only, 0x3ed4b).
         //
         // WHAT IT IS FOR IS INFERENCE, NOT TRACED. It is set per shot, decays,
         // and is ordered exactly the way the weapons are ordered by loudness -

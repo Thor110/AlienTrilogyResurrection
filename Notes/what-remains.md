@@ -757,13 +757,27 @@ Left from that review, to look at:
   last or odd passes only (firing, creatures). The port takes one word a player tick (69.74 Hz, a pass at the
   design point): 900 words, 12.9 s. The original in DOSBox (cycles 120000) drew a frame every three interrupts,
   two passes a frame, so its 1.1.1 demo took about 19 s of wall clock.
-- 1.1.1 compared, port against DOSBox: the same walk through the first door (words 36-46, use) and down the
-  corridor. They part at the first face hugger (fire bursts from word 168): the original kills it in three
-  rounds and takes no damage; in the port it is already walking up before the first burst, takes four rounds,
-  and reaches the player (100 -> 95 -> 90). After that the port's path ends in a corner and misses the
-  cartridges, the clips and the terminal the original reaches. The lead: when that hugger wakes and how fast
-  it closes (its task and the RNG it draws - the port's creatures do not share the original's one generator).
-  The muzzle test (below) was added for this and did not change it.
+- 1.1.1 compared, port against DOSBox (zip 181). Traced with a per-word log of the player and the creatures:
+  1. The port played the demo under its default -so pacing (one pass per two interrupts, a creature tick
+     every pass). The recordings were made with speed compensation on (two passes a frame, the creatures on
+     one), so every recorded word got a whole creature tick instead of half: the first hugger closed twice as
+     fast. FIXED: a demo now plays with speed compensation on and Faster Xenomorphs off.
+  2. The creatures' pass was the first of each pair; the original's is the second (the pass counter runs
+     down to 1 and `test [0x6164], 1` picks pass 1, the drawing pass, the same pass as firing). FIXED.
+  3. The weapon noise (DAT_000b0adc) counted down every pass; FUN_0003e698 runs on the last pass only
+     (0x3ed4b, 0x3ee2a, 0x400d9), so a noise lasts its count in frames. FIXED. (A door setting off from shut
+     stores 0x200 there too, 0x29243 - so the first door's noise is what wakes L111's first hugger from
+     8396 out, its record's own +0x50, rather than half that.)
+  After these the walk matches much further: the first hugger now leaps (as it does in the original, ~4.2 s
+  into its recording), the clips and the 9mm ammunition are picked up (060, then 090) and health stays near
+  100. What still parts: the original's rounds hit the hugger mid-leap; the port's pass 350-450 units to its
+  side, because it came up a different line (its waypoints are random draws, FUN_00032fcc / FUN_000333c8 /
+  FUN_00033ad0), lands its hit (word 236, cause 4), and the run ends short of the terminal at 92.
+  LEFT: the creatures' random draws. The port's stand-in is an LCG seeded 0x1234567 (GameplayScreen
+  `creatureRandom`); the original has one generator (FUN_000100ec, state at 0x109b0-0x109c4), reseeded at
+  each level start (0x1072d from 0x4dd0) and drawn by the particles, the weapons, the sounds and the
+  creatures in one order. Matching a demo beyond the first random waypoint needs that generator and every
+  caller's draws in the original's order.
 - Results (Screens/MultiplayerResultsScreen): FUN_0001560c / FUN_00015228, layout exact for up to four players;
   OURS: eight players (columns close up), and no "Waiting for players" handshake between machines.
 

@@ -447,6 +447,13 @@ namespace ALTEngine::Screens
         // base tick is half as fast. Modern: Speed Compensation turns it off,
         // for the original's default (the player at twice the creatures' rate).
         bool speedCompensationOff = true;
+        // An attract demo plays as it was recorded: with the original's own
+        // default, speed compensation on (two passes a frame at the design
+        // point, a word each, the creatures on one of them), and without
+        // Faster Xenomorphs. Under the -so pacing every word would get a
+        // creature tick of its own, and the creatures would close twice as
+        // fast against the recorded keys.
+        const bool demoPacing = !pendingDemo.empty();
         // Modern: Save Anywhere. Opening the pause menu makes its Save Game
         // keep the level as it stands (Screens/LevelSnapshot.h).
         bool saveAnywhere = false;
@@ -458,7 +465,10 @@ namespace ALTEngine::Screens
         // (`test byte [0x6164], 1` at 0x342c1 and 0x2d929; firing and the
         // weapon's animation on the drawing pass) - half the rate of the
         // player, the doors and the lifts. A fire-on-press weapon's press
-        // waits for the next such tick rather than being lost.
+        // waits for the next such tick rather than being lost. The pass
+        // counter runs down to 1, so at two passes a frame the odd pass is
+        // the second, the drawing pass: the creatures move after the player's
+        // second step of the frame, not its first.
         unsigned logicTick = 0;
         // Faster Xenomorphs: of the passes the original skips for creatures,
         // the aliens take one in FASTER_XENO_OFF_PASS_EVERY, so they run at
@@ -624,6 +634,7 @@ namespace ALTEngine::Screens
             playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
             fasterXenomorphs = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterXenomorphs);
             speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
+            if (demoPacing) { speedCompensationOff = false; fasterXenomorphs = false; }
             saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
             {
@@ -2901,7 +2912,7 @@ namespace ALTEngine::Screens
                     }
                     if (!levelComplete && !playerDead && !syncing) { levelSeconds += playerTickLength; }
                     // The original's alternate pass (see logicTick).
-                    const bool halfPass = ((logicTick++ & 1u) == 0) || speedCompensationOff;
+                    const bool halfPass = ((logicTick++ & 1u) != 0) || speedCompensationOff;
                     passHalves.push_back(halfPass);
                     const bool fasterXenoPass = fasterXenomorphs && !halfPass
                         && (fasterXenoOffPass++ % FASTER_XENO_OFF_PASS_EVERY) == 0;
@@ -3497,7 +3508,9 @@ namespace ALTEngine::Screens
                             weaponSwitch.Begin(target);
                         }
                     }
-                    WS::TickNoise(weaponRuntime);
+                    // On the drawing pass only (0x3ed4b: FUN_0003e698 when
+                    // [0x6164] is 1), so a noise lasts its count in frames.
+                    if (halfPass) { WS::TickNoise(weaponRuntime); }
 
                     // Weapon audio.
                     //
