@@ -164,6 +164,8 @@ A review of every routine in the original against ALTEngine's, one block of the 
 - The main menu fades in as it opens and fades out when a game starts (Start Game or a level from Level
   Select); the load screen fades out once a save is chosen. Moving between the menu's own pages (Options, the
   load screen, multiplayer) does not fade, as in the original.
+- Killed in a network game, the screen fades out where you fell and fades in again where you come back, as in
+  the original. You stay down (no moving, firing or picking up) until it is black; the frag is scored at once.
 
 **Multiplayer**
 - A hit from another player names them as the attacker even when it does no damage; a frag goes to the player

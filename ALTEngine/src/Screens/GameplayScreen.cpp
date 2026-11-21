@@ -1730,31 +1730,46 @@ namespace ALTEngine::Screens
         // - see GameOverSequence. The clip is chosen by HOW you died, which
         // ApplyDamage records. Checked wherever damage is dealt; the sequence
         // itself runs once the frame is done.
+        // THE SCREEN FADES (Formats::ScreenFade) - see the loop below.
+        namespace SF = ALTEngine::Formats::ScreenFade;
+        SF::State screenFade;
+        // Multiplayer: back at a random path node with fresh health
+        // (Game::MultiplayerSpawn) - once the death's fade out is done (0x1038a
+        // starts it; the player's task respawns at 0x3eefe only when cc2 & 8 and
+        // the fade has finished), fading in again (FUN_000402c0, 0x40325).
+        bool netRespawnPending = false;
+        auto netRespawn = [&]() {
+            hudState.dead = false;
+            hudState.health = 100;
+            camera.x = spawnX; camera.z = spawnZ; camera.yaw = spawnYaw;
+            standAt(spawnFeetY);
+            // Whatever pushed the dead player is spent.
+            knockbackStrength = 0;
+            // Co-operative: back at the level's start.
+            if (session && !session->Coop())
+            {
+                float sx = 0, sz = 0, sy = 0;
+                if (spawnAtNode(false, sx, sz, sy)) { camera.x = sx; camera.z = sz; standAt(sy); }
+            }
+            camera.y = playerFeetY + EYE_HEIGHT;
+            playerCam.yaw = static_cast<int>(std::lround(camera.yaw * (4096.0f / 6.28318530718f))) & 0xfff;
+            SF::StartIn(screenFade);
+        };
+
         auto checkPlayerDeath = [&]() {
-            if (!hudState.dead || playerDead) { return; }
+            if (!hudState.dead || playerDead || netRespawnPending) { return; }
             if (session && session->Connected())
             {
-                // Multiplayer: the death is scored - to whoever last hit us,
-                // or against us for anything else - and we come back at a
-                // random path node with fresh health (Game::MultiplayerSpawn).
+                // Multiplayer: the death is scored at once - to whoever last
+                // hit us, or against us for anything else - and the screen
+                // fades out; the player stays down until it is black.
                 const auto me = static_cast<uint8_t>(session->LocalSlot());
                 const auto killer = hudState.attacker >= 0 ? static_cast<uint8_t>(hudState.attacker) : me;
                 session->SendFrag(killer, me);
                 hudState.attacker = -1;
-                hudState.dead = false;
-                hudState.health = 100;
-                camera.x = spawnX; camera.z = spawnZ; camera.yaw = spawnYaw;
-                standAt(spawnFeetY);
-                // Whatever pushed the dead player is spent.
                 knockbackStrength = 0;
-                // Co-operative: back at the level's start.
-                if (!session->Coop())
-                {
-                    float sx = 0, sz = 0, sy = 0;
-                    if (spawnAtNode(false, sx, sz, sy)) { camera.x = sx; camera.z = sz; standAt(sy); }
-                }
-                camera.y = playerFeetY + EYE_HEIGHT;
-                playerCam.yaw = static_cast<int>(std::lround(camera.yaw * (4096.0f / 6.28318530718f))) & 0xfff;
+                netRespawnPending = true;
+                SF::StartOut(screenFade);
                 return;
             }
             // The level ends once the dying fall has run (see the player pass).
@@ -2029,8 +2044,6 @@ namespace ALTEngine::Screens
         // counted up 0x100 a pass past 0x1000, 0x10b7f), by when every colour
         // is black. OURS: the world holds still for those passes; the original
         // runs them with the last input held.
-        namespace SF = ALTEngine::Formats::ScreenFade;
-        SF::State screenFade;
         SF::StartIn(screenFade);
         ALTEngine::Screens::ScreenFadeDraw::Clock fadeClock;
         fadeClock.Start();
@@ -2187,6 +2200,11 @@ namespace ALTEngine::Screens
             // One fade step a frame of the original's (FUN_0004ef64); none while
             // the Pause key holds the game (FUN_0004f81c spins without it).
             if (!pauseFrozen) { fadeClock.Advance(screenFade); }
+            if (netRespawnPending && !SF::Busy(screenFade) && running)
+            {
+                netRespawnPending = false;
+                netRespawn();
+            }
             if (endFading && (!SF::Busy(screenFade) || screenFade.step <= SF::OUT_STEPS - END_FADE_PASSES))
             {
                 endFading = false;
@@ -2973,7 +2991,7 @@ namespace ALTEngine::Screens
                     bool floorHurting = false;
 
                     // Waiting at the exit: still.
-                    if (exitWaiting || syncing) { pcInput = PC::Input{}; }
+                    if (exitWaiting || syncing || netRespawnPending) { pcInput = PC::Input{}; }
                     if (playerDead)
                     {
                         // FUN_0003ee4c replaces the player's task once they
@@ -3179,7 +3197,7 @@ namespace ALTEngine::Screens
                     // property of the key. See WeaponSystem::FireMode.
                     namespace WS = ALTEngine::Screens::WeaponSystem;
 
-                    const bool fireHeld = (keys[keyBindings.GetKey(InputAction::Fire1)] || mouseFire1) && !exitWaiting && !syncing && !playerDead;
+                    const bool fireHeld = (keys[keyBindings.GetKey(InputAction::Fire1)] || mouseFire1) && !exitWaiting && !syncing && !playerDead && !netRespawnPending;
                     const bool firePressed = fireHeld && !firePressedLastTick;
                     // The flamethrower in hand with the trigger up, and not
                     // empty or being raised: FUN_0003efcc's arm 4 stops the
@@ -3473,7 +3491,7 @@ namespace ALTEngine::Screens
                     // anything yet: FUN_0003efcc's case 2 spends a grenade,
                     // sets state 3 and starts that state's animation - which is
                     // the sequence carrying the 0401gren sound cue.
-                    const bool altFireHeld = (keys[keyBindings.GetKey(InputAction::Fire2)] || mouseFire2) && !exitWaiting && !syncing && !playerDead;
+                    const bool altFireHeld = (keys[keyBindings.GetKey(InputAction::Fire2)] || mouseFire2) && !exitWaiting && !syncing && !playerDead && !netRespawnPending;
                     const bool altFirePressed = altFireHeld && !altFirePressedLastTick;
                     altFirePressedLastTick = altFireHeld;
 
@@ -5444,7 +5462,7 @@ namespace ALTEngine::Screens
                     {
                         // As often as the ticks, and not while dying (0x3c5d7:
                         // refused while cc0 has 0x20, 0x40 or 0x80000).
-                        if (playerTicksThisFrame == 0 || playerDead) { break; }
+                        if (playerTicksThisFrame == 0 || playerDead || netRespawnPending) { break; }
                         if (live.collected || live.contained || live.waitingOnTrigger) { continue; }
                         if (live.placedIndex >= placedObjects.size()) { continue; }
                         {

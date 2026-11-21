@@ -728,8 +728,10 @@ Left from that review, to look at:
    Zip 178: the main menu - in as it opens (FUN_00010e38, 0x1150b; not when coming back from its own pages:
    MenuController::SkipNextFadeIn), out when it starts a game (0x12f70, Start Game and Level Select); the
    load screen out once a save is chosen (FUN_00016dc8, 0x17033; a load from the pause menu then skips the
-   level's own fade out). Left: the attract demo's start (0x13802, no demos), a network respawn's out and in
-   (0x1038a, FUN_000402c0 0x40325), the multiplayer results (FUN_0001560c, not ported). One step a drawn
+   level's own fade out). Zip 179: a network respawn - out on the death (0x1038a), the
+   respawn once the fade is done (0x3eefe), in after it (FUN_000402c0, 0x40325); OURS: no "press a key" wait
+   between, as before. Left: the attract demo's start (0x13802, no demos), the multiplayer results
+   (FUN_0001560c, not ported). One step a drawn
    frame, at most 34.87 a second.
 2. **The muzzle test** (FUN_0002b534): a player's round is tested at the muzzle and one step on before it is
    linked, freed silently on a hit. The port starts it at the muzzle untested, so it reaches one step less and
