@@ -725,9 +725,12 @@ Left from that review, to look at:
    screens by a multiply over the frame (ScreenFadeDraw). Wired: the level (in at the start; out for 17
    passes on every end but a closed window - the world held still meanwhile, where the original runs it with
    the last input), the Mission Assessment (in, out in full), the end-level prompt (30 passes black, in, out).
-   Not wired: the menus and splash screens (FUN_00010c8c, FUN_000402c0), the save/load screens (FUN_00012d44,
-   FUN_00013284, FUN_00016dc8), the multiplayer results (FUN_0001560c, not ported). One step a drawn frame,
-   at most 34.87 a second.
+   Zip 178: the main menu - in as it opens (FUN_00010e38, 0x1150b; not when coming back from its own pages:
+   MenuController::SkipNextFadeIn), out when it starts a game (0x12f70, Start Game and Level Select); the
+   load screen out once a save is chosen (FUN_00016dc8, 0x17033; a load from the pause menu then skips the
+   level's own fade out). Left: the attract demo's start (0x13802, no demos), a network respawn's out and in
+   (0x1038a, FUN_000402c0 0x40325), the multiplayer results (FUN_0001560c, not ported). One step a drawn
+   frame, at most 34.87 a second.
 2. **The muzzle test** (FUN_0002b534): a player's round is tested at the muzzle and one step on before it is
    linked, freed silently on a hit. The port starts it at the muzzle untested, so it reaches one step less and
    misses a target pressed against the muzzle. Needs a silent mode in the particle callback.

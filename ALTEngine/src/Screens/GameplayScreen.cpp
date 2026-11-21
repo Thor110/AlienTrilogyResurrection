@@ -2041,7 +2041,10 @@ namespace ALTEngine::Screens
         // runs first (not for a closed window).
         auto keepGoing = [&]() {
             if (running || endFading) { return true; }
-            if (endFadeDone || result.outcome == GameplayOutcome::WindowClosed || !levelReady) { return false; }
+            // A game loaded from the pause menu: its load screen has already
+            // faded out (SaveSlotScreen).
+            if (endFadeDone || result.outcome == GameplayOutcome::WindowClosed
+                || result.outcome == GameplayOutcome::LoadGame || !levelReady) { return false; }
             endFading = true;
             SF::StartOut(screenFade);
             return true;

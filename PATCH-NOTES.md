@@ -161,6 +161,9 @@ A review of every routine in the original against ALTEngine's, one block of the 
   the original's moment of black between them. As in the original, it is not a black curtain: each colour is
   taken down by a fixed amount a frame, so bright things (the HUD, your gun, lit walls) go first and dim
   corners last. Glass, flames and steam are drawn without that colour in the original and stay as they are.
+- The main menu fades in as it opens and fades out when a game starts (Start Game or a level from Level
+  Select); the load screen fades out once a save is chosen. Moving between the menu's own pages (Options, the
+  load screen, multiplayer) does not fade, as in the original.
 
 **Multiplayer**
 - A hit from another player names them as the attacker even when it does no damage; a frag goes to the player

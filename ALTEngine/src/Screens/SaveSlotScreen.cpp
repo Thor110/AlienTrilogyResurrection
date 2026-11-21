@@ -3,6 +3,7 @@
 #include "MenuStyle.h"
 #include <utility>
 #include "MenuBackground.h"
+#include "ScreenFadeDraw.h"
 #include "../Audio/SfxPlayer.h"
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
@@ -118,6 +119,35 @@ namespace ALTEngine::Screens
         SaveSlotResult result;
         bool running = true;
 
+        auto drawFrame = [&]() {
+                DrawMenuBackground(renderer, background, bgW, bgH);
+
+                int scale = ComputeMenuScale(renderer);
+                int rowHeight = TextHeight(scale) + scale * 4;
+                int margin = scale * 8;
+
+                int windowW = 0, windowH = 0;
+                SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
+
+                // Model viewport fills the screen, drawn as a background
+                // layer before any text - fixed position/size, not tied to
+                // cursor position or any other dynamic value (Edward, 2026:
+                // models should fill "the entire background or thereabouts",
+                // and shouldn't jump around while navigating).
+                float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f;
+                ALTEngine::Renderer::DrawModelPreview(renderer, modelSource, 0, 0, windowW, windowH, rotationAngle);
+
+                std::string title = (mode == SaveSlotMode::Load) ? "Load Game" : "Save Game";
+                DrawBitmapText(renderer, title, (windowW - TextWidth(title, scale)) / 2, margin, scale, COLOR_BRIGHT);
+
+                for (int i = 0; i < 10; ++i)
+                {
+                    std::string line = std::to_string(i + 1) + ": " + (slots[static_cast<size_t>(i)].used ? slots[static_cast<size_t>(i)].name : "-UNUSED-");
+                    Color color = (i == cursor) ? COLOR_BRIGHT : COLOR_DIM;
+                    DrawBitmapText(renderer, line, margin, margin + rowHeight * 3 + i * rowHeight, scale, color);
+                }
+        };
+
         while (running)
         {
             SDL_Event event;
@@ -159,34 +189,16 @@ namespace ALTEngine::Screens
             }
             if (!running) { break; }
 
-            DrawMenuBackground(renderer, background, bgW, bgH);
-
-            int scale = ComputeMenuScale(renderer);
-            int rowHeight = TextHeight(scale) + scale * 4;
-            int margin = scale * 8;
-
-            int windowW = 0, windowH = 0;
-            SDL_GetRenderOutputSize(renderer, &windowW, &windowH);
-
-            // Model viewport fills the screen, drawn as a background
-            // layer before any text - fixed position/size, not tied to
-            // cursor position or any other dynamic value (Edward, 2026:
-            // models should fill "the entire background or thereabouts",
-            // and shouldn't jump around while navigating).
-            float rotationAngle = static_cast<float>(SDL_GetTicks()) / 1000.0f;
-            ALTEngine::Renderer::DrawModelPreview(renderer, modelSource, 0, 0, windowW, windowH, rotationAngle);
-
-            std::string title = (mode == SaveSlotMode::Load) ? "Load Game" : "Save Game";
-            DrawBitmapText(renderer, title, (windowW - TextWidth(title, scale)) / 2, margin, scale, COLOR_BRIGHT);
-
-            for (int i = 0; i < 10; ++i)
-            {
-                std::string line = std::to_string(i + 1) + ": " + (slots[static_cast<size_t>(i)].used ? slots[static_cast<size_t>(i)].name : "-UNUSED-");
-                Color color = (i == cursor) ? COLOR_BRIGHT : COLOR_DIM;
-                DrawBitmapText(renderer, line, margin, margin + rowHeight * 3 + i * rowHeight, scale, color);
-            }
-
+            drawFrame();
             SDL_RenderPresent(renderer);
+        }
+
+        // A save chosen to load: the screen fades out before the level is
+        // loaded (FUN_00016dc8, 0x17033). Saving, or backing out, does not.
+        if (mode == SaveSlotMode::Load && result.selectedSlot && !result.windowClosed)
+        {
+            ALTEngine::Formats::ScreenFade::State fade;
+            if (!ScreenFadeDraw::RunFadeOut(renderer, fade, drawFrame)) { result.windowClosed = true; }
         }
 
         if (background) { SDL_DestroyTexture(background); }

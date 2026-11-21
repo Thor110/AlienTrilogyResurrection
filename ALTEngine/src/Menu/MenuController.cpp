@@ -14,6 +14,7 @@
 #include "../Renderer/ModelRenderer.h"
 #include "../Renderer/ModelPreview.h"
 #include "../Screens/MenuBackground.h"
+#include "../Screens/ScreenFadeDraw.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -625,6 +626,8 @@ namespace ALTEngine::Menu
         }
     }
 
+    bool MenuController::skipNextFadeIn = false;
+
     MenuResult MenuController::Run(
         const std::filesystem::path& cdDirectory,
         RenderSettings& renderSettings,
@@ -869,8 +872,30 @@ namespace ALTEngine::Menu
         MenuResult result;
         bool running = true;
 
-        while (running)
+        // THE SCREEN FADES (Formats::ScreenFade). The main menu fades in as it
+        // opens (FUN_00010e38, 0x1150b) and fades out when it starts a game
+        // (0x12f70: the level chosen, then FUN_0004eefc). Its pages - Options,
+        // the load screen - come and go without one, as do the pause menu's
+        // Options.
+        namespace SF = ALTEngine::Formats::ScreenFade;
+        SF::State fade;
+        if (!startInOptionsOnly && !skipNextFadeIn) { SF::StartIn(fade); }
+        skipNextFadeIn = false;
+        ALTEngine::Screens::ScreenFadeDraw::Clock fadeClock;
+        fadeClock.Start();
+        bool fadingOut = false;
+        bool fadeOutDone = false;
+
+        while (true)
         {
+            if (!running && !fadingOut)
+            {
+                const bool startsGame = !result.windowClosed && !startInOptionsOnly && !fadeOutDone
+                    && (result.action == "Start Game" || result.action == "Level Select");
+                if (!startsGame) { break; }
+                fadingOut = true;
+                SF::StartOut(fade);
+            }
             MusicPlayer::Update();
 
             // Shared Enter/Escape logic, callable from both their own
@@ -1186,6 +1211,12 @@ namespace ALTEngine::Menu
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
+                // Fading out: only closing the window is heard.
+                if (fadingOut)
+                {
+                    if (event.type == SDL_EVENT_QUIT) { result.windowClosed = true; fadingOut = false; }
+                    continue;
+                }
                 if (event.type == SDL_EVENT_QUIT) { result.windowClosed = true; running = false; continue; }
 
                 if (awaitingRebind)
@@ -1293,7 +1324,7 @@ namespace ALTEngine::Menu
                     }
                 }
             }
-            if (!running) { break; }
+            if (!running && !fadingOut) { continue; }   // to the fade out, or out
 
             int scale = ComputeMenuScale(renderer);
             int rowHeight = TextHeight(scale) + scale * 6;
@@ -1451,7 +1482,10 @@ namespace ALTEngine::Menu
                 DrawBitmapText(renderer, ALTEngine::Bootstrap::Tr(ALTEngine::Bootstrap::StringId::PressEscToGoBack, language), scale * 8, scale * 8 + rowHeight * 3, scale, COLOR_GREEN);
             }
 
+            ALTEngine::Screens::ScreenFadeDraw::Overlay(renderer, fade);
             SDL_RenderPresent(renderer);
+            fadeClock.Advance(fade);
+            if (fadingOut && !SF::Busy(fade)) { fadingOut = false; fadeOutDone = true; }
         }
 
         // Only stop what this screen started. The PlayLooped above is already

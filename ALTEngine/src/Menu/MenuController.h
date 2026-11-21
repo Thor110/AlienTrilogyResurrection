@@ -30,6 +30,10 @@ namespace ALTEngine::Menu
     class MenuController
     {
     public:
+        // The next opening of the main menu comes back from one of its own
+        // pages (the load screen, multiplayer) and does not fade in.
+        static void SkipNextFadeIn() { skipNextFadeIn = true; }
+
         static MenuResult Run(
             const std::filesystem::path& cdDirectory,
             ALTEngine::Bootstrap::RenderSettings& renderSettings,
@@ -42,5 +46,7 @@ namespace ALTEngine::Menu
             ALTEngine::Bootstrap::Language& language,
             std::vector<int>& mainPath,
             bool startInOptionsOnly = false);
+    private:
+        static bool skipNextFadeIn;
     };
 }

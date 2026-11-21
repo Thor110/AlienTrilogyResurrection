@@ -857,6 +857,9 @@ int main(int, char**)
                 PauseBeforeExit();
                 return 1;
             }
+            // Back on the main menu, which the original's multiplayer pages
+            // never left: no fade in.
+            MenuController::SkipNextFadeIn();
             continue; // Escape/Back - return to the main menu, not exit
         }
 
@@ -878,6 +881,9 @@ int main(int, char**)
                     std::cout << "Save slot " << *loadResult.selectedSlot << " could not be read.\n";
                 }
             }
+            // Backed out of the load screen: back on the menu, which the
+            // original never left, so no fade in.
+            else { MenuController::SkipNextFadeIn(); }
             continue;
         }
 
