@@ -174,6 +174,15 @@ namespace ALTEngine::Net
         const std::string& Level() const { return level; }
         const std::string& GameName() const { return gameName; }
         const Roster& GetRoster() const { return roster; }
+
+        // Who killed whom this game, [killer][victim] (the diagonal is each
+        // player's own deaths): the results screen's table (FUN_00015228).
+        using KillTable = std::array<std::array<int16_t, MAX_PLAYERS>, MAX_PLAYERS>;
+        const KillTable& Kills() const { return kills; }
+        void CountKill(const Frag& frag)
+        {
+            if (frag.killer < MAX_PLAYERS && frag.victim < MAX_PLAYERS) { ++kills[frag.killer][frag.victim]; }
+        }
         // The latest state each other player sent; empty for us and for empty slots.
         const std::array<std::optional<State>, MAX_PLAYERS>& RemoteStates() const { return remote; }
         uint16_t Port() const { return socket.LocalPort(); }
@@ -215,6 +224,7 @@ namespace ALTEngine::Net
         void HandleAsHost(const Address& from, const Message& message, double now);
         void HandleAsClient(const Message& message, double now);
         void DropPeer(int slot);
+        KillTable kills{};
         void ApplyFrag(const Frag& frag);
         int SlotOf(const Address& from) const;
 

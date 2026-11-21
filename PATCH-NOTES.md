@@ -171,6 +171,17 @@ A review of every routine in the original against ALTEngine's, one block of the 
 - A hit from another player names them as the attacker even when it does no damage; a frag goes to the player
   who hit you last.
 
+**The attract demos and the multiplayer scores**
+- **The attract demos are in.** Leave the main menu alone for about fifty seconds and, as in the original, it
+  fades out and plays the next step of its cycle: the intro, then the demo of 1.1.1, the intro, 2.1.1, the
+  intro, 3.1.1. A demo is the original's own recording (GFX/DEMO111.BIN and the others), played at the lowest
+  difficulty; any key ends it. "DEMO" blinks at the top of the screen, as in the original.
+- **A round fired at a creature right against the gun now hits it.** The original tests a new round at the
+  muzzle and one step out before it flies; ALTEngine now does the same.
+- **The scores after a deathmatch**: the original's results screen - who killed whom, each player's own
+  deaths taken off in their own column, and the total, highest first, in each player's colour. Any key, or
+  twenty seconds, goes on. (It has room for all eight of ALTEngine's players.)
+
 ### The level fixes, in stages
 
 Every fix to the game's files now runs in a fixed order, each stage working on the files as the stage before

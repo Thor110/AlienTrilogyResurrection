@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <vector>
+
 #include "../Game/Progression.h"
 #include <filesystem>
 #include <string>
@@ -63,6 +66,11 @@ namespace ALTEngine::Screens
     class GameplayScreen
     {
     public:
+        // The next Run plays an attract demo (Game::DemoPlayback): its input
+        // words in place of the keys and mouse, one a player tick, ending on
+        // any key or when the words run out (outcome ExitGame).
+        static void SetDemo(std::vector<uint16_t> words);
+
         static GameplayResult Run(
             const std::filesystem::path& cdDirectory,
             ALTEngine::Bootstrap::Language& language,

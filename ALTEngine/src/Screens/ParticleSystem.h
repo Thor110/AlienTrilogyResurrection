@@ -345,6 +345,8 @@ namespace ALTEngine::Screens
             // members here since nothing else shares the storage.
             float x = 0, y = 0, z = 0;
             float vx = 0, vy = 0, vz = 0;
+            // A player's round not yet tested where it leaves the gun (see Tick).
+            bool muzzleTest = false;
 
             // Orientation and its rate of change. The original keeps the three
             // angles at +0x10, +0x12 and +0x14; the rates are ours (see
@@ -473,6 +475,7 @@ namespace ALTEngine::Screens
                 p->vx = forward * fs * pitchCos;
                 p->vy = forward * pitchSin;
                 p->vz = -forward * fc * pitchCos;
+                p->muzzleTest = (type == TYPE_PISTOL || type == TYPE_SHOTGUN || type == TYPE_PULSE || type == TYPE_SMARTGUN);
                 return p;
             }
 
@@ -779,6 +782,30 @@ namespace ALTEngine::Screens
                             }
                             p.x = nx; p.y = ny; p.z = nz;
                         }
+                        continue;
+                    }
+
+                    // A player's round as it is fired (FUN_0002b534): tested where it
+                    // leaves the gun, then moved a step and tested again, and only
+                    // then let fly; a hit at either frees it with nothing more -
+                    // no pieces. So a creature against the muzzle is hit, and the
+                    // round reaches the step its life allows (the pass moves it
+                    // from the next pass on).
+                    if (p.muzzleTest)
+                    {
+                        p.muzzleTest = false;
+                        if (blocked(p.x, p.y, p.z, static_cast<int>(p.type), p.life, p.x, p.y, p.z, p.lastTrigger) != 0)
+                        {
+                            p.alive = false;
+                            continue;
+                        }
+                        const float sx = p.x + p.vx, sy = p.y + p.vy, sz = p.z + p.vz;
+                        if (blocked(sx, sy, sz, static_cast<int>(p.type), p.life, p.x, p.y, p.z, p.lastTrigger) != 0)
+                        {
+                            p.alive = false;
+                            continue;
+                        }
+                        p.x = sx; p.y = sy; p.z = sz;
                         continue;
                     }
 

@@ -201,6 +201,7 @@ namespace ALTEngine::Net
     void Session::ApplyFrag(const Frag& frag)
     {
         // A kill scores the killer one; killing yourself costs one.
+        CountKill(frag);
         if (frag.killer < MAX_PLAYERS)
         {
             auto& entry = roster.players[frag.killer];
@@ -478,6 +479,7 @@ namespace ALTEngine::Net
         }
         else if (const auto* frag = std::get_if<Frag>(&message))
         {
+            CountKill(*frag);
             Event e; e.kind = Event::Kind::Frag; e.frag = *frag; Push(e);
         }
         else if (const auto* chat = std::get_if<Chat>(&message))

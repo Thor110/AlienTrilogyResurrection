@@ -15,6 +15,7 @@
 #include "../Renderer/ModelPreview.h"
 #include "../Screens/MenuBackground.h"
 #include "../Screens/ScreenFadeDraw.h"
+#include "../Game/DemoPlayback.h"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -885,13 +886,16 @@ namespace ALTEngine::Menu
         fadeClock.Start();
         bool fadingOut = false;
         bool fadeOutDone = false;
+        // The attract cycle (Game::DemoPlayback): the main menu left alone for
+        // 0x6d6 frames (0x1376c) moves on to the title sequence or a demo.
+        Uint64 idleSince = SDL_GetTicks();
 
         while (true)
         {
             if (!running && !fadingOut)
             {
                 const bool startsGame = !result.windowClosed && !startInOptionsOnly && !fadeOutDone
-                    && (result.action == "Start Game" || result.action == "Level Select");
+                    && (result.action == "Start Game" || result.action == "Level Select" || result.action == "Attract");
                 if (!startsGame) { break; }
                 fadingOut = true;
                 SF::StartOut(fade);
@@ -1218,6 +1222,7 @@ namespace ALTEngine::Menu
                     continue;
                 }
                 if (event.type == SDL_EVENT_QUIT) { result.windowClosed = true; running = false; continue; }
+                if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) { idleSince = SDL_GetTicks(); }
 
                 if (awaitingRebind)
                 {
@@ -1322,6 +1327,15 @@ namespace ALTEngine::Menu
                     default:
                         break;
                     }
+                }
+            }
+            if (running && !fadingOut && !startInOptionsOnly && screen == Screen::MainMenu)
+            {
+                constexpr double IDLE_SECONDS = ALTEngine::Game::DemoPlayback::MENU_IDLE_FRAMES / ALTEngine::Formats::ScreenFade::STEP_HZ;
+                if (static_cast<double>(SDL_GetTicks() - idleSince) / 1000.0 >= IDLE_SECONDS)
+                {
+                    result.action = "Attract";
+                    running = false;
                 }
             }
             if (!running && !fadingOut) { continue; }   // to the fade out, or out

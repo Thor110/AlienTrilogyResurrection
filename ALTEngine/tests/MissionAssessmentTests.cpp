@@ -144,3 +144,30 @@ TEST_CASE("Screen fades: FUN_0004eec0 / FUN_0004eefc / FUN_0004f020")
     SF::StartIn(s);
     CHECK(!s.heldBlack);
 }
+
+#include "Screens/MultiplayerResultsScreen.h"
+
+TEST_CASE("Multiplayer results: FUN_00015228's table, highest score first")
+{
+    using ALTEngine::Screens::MultiplayerResultsPlayer;
+    namespace MR = ALTEngine::Screens::MultiplayerResults;
+    std::vector<MultiplayerResultsPlayer> players(2);
+    players[0].name = "AL"; players[0].number = 1; players[0].score = 1; players[0].kills = { 1, 2 };
+    players[1].name = "RIPLEY"; players[1].number = 2; players[1].score = 3; players[1].kills = { 3, 0 };
+    const auto cells = MR::Layout(players);
+    // n = 2: left = 2 * 0x1b + 8 = 0x3e, top = 2 * 10 + 0x40 = 0x54.
+    CHECK(cells[0].text == std::string("RIPLEY"));        // the higher score's column first
+    CHECK_EQ(cells[0].x, 0x3e + 0x3c + 1 * 5);              // 6 letters: one space in
+    CHECK_EQ(cells[0].y, 0x54);
+    CHECK_EQ(cells[1].x, 0x3e + 0x3c + 0x37 + 3 * 5);       // "AL": three in
+    CHECK(cells[2].text == std::string("="));
+    CHECK_EQ(cells[2].x, 0x3e + 2 * 0x37 + 0x4b);
+    // RIPLEY's row: the name right-set, 3 against AL, own deaths 0, score 3.
+    CHECK_EQ(cells[3].x, 0x3e + (8 - 6) * 5);
+    CHECK_EQ(cells[3].y, 0x54 + 0x14);
+    CHECK(cells[4].text == std::string("   0"));
+    CHECK(cells[5].text == std::string("   3"));
+    CHECK(cells[6].text == std::string("   3"));
+    // AL's row: killed itself once - shown as -1 in its own column.
+    CHECK(cells[9].text == std::string("  -1"));
+}

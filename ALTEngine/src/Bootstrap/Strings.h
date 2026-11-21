@@ -202,4 +202,12 @@ namespace ALTEngine::Bootstrap
         const char* builtIn = StringsEnglish()[static_cast<std::size_t>(id)];
         return builtIn ? builtIn : "";
     }
+
+    // Tr, or `fallback` where the language has no text for it (the game's own
+    // strings come from its language files, which may lack some).
+    inline std::string TrOr(StringId id, Language language, const char* fallback)
+    {
+        std::string s = Tr(id, language);
+        return s.empty() ? std::string(fallback) : s;
+    }
 }

@@ -21,6 +21,8 @@
 #include "Bootstrap/RenderSettings.h"
 #include "Bootstrap/ResolutionSettings.h"
 #include "Formats/BootSequence.h"
+#include "Game/DemoPlayback.h"
+#include "Screens/MultiplayerResultsScreen.h"
 #include "Formats/SplashImageLoader.h"
 #include "Menu/MenuController.h"
 #include "Renderer/ModelPreview.h"
@@ -545,6 +547,8 @@ int main(int, char**)
     };
 
     std::vector<int> mainPath = { 0 };
+    // Where the attract cycle is (DAT_000a62e8, 0..5 - Game::DemoPlayback).
+    size_t attractStep = 0;
 
     while (true)
     {
@@ -617,6 +621,32 @@ int main(int, char**)
                                                                 difficultySettings, cameraSwaySettings, languageSettings,
                                                                 &netInventory, &session);
                     if (played.outcome == GameplayOutcome::WindowClosed) { session.Stop(); return false; }
+                    // A deathmatch over: the scores (FUN_0001560c).
+                    if (!session.Coop())
+                    {
+                        std::vector<ALTEngine::Screens::MultiplayerResultsPlayer> scores;
+                        std::vector<int> slots;
+                        const auto& roster = session.GetRoster();
+                        for (int slot = 0; slot < ALTEngine::Net::MAX_PLAYERS; ++slot)
+                        {
+                            if (roster.players[static_cast<size_t>(slot)].used) { slots.push_back(slot); }
+                        }
+                        for (int slot : slots)
+                        {
+                            const auto& entry = roster.players[static_cast<size_t>(slot)];
+                            ALTEngine::Screens::MultiplayerResultsPlayer p;
+                            p.name = entry.name.empty() ? ("PLAYER" + std::to_string(slot + 1)) : entry.name;
+                            p.number = slot + 1;
+                            p.score = entry.frags;
+                            for (int other : slots) { p.kills.push_back(session.Kills()[static_cast<size_t>(slot)][static_cast<size_t>(other)]); }
+                            scores.push_back(p);
+                        }
+                        if (!ALTEngine::Screens::MultiplayerResultsScreen::Run(cdDirectory, language, digits, scores, keepAlive))
+                        {
+                            session.Stop();
+                            return false;
+                        }
+                    }
                     // Deathmatch is one map; co-operative goes on while every
                     // player finishes the level together.
                     if (played.outcome != GameplayOutcome::LevelComplete || !session.Coop() || !session.Connected())
@@ -861,6 +891,46 @@ int main(int, char**)
             // never left: no fade in.
             MenuController::SkipNextFadeIn();
             continue; // Escape/Back - return to the main menu, not exit
+        }
+
+        // The main menu left alone: the next step of the attract cycle - the
+        // title sequence again, or a level's demo (Game::DemoPlayback).
+        if (menuResult.action == "Attract")
+        {
+            namespace DP = ALTEngine::Game::DemoPlayback;
+            // Moved on before it is read (0x13784): the first is 1.1.1's demo.
+            attractStep = (attractStep + 1) % DP::CYCLE.size();
+            const char* demoLevel = DP::CYCLE[attractStep];
+            if (!demoLevel)
+            {
+                if (!PlayIntroVideos(cdDirectory, language)) { return closeAndExit(); }
+                continue;
+            }
+            std::filesystem::path demoFile = cdDirectory / "GFX" / DP::FileName(demoLevel);
+            if (auto found = ALTEngine::Bootstrap::FindEntryCaseInsensitive(cdDirectory / "GFX", DP::FileName(demoLevel)))
+            {
+                demoFile = *found;
+            }
+            std::vector<uint16_t> words = DP::Load(demoFile);
+            if (words.empty())
+            {
+                std::cout << "Demo " << DP::FileName(demoLevel) << " not found - skipped.\n";
+                continue;
+            }
+            std::cout << "Attract demo: level " << DottedOf(demoLevel) << "\n";
+            // The lowest difficulty (0x1097e), put back afterwards; a new
+            // game's loadout; no briefing (its models are loaded all the same).
+            const Difficulty heldDifficulty = difficultySettings.Get();
+            difficultySettings.Set(Difficulty::AcidReign);
+            ALTEngine::Screens::PlayerInventoryState demoInventory;
+            MissionBriefingScreen::PreloadObjectModels(cdDirectory, language);
+            GameplayScreen::SetDemo(std::move(words));
+            GameplayResult played = GameplayScreen::Run(cdDirectory, language, DottedOf(demoLevel), keyBindings, audioSettings,
+                                                        renderSettings, resolutionSettings, difficultySettings,
+                                                        cameraSwaySettings, languageSettings, &demoInventory);
+            difficultySettings.Set(heldDifficulty);
+            if (played.outcome == GameplayOutcome::WindowClosed) { return closeAndExit(); }
+            continue;
         }
 
         if (menuResult.action == "Load Game")

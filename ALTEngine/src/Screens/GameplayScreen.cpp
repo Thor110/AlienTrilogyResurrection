@@ -51,6 +51,7 @@
 #include "../Renderer/Minimap.h"
 #include "../Audio/MusicPlayer.h"
 #include "ScreenFadeDraw.h"
+#include "../Game/DemoPlayback.h"
 #include "../Bootstrap/ModernSettings.h"
 #include "../Bootstrap/GameplaySettings.h"
 #include "../Renderer/ModelPreview.h"
@@ -231,6 +232,9 @@ namespace ALTEngine::Screens
             return std::nullopt;
         }
     }
+
+    namespace { std::vector<uint16_t> pendingDemo; }
+    void GameplayScreen::SetDemo(std::vector<uint16_t> words) { pendingDemo = std::move(words); }
 
     GameplayResult GameplayScreen::Run(
         const std::filesystem::path& cdDirectory,
@@ -1720,6 +1724,35 @@ namespace ALTEngine::Screens
         }
 
         GameplayResult result;
+        // An attract demo (Game::DemoPlayback): the keys the next word holds,
+        // through the player's own bindings.
+        namespace DP = ALTEngine::Game::DemoPlayback;
+        DP::Reader demo;
+        demo.words = std::move(pendingDemo);
+        pendingDemo.clear();
+        const bool demoMode = !demo.words.empty();
+        static bool demoKeys[SDL_SCANCODE_COUNT];
+        std::fill(std::begin(demoKeys), std::end(demoKeys), false);
+        auto loadDemoWord = [&](uint16_t w) {
+            std::fill(std::begin(demoKeys), std::end(demoKeys), false);
+            const DP::Keys k = DP::Decode(w);
+            auto press = [&](ALTEngine::Bootstrap::InputAction action, bool down) {
+                const SDL_Scancode code = keyBindings.GetKey(action);
+                if (down && code > SDL_SCANCODE_UNKNOWN && code < SDL_SCANCODE_COUNT) { demoKeys[code] = true; }
+            };
+            using IA = ALTEngine::Bootstrap::InputAction;
+            press(IA::MoveForward, k.forward);
+            press(IA::MoveBackward, k.backward);
+            press(IA::TurnLeft, k.turnLeft);
+            press(IA::TurnRight, k.turnRight);
+            press(IA::StrafeLeft, k.strafeLeft);
+            press(IA::StrafeRight, k.strafeRight);
+            press(IA::Fire1, k.fire);
+            press(IA::Fire2, k.fire2);
+            press(IA::Use, k.use);
+            press(IA::LookUp, k.lookUp);
+            press(IA::LookDown, k.lookDown);
+        };
         bool running = true;
         bool levelComplete = false;
         // The resupply levels' countdown (Game::ResupplyTimer, FUN_0003b518).
@@ -2075,6 +2108,13 @@ namespace ALTEngine::Screens
                     continue;
                 }
                 if (event.type == SDL_EVENT_QUIT) { result.outcome = GameplayOutcome::WindowClosed; running = false; }
+                // A demo ends on any key (0x10aa0) or button.
+                else if (demoMode && ((event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
+                                      || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN))
+                {
+                    result.outcome = GameplayOutcome::ExitGame;
+                    running = false;
+                }
                 else if (session && event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat
                          && event.key.scancode >= SDL_SCANCODE_F2 && event.key.scancode <= SDL_SCANCODE_F9)
                 {
@@ -2699,10 +2739,12 @@ namespace ALTEngine::Screens
 
             if (levelReady)
             {
-                const bool* keys = SDL_GetKeyboardState(nullptr);
+                const bool* keys = demoMode ? demoKeys : SDL_GetKeyboardState(nullptr);
 
                 float mouseDx = 0.0f, mouseDy = 0.0f;
-                const SDL_MouseButtonFlags mouseButtons = SDL_GetRelativeMouseState(&mouseDx, &mouseDy);
+                SDL_MouseButtonFlags mouseButtons = SDL_GetRelativeMouseState(&mouseDx, &mouseDy);
+                // A demo has no mouse (0x3f072 clears its counts).
+                if (demoMode) { mouseDx = mouseDy = 0.0f; mouseButtons = 0; }
 
                 // The mouse fires. The original reads its buttons into the same
                 // input word as the keyboard (DAT_000b0cc8 / DAT_000b0cc4), so
@@ -2846,6 +2888,17 @@ namespace ALTEngine::Screens
                 {
                     playerTickAccumulator -= playerTickLength;
                     playerTicksThisFrame++;
+                    // A demo: this pass's word in place of the keys (0x3eff4).
+                    if (demoMode)
+                    {
+                        const uint16_t word = demo.Next();
+                        if (word == DP::END && running)
+                        {
+                            result.outcome = GameplayOutcome::ExitGame;
+                            running = false;
+                        }
+                        loadDemoWord(word);
+                    }
                     if (!levelComplete && !playerDead && !syncing) { levelSeconds += playerTickLength; }
                     // The original's alternate pass (see logicTick).
                     const bool halfPass = ((logicTick++ & 1u) == 0) || speedCompensationOff;
@@ -6428,6 +6481,15 @@ namespace ALTEngine::Screens
                                 {
                                     hud.DrawHudText(renderer, "P A U S E D", 0x84, 0x70,
                                                     ALTEngine::Renderer::HUD_FONT_FIRST_DESCRIPTOR, 1.0f, 1.0f);
+                                }
+                                // "DEMO" over a demo (0x3e79e: string 133 at
+                                // (0x84, 0x2c), font A), on while the timer
+                                // count's bit 0x20 is set, not while fading.
+                                if (demoMode && !SF::Busy(screenFade)
+                                    && ((static_cast<uint64_t>(static_cast<double>(SDL_GetTicks()) * ALTEngine::Screens::PlayerCamera::TICK_HZ / 1000.0) & 0x20) != 0))
+                                {
+                                    hud.DrawHudText(renderer, ALTEngine::Bootstrap::TrOr(ALTEngine::Bootstrap::StringId::GsDemo, language, "DEMO"),
+                                                    0x84, 0x2c, ALTEngine::Renderer::HUD_FONT_FIRST_DESCRIPTOR, 1.0f, 1.0f);
                                 }
                                 if (runModeToggled)
                                 {

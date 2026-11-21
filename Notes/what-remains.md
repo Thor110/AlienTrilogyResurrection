@@ -730,10 +730,10 @@ Left from that review, to look at:
    load screen out once a save is chosen (FUN_00016dc8, 0x17033; a load from the pause menu then skips the
    level's own fade out). Zip 179: a network respawn - out on the death (0x1038a), the
    respawn once the fade is done (0x3eefe), in after it (FUN_000402c0, 0x40325); OURS: no "press a key" wait
-   between, as before. Left: the attract demo's start (0x13802, no demos), the multiplayer results
-   (FUN_0001560c, not ported). One step a drawn
+   between, as before. Zip 180: the attract demo's start (0x13802) and the multiplayer results
+   (FUN_0001560c). One step a drawn
    frame, at most 34.87 a second.
-2. **The muzzle test** (FUN_0002b534): a player's round is tested at the muzzle and one step on before it is
+2. **Done in zip 180 - the muzzle test** (FUN_0002b534): a player's round is tested at the muzzle and one step on before it is
    linked, freed silently on a hit. The port starts it at the muzzle untested, so it reaches one step less and
    misses a target pressed against the muzzle. Needs a silent mode in the particle callback.
 3. **Save names** (FUN_000170fc / FUN_00015c70): the original asks for a name; the port uses DefaultName.
@@ -746,6 +746,26 @@ Left from that review, to look at:
 7. Decisions for Edward, not changed: the carried-item stack's place and art (the original's right column), the
    message font (font A), font A's digit advance, the assessment's count skip, the briefing's typewriter, the
    mouse rate (the original halves X), the attract demos, deathmatch's weapon loss and the results screen.
+
+### Attract demos and the multiplayer results (zip 180)
+- Demos (Game/DemoPlayback.h): GFX/DEMO111/211/311.BIN, 900 input words each (DAT_000b0cc8), one a pass of
+  the player's task (0x3eff4 -> FUN_00010928), 0xffff past the end (cc0 | 8). The menu's idle count (0x6d6
+  frames, 0x1376c) steps the cycle at 0x62c4: title sequence, 111, title, 211, title, 311. Lowest difficulty
+  (0x1097e), default input bits (0x10998), RNG reseeded at every level start (0x1072d from 0x4dd0) - so a demo
+  replays the same in the original at a given frame rate. A word is read every pass (n = c/2 + 1 passes a
+  frame of c interrupts), so the walk is the same at any frame rate; what changes with it is what runs on the
+  last or odd passes only (firing, creatures). The port takes one word a player tick (69.74 Hz, a pass at the
+  design point): 900 words, 12.9 s. The original in DOSBox (cycles 120000) drew a frame every three interrupts,
+  two passes a frame, so its 1.1.1 demo took about 19 s of wall clock.
+- 1.1.1 compared, port against DOSBox: the same walk through the first door (words 36-46, use) and down the
+  corridor. They part at the first face hugger (fire bursts from word 168): the original kills it in three
+  rounds and takes no damage; in the port it is already walking up before the first burst, takes four rounds,
+  and reaches the player (100 -> 95 -> 90). After that the port's path ends in a corner and misses the
+  cartridges, the clips and the terminal the original reaches. The lead: when that hugger wakes and how fast
+  it closes (its task and the RNG it draws - the port's creatures do not share the original's one generator).
+  The muzzle test (below) was added for this and did not change it.
+- Results (Screens/MultiplayerResultsScreen): FUN_0001560c / FUN_00015228, layout exact for up to four players;
+  OURS: eight players (columns close up), and no "Waiting for players" handshake between machines.
 
 ## 3. Code health
 
