@@ -63,7 +63,7 @@ namespace ALTViewer
             new Entry("SECT32/L351LEV.MAP", 0x089BCA56u, 0x1BD573F3u, 39, true, -1, -1, null),
             new Entry("SECT32/L352LEV.MAP", 0x80502E21u, 0xFE2CE8B6u, 26, true, -1, -1, null),
             new Entry("SECT32/L353LEV.MAP", 0xA1F43525u, 0x6B5AF68Eu, 26, true, -1, -1, null),
-            new Entry("SECT32/L371LEV.MAP", 0xE404EDD5u, 0x209C85DDu, 26, true, -1, -1, null),
+            new Entry("SECT32/L371LEV.MAP", 0x5FCF2E15u, 0x9B57461Du, 26, true, -1, -1, null),
             new Entry("SECT32/L381LEV.MAP", 0xE99FD537u, 0x35085A60u, 67, true, -1, -1, null),
             new Entry("SECT32/L391LEV.MAP", 0x4BDBB618u, 0x1B8A92C4u, 5, true, -1, -1, null),
             new Entry("SECT90/L901LEV.MAP", 0xF3B6B7CDu, 0x5F8D4210u, 0, true, -1, -1, null),

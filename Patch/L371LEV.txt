@@ -193,77 +193,77 @@ Patch 50: L371LEV.MAP - recess corners: in each of the level's 14 wall recesses,
   0x43C00: 3B 13 00 00 33 13 00 00 34 13 00 00 FF FF FF FF -> 34 13 00 00 33 13 00 00 3B 13 00 00 FF FF FF FF
   0x43C12: 01 -> 05
 
-Patch 51: L371LEV.MAP - UV review, round 1 (TESTING, Edward with the Face Index Display, 2026): recess corners at faces 5631/5636 (the recess at z 9984, texture 27) reversed to routine 5 like the other top left and bottom right corners; the top right and bottom left corners of four recesses (5640, 5628, 6820, 6815, 7609, 7603, 5014, 5002) mirrored to match them. A triangle can only show the half of its tile cut along x0y1-x1y0, and these need the other half, so each becomes a quad with its last corner repeated, routine 2 (mirrored): the real triangle is (a, b, c) and (a, c, d) has no area. Tracked in Notes/uv-review-log.md
+Patch 51: L371LEV.MAP - UV review, round 1 (TESTING, Edward with the Face Index Display, 2026): recess corners at faces 5631/5636 (the recess at z 9984, texture 27) reversed to routine 5 like the other top left and bottom right corners; the top right and bottom left corners of four recesses (5640, 5628, 6820, 6815, 7609, 7603, 5014, 5002) mirrored to match them. A triangle can only show the half of its tile cut along x0y1-x1y0, and these need the other half, so each becomes a quad with its last corner repeated, routine 6 (mirrored, double-sided; it was 2 before 1.0.0): the real triangle is (a, b, c) and (a, c, d) has no area. Tracked in Notes/uv-review-log.md
   0x2ED50: 45 11 00 00 3C 11 00 00 B1 16 00 00 FF FF FF FF -> B1 16 00 00 3C 11 00 00 45 11 00 00 FF FF FF FF
   0x2ED62: 01 -> 05
   0x2EDB4: 41 11 00 00 37 11 00 00 36 11 00 00 FF FF FF FF -> 36 11 00 00 37 11 00 00 41 11 00 00 FF FF FF FF
   0x2EDC6: 01 -> 05
   0x2EE04: 3E 11 00 00 3D 11 00 00 44 11 00 00 FF FF FF FF -> 3D 11 00 00 44 11 00 00 3E 11 00 00 3E 11 00 00
-  0x2EE16: 01 -> 02
+  0x2EE16: 01 -> 06
   0x2ED14: AF 16 00 00 38 11 00 00 42 11 00 00 FF FF FF FF -> 38 11 00 00 42 11 00 00 AF 16 00 00 AF 16 00 00
-  0x2ED26: 01 -> 02
+  0x2ED26: 01 -> 06
   0x34A34: 49 11 00 00 4A 11 00 00 51 11 00 00 FF FF FF FF -> 4A 11 00 00 51 11 00 00 49 11 00 00 49 11 00 00
-  0x34A46: 01 -> 02
+  0x34A46: 01 -> 06
   0x349D0: B9 16 00 00 BA 16 00 00 BD 16 00 00 FF FF FF FF -> BA 16 00 00 BD 16 00 00 B9 16 00 00 B9 16 00 00
-  0x349E2: 01 -> 02
+  0x349E2: 01 -> 06
   0x387D8: FC 10 00 00 FB 10 00 00 0C 11 00 00 FF FF FF FF -> FB 10 00 00 0C 11 00 00 FC 10 00 00 FC 10 00 00
-  0x387EA: 01 -> 02
+  0x387EA: 01 -> 06
   0x38760: 07 11 00 00 06 11 00 00 0F 11 00 00 FF FF FF FF -> 06 11 00 00 0F 11 00 00 07 11 00 00 07 11 00 00
-  0x38772: 01 -> 02
+  0x38772: 01 -> 06
   0x2BD1C: 88 11 00 00 87 11 00 00 8F 11 00 00 FF FF FF FF -> 87 11 00 00 8F 11 00 00 88 11 00 00 88 11 00 00
-  0x2BD2E: 01 -> 02
+  0x2BD2E: 01 -> 06
   0x2BC2C: 80 11 00 00 7F 11 00 00 8C 11 00 00 FF FF FF FF -> 7F 11 00 00 8C 11 00 00 80 11 00 00 80 11 00 00
-  0x2BC3E: 01 -> 02
+  0x2BC3E: 01 -> 06
 
-Patch 52: L371LEV.MAP - UV review, round 2 (TESTING, Edward with the Face Index Display, 2026): the top right and bottom left corners of the other recesses (7587, 7581, 4525, 4513, 9906, 9911, 9889, 9884, 9535, 9270, 4905, 5175, 5222, 4946) mirrored to match the rest, each a quad with its last corner repeated, routine 2, as in round 1; and faces 6820 and 5628 moved from texture 27 to 35, the band's own. Tracked in Notes/uv-review-log.md
+Patch 52: L371LEV.MAP - UV review, round 2 (TESTING, Edward with the Face Index Display, 2026): the top right and bottom left corners of the other recesses (7587, 7581, 4525, 4513, 9906, 9911, 9889, 9884, 9535, 9270, 4905, 5175, 5222, 4946) mirrored to match the rest, each a quad with its last corner repeated, routine 6, as in round 1; and faces 6820 and 5628 moved from texture 27 to 35, the band's own. Tracked in Notes/uv-review-log.md
   0x38620: DD 10 00 00 DC 10 00 00 EA 10 00 00 FF FF FF FF -> DC 10 00 00 EA 10 00 00 DD 10 00 00 DD 10 00 00
-  0x38632: 01 -> 02
+  0x38632: 01 -> 06
   0x385A8: E6 10 00 00 E5 10 00 00 ED 10 00 00 FF FF FF FF -> E5 10 00 00 ED 10 00 00 E6 10 00 00 E6 10 00 00
-  0x385BA: 01 -> 02
+  0x385BA: 01 -> 06
   0x296E8: 28 11 00 00 27 11 00 00 31 11 00 00 FF FF FF FF -> 27 11 00 00 31 11 00 00 28 11 00 00 28 11 00 00
-  0x296FA: 01 -> 02
+  0x296FA: 01 -> 06
   0x295F8: 20 11 00 00 1F 11 00 00 2E 11 00 00 FF FF FF FF -> 1F 11 00 00 2E 11 00 00 20 11 00 00 20 11 00 00
-  0x2960A: 01 -> 02
+  0x2960A: 01 -> 06
   0x43B4C: 31 13 00 00 32 13 00 00 3C 13 00 00 FF FF FF FF -> 32 13 00 00 3C 13 00 00 31 13 00 00 31 13 00 00
-  0x43B5E: 01 -> 02
+  0x43B5E: 01 -> 06
   0x43BB0: 58 11 00 00 2A 13 00 00 37 13 00 00 FF FF FF FF -> 2A 13 00 00 37 13 00 00 58 11 00 00 58 11 00 00
-  0x43BC2: 01 -> 02
+  0x43BC2: 01 -> 06
   0x439F8: C0 0A 00 00 C1 0A 00 00 CF 0A 00 00 FF FF FF FF -> C1 0A 00 00 CF 0A 00 00 C0 0A 00 00 C0 0A 00 00
-  0x43A0A: 01 -> 02
+  0x43A0A: 01 -> 06
   0x43994: C8 0A 00 00 C9 0A 00 00 D4 0A 00 00 FF FF FF FF -> C9 0A 00 00 D4 0A 00 00 C8 0A 00 00 C8 0A 00 00
-  0x439A6: 01 -> 02
+  0x439A6: 01 -> 06
   0x41E50: 6E 11 00 00 6F 11 00 00 7B 11 00 00 FF FF FF FF -> 6F 11 00 00 7B 11 00 00 6E 11 00 00 6E 11 00 00
-  0x41E62: 01 -> 02
+  0x41E62: 01 -> 06
   0x2B498: 7D 0A 00 00 7C 0A 00 00 86 0A 00 00 FF FF FF FF -> 7C 0A 00 00 86 0A 00 00 7D 0A 00 00 7D 0A 00 00
-  0x2B4AA: 01 -> 02
+  0x2B4AA: 01 -> 06
   0x2C9B0: 75 0A 00 00 74 0A 00 00 83 0A 00 00 FF FF FF FF -> 74 0A 00 00 83 0A 00 00 75 0A 00 00 75 0A 00 00
-  0x2C9C2: 01 -> 02
+  0x2C9C2: 01 -> 06
   0x2CD5C: 9C 0A 00 00 9B 0A 00 00 A5 0A 00 00 FF FF FF FF -> 9B 0A 00 00 A5 0A 00 00 9C 0A 00 00 9C 0A 00 00
-  0x2CD6E: 01 -> 02
+  0x2CD6E: 01 -> 06
   0x2B7CC: 94 0A 00 00 93 0A 00 00 A2 0A 00 00 FF FF FF FF -> 93 0A 00 00 A2 0A 00 00 94 0A 00 00 94 0A 00 00
-  0x2B7DE: 01 -> 02
+  0x2B7DE: 01 -> 06
   0x4099C: 66 11 00 00 67 11 00 00 76 11 00 00 FF FF FF FF -> 67 11 00 00 76 11 00 00 66 11 00 00 66 11 00 00
-  0x409AE: 01 -> 02
+  0x409AE: 01 -> 06
   0x34A44: 1B 00 -> 23 00
   0x2ED24: 1B 00 -> 23 00
 
-Patch 53: L371LEV.MAP - UV review, round 3 (TESTING, Edward with the Face Index Display, 2026): the top right and bottom left corners of three more recesses (5893, 6288, 5320, 5303, 9876, 9607) mirrored like rounds 1 and 2, each a quad with its last corner repeated, routine 2; and faces 6815 and 5640 moved from texture 27 to 35, the band's own. Tracked in Notes/uv-review-log.md
+Patch 53: L371LEV.MAP - UV review, round 3 (TESTING, Edward with the Face Index Display, 2026): the top right and bottom left corners of three more recesses (5893, 6288, 5320, 5303, 9876, 9607) mirrored like rounds 1 and 2, each a quad with its last corner repeated, routine 6; and faces 6815 and 5640 moved from texture 27 to 35, the band's own. Tracked in Notes/uv-review-log.md
   0x301C8: 79 16 00 00 78 16 00 00 80 16 00 00 FF FF FF FF -> 78 16 00 00 80 16 00 00 79 16 00 00 79 16 00 00
-  0x301DA: 01 -> 02
+  0x301DA: 01 -> 06
   0x320A4: 71 16 00 00 70 16 00 00 7D 16 00 00 FF FF FF FF -> 70 16 00 00 7D 16 00 00 71 16 00 00 71 16 00 00
-  0x320B6: 01 -> 02
+  0x320B6: 01 -> 06
   0x2D504: 4B 16 00 00 4A 16 00 00 52 16 00 00 FF FF FF FF -> 4A 16 00 00 52 16 00 00 4B 16 00 00 4B 16 00 00
-  0x2D516: 01 -> 02
+  0x2D516: 01 -> 06
   0x2D3B0: 43 16 00 00 42 16 00 00 4F 16 00 00 FF FF FF FF -> 42 16 00 00 4F 16 00 00 43 16 00 00 43 16 00 00
-  0x2D3C2: 01 -> 02
+  0x2D3C2: 01 -> 06
   0x438F4: 5F 16 00 00 5E 16 00 00 66 16 00 00 FF FF FF FF -> 5E 16 00 00 66 16 00 00 5F 16 00 00 5F 16 00 00
-  0x43906: 01 -> 02
+  0x43906: 01 -> 06
   0x423F0: 57 16 00 00 56 16 00 00 63 16 00 00 FF FF FF FF -> 56 16 00 00 63 16 00 00 57 16 00 00 57 16 00 00
-  0x42402: 01 -> 02
+  0x42402: 01 -> 06
   0x349E0: 1B 00 -> 23 00
   0x2EE14: 1B 00 -> 23 00
 
-Patch 54: L371LEV.MAP - UV review, round 4 (TESTING, Edward with the Face Index Display, 2026): faces 6453, 6455, 5794 and 5792 texture 86 -> 94; face 7382 turned to face the room (it showed only from outside), its texture unchanged; the circle panel at z 11520 put together as its 3 x 3 picture (6062, 6064, 6075 the inner halves of their corner tiles, 6064 and 6075 moved to the circle's top tiles 1 and 3, 6069 no longer mirrored); and 14 pinched triangles (2580, 2583, 2244, 2241, 2077, 2078, 1457, 1456, 1636, 1458, 1460, 1459, 1637, 1461) turned so their right angle sits on the texture's. Tracked in Notes/uv-review-log.md
+Patch 54: L371LEV.MAP - UV review, round 4 (TESTING, Edward with the Face Index Display, 2026): faces 6453, 6455, 5794 and 5792 texture 86 -> 94; face 7382 turned to face the room (it showed only from outside), its texture unchanged; the circle panel at z 11520 put together as its 3 x 3 picture (6062, 6064, 6075 the inner halves of their corner tiles, 6064 and 6075 moved to the circle's top tiles 1 and 3, 6069 no longer mirrored); and 14 pinched triangles (2580, 2583, 2244, 2241, 2077, 2078, 1457, 1456, 1636, 1458, 1460, 1459, 1637, 1461) turned so their right angle sits on the texture's. 6064, a quad with its last corner repeated, uses routine 4, the double-sided twin of 0 (since 1.0.0). Tracked in Notes/uv-review-log.md
   0x32D98: 56 00 -> 5E 00
   0x32DC0: 56 00 -> 5E 00
   0x2FA1C: 56 00 -> 5E 00
@@ -274,7 +274,7 @@ Patch 54: L371LEV.MAP - UV review, round 4 (TESTING, Edward with the Face Index 
   0x30F0E: 01 -> 06
   0x30F24: E6 0A 00 00 E0 0A 00 00 DF 0A 00 00 FF FF FF FF -> DF 0A 00 00 E6 0A 00 00 E0 0A 00 00 E0 0A 00 00
   0x30F34: 11 00 -> 01 00
-  0x30F36: 01 -> 00
+  0x30F36: 01 -> 04
   0x31000: E2 0A 00 00 E1 0A 00 00 E5 0A 00 00 FF FF FF FF -> E2 0A 00 00 E5 0A 00 00 E1 0A 00 00 E1 0A 00 00
   0x31010: 13 00 -> 03 00
   0x31012: 01 -> 06

@@ -8,52 +8,12 @@ options (Options > Modern) are the deliberate departures, each one off until you
 
 ---
 
-## 0.9.9
+## 1.0.0
 
-Everything since 0.9.8.
-
-A third review of the original's code against ALTEngine, this time looking for what makes play feel slightly
-off: rates, timing, rounding and the order things happen in.
+Everything since 0.9.9 (the build sent to testers on 17 November 2026).
 
 ### Closer to the original
 
-**The player**
-- **Falling and climbing.** Walking off a ledge, you now drop to the floor at the original's speed (0x100 a
-  step) instead of landing at once, and climb up the same way. A long fall that lands exactly on the floor
-  hurts, as in the original (it skips armour); landing in water or slime makes its sound.
-- The killing hit's knockback no longer slides your body two cells while you die.
-- The view tips on ramps the way the original's does when facing along them (one direction was the wrong way
-  round).
-- Mouse turning is smooth at high frame rates. The view used to run ahead and jump back every tick, a fine
-  judder while turning.
-
-**Weapons**
-- **The smart gun's firing sound no longer stops** (bug report 6). The real cause hit every sound: once a sound
-  had finished, the audio system still counted it as playing, so the same sound was refused from then on, and
-  sounds went missing at random once a dozen had played. Fixed for every sound.
-- The smart gun, shotgun, pulse rifle and flamethrower now play the original's own animations, with their own
-  sounds at the right frame: the shotgun's pump, the smart gun's reload. Their rates of fire and reload times
-  are the original's (the smart gun was firing 60% too fast).
-- **The pulse rifle shows its own firing art.** It was drawing its grenade art when firing, its firing art when
-  reloading, and its reload art for the grenade.
-- Switching weapons runs at the original's speed: down for 9 steps, up for 8. You can't fire or throw while
-  the weapon is lowered.
-- The lamp's sound no longer cuts off your gunfire.
-- **Weapons fire and animate at the original's speed against the world.** The weapon pacing's default is now 2
-  (it was 3): with ALTEngine's default timing the original steps the weapon every game tick, and 3 ran it on
-  only two ticks of three, so every gun fired and moved at two thirds of its speed. A `WeaponFrameInterrupts`
-  value already in your config file is kept; remove it (or set 2) to get the new default.
-
-**Creatures**
-- **Warriors walking backwards and sideways:** a creature now picks the view it is drawn in after it has
-  turned, as the original does. It used to show the way it faced a moment before, so on setting off each new
-  leg it walked a step in a view up to 45 degrees off its path.
-- A creature near a path node no longer heads for a random point around it, often beside or behind it.
-- Creatures climb and duck the original's heights. They step up a little more (0x120), aren't let into
-  passages too low for them, and walk along a drop's edge as the original's do.
-- Their timers keep counting while they flinch, as in the original.
-- The queen notices you only in her sight cone.
-- **On Hard, the dead come back.** As in the original: a body left lying while you're far away gets up again.
 - **Eggs always let a hugger out.** The original makes a new creature every time something spawns one; it
   never checks whether that creature is already in play. On L232 eight eggs hold huggers that are in play from
   the start, so those eggs opened with nothing inside. The same goes for a trigger or crate that spawns a
@@ -76,21 +36,6 @@ off: rates, timing, rounding and the order things happen in.
 - Creatures settle onto stairs and steps on the same tick as the original, not one ahead.
 - Colonists sit where their level puts them: each one's distance from its wall is in the level file, and many
   sit into it. They were all moved a fixed 0x40 out.
-
-**The world**
-- **Doors make their sounds** (opening, closing, the thud). A door opening also makes the noise that wakes
-  creatures nearby, as a shot does.
-- **Flickering, strobing and pulsing lights** (three light modes the port didn't have) now work, on most
-  levels. L111's red alarm lights pulse for good instead of dying out after 18 seconds.
-- The gun is no longer blown out white by its own muzzle flash.
-- "Lift activated" shows every time a lift is called, not only the first.
-- Motion tracker blips move a cell at a time, as the original's do.
-- Flames and steam jets flicker at the original's speed at any frame rate.
-- Triggers and pickups are checked once per game tick, not once per frame (at high frame rates some trigger
-  commands ran several times over). No pickups are collected while you're dying.
-
-**Multiplayer**
-- Bots move, turn and fire at the players' own rate (they were twice as fast).
 
 ### Every routine, compared again
 
@@ -196,33 +141,12 @@ A review of every routine in the original against ALTEngine's, one block of the 
   deaths taken off in their own column, and the total, highest first, in each player's colour. Any key, or
   twenty seconds, goes on. (It has room for all eight of ALTEngine's players.)
 
-### The level fixes, in stages
+### The level fixes
 
-Every fix to the game's files now runs in a fixed order, each stage working on the files as the stage before
-leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/README.txt` explains each one):
+The fix stages are as in 0.9.9 (`Patch/README.txt`), with two additions: the first stage now also takes out
+duplicate object records, after the duplicate models, and ALTEngine's own file fixes (stage 5) now also cover
+door and lift faces the original cannot draw, kept apart from the fixes made for both.
 
-1. the duplicate door and lift models taken out, and now duplicate objects too;
-2. the level fixes (geometry, objects, lifts, doors);
-3. the texture fixes (texture numbers, turns, flips, the texture sheets);
-4. **the missing faces** - new in the global fixes;
-5. ALTEngine only: the Level Cleanup, the texture blanking, ALTEngine's own file fixes (now also door and lift
-   faces the original cannot draw), and last the padding trim.
-
-- **The missing faces are now fixed for the original game too.** On 36 levels the first cell of the map never
-  had its faces drawn (an off-by-one in the original's level files); some of those faces fill real holes, like
-  the floors on L212, L242 and L243 and the wall on L161. ALTEngine's Level Cleanup used to put them back, so
-  with the cleanup off they were missing. They are now a stage of their own, with L211's missing floor, applied
-  whether the cleanup is on or off, and ALTViewer's patch button puts them in for the original game.
-- **L232: the missing wall in the boiler room, by the grate** (reported on Discord), is in, with the texture
-  Edward picked (193, flipped).
-- **The padding trim** (ALTEngine only, Options > Testing > Padding Trim, on by default): the level files lose
-  the bytes the game never reads, about 10% of them (1.9 MB across the 45 levels). The levels play exactly the
-  same. Turned off, the untrimmed files come back at the next start. ALTViewer reads the trimmed levels too.
-- **The face hugger's art is fixed in ALTEngine's copy of FINGERS.B16** (ALTEngine only). The two rows under
-  the creature, filled since 0.9.6 so it reaches the bottom of the screen, were made in code every time the art
-  loaded; they are now in the file itself, the same pictures (`Patch/FINGERS.txt`).
-- With the faces in, face numbers on most levels are one higher than before from the first cell's faces on
-  (the Face Index Display shows the new numbers).
 - **Six floor triangles that nothing drew are back**: one on L111 and L900 by the foot of the slanted wall (face
   9040), and one at each corner of L131's raised centre (faces 2476, 2494, 2989, 3007). They are in the
   original's files with draw routine 3, which the game has no way to draw. L131's now match the four round the
@@ -248,6 +172,108 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
 - **L906: the bridge sides turned the right way** - 48 faces turned a quarter-turn clockwise (19 of them also
   mirrored), and 28 more flipped top to bottom (Edward). The piece of bridge side under the railing at the
   far end, missing from the start, is there now: it was always in the file but faced the wrong way (texture 217).
+
+- **L371: the 29 corner faces drawn as squashed quads are double-sided** (Edward). The original hides a squashed
+  quad when its facing test lands on the two corners that are the same point; the double-sided version of the
+  same draw tests nothing, and looks the same (no see-through texels in those tiles). For the original game too.
+
+### Changed
+
+- **Modern: Speed Compensation is gone** - far too fast to play. ALTEngine always runs at the original's -so
+  pacing; only the attract demos play at the pacing they were recorded at.
+- **Items on a lift ride it.** A pickup lying on a lift's floor goes up and down with the platform; it used to
+  stay hanging where the level put it.
+
+---
+
+## 0.9.9
+
+Everything since 0.9.8.
+
+A third review of the original's code against ALTEngine, this time looking for what makes play feel slightly
+off: rates, timing, rounding and the order things happen in.
+
+### Closer to the original
+
+**The player**
+- **Falling and climbing.** Walking off a ledge, you now drop to the floor at the original's speed (0x100 a
+  step) instead of landing at once, and climb up the same way. A long fall that lands exactly on the floor
+  hurts, as in the original (it skips armour); landing in water or slime makes its sound.
+- The killing hit's knockback no longer slides your body two cells while you die.
+- The view tips on ramps the way the original's does when facing along them (one direction was the wrong way
+  round).
+- Mouse turning is smooth at high frame rates. The view used to run ahead and jump back every tick, a fine
+  judder while turning.
+
+**Weapons**
+- **The smart gun's firing sound no longer stops** (bug report 6). The real cause hit every sound: once a sound
+  had finished, the audio system still counted it as playing, so the same sound was refused from then on, and
+  sounds went missing at random once a dozen had played. Fixed for every sound.
+- The smart gun, shotgun, pulse rifle and flamethrower now play the original's own animations, with their own
+  sounds at the right frame: the shotgun's pump, the smart gun's reload. Their rates of fire and reload times
+  are the original's (the smart gun was firing 60% too fast).
+- **The pulse rifle shows its own firing art.** It was drawing its grenade art when firing, its firing art when
+  reloading, and its reload art for the grenade.
+- Switching weapons runs at the original's speed: down for 9 steps, up for 8. You can't fire or throw while
+  the weapon is lowered.
+- The lamp's sound no longer cuts off your gunfire.
+- **Weapons fire and animate at the original's speed against the world.** The weapon pacing's default is now 2
+  (it was 3): with ALTEngine's default timing the original steps the weapon every game tick, and 3 ran it on
+  only two ticks of three, so every gun fired and moved at two thirds of its speed. A `WeaponFrameInterrupts`
+  value already in your config file is kept; remove it (or set 2) to get the new default.
+
+**Creatures**
+- **Warriors walking backwards and sideways:** a creature now picks the view it is drawn in after it has
+  turned, as the original does. It used to show the way it faced a moment before, so on setting off each new
+  leg it walked a step in a view up to 45 degrees off its path.
+- A creature near a path node no longer heads for a random point around it, often beside or behind it.
+- Creatures climb and duck the original's heights. They step up a little more (0x120), aren't let into
+  passages too low for them, and walk along a drop's edge as the original's do.
+- Their timers keep counting while they flinch, as in the original.
+- The queen notices you only in her sight cone.
+- **On Hard, the dead come back.** As in the original: a body left lying while you're far away gets up again.
+
+**The world**
+- **Doors make their sounds** (opening, closing, the thud). A door opening also makes the noise that wakes
+  creatures nearby, as a shot does.
+- **Flickering, strobing and pulsing lights** (three light modes the port didn't have) now work, on most
+  levels. L111's red alarm lights pulse for good instead of dying out after 18 seconds.
+- The gun is no longer blown out white by its own muzzle flash.
+- "Lift activated" shows every time a lift is called, not only the first.
+- Motion tracker blips move a cell at a time, as the original's do.
+- Flames and steam jets flicker at the original's speed at any frame rate.
+- Triggers and pickups are checked once per game tick, not once per frame (at high frame rates some trigger
+  commands ran several times over). No pickups are collected while you're dying.
+
+**Multiplayer**
+- Bots move, turn and fire at the players' own rate (they were twice as fast).
+
+### The level fixes, in stages
+
+Every fix to the game's files now runs in a fixed order, each stage working on the files as the stage before
+leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/README.txt` explains each one):
+
+1. the duplicate door and lift models taken out;
+2. the level fixes (geometry, objects, lifts, doors);
+3. the texture fixes (texture numbers, turns, flips, the texture sheets);
+4. **the missing faces** - new in the global fixes;
+5. ALTEngine only: the Level Cleanup, the texture blanking, ALTEngine's own file fixes, and last the padding trim.
+
+- **The missing faces are now fixed for the original game too.** On 36 levels the first cell of the map never
+  had its faces drawn (an off-by-one in the original's level files); some of those faces fill real holes, like
+  the floors on L212, L242 and L243 and the wall on L161. ALTEngine's Level Cleanup used to put them back, so
+  with the cleanup off they were missing. They are now a stage of their own, with L211's missing floor, applied
+  whether the cleanup is on or off, and ALTViewer's patch button puts them in for the original game.
+- **L232: the missing wall in the boiler room, by the grate** (reported on Discord), is in, with the texture
+  Edward picked (193, flipped).
+- **The padding trim** (ALTEngine only, Options > Testing > Padding Trim, on by default): the level files lose
+  the bytes the game never reads, about 10% of them (1.9 MB across the 45 levels). The levels play exactly the
+  same. Turned off, the untrimmed files come back at the next start. ALTViewer reads the trimmed levels too.
+- **The face hugger's art is fixed in ALTEngine's copy of FINGERS.B16** (ALTEngine only). The two rows under
+  the creature, filled since 0.9.6 so it reaches the bottom of the screen, were made in code every time the art
+  loaded; they are now in the file itself, the same pictures (`Patch/FINGERS.txt`).
+- With the faces in, face numbers on most levels are one higher than before from the first cell's faces on
+  (the Face Index Display shows the new numbers).
 - ALTViewer's patch button can be pressed again over a patched game: it takes the missing faces out, checks the
   byte patches, and puts them back. ALTEngine does the same when it is installed from a game ALTViewer patched.
 - **ALTViewer reads ALTEngine's files**: the trimmed levels (Level Viewer) and the face hugger's taller frames
@@ -269,10 +295,6 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
 - **No command window on Windows.** The window that opened behind the game is gone; what it showed now goes to
   `altengine.log` beside `ALTEngine.exe`, made afresh at every start - the file to send with a bug report. (A
   build configured with `-DALTENGINE_CONSOLE=ON` brings the window back, for testing.)
-- **Modern: Speed Compensation is gone** - far too fast to play. ALTEngine always runs at the original's -so
-  pacing; only the attract demos play at the pacing they were recorded at.
-- **Items on a lift ride it.** A pickup lying on a lift's floor goes up and down with the platform; it used to
-  stay hanging where the level put it.
 - **Picking a weapon from the pause menu is always on**, as in the original: Enter (or Right) on a weapon in the
   list switches to it. It was the Modern option Pause Weapon Select, which is gone.
 

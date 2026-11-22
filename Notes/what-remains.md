@@ -850,6 +850,15 @@ Left from that review, to look at:
   object, crate 2). Patch 10's three edits past it moved down 16 (0x801C2/0x80172/0x80262 -> 0x801B2/0x80162/
   0x80252); L906 MissingFaces CRCs remade; checked byte for byte against the old patched file less the record, and
   the C# copy run under mono on the real file.
+- Zip 191: version 1.0.0 (PATCH-NOTES: 0.9.9 is the testers' build, commit bdf3b81 of 17 November 01:57; 1.0.0
+  holds everything since). L371's squashed-quad corners double-sided (Notes/uv-review-log.md): patches 51-53 routine
+  2 -> 6 on 28 faces, patch 54 face 6064 0 -> 4; L371 CRCs remade.
+- Open: the invisible wall on L141's big lift (lift 11, cells 66-70 x 40-44, low 64 high 112, starts at the top as
+  the original does - flag 1 first, 0x4245c). A simulation with the port's own lift, height and move code (player
+  riding it down and up from the middle, each edge and each side, trying all four ways every tick) finds no move
+  refused while the floor ahead is within a step and there is headroom. Column 70 has its ceiling at 112: with the
+  lift at the top it is solid (no headroom) and under 0x300 of headroom from floor 88 up - the same in the
+  original. Needs what the video shows (on the lift or beside it, going up or down, where).
 - Open (Edward): global patches that may not suit the original should be separated like this one. The only
   known candidate: the "mirrored, other half" quads ((a, b, c, c) with routine 2, Notes/uv-review-log.md), which
   are unverified in DOS.

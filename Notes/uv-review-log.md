@@ -30,8 +30,14 @@ the draw routine at +0x12, and the light id at +0x13.
 - **Mirrored, other half:** a triangle cannot show the half of the tile cut along x0y0-x1y1. These become a
   quad (a, b, c, c) with routine 2 (mirrored quad, corners x1y1, x0y1, x0y0, x1y0): the triangle (a, b, c) is the
   face, and (a, c, d) has no area. The port draws quads as (a, b, c) + (a, c, d), so this is exact there. No
-  shipped level uses a quad like this, and how the original rasterises one is not traced, so in DOS it is
-  unverified.
+  shipped level uses a quad like this. **Made double-sided in zip 191 (1.0.0)**: routines 0 and 2 project with
+  0x48490, which returns the 2D cross product of three of the projected corners, and hide the face when it is 0 or
+  less (0x19b4a, 0x1b9d4); with two corners the same point that can be 0, so in DOS the quad could vanish (Edward
+  remembered as much). Their double-sided twins, routine 4 for 0 and 6 for 2 (0x1d64c, 0x1f274), project with
+  0x48ba4 and test nothing but the screen edges. They are the cutout routines, so a keyed texel would show through,
+  and none of the tiles used has one (L371's 35 and 1: 0 of 1024). The 28 L371 corners went 2 -> 6 and face 6064
+  0 -> 4; L112's 5850 matched too, but all four of its corners are one vertex (the doubled triangle blanked out),
+  so it was left.
 
 ## L111LEV and L900LEV
 

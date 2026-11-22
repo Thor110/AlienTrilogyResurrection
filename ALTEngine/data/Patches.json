@@ -30684,7 +30684,7 @@
     {
       "target": "SECT32/L371LEV.MAP",
       "stage": "texture",
-      "note": "L371LEV.MAP - UV review, round 1 (TESTING, Edward with the Face Index Display, 2026): recess corners at faces 5631/5636 (the recess at z 9984, texture 27) reversed to routine 5 like the other top left and bottom right corners; the top right and bottom left corners of four recesses (5640, 5628, 6820, 6815, 7609, 7603, 5014, 5002) mirrored to match them. A triangle can only show the half of its tile cut along x0y1-x1y0, and these need the other half, so each becomes a quad with its last corner repeated, routine 2 (mirrored): the real triangle is (a, b, c) and (a, c, d) has no area. Tracked in Notes/uv-review-log.md",
+      "note": "L371LEV.MAP - UV review, round 1 (TESTING, Edward with the Face Index Display, 2026): recess corners at faces 5631/5636 (the recess at z 9984, texture 27) reversed to routine 5 like the other top left and bottom right corners; the top right and bottom left corners of four recesses (5640, 5628, 6820, 6815, 7609, 7603, 5014, 5002) mirrored to match them. A triangle can only show the half of its tile cut along x0y1-x1y0, and these need the other half, so each becomes a quad with its last corner repeated, routine 6 (mirrored, double-sided; it was 2 before 1.0.0): the real triangle is (a, b, c) and (a, c, d) has no area. Tracked in Notes/uv-review-log.md",
       "edits": [
         {
           "offset": "0x2ED50",
@@ -30764,7 +30764,7 @@
         {
           "offset": "0x2EE16",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -30791,7 +30791,7 @@
         {
           "offset": "0x2ED26",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -30818,7 +30818,7 @@
         {
           "offset": "0x34A46",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -30845,7 +30845,7 @@
         {
           "offset": "0x349E2",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -30872,7 +30872,7 @@
         {
           "offset": "0x387EA",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -30899,7 +30899,7 @@
         {
           "offset": "0x38772",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -30926,7 +30926,7 @@
         {
           "offset": "0x2BD2E",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -30953,7 +30953,7 @@
         {
           "offset": "0x2BC3E",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         }
       ]
@@ -30961,7 +30961,7 @@
     {
       "target": "SECT32/L371LEV.MAP",
       "stage": "texture",
-      "note": "L371LEV.MAP - UV review, round 2 (TESTING, Edward with the Face Index Display, 2026): the top right and bottom left corners of the other recesses (7587, 7581, 4525, 4513, 9906, 9911, 9889, 9884, 9535, 9270, 4905, 5175, 5222, 4946) mirrored to match the rest, each a quad with its last corner repeated, routine 2, as in round 1; and faces 6820 and 5628 moved from texture 27 to 35, the band's own. Tracked in Notes/uv-review-log.md",
+      "note": "L371LEV.MAP - UV review, round 2 (TESTING, Edward with the Face Index Display, 2026): the top right and bottom left corners of the other recesses (7587, 7581, 4525, 4513, 9906, 9911, 9889, 9884, 9535, 9270, 4905, 5175, 5222, 4946) mirrored to match the rest, each a quad with its last corner repeated, routine 6, as in round 1; and faces 6820 and 5628 moved from texture 27 to 35, the band's own. Tracked in Notes/uv-review-log.md",
       "edits": [
         {
           "offset": "0x38620",
@@ -30987,7 +30987,7 @@
         {
           "offset": "0x38632",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31014,7 +31014,7 @@
         {
           "offset": "0x385BA",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31041,7 +31041,7 @@
         {
           "offset": "0x296FA",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31068,7 +31068,7 @@
         {
           "offset": "0x2960A",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31095,7 +31095,7 @@
         {
           "offset": "0x43B5E",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31122,7 +31122,7 @@
         {
           "offset": "0x43BC2",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31149,7 +31149,7 @@
         {
           "offset": "0x43A0A",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31176,7 +31176,7 @@
         {
           "offset": "0x439A6",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31203,7 +31203,7 @@
         {
           "offset": "0x41E62",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31230,7 +31230,7 @@
         {
           "offset": "0x2B4AA",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31257,7 +31257,7 @@
         {
           "offset": "0x2C9C2",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31284,7 +31284,7 @@
         {
           "offset": "0x2CD6E",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31311,7 +31311,7 @@
         {
           "offset": "0x2B7DE",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31338,7 +31338,7 @@
         {
           "offset": "0x409AE",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31360,7 +31360,7 @@
     {
       "target": "SECT32/L371LEV.MAP",
       "stage": "texture",
-      "note": "L371LEV.MAP - UV review, round 3 (TESTING, Edward with the Face Index Display, 2026): the top right and bottom left corners of three more recesses (5893, 6288, 5320, 5303, 9876, 9607) mirrored like rounds 1 and 2, each a quad with its last corner repeated, routine 2; and faces 6815 and 5640 moved from texture 27 to 35, the band's own. Tracked in Notes/uv-review-log.md",
+      "note": "L371LEV.MAP - UV review, round 3 (TESTING, Edward with the Face Index Display, 2026): the top right and bottom left corners of three more recesses (5893, 6288, 5320, 5303, 9876, 9607) mirrored like rounds 1 and 2, each a quad with its last corner repeated, routine 6; and faces 6815 and 5640 moved from texture 27 to 35, the band's own. Tracked in Notes/uv-review-log.md",
       "edits": [
         {
           "offset": "0x301C8",
@@ -31386,7 +31386,7 @@
         {
           "offset": "0x301DA",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31413,7 +31413,7 @@
         {
           "offset": "0x320B6",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31440,7 +31440,7 @@
         {
           "offset": "0x2D516",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31467,7 +31467,7 @@
         {
           "offset": "0x2D3C2",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31494,7 +31494,7 @@
         {
           "offset": "0x43906",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31521,7 +31521,7 @@
         {
           "offset": "0x42402",
           "bytes": [
-            "0x02"
+            "0x06"
           ]
         },
         {
@@ -31543,7 +31543,7 @@
     {
       "target": "SECT32/L371LEV.MAP",
       "stage": "texture",
-      "note": "L371LEV.MAP - UV review, round 4 (TESTING, Edward with the Face Index Display, 2026): faces 6453, 6455, 5794 and 5792 texture 86 -> 94; face 7382 turned to face the room (it showed only from outside), its texture unchanged; the circle panel at z 11520 put together as its 3 x 3 picture (6062, 6064, 6075 the inner halves of their corner tiles, 6064 and 6075 moved to the circle's top tiles 1 and 3, 6069 no longer mirrored); and 14 pinched triangles (2580, 2583, 2244, 2241, 2077, 2078, 1457, 1456, 1636, 1458, 1460, 1459, 1637, 1461) turned so their right angle sits on the texture's. Tracked in Notes/uv-review-log.md",
+      "note": "L371LEV.MAP - UV review, round 4 (TESTING, Edward with the Face Index Display, 2026): faces 6453, 6455, 5794 and 5792 texture 86 -> 94; face 7382 turned to face the room (it showed only from outside), its texture unchanged; the circle panel at z 11520 put together as its 3 x 3 picture (6062, 6064, 6075 the inner halves of their corner tiles, 6064 and 6075 moved to the circle's top tiles 1 and 3, 6069 no longer mirrored); and 14 pinched triangles (2580, 2583, 2244, 2241, 2077, 2078, 1457, 1456, 1636, 1458, 1460, 1459, 1637, 1461) turned so their right angle sits on the texture's. 6064, a quad with its last corner repeated, uses routine 4, the double-sided twin of 0 (since 1.0.0). Tracked in Notes/uv-review-log.md",
       "edits": [
         {
           "offset": "0x32D98",
@@ -31658,7 +31658,7 @@
         {
           "offset": "0x30F36",
           "bytes": [
-            "0x00"
+            "0x04"
           ]
         },
         {
