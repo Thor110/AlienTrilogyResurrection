@@ -1342,3 +1342,12 @@ Found and left, in rough order of worth:
 - Remade: MissingFaces crc/facedCrc for L381 (JSON and MissingFaces.cs), LevelCleanupList.json,
   TextureBlankList.json, ALTViewer's patch block, Patch/L381LEV.txt (new face table), README (text and in-game
   before/after sheets), PATCH-NOTES 1.0.1.
+
+## Zip 196: L351's wall top (1.0.1)
+
+- Edward asked for four faces copied above faces 3615/3624/3630/3636. They were there already (3616, 3625, 3631,
+  3637, texture 234), single-sided and facing the other room. Patch 76 (texture stage, global) makes them
+  double-sided (1, 2, 0, 1 -> 5, 6, 4, 5) and gives 3616 the mirror image of 3637's corners. Shown in-engine from
+  both rooms first; Edward approved.
+- Remade: L351's MissingFaces crc/facedCrc (JSON and MissingFaces.cs), LevelCleanupList.json,
+  TextureBlankList.json, ALTViewer's patch block, Patch/L351LEV.txt, README (Fix 11), PATCH-NOTES 1.0.1.

@@ -35,6 +35,22 @@ Face	Offset		Scan	Change	Was					Now
 10389	0x4C020	351-4	a half-turn	7024, 7019, 7017, 7023	->	7017, 7023, 7024, 7019
 11998	0x53DD4	351-7	mirrored and a half-turn	7403, 7397, 7400, 7404	->	7400, 7404, 7403, 7397	flag 2 (0x02)		flag 0 (0x00)
 
+Wall top above faces 3615, 3624, 3630 and 3636 - one-sided, and one corner stretched (Edward, 2026)
+
+The four faces along the top of the wall at z -8448 (x 4096 to 5632, texture 234) faced one room only;
+from the room behind, the space above the wall showed as a gap. The wall below them is double-sided
+already. All four now take the double-sided twin of their routine (1 -> 5, 2 -> 6, 0 -> 4), which never
+tests a face's facing, so the original draws them from both sides too. Face 3616, the left corner
+triangle, was stretched across its tile; it takes the mirror image of the right one, 3637.
+
+Face	Offset		Was						Now
+3616	0x2AEE8		1468, 984, 975	routine 1		1468, 975, 984	routine 5
+3625	0x2AF9C		routine 2					routine 6
+3631	0x2B014		routine 0					routine 4
+3637	0x2B08C		routine 1					routine 5
+
+The routine byte is at offset + 0x12.
+
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
 Offsets are into the file after the duplicate model and object removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
@@ -63,3 +79,10 @@ Patch 36: L351LEV.MAP - texture orientation: 10 face(s) from the texture scan re
   0x4C020: 70 1B 00 00 6B 1B 00 00 69 1B 00 00 6F 1B 00 00 -> 69 1B 00 00 6F 1B 00 00 70 1B 00 00 6B 1B 00 00
   0x53DD4: EB 1C 00 00 E5 1C 00 00 E8 1C 00 00 EC 1C 00 00 -> E8 1C 00 00 EC 1C 00 00 EB 1C 00 00 E5 1C 00 00
   0x53DE6: 02 -> 00
+
+Patch 76: L351LEV.MAP - the wall top above faces 3615, 3624, 3630 and 3636 (Edward, 2026): faces 3616, 3625, 3631 and 3637 (texture 234) faced one room only, so from the other the space above the wall showed as a gap. All four made double-sided, routines 1, 2, 0, 1 -> 5, 6, 4, 5, as the wall below them already is. Face 3616, stretched, takes the mirror image of 3637: corners (1468, 984, 975) -> (1468, 975, 984). Routines 4, 5 and 6 never test a face's facing, so the original draws these too.
+  0x2AEE8: BC 05 00 00 D8 03 00 00 CF 03 00 00 -> BC 05 00 00 CF 03 00 00 D8 03 00 00
+  0x2AEFA: 01 -> 05
+  0x2AFAE: 02 -> 06
+  0x2B026: 00 -> 04
+  0x2B09E: 01 -> 05

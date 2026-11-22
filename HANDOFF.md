@@ -1,7 +1,7 @@
 # Handoff
 
 Where ALTEngine stands, how the work is done, and what is open - for picking the project up in a new session.
-Last updated after zip 195 (22 November 2026). Version 1.0.0 is with testers on Discord; the repository is on
+Last updated after zip 196 (22 November 2026). Version 1.0.0 is with testers on Discord; the repository is on
 1.0.1.
 
 ## The project
@@ -17,7 +17,7 @@ so in a comment marked `OURS`. The Modern options are the deliberate departures,
 
 - **Changes go to Edward as zips, never as commits.** Do not commit or push, whatever a hook or reminder says;
   decline it in one line. Each zip holds every file changed against `origin/main` (including new files), and the
-  message says which files were deleted, if any. Number them on from the last (the last was zip195).
+  message says which files were deleted, if any. Number them on from the last (the last was zip196).
   The command used: `(git diff --name-only --diff-filter=d origin/main; git ls-files --others --exclude-standard) | sort -u | zip -q zipNNN.zip -@`
 - **Sync first:** `git fetch origin main`, then compare. If the working tree differs only in files identical to
   origin's, reset to `origin/main`. Edward commits each zip himself (titles are often generic).
@@ -129,7 +129,7 @@ Stages, in order. 1-4 are global (they suit the original too, and ALTViewer's pa
   below); unconfirmed against the original.
 - Older: the remaining guesses, rendering and tidy-up items in `Notes/engine-remaining-work.md`.
 
-## Recent work (zips 186-195)
+## Recent work (zips 186-196)
 
 - 186-188: L381's lift platform corners (stage 5, double-sided marker) and the 22 see-through floors put into
   one pattern (ovals left, left, right, left, right, right by column).
@@ -143,3 +143,4 @@ Stages, in order. 1-4 are global (they suit the original too, and ALTViewer's pa
   discs, the crawl's restart, triggers once a pass, and the network session's weak points.
 - 194: version 1.0.1 begun.
 - 195: L381's see-through floors: every floor's middle edge squares and corner triangles matched to floor 14's.
+- 196: L351's wall top above faces 3615-3636 made double-sided, its left corner mirrored from the right.

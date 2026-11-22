@@ -35,6 +35,9 @@ Everything since 1.0.0 (the build sent to testers on 22 November 2026).
   triangles take the tiles and corner orders Edward picked, and every floor's edges and corners now match one
   model floor's (mirrored where its oval runs the other way). 219 faces in one patch, replacing 1.0.0's 97; the
   floor at cells 77/37 no longer borrows a texture from another page. See Patch/L381LEV.txt.
+- **L351, the top of the wall above faces 3615-3636**: the four faces along it showed only from one room, leaving
+  a gap from the other; they are now double-sided, like the wall below, and the stretched left corner triangle
+  mirrors the right one. See Patch/L351LEV.txt.
 
 ### Closer to the original
 

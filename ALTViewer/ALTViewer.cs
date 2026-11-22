@@ -1336,6 +1336,17 @@ namespace ALTViewer
                 Tuple.Create(0x2C460L, new byte[] { 0xB9, 0x27, 0x00, 0x00, 0xB6, 0x27, 0x00, 0x00, 0xB5, 0x27, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x24 })
             };
             BinaryUtility.ReplaceBytes(replacements, patchDirectory);
+            // L351LEV.MAP - the wall top above faces 3615, 3624, 3630 and 3636 (Edward, 2026): faces 3616, 3625, 3631 and 3637 (texture 234) faced one room only, so from the other the space above the wall showed as a gap. All four made double-sided, routines 1, 2, 0, 1 -> 5, 6, 4, 5, as the wall below them already is. Face 3616, stretched, takes the mirror image of 3637: corners (1468, 984, 975) -> (1468, 975, 984). Routines 4, 5 and 6 never test a face's facing, so the original draws these too.
+            patchDirectory = gameDirectory + "SECT32\\L351LEV.MAP";
+            replacements = new List<Tuple<long, byte[]>>()
+            {
+                Tuple.Create(0x2AEE8L, new byte[] { 0xBC, 0x05, 0x00, 0x00, 0xCF, 0x03, 0x00, 0x00, 0xD8, 0x03, 0x00, 0x00 }),
+                Tuple.Create(0x2AEFAL, new byte[] { 0x05 }),
+                Tuple.Create(0x2AFAEL, new byte[] { 0x06 }),
+                Tuple.Create(0x2B026L, new byte[] { 0x04 }),
+                Tuple.Create(0x2B09EL, new byte[] { 0x05 })
+            };
+            BinaryUtility.ReplaceBytes(replacements, patchDirectory);
             // L906LEV.MAP - the bridge sides (texture 117, Edward with the Face Index Display, 2026): 36 faces turned a quarter-turn clockwise, (d, a, b, c). Faces as the display shows them with the Level Cleanup on: 4526, 4528, 4530, 4532, 4534, 4536, 5361, 5363, 5365, 5367, 5369, 5371, 5396, 5414, 5572, 5593, 5759, 5934, 6397, 6641, 6752, 6773, 6825, 6843, 7807, 7809, 7811, 7813, 7815, 7817, 8558, 8574, 8576, 8578, 8580, 8582 (in the shipped file 13 to 21 higher, 4539 ... 8603). Some will be flipped horizontally next
             patchDirectory = gameDirectory + "SECT90\\L906LEV.MAP";
             replacements = new List<Tuple<long, byte[]>>()

@@ -44195,6 +44195,54 @@
           ]
         }
       ]
+    },
+    {
+      "target": "SECT32/L351LEV.MAP",
+      "stage": "texture",
+      "note": "L351LEV.MAP - the wall top above faces 3615, 3624, 3630 and 3636 (Edward, 2026): faces 3616, 3625, 3631 and 3637 (texture 234) faced one room only, so from the other the space above the wall showed as a gap. All four made double-sided, routines 1, 2, 0, 1 -> 5, 6, 4, 5, as the wall below them already is. Face 3616, stretched, takes the mirror image of 3637: corners (1468, 984, 975) -> (1468, 975, 984). Routines 4, 5 and 6 never test a face's facing, so the original draws these too.",
+      "edits": [
+        {
+          "offset": "0x2AEE8",
+          "bytes": [
+            "0xBC",
+            "0x05",
+            "0x00",
+            "0x00",
+            "0xCF",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xD8",
+            "0x03",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x2AEFA",
+          "bytes": [
+            "0x05"
+          ]
+        },
+        {
+          "offset": "0x2AFAE",
+          "bytes": [
+            "0x06"
+          ]
+        },
+        {
+          "offset": "0x2B026",
+          "bytes": [
+            "0x04"
+          ]
+        },
+        {
+          "offset": "0x2B09E",
+          "bytes": [
+            "0x05"
+          ]
+        }
+      ]
     }
   ],
   "faceUvRotations": [],

@@ -484,6 +484,7 @@ Fixes marked "texture scan" were found by ALTLevelScan, which looks for faces wh
 - [Patched an issue on L351LEV where one face had its texture rotated (texture scan 351-11).](#L351LEV-Fix-8)
 - [Patched an issue on L351LEV where one face had its texture rotated (texture scan 351-12).](#L351LEV-Fix-9)
 - [Patched an issue on L351LEV where one face had its texture flipped and rotated (texture scan 351-13).](#L351LEV-Fix-10)
+- [Patched an issue on L351LEV where the top of a wall showed as a gap from one side and one of its corner triangles was stretched.](#L351LEV-Fix-11)
 - [Patched an issue on L352LEV where one face had its texture rotated (texture scan 352-1).](#L352LEV-Fix-1)
 - [Patched an issue on L352LEV where one face had its texture rotated (texture scan 352-2).](#L352LEV-Fix-2)
 - [Patched an issue on L353LEV where two faces had their textures flipped (texture scan 353-1).](#L353LEV-Fix-1)
@@ -1359,6 +1360,21 @@ Patch listed at Patch/L351LEV.txt
 UV flipped and rotation corrected.
 
 Found by texture scan 351-13. Face 8713 is corrected so the texture runs on from the faces around it.
+
+Patch listed at Patch/L351LEV.txt
+
+## L351LEV Fix 11
+
+Faces made double-sided and UV corrected.
+
+The top of the wall above faces 3615, 3624, 3630 and 3636 (texture 234; faces 3616, 3625, 3631 and 3637) faced one room only, so from the room behind it the space above the wall showed as a gap. The four faces are now double-sided, as the wall below them already was. The left corner triangle, 3616, was stretched; it now takes the mirror image of the right one, 3637 (Edward).
+
+Double-sided routines are ones the original already has and draws from both sides, so this suits the original game as well and is part of ALTViewer's patch button.
+
+<table>
+<tr><th>Before</th><th>After</th></tr>
+<tr><td><img src="Images/L351LEV/L351LEV-walltop-before.png" width="400" alt="L351LEV wall top before"></td><td><img src="Images/L351LEV/L351LEV-walltop-after.png" width="400" alt="L351LEV wall top after"></td></tr>
+</table>
 
 Patch listed at Patch/L351LEV.txt
 
