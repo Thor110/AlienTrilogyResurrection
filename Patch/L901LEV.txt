@@ -11,7 +11,7 @@ Offset	Original	New
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
-Patch 8: L901LEV.MAP - Incorrect player store positioning
+Patch 1: L901LEV.MAP - Incorrect player store positioning
   0x5BAD5: 16 23 -> 15 29
   0x5BAE9: 25 23 -> 16 29
   0x5BAFD: 15 1A -> 17 29

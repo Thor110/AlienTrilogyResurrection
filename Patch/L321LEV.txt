@@ -33,7 +33,7 @@ Face	Offset		Scan	Change	Was					Now
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
-Patch 25: L321LEV.MAP - texture orientation: 19 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L321LEV.txt) (Claude, 2026)
+Patch 30: L321LEV.MAP - texture orientation: 19 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L321LEV.txt) (Claude, 2026)
   0x109C4: 7B 1A 00 00 D9 1A 00 00 D0 1A 00 00 4A 1A 00 00 -> 4A 1A 00 00 7B 1A 00 00 D9 1A 00 00 D0 1A 00 00
   0x12044: 49 1A 00 00 D4 1A 00 00 77 1A 00 00 7C 1A 00 00 -> 7C 1A 00 00 49 1A 00 00 D4 1A 00 00 77 1A 00 00
   0x16FDE: 02 -> 00

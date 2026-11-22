@@ -4,7 +4,7 @@
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
-Patch 10: 371GFX.B16 - graphics background fix
+Patch 18: 371GFX.B16 - graphics background fix
   0x3AB0C (64 bytes):
     +0x0: 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 -> FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA
     +0x20: 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 97 -> FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA FA

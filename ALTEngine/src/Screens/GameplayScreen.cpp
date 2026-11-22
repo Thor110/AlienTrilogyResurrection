@@ -443,10 +443,11 @@ namespace ALTEngine::Screens
         // the original's do (see logicTick); on, the aliens run on every tick
         // and everything else stays on the alternate ones.
         bool fasterXenomorphs = false;
-        // The original's -so switch, the port's default: one pass of the task
+        // The original's -so switch, the port's pacing: one pass of the task
         // list per two interrupts, so every tick is a creature tick and the
-        // base tick is half as fast. Modern: Speed Compensation turns it off,
-        // for the original's default (the player at twice the creatures' rate).
+        // base tick is half as fast. Only an attract demo turns it off, below
+        // (Modern: Speed Compensation, which did so for play, is gone - far
+        // too fast).
         bool speedCompensationOff = true;
         // An attract demo plays as it was recorded: with the original's own
         // default, speed compensation on (two passes a frame at the design
@@ -633,8 +634,8 @@ namespace ALTEngine::Screens
             freeLook = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FreeLook);
             playerJumping = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::PlayerJumping);
             fasterXenomorphs = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::FasterXenomorphs);
-            speedCompensationOff = !modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SpeedCompensation);
-            if (demoPacing) { speedCompensationOff = false; fasterXenomorphs = false; }
+            speedCompensationOff = !demoPacing;
+            if (demoPacing) { fasterXenomorphs = false; }
             saveAnywhere = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::SaveAnywhere);
             liveMinimap = modern.IsActive(ALTEngine::Bootstrap::ModernFeature::LiveMinimap);
             {
@@ -3953,7 +3954,7 @@ namespace ALTEngine::Screens
                             // tests [0x6164] & 1, 0x342c1); the egg's, the
                             // queen's, the colonist's and the vents' tasks have
                             // no such test and run every pass. The same with
-                            // Speed Compensation off, one pass a tick.
+                            // -so pacing, one pass a tick.
                             const bool everyPass = enemy.type == 1 || enemy.type == 7 || enemy.type == 10
                                                 || ALTEngine::Screens::IsVent(enemy.type);
                             if (!creaturePass && !everyPass) { continue; }
@@ -5734,6 +5735,24 @@ namespace ALTEngine::Screens
                                 {
                                     const size_t pi = liftPlaced[li].first + k;
                                     if (pi < placedObjects.size()) { placedObjects[pi].y = lifts[li].PlatformY(); }
+                                }
+                            }
+                            // What lies on the lift rides it: an item is drawn
+                            // on its cell's floor, the floor byte the lift
+                            // rewrites (FUN_00041e80), so it goes up and down
+                            // with the platform. It stayed where the level
+                            // put it.
+                            if (lifts[li].Moving() || liftResult.stopped)
+                            {
+                                const LF::Lift& lift = lifts[li];
+                                const int mapLength = level.header.mapLength;
+                                for (const LivePickup& live : livePickups)
+                                {
+                                    if (mapLength <= 0 || live.cellIndex < 0 || live.placedIndex >= placedObjects.size()) { continue; }
+                                    const int cx = live.cellIndex % mapLength, cz = live.cellIndex / mapLength;
+                                    if (cx < lift.cellX || cx >= lift.cellX + lift.width || cz < lift.cellZ || cz >= lift.cellZ + lift.depth) { continue; }
+                                    placedObjects[live.placedIndex].y = ALTEngine::Formats::FindFloorHeightGridSpace(level, cx * 512 + 256, cz * 512 + 256)
+                                        + static_cast<float>(ALTEngine::Screens::DroppedPickups::DropHeight(live.type));
                                 }
                             }
                         }

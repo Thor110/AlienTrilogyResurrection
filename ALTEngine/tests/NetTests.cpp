@@ -589,7 +589,6 @@ TEST_CASE("Session rules: in a network game the host decides what changes play a
         const B::SessionRulesScope scope(rules);
         CHECK(modern.IsActive(B::ModernFeature::FasterXenomorphs));
         CHECK(!modern.IsActive(B::ModernFeature::PlayerJumping));
-        CHECK(!modern.IsActive(B::ModernFeature::SpeedCompensation));
         CHECK(modern.IsActive(B::ModernFeature::EnableCheats));    // the host allows cheats
         CHECK(!modern.IsActive(B::ModernFeature::SaveAnywhere));
         CHECK_EQ(B::WeaponPacingSettings(config).Get(), 6);

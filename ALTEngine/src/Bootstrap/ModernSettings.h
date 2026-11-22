@@ -70,16 +70,17 @@ namespace ALTEngine::Bootstrap
         // the original's pace, which suits them.
         FasterXenomorphs,
 
-        // The original's speed compensation, its default unless "-so" was
-        // given: the player, doors and lifts tick at 69.74 Hz, twice the
-        // creatures' 34.87. Off, the port runs as -so does: everything at
-        // 34.87 Hz (Edward, 2026: on, "everything is insanely fast").
-        SpeedCompensation,
+        // Value 9 was Speed Compensation (the original's default pacing, the
+        // player, doors and lifts at twice the creatures' rate): removed in
+        // zip 183, far too fast to play. The port always runs as the
+        // original's -so does; an attract demo alone plays at the pacing it
+        // was recorded at (GameplayScreen). The values after it keep theirs,
+        // as a network game sends them as bits.
 
         // Save Game in the pause menu saves the level as it stands - the
         // player, creatures, doors, lifts, crates and pickups - instead of a
         // checkpoint at its start. The original only saves between levels.
-        SaveAnywhere,
+        SaveAnywhere = 10,
 
         // How long each level took, from the first tick on it to its End Level
         // trigger, on the mission assessment, with the run's running total
@@ -134,7 +135,6 @@ namespace ALTEngine::Bootstrap
             ModernFeature::LiveMinimap,
             ModernFeature::EnableCheats,
             ModernFeature::FasterXenomorphs,
-            ModernFeature::SpeedCompensation,
             ModernFeature::SaveAnywhere,
             ModernFeature::LevelTimer,
         };
@@ -156,7 +156,6 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::RenderDistance:
             case ModernFeature::LiveMinimap:
             case ModernFeature::FasterXenomorphs:
-            case ModernFeature::SpeedCompensation:
                 return NetworkRule::Shared;
             }
             return NetworkRule::Shared;
@@ -290,7 +289,6 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::LiveMinimap: return "Live Minimap";
             case ModernFeature::EnableCheats: return "Enable Cheats";
             case ModernFeature::FasterXenomorphs: return "Faster Xenomorphs";
-            case ModernFeature::SpeedCompensation: return "Speed Compensation";
             case ModernFeature::SaveAnywhere: return "Save Anywhere";
             case ModernFeature::LevelTimer: return "Level Timer";
             }
@@ -310,7 +308,6 @@ namespace ALTEngine::Bootstrap
             case ModernFeature::LiveMinimap: return "ModernLiveMinimap";
             case ModernFeature::EnableCheats: return "ModernEnableCheats";
             case ModernFeature::FasterXenomorphs: return "ModernFasterXenomorphs";
-            case ModernFeature::SpeedCompensation: return "ModernSpeedCompensation";
             case ModernFeature::SaveAnywhere: return "ModernSaveAnywhere";
             case ModernFeature::LevelTimer: return "ModernLevelTimer";
             }

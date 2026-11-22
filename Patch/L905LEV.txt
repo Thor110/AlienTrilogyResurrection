@@ -70,7 +70,7 @@ None	0x23858	905-1	mirrored	6639, 6636, 6641, 6642	->	6639, 6636, 6641, 6642	fla
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
-Patch 1: L905LEV.MAP
+Patch 11: L905LEV.MAP - the pipes drawn solid instead of see-through (ALTViewer's fixes 1 and 2)
   0x56ADA: 02 -> 00
   0x57A8E: 02 -> 00
   0x41356: 02 -> 00
@@ -125,6 +125,6 @@ Patch 1: L905LEV.MAP
   0x4632E: 02 -> 00
   0x4637E: 02 -> 00
 
-Patch 37: L905LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L905LEV.txt) (Claude, 2026)
+Patch 42: L905LEV.MAP - texture orientation: 2 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L905LEV.txt) (Claude, 2026)
   0x2386A: 02 -> 00
   0x238E2: 02 -> 00

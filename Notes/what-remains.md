@@ -797,6 +797,22 @@ Left from that review, to look at:
 - Results (Screens/MultiplayerResultsScreen): FUN_0001560c / FUN_00015228, layout exact for up to four players;
   OURS: eight players (columns close up), and no "Waiting for players" handshake between machines.
 
+### Edward's list (zip 183)
+- Done: the six routine-3 floor triangles (L111/L900 face 9040, L131 2476/2494/2989/3007) - routine 3 is in no
+  draw table, so they were holes in the original too; routine 2 now, L131's texture 191, L111's 18. L381's
+  first see-through floor (faces 3283/3099 half-turned, 2850/2860 textures swapped). L906's 53 converted
+  export remaps taken out. Modern: Speed Compensation removed (value 9 retired). Pickups ride lifts.
+  MissingFaces CRCs for L131, L381 and L906 remade; LevelCleanupList and TextureBlankList regenerated (L361 and
+  361GFX now listed too - they had been left out).
+- Open, waiting on Edward: (1) L906's duplicate box - crate 9 at cell 57,79 (empty) on crate 8 (drop 1);
+  removing a record needs a new stage (the file shortens, crates 10-22 renumber, later offsets move; only logic
+  3 names an object, crate 2, so it is safe); (2) L381's lift that starts up - lift 12 (54,32: floor 0, travel
+  84, at the top, threshold 2) is the odd one among the lifts under the see-through floor (0-11, 15: floor 56,
+  travel 24, at the bottom); (3) L381's lift textures and the see-through floors' corners, to copy the first
+  floor's fix onto the rest; (4) the "invisible wall" when a lift is activated - nothing marks a moving lift's
+  cells; which lift?
+- Demo 1.1.1, word 703: the player slides along z 11831 and misses the terminal's trigger cell.
+
 ## 3. Code health
 
 Done in zip 81:

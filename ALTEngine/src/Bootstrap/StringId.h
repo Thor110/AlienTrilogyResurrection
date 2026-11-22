@@ -169,8 +169,6 @@ namespace ALTEngine::Bootstrap
         ActionJump,
         FasterXenomorphs,
         DescFasterXenomorphs,
-        SpeedCompensation,
-        DescSpeedCompensation,
         SaveAnywhere,
         DescSaveAnywhere,
         // Modern: Level Timer, and its line on the mission assessment. OURS.

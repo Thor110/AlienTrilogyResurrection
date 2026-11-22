@@ -149,83 +149,24 @@ Texture Flips
 0x3D842 = 00
 0x3D306 = 00
 
-Fixes moved from ALTViewer's model export into the file (Claude, 2026)
-
-ALTViewer's OBJ export used to correct bridge faces by giving them other UVs, so the fix never reached
-the game. Each one is now a byte change that gives the same result in the level file itself.
-
-A turn rotates the face's four vertex indices (16 bytes at the face's offset), keeping its winding. A mirror
-sets the flag byte (offset + 0x12) to its mirrored partner. A texture change sets the texture index
-(offset + 0x10, two bytes) to the one the export borrowed. The old export remap is listed so the mapping
-stays on record: "face N's UVs as a,b,c,d" means corner k took corner p[k] of face N's UVs.
-
-Face	Offset		Old export remap		Change				Was						Now
-10900	0x50BEC		its own UVs as 2,1,0,3		mirrored and a quarter-turn		8884, 9439, 8885, 8886 tex 256 flag 4	->	9439, 8885, 8886, 8884 tex 256 flag 6
-8580	0x456AC		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13744, 13790, 13778, 13777 tex 256 flag 4	->	13777, 13744, 13790, 13778 tex 256 flag 6
-8598	0x45814		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13741, 13740, 13774, 13775 tex 256 flag 4	->	13775, 13741, 13740, 13774 tex 256 flag 6
-8602	0x45864		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13765, 13742, 13776, 13784 tex 256 flag 4	->	13784, 13765, 13742, 13776 tex 256 flag 6
-7826	0x41BC4		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13731, 13725, 13771, 13773 tex 256 flag 4	->	13773, 13731, 13725, 13771 tex 256 flag 6
-7830	0x41C14		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13728, 13730, 13772, 13770 tex 256 flag 4	->	13770, 13728, 13730, 13772 tex 256 flag 6
-7834	0x41C64		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13761, 13754, 13780, 13781 tex 256 flag 4	->	13781, 13761, 13754, 13780 tex 256 flag 6
-5428	0x3606C		its own UVs as 0,3,2,1		mirrored and three quarter-turns		8572, 8573, 8590, 8574 tex 175 flag 2	->	8574, 8572, 8573, 8590 tex 175 flag 0
-5586	0x36CC4		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13917, 13953, 13959, 13916 tex 256 flag 4	->	13916, 13917, 13953, 13959 tex 256 flag 6
-5948	0x3890C		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13915, 13912, 13918, 13919 tex 256 flag 4	->	13919, 13915, 13912, 13918 tex 256 flag 6
-6655	0x3C048		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13835, 13836, 13825, 13829 tex 305 flag 0	->	13829, 13835, 13836, 13825 tex 305 flag 2
-6839	0x3CEA8		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13877, 13878, 13865, 13870 tex 304 flag 0	->	13870, 13877, 13878, 13865 tex 304 flag 2
-5375	0x35C48		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13608, 13610, 13645, 13644 tex 256 flag 4	->	13644, 13608, 13610, 13645 tex 256 flag 6
-5379	0x35C98		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13605, 13604, 13641, 13642 tex 256 flag 4	->	13642, 13605, 13604, 13641 tex 256 flag 6
-5383	0x35CE8		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13631, 13606, 13643, 13650 tex 256 flag 4	->	13650, 13631, 13606, 13643 tex 256 flag 6
-4550	0x31BD4		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13627, 13619, 13647, 13648 tex 256 flag 4	->	13648, 13627, 13619, 13647 tex 256 flag 6
-4546	0x31B84		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13592, 13594, 13638, 13636 tex 256 flag 4	->	13636, 13592, 13594, 13638 tex 256 flag 6
-4542	0x31B34		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13595, 13589, 13637, 13639 tex 256 flag 4	->	13639, 13595, 13589, 13637 tex 256 flag 6
-6830	0x3CDF4		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13667, 13701, 13720, 13712 tex 256 flag 4	->	13712, 13667, 13701, 13720 tex 256 flag 6
-6932	0x3D5EC		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13662, 13665, 13710, 13711 tex 256 flag 4	->	13711, 13662, 13665, 13710 tex 256 flag 6
-7079	0x3E168		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13682, 13668, 13713, 13714 tex 256 flag 4	->	13714, 13682, 13668, 13713 tex 256 flag 6
-7006	0x3DBB4		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13677, 13681, 13718, 13715 tex 256 flag 4	->	13715, 13677, 13681, 13718 tex 256 flag 6
-6887	0x3D268		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13679, 13678, 13716, 13717 tex 256 flag 4	->	13717, 13679, 13678, 13716 tex 256 flag 6
-6736	0x3C69C		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13700, 13705, 13722, 13721 tex 256 flag 4	->	13721, 13700, 13705, 13722 tex 256 flag 6
-6787	0x3CA98		its own UVs as 0,3,2,1		mirrored and three quarter-turns		13832, 13866, 13874, 14008 tex 256 flag 4	->	14008, 13832, 13866, 13874 tex 256 flag 6
-8596	0x457EC		its own UVs as 1,2,3,0		three quarter-turns		13740, 13744, 13777, 13774 tex 256 flag 4	->	13774, 13740, 13744, 13777 tex 256 flag 4
-8600	0x4583C		its own UVs as 1,2,3,0		three quarter-turns		13742, 13741, 13775, 13776 tex 256 flag 4	->	13776, 13742, 13741, 13775 tex 256 flag 4
-8604	0x4588C		its own UVs as 1,2,3,0		three quarter-turns		13759, 13765, 13784, 13782 tex 256 flag 4	->	13782, 13759, 13765, 13784 tex 256 flag 4
-7824	0x41B9C		its own UVs as 1,2,3,0		three quarter-turns		13786, 13731, 13773, 13794 tex 256 flag 4	->	13794, 13786, 13731, 13773 tex 256 flag 4
-7828	0x41BEC		its own UVs as 1,2,3,0		three quarter-turns		13725, 13728, 13770, 13771 tex 256 flag 4	->	13771, 13725, 13728, 13770 tex 256 flag 4
-7832	0x41C3C		its own UVs as 1,2,3,0		three quarter-turns		13730, 13761, 13781, 13772 tex 256 flag 4	->	13772, 13730, 13761, 13781 tex 256 flag 4
-6857	0x3D010		its own UVs as 1,2,3,0		three quarter-turns		11760, 11771, 11772, 11759 tex 153 flag 0	->	11759, 11760, 11771, 11772 tex 153 flag 0
-5607	0x36E68		its own UVs as 1,2,3,0		three quarter-turns		13952, 13351, 14016, 13956 tex 256 flag 4	->	13956, 13952, 13351, 14016 tex 256 flag 4
-5410	0x35F04		its own UVs as 1,2,3,0		three quarter-turns		13961, 13933, 13941, 13960 tex 305 flag 0	->	13960, 13961, 13933, 13941 tex 305 flag 0
-5773	0x37B60		its own UVs as 1,2,3,0		three quarter-turns		13920, 13921, 13890, 13898 tex 313 flag 0	->	13898, 13920, 13921, 13890 tex 313 flag 0
-6411	0x3AD38		its own UVs as 1,2,3,0		three quarter-turns		13825, 13822, 13831, 13828 tex 256 flag 4	->	13828, 13825, 13822, 13831 tex 256 flag 4
-6766	0x3C8F4		its own UVs as 1,2,3,0		three quarter-turns		13865, 13829, 13830, 13869 tex 256 flag 4	->	13869, 13865, 13829, 13830 tex 256 flag 4
-5377	0x35C70		its own UVs as 1,2,3,0		three quarter-turns		13604, 13608, 13644, 13641 tex 256 flag 4	->	13641, 13604, 13608, 13644 tex 256 flag 4
-5381	0x35CC0		its own UVs as 1,2,3,0		three quarter-turns		13606, 13605, 13642, 13643 tex 256 flag 4	->	13643, 13606, 13605, 13642 tex 256 flag 4
-5385	0x35D10		its own UVs as 1,2,3,0		three quarter-turns		13625, 13631, 13650, 13649 tex 256 flag 4	->	13649, 13625, 13631, 13650 tex 256 flag 4
-4548	0x31BAC		its own UVs as 1,2,3,0		three quarter-turns		13594, 13627, 13648, 13638 tex 256 flag 4	->	13638, 13594, 13627, 13648 tex 256 flag 4
-4544	0x31B5C		its own UVs as 1,2,3,0		three quarter-turns		13589, 13592, 13636, 13637 tex 256 flag 4	->	13637, 13589, 13592, 13636 tex 256 flag 4
-4540	0x31B0C		its own UVs as 1,2,3,0		three quarter-turns		13653, 13595, 13639, 13640 tex 256 flag 4	->	13640, 13653, 13595, 13639 tex 256 flag 4
-6730	0x3C624		its own UVs as 1,2,3,0		three quarter-turns		13701, 13696, 13719, 13720 tex 256 flag 4	->	13720, 13701, 13696, 13719 tex 256 flag 4
-6881	0x3D1F0		its own UVs as 1,2,3,0		three quarter-turns		13665, 13667, 13712, 13710 tex 256 flag 4	->	13710, 13665, 13667, 13712 tex 256 flag 4
-7000	0x3DB3C		its own UVs as 1,2,3,0		three quarter-turns		13668, 13662, 13711, 13713 tex 256 flag 4	->	13713, 13668, 13662, 13711 tex 256 flag 4
-7085	0x3E1E0		its own UVs as 1,2,3,0		three quarter-turns		13681, 13685, 13724, 13718 tex 256 flag 4	->	13718, 13681, 13685, 13724 tex 256 flag 4
-6938	0x3D664		its own UVs as 1,2,3,0		three quarter-turns		13678, 13677, 13715, 13716 tex 256 flag 4	->	13716, 13678, 13677, 13715 tex 256 flag 4
-6836	0x3CE6C		its own UVs as 1,2,3,0		three quarter-turns		13705, 13679, 13717, 13722 tex 256 flag 4	->	13722, 13705, 13679, 13717 tex 256 flag 4
-5357	0x35AE0		its own UVs as 3,2,1,0		mirrored and a half-turn		1265, 872, 1354, 1266 tex 206 flag 0	->	1354, 1266, 1265, 872 tex 206 flag 2
-5373	0x35C20		its own UVs as 3,2,1,0		mirrored and a half-turn		13585, 13610, 13645, 13661 tex 256 flag 4	->	13645, 13661, 13585, 13610 tex 256 flag 6
-4538	0x31AE4		its own UVs as 3,2,1,0		mirrored and a half-turn		13653, 13651, 13660, 13640 tex 256 flag 4	->	13660, 13640, 13653, 13651 tex 256 flag 6
-4522	0x319A4		its own UVs as 3,2,1,0		mirrored and a half-turn		879, 1088, 1089, 880 tex 206 flag 0	->	1089, 880, 879, 1088 tex 206 flag 2
+The 53 bridge and fence faces once turned and mirrored here, converted from ALTViewer's old model-export UV
+remaps (Claude, 2026), were taken out again in zip 183: Edward found most, if not all, of them wrong.
+Only the fixes listed above, made by hand, stay.
 
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
-Patch 0: L906LEV.MAP
+Patch 0: L906LEV.MAP - a misplaced triangle: its vertex list put right (ALTViewer's fix 1)
+  0x50BC8: FF FF FF FF -> B4 22 00 00
+
+Patch 10: L906LEV.MAP - the railings drawn see-through (ALTViewer's fixes 2-4), the bridge sections given their textures (fix 5) and textures flipped the right way
   0x51342: 00 -> 04
   0x51A0E: 00 -> 04
   0x51EBE: 00 -> 04
   0x5236E: 00 -> 04
   0x52AEE: 00 -> 04
   0x22BF9: 01 -> 04
-  0x50BC8: FF FF FF FF -> B4 22 00 00
   0x45680: 31 01 -> 75 00
   0x22BF9: 01 02 -> 01 04
   0x50BE8: 31 01 -> 75 00
@@ -332,87 +273,3 @@ Patch 0: L906LEV.MAP
   0x801C2: 00 -> 0B
   0x80172: 00 -> 0B
   0x80262: 00 -> 0B
-
-Patch 48: L906LEV.MAP - 53 bridge faces with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L906LEV.txt) (Edward, 2026; Claude, 2026)
-  0x50BEC: B4 22 00 00 DF 24 00 00 B5 22 00 00 B6 22 00 00 -> DF 24 00 00 B5 22 00 00 B6 22 00 00 B4 22 00 00
-  0x50BFE: 04 -> 06
-  0x456AC: B0 35 00 00 DE 35 00 00 D2 35 00 00 D1 35 00 00 -> D1 35 00 00 B0 35 00 00 DE 35 00 00 D2 35 00 00
-  0x456BE: 04 -> 06
-  0x45814: AD 35 00 00 AC 35 00 00 CE 35 00 00 CF 35 00 00 -> CF 35 00 00 AD 35 00 00 AC 35 00 00 CE 35 00 00
-  0x45826: 04 -> 06
-  0x45864: C5 35 00 00 AE 35 00 00 D0 35 00 00 D8 35 00 00 -> D8 35 00 00 C5 35 00 00 AE 35 00 00 D0 35 00 00
-  0x45876: 04 -> 06
-  0x41BC4: A3 35 00 00 9D 35 00 00 CB 35 00 00 CD 35 00 00 -> CD 35 00 00 A3 35 00 00 9D 35 00 00 CB 35 00 00
-  0x41BD6: 04 -> 06
-  0x41C14: A0 35 00 00 A2 35 00 00 CC 35 00 00 CA 35 00 00 -> CA 35 00 00 A0 35 00 00 A2 35 00 00 CC 35 00 00
-  0x41C26: 04 -> 06
-  0x41C64: C1 35 00 00 BA 35 00 00 D4 35 00 00 D5 35 00 00 -> D5 35 00 00 C1 35 00 00 BA 35 00 00 D4 35 00 00
-  0x41C76: 04 -> 06
-  0x3606C: 7C 21 00 00 7D 21 00 00 8E 21 00 00 7E 21 00 00 -> 7E 21 00 00 7C 21 00 00 7D 21 00 00 8E 21 00 00
-  0x3607E: 02 -> 00
-  0x36CC4: 5D 36 00 00 81 36 00 00 87 36 00 00 5C 36 00 00 -> 5C 36 00 00 5D 36 00 00 81 36 00 00 87 36 00 00
-  0x36CD6: 04 -> 06
-  0x3890C: 5B 36 00 00 58 36 00 00 5E 36 00 00 5F 36 00 00 -> 5F 36 00 00 5B 36 00 00 58 36 00 00 5E 36 00 00
-  0x3891E: 04 -> 06
-  0x3C048: 0B 36 00 00 0C 36 00 00 01 36 00 00 05 36 00 00 -> 05 36 00 00 0B 36 00 00 0C 36 00 00 01 36 00 00
-  0x3C05A: 00 -> 02
-  0x3CEA8: 35 36 00 00 36 36 00 00 29 36 00 00 2E 36 00 00 -> 2E 36 00 00 35 36 00 00 36 36 00 00 29 36 00 00
-  0x3CEBA: 00 -> 02
-  0x35C48: 28 35 00 00 2A 35 00 00 4D 35 00 00 4C 35 00 00 -> 4C 35 00 00 28 35 00 00 2A 35 00 00 4D 35 00 00
-  0x35C5A: 04 -> 06
-  0x35C98: 25 35 00 00 24 35 00 00 49 35 00 00 4A 35 00 00 -> 4A 35 00 00 25 35 00 00 24 35 00 00 49 35 00 00
-  0x35CAA: 04 -> 06
-  0x35CE8: 3F 35 00 00 26 35 00 00 4B 35 00 00 52 35 00 00 -> 52 35 00 00 3F 35 00 00 26 35 00 00 4B 35 00 00
-  0x35CFA: 04 -> 06
-  0x31BD4: 3B 35 00 00 33 35 00 00 4F 35 00 00 50 35 00 00 -> 50 35 00 00 3B 35 00 00 33 35 00 00 4F 35 00 00
-  0x31BE6: 04 -> 06
-  0x31B84: 18 35 00 00 1A 35 00 00 46 35 00 00 44 35 00 00 -> 44 35 00 00 18 35 00 00 1A 35 00 00 46 35 00 00
-  0x31B96: 04 -> 06
-  0x31B34: 1B 35 00 00 15 35 00 00 45 35 00 00 47 35 00 00 -> 47 35 00 00 1B 35 00 00 15 35 00 00 45 35 00 00
-  0x31B46: 04 -> 06
-  0x3CDF4: 63 35 00 00 85 35 00 00 98 35 00 00 90 35 00 00 -> 90 35 00 00 63 35 00 00 85 35 00 00 98 35 00 00
-  0x3CE06: 04 -> 06
-  0x3D5EC: 5E 35 00 00 61 35 00 00 8E 35 00 00 8F 35 00 00 -> 8F 35 00 00 5E 35 00 00 61 35 00 00 8E 35 00 00
-  0x3D5FE: 04 -> 06
-  0x3E168: 72 35 00 00 64 35 00 00 91 35 00 00 92 35 00 00 -> 92 35 00 00 72 35 00 00 64 35 00 00 91 35 00 00
-  0x3E17A: 04 -> 06
-  0x3DBB4: 6D 35 00 00 71 35 00 00 96 35 00 00 93 35 00 00 -> 93 35 00 00 6D 35 00 00 71 35 00 00 96 35 00 00
-  0x3DBC6: 04 -> 06
-  0x3D268: 6F 35 00 00 6E 35 00 00 94 35 00 00 95 35 00 00 -> 95 35 00 00 6F 35 00 00 6E 35 00 00 94 35 00 00
-  0x3D27A: 04 -> 06
-  0x3C69C: 84 35 00 00 89 35 00 00 9A 35 00 00 99 35 00 00 -> 99 35 00 00 84 35 00 00 89 35 00 00 9A 35 00 00
-  0x3C6AE: 04 -> 06
-  0x3CA98: 08 36 00 00 2A 36 00 00 32 36 00 00 B8 36 00 00 -> B8 36 00 00 08 36 00 00 2A 36 00 00 32 36 00 00
-  0x3CAAA: 04 -> 06
-  0x457EC: AC 35 00 00 B0 35 00 00 D1 35 00 00 CE 35 00 00 -> CE 35 00 00 AC 35 00 00 B0 35 00 00 D1 35 00 00
-  0x4583C: AE 35 00 00 AD 35 00 00 CF 35 00 00 D0 35 00 00 -> D0 35 00 00 AE 35 00 00 AD 35 00 00 CF 35 00 00
-  0x4588C: BF 35 00 00 C5 35 00 00 D8 35 00 00 D6 35 00 00 -> D6 35 00 00 BF 35 00 00 C5 35 00 00 D8 35 00 00
-  0x41B9C: DA 35 00 00 A3 35 00 00 CD 35 00 00 E2 35 00 00 -> E2 35 00 00 DA 35 00 00 A3 35 00 00 CD 35 00 00
-  0x41BEC: 9D 35 00 00 A0 35 00 00 CA 35 00 00 CB 35 00 00 -> CB 35 00 00 9D 35 00 00 A0 35 00 00 CA 35 00 00
-  0x41C3C: A2 35 00 00 C1 35 00 00 D5 35 00 00 CC 35 00 00 -> CC 35 00 00 A2 35 00 00 C1 35 00 00 D5 35 00 00
-  0x3D010: F0 2D 00 00 FB 2D 00 00 FC 2D 00 00 EF 2D 00 00 -> EF 2D 00 00 F0 2D 00 00 FB 2D 00 00 FC 2D 00 00
-  0x36E68: 80 36 00 00 27 34 00 00 C0 36 00 00 84 36 00 00 -> 84 36 00 00 80 36 00 00 27 34 00 00 C0 36 00 00
-  0x35F04: 89 36 00 00 6D 36 00 00 75 36 00 00 88 36 00 00 -> 88 36 00 00 89 36 00 00 6D 36 00 00 75 36 00 00
-  0x37B60: 60 36 00 00 61 36 00 00 42 36 00 00 4A 36 00 00 -> 4A 36 00 00 60 36 00 00 61 36 00 00 42 36 00 00
-  0x3AD38: 01 36 00 00 FE 35 00 00 07 36 00 00 04 36 00 00 -> 04 36 00 00 01 36 00 00 FE 35 00 00 07 36 00 00
-  0x3C8F4: 29 36 00 00 05 36 00 00 06 36 00 00 2D 36 00 00 -> 2D 36 00 00 29 36 00 00 05 36 00 00 06 36 00 00
-  0x35C70: 24 35 00 00 28 35 00 00 4C 35 00 00 49 35 00 00 -> 49 35 00 00 24 35 00 00 28 35 00 00 4C 35 00 00
-  0x35CC0: 26 35 00 00 25 35 00 00 4A 35 00 00 4B 35 00 00 -> 4B 35 00 00 26 35 00 00 25 35 00 00 4A 35 00 00
-  0x35D10: 39 35 00 00 3F 35 00 00 52 35 00 00 51 35 00 00 -> 51 35 00 00 39 35 00 00 3F 35 00 00 52 35 00 00
-  0x31BAC: 1A 35 00 00 3B 35 00 00 50 35 00 00 46 35 00 00 -> 46 35 00 00 1A 35 00 00 3B 35 00 00 50 35 00 00
-  0x31B5C: 15 35 00 00 18 35 00 00 44 35 00 00 45 35 00 00 -> 45 35 00 00 15 35 00 00 18 35 00 00 44 35 00 00
-  0x31B0C: 55 35 00 00 1B 35 00 00 47 35 00 00 48 35 00 00 -> 48 35 00 00 55 35 00 00 1B 35 00 00 47 35 00 00
-  0x3C624: 85 35 00 00 80 35 00 00 97 35 00 00 98 35 00 00 -> 98 35 00 00 85 35 00 00 80 35 00 00 97 35 00 00
-  0x3D1F0: 61 35 00 00 63 35 00 00 90 35 00 00 8E 35 00 00 -> 8E 35 00 00 61 35 00 00 63 35 00 00 90 35 00 00
-  0x3DB3C: 64 35 00 00 5E 35 00 00 8F 35 00 00 91 35 00 00 -> 91 35 00 00 64 35 00 00 5E 35 00 00 8F 35 00 00
-  0x3E1E0: 71 35 00 00 75 35 00 00 9C 35 00 00 96 35 00 00 -> 96 35 00 00 71 35 00 00 75 35 00 00 9C 35 00 00
-  0x3D664: 6E 35 00 00 6D 35 00 00 93 35 00 00 94 35 00 00 -> 94 35 00 00 6E 35 00 00 6D 35 00 00 93 35 00 00
-  0x3CE6C: 89 35 00 00 6F 35 00 00 95 35 00 00 9A 35 00 00 -> 9A 35 00 00 89 35 00 00 6F 35 00 00 95 35 00 00
-  0x35AE0: F1 04 00 00 68 03 00 00 4A 05 00 00 F2 04 00 00 -> 4A 05 00 00 F2 04 00 00 F1 04 00 00 68 03 00 00
-  0x35AF2: 00 -> 02
-  0x35C20: 11 35 00 00 2A 35 00 00 4D 35 00 00 5D 35 00 00 -> 4D 35 00 00 5D 35 00 00 11 35 00 00 2A 35 00 00
-  0x35C32: 04 -> 06
-  0x31AE4: 55 35 00 00 53 35 00 00 5C 35 00 00 48 35 00 00 -> 5C 35 00 00 48 35 00 00 55 35 00 00 53 35 00 00
-  0x31AF6: 04 -> 06
-  0x319A4: 6F 03 00 00 40 04 00 00 41 04 00 00 70 03 00 00 -> 41 04 00 00 70 03 00 00 6F 03 00 00 40 04 00 00
-  0x319B6: 00 -> 02

@@ -270,7 +270,7 @@ The host chooses the **Game Mode** below Name Of Game:
 - **Deathmatch** (the default) is the original's: the ten maps above, players against each other, with bots if wanted.
 - **Co-operative** is ALTEngine's own: the players go through the story missions together, starting on any of the 35 ("Start at mission"). There is no friendly fire and no bots (those rows are greyed out), with the same player limit as deathmatch. A player who reaches the end of a level waits there, out of sight and out of harm, until every player in the game has reached it; then the next mission loads for everyone. Dying puts you back at the level's start. The level is shared: the host runs the aliens, which go after whichever player is nearest, and every player sees and fights the same ones; doors, lifts, switches, lights, pickups and destroyed crates are the same for everyone, and a player joining late catches up with all of it. The motion tracker works in co-operative games, pulse and all. Grenades and seismic charges are seen by everyone. Each mission keeps its briefing and its assessment (marked CO-OPERATIVE); a player coming into a level the others are already playing sees a short syncing screen, in the briefing's style, while the level catches up.
 
-**The host's rules.** Every Modern option that changes how the game plays (Player Jumping, No Hit Immunity, Free Look, Render Distance, Live Minimap, Faster Xenomorphs, Speed Compensation, Enable Cheats) and the weapon pacing are the host's choice, for every player in the game. Save Anywhere and the testing aids that change play (Disable Enemy Spawn, Ghost Mode, Disable Resupply Timer) are off in a network game. Each player's own settings are untouched and come back afterwards.
+**The host's rules.** Every Modern option that changes how the game plays (Player Jumping, No Hit Immunity, Free Look, Render Distance, Live Minimap, Faster Xenomorphs, Enable Cheats) and the weapon pacing are the host's choice, for every player in the game. Save Anywhere and the testing aids that change play (Disable Enemy Spawn, Ghost Mode, Disable Resupply Timer) are off in a network game. Each player's own settings are untouched and come back afterwards.
 
 **Versions.** A player on a different version of ALTEngine from the host is turned away with a message naming both versions. A game hosted on another version doesn't show in the Join list.
 
@@ -646,7 +646,7 @@ Here it is with the fix I applied to the level.
   <img src="Images/L906LEV-bridge-fixed.png" alt="L906LEV Patched">
 </div>
 
-This used to be fixed only when exporting the model, on top of a partial fix in the game files. All 53 bridge faces are now fixed in the level file itself: UV rotation corrected on 24, UV flipped and rotation corrected on 29. Applied by both ALTEngine and ALTViewer's patch button. The face list, with the old export remap for each, is in Patch/L906LEV.txt.
+The fix is the hand-made one in the game files (Patch/L906LEV.txt). The 53 bridge and fence faces that were later turned and mirrored in the file, converted from ALTViewer's old model-export UV remaps, were taken out again: most, if not all, of them were wrong.
 
 ## L906LEV Multiplayer Map 7 Fix 6
 
@@ -2052,26 +2052,6 @@ No screenshot: cell attributes.
 <tr><td><img src="Images/L906LEV/L906LEV-fix00-18-before.png" width="320" alt="L906LEV-fix00-18 before"></td><td><img src="Images/L906LEV/L906LEV-fix00-18-after.png" width="320" alt="L906LEV-fix00-18 after"></td></tr>
 <tr><td><img src="Images/L906LEV/L906LEV-fix00-19-before.png" width="320" alt="L906LEV-fix00-19 before"></td><td><img src="Images/L906LEV/L906LEV-fix00-19-after.png" width="320" alt="L906LEV-fix00-19 after"></td></tr>
 <tr><td><img src="Images/L906LEV/L906LEV-fix00-20-before.png" width="320" alt="L906LEV-fix00-20 before"></td><td><img src="Images/L906LEV/L906LEV-fix00-20-after.png" width="320" alt="L906LEV-fix00-20 after"></td></tr>
-</table>
-
-**Patch 48.** 53 bridge faces with the wrong texture or orientation.
-
-<table><tr><th>Before</th><th>After</th></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-1-before.png" width="320" alt="L906LEV-fix48-1 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-1-after.png" width="320" alt="L906LEV-fix48-1 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-2-before.png" width="320" alt="L906LEV-fix48-2 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-2-after.png" width="320" alt="L906LEV-fix48-2 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-3-before.png" width="320" alt="L906LEV-fix48-3 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-3-after.png" width="320" alt="L906LEV-fix48-3 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-4-before.png" width="320" alt="L906LEV-fix48-4 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-4-after.png" width="320" alt="L906LEV-fix48-4 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-5-before.png" width="320" alt="L906LEV-fix48-5 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-5-after.png" width="320" alt="L906LEV-fix48-5 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-6-before.png" width="320" alt="L906LEV-fix48-6 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-6-after.png" width="320" alt="L906LEV-fix48-6 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-7-before.png" width="320" alt="L906LEV-fix48-7 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-7-after.png" width="320" alt="L906LEV-fix48-7 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-8-before.png" width="320" alt="L906LEV-fix48-8 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-8-after.png" width="320" alt="L906LEV-fix48-8 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-9-before.png" width="320" alt="L906LEV-fix48-9 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-9-after.png" width="320" alt="L906LEV-fix48-9 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-10-before.png" width="320" alt="L906LEV-fix48-10 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-10-after.png" width="320" alt="L906LEV-fix48-10 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-11-before.png" width="320" alt="L906LEV-fix48-11 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-11-after.png" width="320" alt="L906LEV-fix48-11 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-12-before.png" width="320" alt="L906LEV-fix48-12 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-12-after.png" width="320" alt="L906LEV-fix48-12 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-13-before.png" width="320" alt="L906LEV-fix48-13 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-13-after.png" width="320" alt="L906LEV-fix48-13 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-14-before.png" width="320" alt="L906LEV-fix48-14 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-14-after.png" width="320" alt="L906LEV-fix48-14 after"></td></tr>
-<tr><td><img src="Images/L906LEV/L906LEV-fix48-15-before.png" width="320" alt="L906LEV-fix48-15 before"></td><td><img src="Images/L906LEV/L906LEV-fix48-15-after.png" width="320" alt="L906LEV-fix48-15 after"></td></tr>
 </table>
 
 ### L908LEV

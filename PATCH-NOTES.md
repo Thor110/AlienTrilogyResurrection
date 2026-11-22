@@ -222,6 +222,15 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
   loaded; they are now in the file itself, the same pictures (`Patch/FINGERS.txt`).
 - With the faces in, face numbers on most levels are one higher than before from the first cell's faces on
   (the Face Index Display shows the new numbers).
+- **Six floor triangles that nothing drew are back**: one on L111 and L900 by the foot of the slanted wall (face
+  9040), and one at each corner of L131's raised centre (faces 2476, 2494, 2989, 3007). They are in the
+  original's files with draw routine 3, which the game has no way to draw; they now have the routine they were
+  meant to have, and L131's take texture 191 (Edward), L111's its neighbours' 18.
+- **L381: the see-through floor over the lifts**, the first of its kind put right (Edward): two faces turned
+  half way round and two given each other's texture. The rest of them are still to follow.
+- **L906: the 53 bridge and fence faces turned and mirrored in the file are back as they were.** They were
+  converted from ALTViewer's old model-export remaps, and most, if not all, were wrong; only the fixes made by
+  hand stay.
 - ALTViewer's patch button can be pressed again over a patched game: it takes the missing faces out, checks the
   byte patches, and puts them back. ALTEngine does the same when it is installed from a game ALTViewer patched.
 - **ALTViewer reads ALTEngine's files**: the trimmed levels (Level Viewer) and the face hugger's taller frames
@@ -243,6 +252,10 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
 - **No command window on Windows.** The window that opened behind the game is gone; what it showed now goes to
   `altengine.log` beside `ALTEngine.exe`, made afresh at every start - the file to send with a bug report. (A
   build configured with `-DALTENGINE_CONSOLE=ON` brings the window back, for testing.)
+- **Modern: Speed Compensation is gone** - far too fast to play. ALTEngine always runs at the original's -so
+  pacing; only the attract demos play at the pacing they were recorded at.
+- **Items on a lift ride it.** A pickup lying on a lift's floor goes up and down with the platform; it used to
+  stay hanging where the level put it.
 - **Picking a weapon from the pause menu is always on**, as in the original: Enter (or Right) on a weapon in the
   list switches to it. It was the Modern option Pause Weapon Select, which is gone.
 

@@ -43,13 +43,13 @@ the faces, slots and bytes.
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
-Patch 42: L903LEV.MAP - four cells lost their wall attribute when the level was made from L141LEV: two pillars at (11,43) and (11,48) could be walked into; restored to L141's values (Claude, 2026)
+Patch 8: L903LEV.MAP - four cells lost their wall attribute when the level was made from L141LEV: two pillars at (11,43) and (11,48) could be walked into; restored to L141's values (Claude, 2026)
   0x69002: 00 -> 14
   0x69502: 00 -> 14
   0x6AE52: 00 -> 14
   0x6E862: 00 -> 15
 
-Patch 46: L903LEV.MAP - 10 Weyland-Yutani and grey crate faces (the same faces as L141LEV) with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L903LEV.txt) (Edward, 2026; Claude, 2026)
+Patch 48: L903LEV.MAP - 10 Weyland-Yutani and grey crate faces (the same faces as L141LEV) with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L903LEV.txt) (Edward, 2026; Claude, 2026)
   0x28B94: DB 00 -> DC 00
   0x3117C: DA 00 -> D9 00
   0x31190: C1 00 -> 7F 00
@@ -63,7 +63,7 @@ Patch 46: L903LEV.MAP - 10 Weyland-Yutani and grey crate faces (the same faces a
   0x42F80: E1 00 -> E0 00
   0x42F94: 55 00 -> E1 00
 
-Patch 56: L903LEV.MAP - the same three faces as L141LEV.MAP (2735, 2736, 2196), same geometry at the same offsets. Tracked in Notes/uv-review-log.md
+Patch 57: L903LEV.MAP - the same three faces as L141LEV.MAP (2735, 2736, 2196), same geometry at the same offsets. Tracked in Notes/uv-review-log.md
   0x28B80: DF 00 -> D9 00
   0x28B84: F8 09 00 00 00 0A 00 00 E2 09 00 00 ED 08 00 00 -> E2 09 00 00 ED 08 00 00 F8 09 00 00 00 0A 00 00
   0x28B96: 00 -> 02

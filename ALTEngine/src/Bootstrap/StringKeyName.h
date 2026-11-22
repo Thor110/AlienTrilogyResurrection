@@ -153,8 +153,6 @@ namespace ALTEngine::Bootstrap
         case StringId::ActionJump: return "ActionJump";
         case StringId::FasterXenomorphs: return "FasterXenomorphs";
         case StringId::DescFasterXenomorphs: return "DescFasterXenomorphs";
-        case StringId::SpeedCompensation: return "SpeedCompensation";
-        case StringId::DescSpeedCompensation: return "DescSpeedCompensation";
         case StringId::SaveAnywhere: return "SaveAnywhere";
         case StringId::DescSaveAnywhere: return "DescSaveAnywhere";
         case StringId::LevelTimer: return "LevelTimer";
@@ -504,8 +502,6 @@ namespace ALTEngine::Bootstrap
         if (name == "ActionJump") { return StringId::ActionJump; }
         if (name == "FasterXenomorphs") { return StringId::FasterXenomorphs; }
         if (name == "DescFasterXenomorphs") { return StringId::DescFasterXenomorphs; }
-        if (name == "SpeedCompensation") { return StringId::SpeedCompensation; }
-        if (name == "DescSpeedCompensation") { return StringId::DescSpeedCompensation; }
         if (name == "SaveAnywhere") { return StringId::SaveAnywhere; }
         if (name == "DescSaveAnywhere") { return StringId::DescSaveAnywhere; }
         if (name == "LevelTimer") { return StringId::LevelTimer; }

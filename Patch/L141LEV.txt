@@ -69,7 +69,7 @@ Face	Offset		Was					Now
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
-Patch 45: L141LEV.MAP - 10 Weyland-Yutani and grey crate faces with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L141LEV.txt) (Edward, 2026; Claude, 2026)
+Patch 47: L141LEV.MAP - 10 Weyland-Yutani and grey crate faces with the wrong texture or orientation, fixed in the file; these were only corrected in ALTViewer's model export before (see Patch/L141LEV.txt) (Edward, 2026; Claude, 2026)
   0x28B94: DB 00 -> DC 00
   0x3117C: DA 00 -> D9 00
   0x31190: C1 00 -> 7F 00
@@ -83,7 +83,7 @@ Patch 45: L141LEV.MAP - 10 Weyland-Yutani and grey crate faces with the wrong te
   0x42F80: E1 00 -> E0 00
   0x42F94: 55 00 -> E1 00
 
-Patch 55: L141LEV.MAP - UV review (TESTING, Edward with the Face Index Display, 2026): face 2735 texture 223 -> 217 (the crate's own); face 2736 flipped horizontally - its texture lies on its side, so that is its v axis: (c, d, a, b) with routine 0 -> 2; face 2196 texture 0 -> 225. Tracked in Notes/uv-review-log.md
+Patch 56: L141LEV.MAP - UV review (TESTING, Edward with the Face Index Display, 2026): face 2735 texture 223 -> 217 (the crate's own); face 2736 flipped horizontally - its texture lies on its side, so that is its v axis: (c, d, a, b) with routine 0 -> 2; face 2196 texture 0 -> 225. Tracked in Notes/uv-review-log.md
   0x28B80: DF 00 -> D9 00
   0x28B84: F8 09 00 00 00 0A 00 00 E2 09 00 00 ED 08 00 00 -> E2 09 00 00 ED 08 00 00 F8 09 00 00 00 0A 00 00
   0x28B96: 00 -> 02

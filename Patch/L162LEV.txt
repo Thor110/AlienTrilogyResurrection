@@ -4,5 +4,5 @@ L162LEV - patches made by ALTEngine and ALTViewer. Why each one was made is in i
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
-Patch 6: L162LEV.MAP - D001 - incorrect texture index
+Patch 16: L162LEV.MAP - D001 - incorrect texture index
   0x3205C: 69 -> 67

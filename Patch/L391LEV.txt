@@ -276,7 +276,7 @@ Face	Offset		Scan	Change	Was					Now
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
-Patch 19: L391LEV.MAP - queen's egg sack inner layer: 246 faces turned a quarter-turn, each strip now runs into the next as in L263LEV (Claude, 2026)
+Patch 24: L391LEV.MAP - queen's egg sack inner layer: 246 faces turned a quarter-turn, each strip now runs into the next as in L263LEV (Claude, 2026)
   0x12E6C: 15 15 00 00 21 15 00 00 22 15 00 00 16 15 00 00 -> 22 15 00 00 16 15 00 00 15 15 00 00 21 15 00 00
   0x12F70: 1F 15 00 00 2B 15 00 00 2C 15 00 00 20 15 00 00 -> 2C 15 00 00 20 15 00 00 1F 15 00 00 2B 15 00 00
   0x12F84: 20 15 00 00 2C 15 00 00 2D 15 00 00 21 15 00 00 -> 2D 15 00 00 21 15 00 00 20 15 00 00 2C 15 00 00
@@ -524,7 +524,7 @@ Patch 19: L391LEV.MAP - queen's egg sack inner layer: 246 faces turned a quarter
   0x179F8: 87 14 00 00 9A 14 00 00 9B 14 00 00 88 14 00 00 -> 9A 14 00 00 9B 14 00 00 88 14 00 00 87 14 00 00
   0x17A84: 75 14 00 00 88 14 00 00 89 14 00 00 76 14 00 00 -> 88 14 00 00 89 14 00 00 76 14 00 00 75 14 00 00
 
-Patch 36: L391LEV.MAP - texture orientation: 3 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L391LEV.txt) (Claude, 2026)
+Patch 41: L391LEV.MAP - texture orientation: 3 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L391LEV.txt) (Claude, 2026)
   0xEA9C: 01 0D 00 00 06 0D 00 00 23 0D 00 00 21 0D 00 00 -> 21 0D 00 00 01 0D 00 00 06 0D 00 00 23 0D 00 00
   0x16134: A6 11 00 00 04 12 00 00 9C 11 00 00 9D 11 00 00 -> 9C 11 00 00 9D 11 00 00 A6 11 00 00 04 12 00 00
   0x18524: AB 11 00 00 99 11 00 00 97 11 00 00 06 12 00 00 -> 99 11 00 00 97 11 00 00 06 12 00 00 AB 11 00 00

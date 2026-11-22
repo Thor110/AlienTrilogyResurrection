@@ -5,7 +5,7 @@
    "level": "SECT11/L111LEV.MAP",
    "crc": 1895567058,
    "textures": 339,
-   "unused": "25,42,45,50-52,54-55,57-63,66-67,70-71,79-84,92,100-105,107,110-111,119-121,136,146,154,157,160,165-191,196,208-209,213-214,237,244,247-249,253-255,261-263,283-290,304,310,312",
+   "unused": "16,25,42,45,50-52,54-55,57-63,66-67,70-71,79-84,92,100-105,107,110-111,119-121,136,146,154,157,160,165-191,196,208-209,213-214,237,244,247-249,253-255,261-263,283-290,304,310,312",
    "backgrounds": [
     {
      "page": 0,
@@ -58,7 +58,7 @@
      "rule": "most common colour of the space blanked"
     }
    ],
-   "texelsChanged": 51009
+   "texelsChanged": 52033
   },
   "SECT11/112GFX.B16": {
    "level": "SECT11/L112LEV.MAP",
@@ -1889,6 +1889,65 @@
    ],
    "texelsChanged": 31142
   },
+  "SECT32/361GFX.B16": {
+   "level": "SECT32/L361LEV.MAP",
+   "crc": 3736007285,
+   "textures": 335,
+   "unused": "6-7,14-15,22-23,31,41-44,48-51,55-58,63,106-111,114-118,120-125,177,179-181,184-191,209,216,235-239,242-247,250-308,310-316,318-334",
+   "backgrounds": [
+    {
+     "page": 0,
+     "background": 227,
+     "rgb": [
+      16,
+      16,
+      16
+     ],
+     "rule": "most common colour of the space blanked"
+    },
+    {
+     "page": 1,
+     "background": 248,
+     "rgb": [
+      0,
+      0,
+      56
+     ],
+     "rule": "most common colour of the space blanked"
+    },
+    {
+     "page": 2,
+     "background": 255,
+     "rgb": [
+      0,
+      0,
+      0
+     ],
+     "rule": "most common colour of the space blanked"
+    },
+    {
+     "page": 3,
+     "background": 248,
+     "rgb": [
+      0,
+      0,
+      56
+     ],
+     "rule": "most common colour of the space blanked"
+    },
+    {
+     "page": 4,
+     "background": 225,
+     "rgb": [
+      16,
+      24,
+      24
+     ],
+     "rule": "most common colour of the space blanked"
+    }
+   ],
+   "texelsChanged": 99309
+  },
   "SECT32/371GFX.B16": {
    "level": "SECT32/L371LEV.MAP",
    "crc": 2248877504,
@@ -2070,7 +2129,7 @@
    "level": "SECT90/L900LEV.MAP",
    "crc": 1237408432,
    "textures": 339,
-   "unused": "25,42,45,50-52,54-55,57-63,66-67,70-71,79-84,92,100-105,107,110-111,119-121,136,146,154,157,160,165-191,196,208-209,213-214,237,244,247-249,253-255,261-263,283-290,304,310,312",
+   "unused": "16,25,42,45,50-52,54-55,57-63,66-67,70-71,79-84,92,100-105,107,110-111,119-121,136,146,154,157,160,165-191,196,208-209,213-214,237,244,247-249,253-255,261-263,283-290,304,310,312",
    "backgrounds": [
     {
      "page": 0,
@@ -2123,7 +2182,7 @@
      "rule": "most common colour of the space blanked"
     }
    ],
-   "texelsChanged": 49947
+   "texelsChanged": 50971
   },
   "SECT90/901GFX.B16": {
    "level": "SECT90/L901LEV.MAP",

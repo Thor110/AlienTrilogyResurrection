@@ -2,7 +2,7 @@
  "about": "Level Cleanup plans (ALTEngine only), made by ALTLevelCleanupList from the level files as Patches.json and MissingFaces.json leave them. Each applies only to a file with its crc. Remake this file whenever a fix or a missing face changes a level.",
  "levels": {
   "SECT11/L111LEV.MAP": {
-   "crc": 704090993,
+   "crc": 2347659876,
    "remove": "1-3,10184,10413,10563,10711",
    "clear": "43-46,9052,9144,9236,9328",
    "outOfView": 7,
@@ -61,7 +61,7 @@
    "byHand": 4
   },
   "SECT11/L131LEV.MAP": {
-   "crc": 1428333324,
+   "crc": 2443629840,
    "remove": "1096,4901,4906-4907,4912,5751,5756,12151,13346-13349",
    "clear": "",
    "outOfView": 0,
@@ -301,6 +301,15 @@
    "inLifts": 0,
    "hidden": 0
   },
+  "SECT32/L361LEV.MAP": {
+   "crc": 2660912559,
+   "remove": "",
+   "clear": "",
+   "outOfView": 0,
+   "facingAway": 0,
+   "inLifts": 0,
+   "hidden": 0
+  },
   "SECT32/L371LEV.MAP": {
    "crc": 547128797,
    "remove": "124-137,7533,9604,9607-9608",
@@ -311,7 +320,7 @@
    "hidden": 5
   },
   "SECT32/L381LEV.MAP": {
-   "crc": 4066065535,
+   "crc": 2202481121,
    "remove": "",
    "clear": "",
    "outOfView": 0,
@@ -329,7 +338,7 @@
    "hidden": 0
   },
   "SECT90/L900LEV.MAP": {
-   "crc": 4241143953,
+   "crc": 3331718823,
    "remove": "1-3,10184,10413,10563,10711",
    "clear": "43-46,9052,9144,9236,9328",
    "outOfView": 7,
@@ -383,7 +392,7 @@
    "hidden": 18
   },
   "SECT90/L906LEV.MAP": {
-   "crc": 1075113189,
+   "crc": 3666677425,
    "remove": "1209-1214,1226,1464,2449-2454,7399,7699,7815,8093,8211,8313,8415,8571,8755,8928,9169-9172,9296-9299,9422-9425,9548-9551,9668-9671,9780-9783,12302-12325,12594-12597",
    "clear": "6472-6475,6570-6573,6668-6671,6766-6769,6864-6867,6962-6965,9429-9432",
    "outOfView": 28,

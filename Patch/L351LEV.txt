@@ -39,7 +39,7 @@ Face	Offset		Scan	Change	Was					Now
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
-Patch 18: L351LEV.MAP - resin wall top row: two corner faces rotated, two centre faces mirrored the wrong way (Claude, 2026)
+Patch 23: L351LEV.MAP - resin wall top row: two corner faces rotated, two centre faces mirrored the wrong way (Claude, 2026)
   0x1A264: 0C 0B 00 00 09 0B 00 00 0D 07 00 00 0D 0B 00 00 -> 09 0B 00 00 0D 07 00 00 0D 0B 00 00 0C 0B 00 00
   0x1A276: 1E -> 20
   0x1A2EE: 1E -> 20
@@ -47,7 +47,7 @@ Patch 18: L351LEV.MAP - resin wall top row: two corner faces rotated, two centre
   0x1A3F4: 07 0B 00 00 0A 0B 00 00 EB 06 00 00 EA 06 00 00 -> EA 06 00 00 07 0B 00 00 0A 0B 00 00 EB 06 00 00
   0x1A406: 20 -> 1E
 
-Patch 31: L351LEV.MAP - texture orientation: 10 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L351LEV.txt) (Claude, 2026)
+Patch 36: L351LEV.MAP - texture orientation: 10 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L351LEV.txt) (Claude, 2026)
   0x27144: D9 17 00 00 EA 17 00 00 D4 17 00 00 CF 17 00 00 -> EA 17 00 00 D4 17 00 00 CF 17 00 00 D9 17 00 00
   0x29944: 1F 09 00 00 1E 09 00 00 10 09 00 00 12 09 00 00 -> 1E 09 00 00 10 09 00 00 12 09 00 00 1F 09 00 00
   0x2CDB0: B5 17 00 00 93 16 00 00 91 16 00 00 B2 17 00 00 -> 91 16 00 00 B2 17 00 00 B5 17 00 00 93 16 00 00
