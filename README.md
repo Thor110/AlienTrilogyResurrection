@@ -38,7 +38,7 @@ This optional step has been removed as it needs revising sometime in the future,
 
 The road map for this project.
 
-- [❌ 0 : Engine Reimplementation](#engine-reimplementation) ( 25% Complete )
+- [✅ 0 : Engine Reimplementation](#engine-reimplementation) ( 95% Complete )
 	- Original CD detection and selective asset extraction
 	- Automated Redbook CD-DA audio ripping and pre-bundled playlist generation
 	- Native image and video override architecture
@@ -46,6 +46,7 @@ The road map for this project.
 	- Integrated main menu audio, functional layout drafts, options configs, resolution detection  and selection.
 	- Graphics quality options smoothed and original rendering styles. (WIP)
 	- Resolution scaling.
+	- HUD scaling.
 	- Modular language localization system.
 - [❌ 1 : Text Editor](#text-editor) ( 50% Complete )
 	- View text from the games missions and user interface.
