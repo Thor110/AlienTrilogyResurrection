@@ -3,6 +3,7 @@
 #include "LevelLoader.h"
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace ALTEngine::Formats
@@ -96,13 +97,32 @@ namespace ALTEngine::Formats
 
             // Prime each animator so a face has something to draw on frame one
             // rather than flashing whatever descriptor 0 happens to be.
-            for (Animator& a : animators) { Prime(a); }
+            for (Animator& a : animators) { Prime(a, {}); }
         }
 
-        // One tick. `randomBits` feeds the random-speed opcodes.
-        void Tick(int randomBits)
+        // A draw from the game's generator (FUN_000100ec), taken only when a
+        // random-hold opcode (7-10) is reached; empty draws 0.
+        using Draw = std::function<uint32_t()>;
+
+        // The level start (FUN_00042fac): every animator back to the start
+        // of its program and run to its first frame, drawing as it goes.
+        void Restart(const Draw& draw)
         {
-            for (Animator& a : animators) { TickOne(a, randomBits); }
+            for (Animator& a : animators)
+            {
+                a.ip = 0;
+                a.ticksRemaining = 0;
+                a.speed = 1;
+                a.stopped = false;
+                a.hasOutput = false;
+                Prime(a, draw);
+            }
+        }
+
+        // One tick (FUN_00042ff4 for each animator, in order).
+        void Tick(const Draw& draw)
+        {
+            for (Animator& a : animators) { TickOne(a, draw); }
         }
 
         // Script command 9 (ChangeTexture). Advances an animator's variant
@@ -151,8 +171,9 @@ namespace ALTEngine::Formats
         //   2-6      hold each frame for 1/2/3/4/16 ticks
         //   7-10     random hold, (rand & 0x03/0x07/0x0f/0x1f) + 1
         //   11       stop - the program holds its last frame forever
-        static int SpeedForOpcode(int opcode, int randomBits)
+        static int SpeedForOpcode(int opcode, const Draw& draw)
         {
+            const auto randomBits = [&]() { return draw ? draw() : 0u; };
             switch (opcode)
             {
             case 2: return 1;
@@ -160,10 +181,10 @@ namespace ALTEngine::Formats
             case 4: return 3;
             case 5: return 4;
             case 6: return 16;
-            case 7: return (randomBits & 0x03) + 1;
-            case 8: return (randomBits & 0x07) + 1;
-            case 9: return (randomBits & 0x0f) + 1;
-            case 10: return (randomBits & 0x1f) + 1;
+            case 7: return static_cast<int>(randomBits() & 0x03) + 1;
+            case 8: return static_cast<int>(randomBits() & 0x07) + 1;
+            case 9: return static_cast<int>(randomBits() & 0x0f) + 1;
+            case 10: return static_cast<int>(randomBits() & 0x1f) + 1;
             default: return 1;
             }
         }
@@ -178,15 +199,15 @@ namespace ALTEngine::Formats
         // Runs the program forward until it emits its first output frame, so
         // an unarmed animator still shows a sensible starting texture. Opcodes
         // encountered on the way are applied.
-        void Prime(Animator& a)
+        void Prime(Animator& a, const Draw& draw)
         {
             const std::vector<uint16_t>* program = ProgramFor(a);
             if (!program) { return; }
 
-            RunToFrame(a, *program, 0);
+            RunToFrame(a, *program, draw);
         }
 
-        void TickOne(Animator& a, int randomBits)
+        void TickOne(Animator& a, const Draw& draw)
         {
             if (a.stopped) { return; }
 
@@ -203,13 +224,13 @@ namespace ALTEngine::Formats
             // ticks, not speed + 1.
             if (--a.ticksRemaining > 0) { return; }
 
-            RunToFrame(a, *program, randomBits);
+            RunToFrame(a, *program, draw);
         }
 
         // Walks opcodes to the next output frame and shows it. The guard
         // stops a malformed program (an OP1 loop with no frame in it)
-        // spinning. Prime passes 0 for the random bits.
-        static void RunToFrame(Animator& a, const std::vector<uint16_t>& program, int randomBits)
+        // spinning.
+        static void RunToFrame(Animator& a, const std::vector<uint16_t>& program, const Draw& draw)
         {
             for (size_t guard = 0; guard < program.size() * 2 + 4; ++guard)
             {
@@ -228,7 +249,7 @@ namespace ALTEngine::Formats
                 const int opcode = entry & 0x7fff;
                 if (opcode == 11) { a.stopped = true; return; }
                 if (opcode == 1) { a.ip = 0; continue; }
-                a.speed = SpeedForOpcode(opcode, randomBits);
+                a.speed = SpeedForOpcode(opcode, draw);
                 a.ip++;
             }
         }

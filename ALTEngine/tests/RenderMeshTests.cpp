@@ -169,8 +169,8 @@ TEST_CASE("Animated faces: rebuilding just their runs gives the whole level's bu
     int patched = 0;
     for (int tick = 0; tick < 400; ++tick)
     {
-        animator.Tick(tick * 7919);
-        lights.Tick(tick * 104729);
+        animator.Tick([tick]() { return static_cast<uint32_t>(tick * 7919); });
+        lights.Tick([tick]() { return static_cast<uint32_t>(tick * 104729); });
         const auto full = BuildLevelRenderMeshAllFills(level, set.uvRects, {}, &lights, &animator);
         bool rebuild = false;   // what the renderer does when a run cannot be patched
         for (size_t p = 0; p < 3; ++p)

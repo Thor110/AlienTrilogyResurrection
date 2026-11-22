@@ -1816,15 +1816,22 @@ namespace ALTEngine::Renderer
         return sampler == samplerLinear;
     }
 
-    bool ModelRenderer::TickLevelLights(const std::string& cacheKey, int randomBits)
+    void ModelRenderer::RestartLevelAnimations(const std::string& cacheKey, const std::function<uint32_t()>& draw)
+    {
+        auto it = loadedLevels.find(cacheKey);
+        if (it == loadedLevels.end()) { return; }
+        it->second.animator.Restart(draw);
+    }
+
+    bool ModelRenderer::TickLevelLights(const std::string& cacheKey, const std::function<uint32_t()>& draw)
     {
         if (!device) { return false; }
         auto it = loadedLevels.find(cacheKey);
         if (it == loadedLevels.end()) { return false; }
         LoadedLevel& level = it->second;
 
-        level.lights.Tick(randomBits);
-        level.animator.Tick(randomBits);
+        level.lights.Tick(draw);
+        level.animator.Tick(draw);
 
         // Nothing to do unless a resolved light colour or an animator's output
         // descriptor actually moved. That is the common case by a wide margin -

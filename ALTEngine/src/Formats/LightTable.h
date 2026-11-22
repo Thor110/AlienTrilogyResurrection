@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace ALTEngine::Formats
@@ -120,17 +121,16 @@ namespace ALTEngine::Formats
             Restamp();
         }
 
-        // One tick. `randomBits` supplies the jitter the original takes
-        // from its RNG - passing a fixed value gives deterministic blink
-        // timing, which is useful when comparing against a recording.
-        void Tick(int randomBits)
+        // One tick. `draw` is the game's generator (FUN_000100ec); empty
+        // draws 0, which gives fixed blink timing.
+        void Tick(const std::function<uint32_t()>& draw)
         {
             if (StepEquipment()) { equipmentReachedFull = true; }
             // Two draws a pass, shared by every light (0x29f98-0x29fb0):
-            // (rand & 3) + 1 and (rand & 7) + 1. So every mode-2 light in a
+            // (rand & 3) + 1, then (rand & 7) + 1. So every mode-2 light in a
             // level flickers in step, and so does every mode-5 one.
-            const int jitter = (randomBits & 3) + 1;
-            const int jitter8 = ((randomBits >> 2) & 7) + 1;
+            const int jitter = static_cast<int>((draw ? draw() : 0u) & 3) + 1;
+            const int jitter8 = static_cast<int>((draw ? draw() : 0u) & 7) + 1;
 
             for (size_t i = 0; i < lights.size(); ++i)
             {

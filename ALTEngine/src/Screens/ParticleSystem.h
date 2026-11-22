@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../Game/OriginalRandom.h"
 #include "PlayerCamera.h"
 
 #include <cmath>
@@ -375,23 +376,12 @@ namespace ALTEngine::Screens
             bool alive = false;
         };
 
-        // A small xorshift, used wherever the original calls FUN_000100ec.
-        //
-        // NOT the original's generator. Its sequence is not reproduced, only its
-        // RANGE - every use here masks the result the same way the original does
-        // (& 0x1f, & 0x0f, & 0xfff), so the spread of values matches even though
-        // the exact stream does not. That matters only if something ever needs
-        // to be deterministic against a recording.
+        // FUN_000100ec, wherever the original calls it: a handle on the
+        // game's one stream (Game::OriginalRandom), so every Rng draws from
+        // the same sequence in the order the calls are made.
         struct Rng
         {
-            uint32_t state = 0x2545f491u;
-            uint32_t Next()
-            {
-                state ^= state << 13;
-                state ^= state >> 17;
-                state ^= state << 5;
-                return state;
-            }
+            uint32_t Next() { return ALTEngine::Game::OriginalRandom::Next(); }
             int Bits(uint32_t mask) { return static_cast<int>(Next() & mask); }
         };
 

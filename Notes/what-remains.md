@@ -696,8 +696,8 @@ Left from that audit, to look at:
    The shot fires before the move in the original, after it in the port.
 8. Switches: a thrown switch flashes for 40 passes before it settles, the idle blink is 17 passes per switch on
    its own clock, and 0x5c plays twice (0x3846c, 0x380f4).
-9. Speed Compensation (Modern) runs lights, animators, messages and switch timers at half rate; the noise timer
-   runs every tick (the original once a frame).
+9. Speed Compensation (Modern) runs messages and switch timers at half rate (lights and animators every pass
+   since zip 182; the noise timer once a frame since zip 181).
 10. The seismic charge and grenade aren't tied to the weapon pass; the reload clip sounds look port-own.
 
 ### Every routine, round 4 (zip 176, v0.9.9)
@@ -773,11 +773,27 @@ Left from that review, to look at:
   100. What still parts: the original's rounds hit the hugger mid-leap; the port's pass 350-450 units to its
   side, because it came up a different line (its waypoints are random draws, FUN_00032fcc / FUN_000333c8 /
   FUN_00033ad0), lands its hit (word 236, cause 4), and the run ends short of the terminal at 92.
-  LEFT: the creatures' random draws. The port's stand-in is an LCG seeded 0x1234567 (GameplayScreen
-  `creatureRandom`); the original has one generator (FUN_000100ec, state at 0x109b0-0x109c4), reseeded at
-  each level start (0x1072d from 0x4dd0) and drawn by the particles, the weapons, the sounds and the
-  creatures in one order. Matching a demo beyond the first random waypoint needs that generator and every
-  caller's draws in the original's order.
+- The generator (zip 182, Game/OriginalRandom.h): FUN_000100ec ported exactly - six words at 0x109b0, seeded
+  from the constant table at 0xa4dd0 (0xabcd0123, 0x10, 0xf0ad0000, 0xda0e0, 1, 0x1aa01001) at every level
+  start (0x1072d). One shared stream: Particles::Rng (rounds, casings, blood, glass, fuses, drops, shatter,
+  explosions), the creatures' draws (was an LCG seeded 0x1234567), the lights (two draws a pass, 0x29f98 -
+  was one SDL_rand a creature pass), the texture animations' random holds (FUN_00042d7c opcodes 7-10), the
+  speech choices (were SDL_rand). Level start in the original's order: reseed, the spawns (FUN_0002f490; a
+  colonist's draw in FUN_0002e638, 0x2ee7f), the texture animations run to their first frames
+  (FUN_00042fac), one draw at 0x108b6. FUN_0002f3b0's draws are behind its type remap (0x23fd78, the
+  identity in play) and FUN_0003b5a0's are network only, so neither draws.
+  The lights' and animations' tasks have no pass test, so they now tick every pass, not on the creature pass
+  (item 9 under "round 3" below, for those two).
+  RESULT on 1.1.1: health 100 to the end, the first hugger killed in its leap, the cartridges, the clips and
+  the 9mm ammunition (060, 057, 056, 090), the WY corridor and the barrels to the terminal - the original's
+  walk. They part at the terminal (words 703-707, use held): the original gets "Door powered up" and goes
+  through the door; the port's player slides along z 11831 and is not on the terminal's trigger cell.
+  LEFT: (1) the terminal - where the port's player stands at word 703 against the original (a collision or
+  slide difference); (2) the order of the draws inside a pass - the original's task list order (by each
+  task's priority, FUN_000124f4) against the port's fixed order; (3) the draws the original makes while
+  drawing (the jets' and flames' frames, picked per particle drawn, FUN_0002d6ec family): the port picks those
+  from a hash so the stream does not depend on what is in view; (4) multiplayer spawn points (MultiplayerSpawn,
+  its own generator) and the bots (OURS) stay off the stream.
 - Results (Screens/MultiplayerResultsScreen): FUN_0001560c / FUN_00015228, layout exact for up to four players;
   OURS: eight players (columns close up), and no "Waiting for players" handshake between machines.
 

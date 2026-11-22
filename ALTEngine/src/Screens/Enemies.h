@@ -8,6 +8,7 @@
 #include "EnemyBehaviour.h"
 #include "PlayerCamera.h"
 #include "../Game/OriginalMath.h"
+#include "../Game/OriginalRandom.h"
 #include "CreatureAI.h"
 #include "CreatureTasks.h"
 
@@ -381,6 +382,10 @@ namespace ALTEngine::Screens
         {
             enemy.hitCooldown = SPAWN_IMMUNITY;
             enemy.spawnGuard = true;
+            // FUN_0002e638's colonist arm (0x2ee7f) draws once for its task's
+            // +0xc (rand & 5) - kept for the stream; the task's +0xc is
+            // nothing the port's colonist reads.
+            if (enemy.type == 10) { (void)ALTEngine::Game::OriginalRandom::Next(); }
         }
 
         // FUN_0002e638 takes a free slot from 0x80 every time it spawns - it

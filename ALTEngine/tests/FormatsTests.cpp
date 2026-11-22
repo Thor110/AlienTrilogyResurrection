@@ -10,6 +10,7 @@
 #include "Formats/SpriteFrameDecompressor.h"
 #include "Formats/SpriteRle.h"
 #include "Formats/TextureAnimation.h"
+#include "Game/OriginalRandom.h"
 
 #include <cmath>
 #include <fstream>
@@ -36,6 +37,17 @@ namespace
 
 // ---- the light table (FUN_00029be0 and the per-tick updater) ----------------
 
+TEST_CASE("Random: FUN_000100ec from the seed at 0xa4dd0, the carry included")
+{
+    ALTEngine::Game::OriginalRandom::State r;
+    CHECK_EQ(r.Next(), 0x1aa01013u);
+    CHECK_EQ(r.Next(), 0x4fe0303au);
+    CHECK_EQ(r.Next(), 0xefa090afu);
+    CHECK_EQ(r.Next(), 0xcee1b20fu);   // s4 + s1 carried out: one more
+    r.Reseed();
+    CHECK_EQ(r.Next(), 0x1aa01013u);
+}
+
 TEST_CASE("Lights: a flat record shows its lit colour, scaled by the global multiplier")
 {
     LightTable table;
@@ -58,12 +70,12 @@ TEST_CASE("Lights: a flash brightens one tick only, clamped at 255, but never li
     flat.on = 1;
     table.Reset({ flat, flat, flat });
     table.RequestFlash();
-    table.Tick(0);
+    table.Tick({});
     CHECK_EQ(static_cast<int>(table.ColourFor(2).corner[0].r), 255);   // 96 * 8192 / 0xc00 = 256
     // Records 0 and 1 keep the normal multiplier (0x2a05d): the weapon's light.
     CHECK_EQ(static_cast<int>(table.ColourFor(0).corner[0].r), 120);
     CHECK_EQ(static_cast<int>(table.ColourFor(1).corner[0].r), 120);
-    table.Tick(0);
+    table.Tick({});
     CHECK_EQ(static_cast<int>(table.ColourFor(2).corner[0].r), 120);
 }
 
@@ -82,18 +94,18 @@ TEST_CASE("Lights: mode 3 pulses for ever at its own times; modes 2 and 5 flicke
     int last = table.Records()[0].on;
     for (int t = 0; t < 100; ++t)
     {
-        table.Tick(0);
+        table.Tick({});
         if (table.Records()[0].on != last) { ++changes; last = table.Records()[0].on; }
     }
     CHECK(changes >= 30);
     // Mode 2 with draws of 1 and 1: on for 1 then off for 1, from the first tick.
     LightTable two;
     two.Reset({ Light(2, 96, 0), Light(2, 96, 0), Light(5, 96, 0) });
-    two.Tick(0);
+    two.Tick({});
     CHECK_EQ(static_cast<int>(two.Records()[2].on), 1);
     CHECK_EQ(static_cast<int>(two.Records()[2].blinkCountdown), 0);   // mode 5: (1 - 1) >> 1
     CHECK_EQ(static_cast<int>(two.Records()[2].on), 1);
-    two.Tick(0);
+    two.Tick({});
     CHECK_EQ(static_cast<int>(two.Records()[2].on), 0);
     CHECK_EQ(static_cast<int>(two.Records()[2].on), 0);
     // A record that isn't armed is put back to the level's own state.
@@ -102,7 +114,7 @@ TEST_CASE("Lights: mode 3 pulses for ever at its own times; modes 2 and 5 flicke
     w.variantMax = 1;
     w.on = 1;
     waiting.Reset({ w, w, w });
-    waiting.Tick(0);
+    waiting.Tick({});
     CHECK_EQ(static_cast<int>(waiting.Records()[2].on), 1);
 }
 
@@ -125,15 +137,15 @@ TEST_CASE("Lights: a blink record waits for its switch, then blinks with its dur
     blink.offDuration = 2;
     blink.blinkRepeats = 5;
     table.Reset({ blink });
-    for (int t = 0; t < 10; ++t) { table.Tick(0); }
+    for (int t = 0; t < 10; ++t) { table.Tick({}); }
     CHECK_EQ(static_cast<int>(table.Records()[0].on), 0);          // not armed
     table.ToggleLight(0, 5);
     CHECK_EQ(static_cast<int>(table.Records()[0].variant), 1);     // clamped to its maximum
-    table.Tick(0);                                                  // jitter (0 & 3) + 1
+    table.Tick({});                                                  // jitter (0 & 3) + 1
     CHECK_EQ(static_cast<int>(table.Records()[0].on), 1);
     CHECK_EQ(static_cast<int>(table.Records()[0].blinkCountdown), 1 + 3);
     CHECK_EQ(static_cast<int>(table.ColourFor(0).corner[0].r), 120);
-    for (int t = 0; t < 5; ++t) { table.Tick(0); }
+    for (int t = 0; t < 5; ++t) { table.Tick({}); }
     CHECK_EQ(static_cast<int>(table.Records()[0].on), 0);
     CHECK_EQ(static_cast<int>(table.ColourFor(0).corner[0].r), 0);
 }
@@ -152,7 +164,7 @@ TEST_CASE("Texture animation: a program holds each frame for its speed, then loo
     REQUIRE(anim.CurrentTexture(0, tex));
     CHECK_EQ(static_cast<int>(tex), 100);
     std::vector<int> seen;
-    for (int t = 0; t < 9; ++t) { anim.Tick(0); anim.CurrentTexture(0, tex); seen.push_back(tex); }
+    for (int t = 0; t < 9; ++t) { anim.Tick({}); anim.CurrentTexture(0, tex); seen.push_back(tex); }
     // Each frame shows for two ticks (FUN_00042ff4 counts down, then moves on at 0).
     CHECK(seen == std::vector<int>({ 100, 101, 101, 100, 100, 101, 101, 100, 100 }));
 }
@@ -165,11 +177,11 @@ TEST_CASE("Texture animation: a gated program waits for ChangeTexture, and op 11
     TextureAnimator anim;
     anim.Reset(level);
     uint16_t tex = 0;
-    for (int t = 0; t < 5; ++t) { anim.Tick(0); }
+    for (int t = 0; t < 5; ++t) { anim.Tick({}); }
     REQUIRE(anim.CurrentTexture(0, tex));
     CHECK_EQ(static_cast<int>(tex), 200);            // primed, but not running
     anim.ChangeTexture(0, 1);
-    for (int t = 0; t < 10; ++t) { anim.Tick(0); }
+    for (int t = 0; t < 10; ++t) { anim.Tick({}); }
     anim.CurrentTexture(0, tex);
     CHECK_EQ(static_cast<int>(tex), 201);            // ran to the stop and stayed
     CHECK(anim.Animators()[0].stopped);
@@ -291,20 +303,20 @@ TEST_CASE("LightTable: the shoulder lamp and goggles ramp the global light (FUN_
     const int normal = table.GlobalTriple()[0];
     CHECK_EQ(normal, LIGHT_GLOBAL_NORMAL);
     table.StartEquipment(LightTable::Equipment::Lamp);
-    for (int i = 0; i < 0x20; ++i) { table.Tick(0); }
+    for (int i = 0; i < 0x20; ++i) { table.Tick({}); }
     auto lamp = table.GlobalTriple();
     CHECK_EQ(lamp[0], 0x2400);
     CHECK_EQ(lamp[1], 0x2400);
     CHECK_EQ(lamp[2], 0x1000);
     // Fading out takes 0x40 a tick, so 0x40 ticks, then the normal light.
     table.StopEquipment();
-    for (int i = 0; i < 0x40; ++i) { table.Tick(0); }
+    for (int i = 0; i < 0x40; ++i) { table.Tick({}); }
     CHECK(table.ActiveEquipment() == LightTable::Equipment::None);
     const int after = table.GlobalTriple()[2];
     CHECK_EQ(after, LIGHT_GLOBAL_NORMAL);
 
     table.StartEquipment(LightTable::Equipment::Goggles);
-    for (int i = 0; i < 0x20; ++i) { table.Tick(0); }
+    for (int i = 0; i < 0x20; ++i) { table.Tick({}); }
     auto goggles = table.GlobalTriple();
     CHECK_EQ(goggles[0], 0x1000);
     CHECK_EQ(goggles[1], 0x2200);

@@ -11,6 +11,7 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -306,13 +307,17 @@ namespace ALTEngine::Renderer
         // Call this once per gameplay tick, before RenderLevelToRgba.
         // Cheap on the great majority of ticks: it steps 128 small state
         // machines and compares 128 resolved entries, and only touches the
-        // GPU when one of them moved. `randomBits` supplies the timing
-        // jitter the original takes from its RNG - pass a real random
-        // value, or a fixed one for reproducible blink timing.
+        // GPU when one of them moved. `draw` is the game's generator
+        // (Game::OriginalRandom): the lights take two draws a tick and the
+        // texture animations one at each random hold, as the original's do.
         //
         // Returns true if the buffers were rebuilt, which is useful mainly
         // for logging and tests.
-        static bool TickLevelLights(const std::string& cacheKey, int randomBits);
+        static bool TickLevelLights(const std::string& cacheKey, const std::function<uint32_t()>& draw);
+
+        // The level start's texture animation setup (FUN_00042fac): every
+        // program run from the top to its first frame, drawing as it goes.
+        static void RestartLevelAnimations(const std::string& cacheKey, const std::function<uint32_t()>& draw);
 
         // The screen fade (Formats::ScreenFade) on everything drawn with a
         // colour: the level's faces, the models, the sprites. Set it every

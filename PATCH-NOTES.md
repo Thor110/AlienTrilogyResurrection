@@ -185,6 +185,13 @@ A review of every routine in the original against ALTEngine's, one block of the 
   (they were on the first).
 - **A gunshot's (or a door's) noise lasts as long as in the original.** With speed compensation on it was
   dying away twice as fast, so creatures stopped hearing it early.
+- **The original's own random numbers.** ALTEngine now uses the game's generator, seeded the same way at the
+  start of every level, for everything that was random: the creatures' choices, the spread of shots and
+  sparks, the lights' flicker, the texture animations, the debris, Ripley's remarks. The attract demo of 1.1.1
+  now plays out as the original's does almost to the end - the face hugger shot in mid-leap, every pickup on
+  the way, not a scratch taken.
+- **Flickering lights and animated textures keep the original's pace** with speed compensation on (they ran at
+  half speed).
 - **The scores after a deathmatch**: the original's results screen - who killed whom, each player's own
   deaths taken off in their own column, and the total, highest first, in each player's colour. Any key, or
   twenty seconds, goes on. (It has room for all eight of ALTEngine's players.)

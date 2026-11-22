@@ -22,6 +22,7 @@
 #include "GameplayObjects.h"
 #include "GameplayLevelBuild.h"
 #include "Enemies.h"
+#include "../Game/OriginalRandom.h"
 #include "../Game/Blast.h"
 #include "../Game/Doors.h"
 #include "../Game/ResupplyTimer.h"
@@ -544,7 +545,6 @@ namespace ALTEngine::Screens
         // last went out (so a change is sent at once).
         double lastCreaturesSent = -1.0, lastCreaturesFull = -1.0;
         std::vector<uint16_t> creatureFlagsSent;
-        uint32_t creatureRandom = 0x1234567u;   // FUN_000100ec stands in
         ALTEngine::Screens::Particles::Pool particles;
         ALTEngine::Screens::Particles::Rng dropRng;
         ALTEngine::Screens::ExplosionEffects explosions;
@@ -1605,8 +1605,17 @@ namespace ALTEngine::Screens
                         playerExplosives.clear();
                         minimapVisited.clear();
                         minimapAreas.clear();
+                        // The generator's own seed, at every level start
+                        // (FUN_00010694, 0x1072d), before the spawns draw.
+                        ALTEngine::Game::OriginalRandom::Reseed();
                         enemies = ALTEngine::Screens::Enemies::Build(
                             level, static_cast<int>(difficultySettings.Get()), originX, originZ);
+                        // Then, as the original's level start goes on: the
+                        // texture animations run to their first frames
+                        // (FUN_00042fac, a draw at each random hold), and one
+                        // draw more at 0x108b6 (& 0x7f into DAT_00010bc4).
+                        ModelRenderer::RestartLevelAnimations(cacheKey, ALTEngine::Game::OriginalRandom::Next);
+                        (void)ALTEngine::Game::OriginalRandom::Next();
                         // Testing: Disable Enemy Spawn. An empty roster leaves
                         // the triggers, eggs, crates and vents nothing to let
                         // out - every one of them looks its monster up by
@@ -1905,7 +1914,7 @@ namespace ALTEngine::Screens
                     // FUN_00036f4c: "Battery required", and half the time a
                     // remark (FUN_000572e4(0xe)).
                     hudMessages.ShowBatteryRequired(language);
-                    if (SDL_rand(2) != 0) { voice.Say(ALTEngine::Audio::Speech::BATTERY_REQUIRED, session != nullptr); }
+                    if ((ALTEngine::Game::OriginalRandom::Next() & 0x1) != 0) { voice.Say(ALTEngine::Audio::Speech::BATTERY_REQUIRED, session != nullptr); }
                     return false;
                 }
                 inventory.batteries--;
@@ -2017,11 +2026,11 @@ namespace ALTEngine::Screens
             // (FUN_00030b04).
             if (enemy.type == 7)
             {
-                if (SDL_rand(8) == 0) { voice.Say(SP::QUEEN_HIT, net); }
+                if ((ALTEngine::Game::OriginalRandom::Next() & 0x7) == 0) { voice.Say(SP::QUEEN_HIT, net); }
                 if (enemy.health < 0x1a) { voice.Say(SP::QUEEN_WEAK, net); }
-                if (killed && SDL_rand(4) != 0) { voice.Say(SP::QUEEN_KILLED, net); }
+                if (killed && (ALTEngine::Game::OriginalRandom::Next() & 0x3) != 0) { voice.Say(SP::QUEEN_KILLED, net); }
             }
-            else if (enemy.type == 2 && killed && SDL_rand(2) != 0) { voice.Say(SP::HUGGER_KILLED, net); }
+            else if (enemy.type == 2 && killed && (ALTEngine::Game::OriginalRandom::Next() & 0x1) != 0) { voice.Say(SP::HUGGER_KILLED, net); }
         };
         // A change from another machine, made here.
         auto applyWorldEvent = [&](const ALTEngine::Net::WorldEvent& w) {
@@ -2831,10 +2840,10 @@ namespace ALTEngine::Screens
                                 // FUN_0004d438: keys 3 and 4 draw a remark
                                 // half the time.
                                 namespace SP = ALTEngine::Audio::Speech;
-                                if (i == 2 && SDL_rand(2) != 0) { voice.Say(SP::WEAPON_THREE, session != nullptr); }
-                                if (i == 3 && SDL_rand(2) != 0)
+                                if (i == 2 && (ALTEngine::Game::OriginalRandom::Next() & 0x1) != 0) { voice.Say(SP::WEAPON_THREE, session != nullptr); }
+                                if (i == 3 && (ALTEngine::Game::OriginalRandom::Next() & 0x1) != 0)
                                 {
-                                    voice.Say(SDL_rand(2) == 0 ? SP::WEAPON_FOUR_A : SP::WEAPON_FOUR_B, session != nullptr);
+                                    voice.Say((ALTEngine::Game::OriginalRandom::Next() & 0x1) == 0 ? SP::WEAPON_FOUR_A : SP::WEAPON_FOUR_B, session != nullptr);
                                 }
                             }
                         }
@@ -3347,10 +3356,10 @@ namespace ALTEngine::Screens
                         };
                         const int projectileType = TYPE_FOR_WEAPON[hudState.currentWeapon];
                         // FUN_0002c0a0: a burst of flame, 5 times in 16, a remark.
-                        if (projectileType == P::TYPE_FLAME && SDL_rand(16) < 5)
+                        if (projectileType == P::TYPE_FLAME && (ALTEngine::Game::OriginalRandom::Next() & 0xf) < 5)
                         {
                             namespace SP = ALTEngine::Audio::Speech;
-                            voice.Say(SDL_rand(2) == 0 ? SP::FLAMING_B : SP::FLAMING_A, session != nullptr);
+                            voice.Say((ALTEngine::Game::OriginalRandom::Next() & 0x1) == 0 ? SP::FLAMING_B : SP::FLAMING_A, session != nullptr);
                         }
 
                         // The pulse rifle, flamethrower and smartgun each put
@@ -3801,10 +3810,7 @@ namespace ALTEngine::Screens
                             z = static_cast<int>(std::lround(static_cast<float>(gz) - originZ));
                             return true;
                         };
-                        aiWorld.random = [&]() {
-                            creatureRandom = creatureRandom * 1103515245u + 12345u;
-                            return static_cast<int>((creatureRandom >> 16) & 0xffff);
-                        };
+                        aiWorld.random = []() { return static_cast<int>(ALTEngine::Game::OriginalRandom::Next()); };
 
                         auto enemyAxisClear = [&](float x, float z, bool alongX, float velocity, float halfHeight, bool hanging,
                                                   float bodyY) {
@@ -5600,20 +5606,21 @@ namespace ALTEngine::Screens
                             for (int t = speedCompensationOff ? 2 : 1; t > 0; --t) { hud.TickTracker(); }
                         }
 
+                        // Level lights and texture animations: their tasks
+                        // (LAB_00029d90, FUN_00042ff4) have no pass test, so
+                        // they run every pass, the lights drawing twice from
+                        // the generator each time (0x29f98). Steps the blink
+                        // state machines and re-uploads vertex colours only
+                        // when a light actually changed state.
+                        ModelRenderer::TickLevelLights(cacheKey, ALTEngine::Game::OriginalRandom::Next);
+                        if (ModelRenderer::TakeLevelLightFull(cacheKey))
+                        {
+                            ALTEngine::Audio::SfxPlayer::StopLoop(lightFullSound);
+                            lightFullSound = ALTEngine::Audio::SfxPlayer::StartLoop(LIGHT_FULL_SOUND, 1.0f, digits.c_str(), cdDirectory);
+                        }
+
                         if (worldHalf)
                         {
-                            // Level lights. Steps the blink state machines and
-                            // re-uploads vertex colours only when a light
-                            // actually changed state. The jitter argument is
-                            // the (rand & 3) + 1 the original adds to each
-                            // blink duration.
-                            ModelRenderer::TickLevelLights(cacheKey, SDL_rand(256));
-                            if (ModelRenderer::TakeLevelLightFull(cacheKey))
-                            {
-                                ALTEngine::Audio::SfxPlayer::StopLoop(lightFullSound);
-                                lightFullSound = ALTEngine::Audio::SfxPlayer::StartLoop(LIGHT_FULL_SOUND, 1.0f, digits.c_str(), cdDirectory);
-                            }
-
                             hudState.Tick();
                             // FUN_0003e618 after a hit off health, and the
                             // speech task (FUN_00057338).
