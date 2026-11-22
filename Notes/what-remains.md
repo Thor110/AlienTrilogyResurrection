@@ -837,6 +837,13 @@ Left from that review, to look at:
   section and face, made after the cleanup and blanking, taken out at the start of every run before the cleaned
   copies are set aside; checked with the cleanup on and off and run twice each. No global file changes, so no
   CRC or list to remake.
+- Zip 188: L381's 22 see-through floors (Patch 75, texture stage, global): ovals left, left, right, left, right,
+  right by column (54, 59, 64, 72, 77, 82; Edward from rendered sheets); floors 6, 11, 15, 17, 18, 20, 22 mirrored
+  whole (quads keep winding, routine 12<->34 / 30<->32; triangles reversed, routine 13 = 0x224e8 projects with
+  0x48924 and never tests facing, as routine 5); floor 14's top-right triangle mirrored from its bottom-right.
+  97 faces. Open: floor 14's two left triangles (no corner order or nearby tile looked right to Edward); floor 22's
+  two left triangles use texture 0 (page 0) in the shipped file. recrc.sh now takes ALTEngine's model face edits
+  out before reading a CRC (they are made after the missing faces).
 - Open (Edward): global patches that may not suit the original should be separated like this one. The only
   known candidate: the "mirrored, other half" quads ((a, b, c, c) with routine 2, Notes/uv-review-log.md), which
   are unverified in DOS.

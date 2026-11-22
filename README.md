@@ -496,6 +496,7 @@ Fixes marked "texture scan" were found by ALTLevelScan, which looks for faces wh
 - [Patched an issue on L371LEV where the corner triangles of 14 wall recesses had their textures turned (28 faces).](#L371LEV-Fix-8)
 - [Patched an issue on L381LEV where one face had its texture rotated (texture scan 381-1).](#L381LEV-Fix-1)
 - [ALTEngine only: patched an issue on L381LEV where two corners of the lift platform had their texture cut the wrong way.](#L381LEV-Fix-2-ALTEngine-only)
+- [Patched an issue on L381LEV where the see-through floors over the lift shafts did not follow one pattern (97 faces on 8 floors).](#L381LEV-Fix-3)
 - [Patched an issue on L391LEV where 246 faces of the queen's egg sack had their texture turned.](#L391LEV-Fix-1)
 - [Patched an issue on L391LEV where one face had its texture rotated (texture scan 391-1).](#L391LEV-Fix-2)
 - [Patched an issue on L391LEV where one face had its texture rotated (texture scan 391-2).](#L391LEV-Fix-3)
@@ -1464,6 +1465,23 @@ Mirroring a triangle means reversing its corners, which turns it over. The origi
 </table>
 
 Patch listed at Patch/L381LEV.txt (its ALTENGINE ONLY section) and ALTEngine/data/EngineFilePatches.json.
+
+## L381LEV Fix 3
+
+UV mapping corrected.
+
+The big room over the lift shafts has 22 see-through floors. In each, the middle faces form an oval on one side, and across the room the ovals were meant to run in a pattern by column: left, left, right, left, right, right (Edward). Seven floors had theirs the wrong way round; each is now mirrored left to right as a whole, edges and corners included. One more floor, at cells 59/32, gets its top-right corner triangle mirrored from its bottom-right one.
+
+Every change uses draw routines the original already has (the mirrored partners of the see-through routines, and the corner triangles' routine 13, which the original draws from both sides), so it suits the original game as well and is part of ALTViewer's patch button.
+
+Still to do: the two left corner triangles of that floor at cells 59/32, and the floor at cells 77/37, whose two corner triangles use a texture from another page.
+
+<table>
+<tr><th>Before</th><th>After</th></tr>
+<tr><td><img src="Images/L381LEV/L381LEV-seethrough-floors-before.png" width="400" alt="L381LEV see-through floors before"></td><td><img src="Images/L381LEV/L381LEV-seethrough-floors-after.png" width="400" alt="L381LEV see-through floors after"></td></tr>
+</table>
+
+Patch listed at Patch/L381LEV.txt
 
 ## L391LEV Fix 1
 

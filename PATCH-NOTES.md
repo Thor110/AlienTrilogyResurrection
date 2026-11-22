@@ -230,6 +230,9 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
   neighbours' texture, 18.
 - **L381: the see-through floor over the lifts**, the first of its kind put right (Edward): two faces turned
   half way round and two given each other's texture. The rest of them are still to follow.
+- **L381: the 22 see-through floors over the lift shafts follow one pattern** (Edward). The oval in each floor's
+  middle runs left, left, right, left, right, right across the room's columns; seven floors had it the wrong way
+  round and are mirrored whole, and one floor's corner triangle is put right. For the original game too.
 - **L381: the lift platforms' corners** (ALTEngine only, Edward). Two of the four corner triangles of the
   platform all 13 of the level's big lifts use had their texture cut the wrong way; each is now the mirror image
   of the corner across from it. The original game cannot draw that (it hides the back of every lift face, and a
