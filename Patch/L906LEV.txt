@@ -18,7 +18,7 @@ Left side railing double sided transparency fix
 0x22BF9 == 04
 
 0x22BF9 == 01 04 ( railing texture fix )
-0x50BE8 == 75 00 ( under railing texture fix ) // NOTE : This face still isn't visible
+0x50BE8 == D9 00 ( under railing texture fix - 217, Edward 2026; was 75 00 ) // it never showed because its corners ran the wrong way round: put right in a later patch
 
 Texture Correction
 Bridge Section 1
@@ -160,7 +160,7 @@ Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the sh
 Patch 0: L906LEV.MAP - a misplaced triangle: its vertex list put right (ALTViewer's fix 1)
   0x50BC8: FF FF FF FF -> B4 22 00 00
 
-Patch 10: L906LEV.MAP - the railings drawn see-through (ALTViewer's fixes 2-4), the bridge sections given their textures (fix 5) and textures flipped the right way
+Patch 10: L906LEV.MAP - the railings drawn see-through (ALTViewer's fixes 2-4), the bridge sections given their textures (fix 5) and textures flipped the right way; the face under the railing at 0x50BD8 (face 10899) now texture 217 (0xD9), Edward 2026 - see the next patch for why it never showed
   0x51342: 00 -> 04
   0x51A0E: 00 -> 04
   0x51EBE: 00 -> 04
@@ -169,7 +169,7 @@ Patch 10: L906LEV.MAP - the railings drawn see-through (ALTViewer's fixes 2-4), 
   0x22BF9: 01 -> 04
   0x45680: 31 01 -> 75 00
   0x22BF9: 01 02 -> 01 04
-  0x50BE8: 31 01 -> 75 00
+  0x50BE8: 31 01 -> D9 00
   0x456A8: 01 -> 75
   0x457E8: 01 -> 75
   0x45810: 01 -> 75
@@ -326,3 +326,86 @@ Patch 70: L906LEV.MAP - the bridge sides, horizontal flips (Edward with the Face
   0x456AA: 00 -> 02
   0x45812: 00 -> 02
   0x45862: 00 -> 02
+
+Patch 71: L906LEV.MAP - the bridge sides at x -10240 (texture 117, Edward with the Face Index Display, 2026): faces 6722, 6822, 6873, 6924, 6992, 7071 turned a quarter-turn clockwise, (d, a, b, c), and of them 6722, 6873, 6992 also mirrored, draw routine 0 -> 2. Faces as the display shows them with the Level Cleanup on
+  0x3C688: 89 35 00 00 8D 35 00 00 8C 35 00 00 84 35 00 00 -> 84 35 00 00 89 35 00 00 8D 35 00 00 8C 35 00 00
+  0x3C69A: 00 -> 02
+  0x3CE58: 6F 35 00 00 7D 35 00 00 8D 35 00 00 89 35 00 00 -> 89 35 00 00 6F 35 00 00 7D 35 00 00 8D 35 00 00
+  0x3D254: 6E 35 00 00 7C 35 00 00 7D 35 00 00 6F 35 00 00 -> 6F 35 00 00 6E 35 00 00 7C 35 00 00 7D 35 00 00
+  0x3D266: 00 -> 02
+  0x3D650: 6D 35 00 00 7B 35 00 00 7C 35 00 00 6E 35 00 00 -> 6E 35 00 00 6D 35 00 00 7B 35 00 00 7C 35 00 00
+  0x3DBA0: 71 35 00 00 7E 35 00 00 7B 35 00 00 6D 35 00 00 -> 6D 35 00 00 71 35 00 00 7E 35 00 00 7B 35 00 00
+  0x3DBB2: 00 -> 02
+  0x3E1CC: 75 35 00 00 7F 35 00 00 7E 35 00 00 71 35 00 00 -> 71 35 00 00 75 35 00 00 7F 35 00 00 7E 35 00 00
+
+Patch 72: L906LEV.MAP - the bridge sides, vertical flips (Edward with the Face Index Display, 2026): 28 faces turned half way round, (c, d, a, b), with the draw routine toggled 0 <-> 2 - so each is flipped top to bottom, as L111LEV.MAP face 4150 is. Faces as the display shows them with the Level Cleanup on: 4508, 4524, 5343, 5359, 8627, 8630, 8631, 8815, 8954, 9121, 9255, 9377, 9499, 9607, 9723, 9845, 9981, 10073, 10185, 10187, 10189, 10191, 10192, 10319, 10440, 10553, 10845, 10924
+  0x31AD0: 58 35 00 00 59 35 00 00 53 35 00 00 55 35 00 00 -> 53 35 00 00 55 35 00 00 58 35 00 00 59 35 00 00
+  0x31AE2: 00 -> 02
+  0x31990: 59 35 00 00 2B 05 00 00 71 03 00 00 53 35 00 00 -> 71 03 00 00 53 35 00 00 59 35 00 00 2B 05 00 00
+  0x319A2: 02 -> 00
+  0x35C0C: 5A 35 00 00 5B 35 00 00 2A 35 00 00 11 35 00 00 -> 2A 35 00 00 11 35 00 00 5A 35 00 00 5B 35 00 00
+  0x35C1E: 02 -> 00
+  0x35ACC: F3 0C 00 00 5A 35 00 00 11 35 00 00 69 03 00 00 -> 11 35 00 00 69 03 00 00 F3 0C 00 00 5A 35 00 00
+  0x35ADE: 00 -> 02
+  0x45BFC: B2 2E 00 00 F2 1F 00 00 EB 1F 00 00 AF 2E 00 00 -> EB 1F 00 00 AF 2E 00 00 B2 2E 00 00 F2 1F 00 00
+  0x45C0E: 02 -> 00
+  0x45C38: F2 1F 00 00 F3 1F 00 00 EC 1F 00 00 EB 1F 00 00 -> EC 1F 00 00 EB 1F 00 00 F2 1F 00 00 F3 1F 00 00
+  0x45C4A: 00 -> 02
+  0x45C4C: F3 1F 00 00 C5 20 00 00 88 20 00 00 EC 1F 00 00 -> 88 20 00 00 EC 1F 00 00 F3 1F 00 00 C5 20 00 00
+  0x45C5E: 02 -> 00
+  0x46AC0: C5 20 00 00 B8 20 00 00 C6 20 00 00 88 20 00 00 -> C6 20 00 00 88 20 00 00 C5 20 00 00 B8 20 00 00
+  0x46AD2: 00 -> 02
+  0x475B0: B8 20 00 00 C9 20 00 00 B7 20 00 00 C6 20 00 00 -> B7 20 00 00 C6 20 00 00 B8 20 00 00 C9 20 00 00
+  0x475C2: 00 -> 02
+  0x482BC: C9 20 00 00 CA 20 00 00 9C 22 00 00 B7 20 00 00 -> 9C 22 00 00 B7 20 00 00 C9 20 00 00 CA 20 00 00
+  0x482CE: 00 -> 02
+  0x48D84: CA 20 00 00 E2 20 00 00 DF 20 00 00 9C 22 00 00 -> DF 20 00 00 9C 22 00 00 CA 20 00 00 E2 20 00 00
+  0x48D96: 02 -> 00
+  0x4975C: E2 20 00 00 E3 20 00 00 99 22 00 00 DF 20 00 00 -> 99 22 00 00 DF 20 00 00 E2 20 00 00 E3 20 00 00
+  0x4976E: 00 -> 02
+  0x4A134: E3 20 00 00 ED 20 00 00 EB 20 00 00 99 22 00 00 -> EB 20 00 00 99 22 00 00 E3 20 00 00 ED 20 00 00
+  0x4A146: 02 -> 00
+  0x4A9F4: ED 20 00 00 EE 20 00 00 8F 22 00 00 EB 20 00 00 -> 8F 22 00 00 EB 20 00 00 ED 20 00 00 EE 20 00 00
+  0x4AA06: 00 -> 02
+  0x4B354: EE 20 00 00 D2 20 00 00 8B 22 00 00 8F 22 00 00 -> 8B 22 00 00 8F 22 00 00 EE 20 00 00 D2 20 00 00
+  0x4B366: 02 -> 00
+  0x4BD2C: D2 20 00 00 D3 20 00 00 8C 22 00 00 8B 22 00 00 -> 8C 22 00 00 8B 22 00 00 D2 20 00 00 D3 20 00 00
+  0x4BD3E: 00 -> 02
+  0x4C7CC: D3 20 00 00 D8 20 00 00 91 22 00 00 8C 22 00 00 -> 91 22 00 00 8C 22 00 00 D3 20 00 00 D8 20 00 00
+  0x4C7DE: 02 -> 00
+  0x4CEFC: D8 20 00 00 4C 21 00 00 92 22 00 00 91 22 00 00 -> 92 22 00 00 91 22 00 00 D8 20 00 00 4C 21 00 00
+  0x4CF0E: 00 -> 02
+  0x4D7BC: 4C 21 00 00 4B 21 00 00 4A 21 00 00 92 22 00 00 -> 4A 21 00 00 92 22 00 00 4C 21 00 00 4B 21 00 00
+  0x4D7CE: 02 -> 00
+  0x4D7E4: 4B 21 00 00 4F 21 00 00 50 21 00 00 4A 21 00 00 -> 50 21 00 00 4A 21 00 00 4B 21 00 00 4F 21 00 00
+  0x4D7F6: 00 -> 02
+  0x4D80C: 4F 21 00 00 4E 21 00 00 BA 22 00 00 50 21 00 00 -> BA 22 00 00 50 21 00 00 4F 21 00 00 4E 21 00 00
+  0x4D81E: 02 -> 00
+  0x4D848: 4E 21 00 00 4D 21 00 00 A6 22 00 00 BA 22 00 00 -> A6 22 00 00 BA 22 00 00 4E 21 00 00 4D 21 00 00
+  0x4D85A: 02 -> 00
+  0x4D834: 4D 21 00 00 F5 20 00 00 A2 22 00 00 A6 22 00 00 -> A2 22 00 00 A6 22 00 00 4D 21 00 00 F5 20 00 00
+  0x4D846: 00 -> 02
+  0x4E234: F5 20 00 00 F6 20 00 00 A3 22 00 00 A2 22 00 00 -> A3 22 00 00 A2 22 00 00 F5 20 00 00 F6 20 00 00
+  0x4E246: 02 -> 00
+  0x4EBA8: F6 20 00 00 FA 20 00 00 A7 22 00 00 A3 22 00 00 -> A7 22 00 00 A3 22 00 00 F6 20 00 00 FA 20 00 00
+  0x4EBBA: 00 -> 02
+  0x4F47C: FA 20 00 00 11 21 00 00 AF 22 00 00 A7 22 00 00 -> AF 22 00 00 A7 22 00 00 FA 20 00 00 11 21 00 00
+  0x4F48E: 02 -> 00
+  0x50B4C: 11 21 00 00 22 21 00 00 21 21 00 00 AF 22 00 00 -> 21 21 00 00 AF 22 00 00 11 21 00 00 22 21 00 00
+  0x50B5E: 00 -> 02
+  0x51178: 22 21 00 00 49 21 00 00 B3 22 00 00 21 21 00 00 -> B3 22 00 00 21 21 00 00 22 21 00 00 49 21 00 00
+  0x5118A: 02 -> 00
+
+Patch 73: L906LEV.MAP - the bridge sides at x -12288 (texture 117, Edward with the Face Index Display, 2026): faces 6716, 6816, 6867, 6918, 6986, 7065 turned a quarter-turn clockwise, (d, a, b, c), and of them 6816, 6918, 7065 also mirrored, draw routine 0 -> 2. Faces as the display shows them with the Level Cleanup on
+  0x3C610: 80 35 00 00 8A 35 00 00 8B 35 00 00 85 35 00 00 -> 85 35 00 00 80 35 00 00 8A 35 00 00 8B 35 00 00
+  0x3CDE0: 85 35 00 00 8B 35 00 00 78 35 00 00 63 35 00 00 -> 63 35 00 00 85 35 00 00 8B 35 00 00 78 35 00 00
+  0x3CDF2: 00 -> 02
+  0x3D1DC: 63 35 00 00 78 35 00 00 76 35 00 00 61 35 00 00 -> 61 35 00 00 63 35 00 00 78 35 00 00 76 35 00 00
+  0x3D5D8: 61 35 00 00 76 35 00 00 77 35 00 00 5E 35 00 00 -> 5E 35 00 00 61 35 00 00 76 35 00 00 77 35 00 00
+  0x3D5EA: 00 -> 02
+  0x3DB28: 5E 35 00 00 77 35 00 00 79 35 00 00 64 35 00 00 -> 64 35 00 00 5E 35 00 00 77 35 00 00 79 35 00 00
+  0x3E154: 64 35 00 00 79 35 00 00 7A 35 00 00 72 35 00 00 -> 72 35 00 00 64 35 00 00 79 35 00 00 7A 35 00 00
+  0x3E166: 00 -> 02
+
+Patch 74: L906LEV.MAP - the bridge side under the railing between faces 10560 and 10945 (as the display shows them with the Level Cleanup on; face 10899 in the shipped file, 0x50BD8): its corners ran the other way round from its neighbours', so it faced away and was never drawn ("This face still isn't visible" in the old fix list). Turned to run as they do, (9439, 8884, 8484, 9440): top edge first, along the bridge, then down. Its texture is now 217 (Edward, 2026)
+  0x50BD8: 24 21 00 00 B4 22 00 00 DF 24 00 00 E0 24 00 00 -> DF 24 00 00 B4 22 00 00 24 21 00 00 E0 24 00 00

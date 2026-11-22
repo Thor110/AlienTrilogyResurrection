@@ -8,8 +8,12 @@ Patch 55: L131LEV.MAP - UV review (TESTING, Edward with the Face Index Display, 
   0x3BFF4: 9A 00 -> B7 00
   0x3BFBC: EF 20 00 00 98 23 00 00 CC 23 00 00 F0 20 00 00 -> 98 23 00 00 CC 23 00 00 F0 20 00 00 EF 20 00 00
 
-Patch 67: L131LEV.MAP - four missing floor triangles (Edward, 2026), one at each corner of the raised centre: faces 2476, 2494, 2989 and 3007 have draw routine 3, which nothing draws. Routine 3 -> 2 and texture 195 -> 191
-  0x271BC: C3 00 03 -> BF 00 02
-  0x27324: C3 00 03 -> BF 00 02
-  0x299D0: C3 00 03 -> BF 00 02
-  0x29B38: C3 00 03 -> BF 00 02
+Patch 67: L131LEV.MAP - four missing floor triangles (Edward, 2026), one at each corner of the raised centre: faces 2476, 2494, 2989 and 3007 have draw routine 3, which nothing draws. Each now takes its texture, routine and corner order from the matching triangle round the other console (Edward, FaceLog): 2476 from 4544, 2989 from 4972, 2494 from 4562, 3007 from 4990 - texture 195 -> 191, routine 3 -> 1, corners turned so each sits on its tile as its counterpart does
+  0x271AC: 5E 2E 00 00 61 2E 00 00 13 2E 00 00 FF FF FF FF -> 13 2E 00 00 5E 2E 00 00 61 2E 00 00 FF FF FF FF
+  0x271BC: C3 00 03 -> BF 00 01
+  0x299C0: 65 2E 00 00 1D 2E 00 00 1E 2E 00 00 FF FF FF FF -> 1E 2E 00 00 65 2E 00 00 1D 2E 00 00 FF FF FF FF
+  0x299D0: C3 00 03 -> BF 00 01
+  0x27314: 17 2E 00 00 57 2E 00 00 19 2E 00 00 FF FF FF FF -> 19 2E 00 00 17 2E 00 00 57 2E 00 00 FF FF FF FF
+  0x27324: C3 00 03 -> BF 00 01
+  0x29B28: 5D 2E 00 00 59 2E 00 00 21 2E 00 00 FF FF FF FF -> 21 2E 00 00 5D 2E 00 00 59 2E 00 00 FF FF FF FF
+  0x29B38: C3 00 03 -> BF 00 01

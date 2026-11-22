@@ -224,15 +224,17 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
   (the Face Index Display shows the new numbers).
 - **Six floor triangles that nothing drew are back**: one on L111 and L900 by the foot of the slanted wall (face
   9040), and one at each corner of L131's raised centre (faces 2476, 2494, 2989, 3007). They are in the
-  original's files with draw routine 3, which the game has no way to draw; they now have the routine they were
-  meant to have, and L131's take texture 191 (Edward), L111's its neighbours' 18.
+  original's files with draw routine 3, which the game has no way to draw. L131's now match the four round the
+  other console - texture, routine and the way they sit on their tiles (Edward); L111's has routine 2 and its
+  neighbours' texture, 18.
 - **L381: the see-through floor over the lifts**, the first of its kind put right (Edward): two faces turned
   half way round and two given each other's texture. The rest of them are still to follow.
 - **L906: the 53 bridge and fence faces turned and mirrored in the file are back as they were.** They were
   converted from ALTViewer's old model-export remaps, and most, if not all, were wrong; only the fixes made by
   hand stay. (A game patched by an older ALTViewer keeps them until L906LEV.MAP is copied from the disc again.)
-- **L906: the bridge sides turned the right way** - 36 faces, a quarter-turn clockwise, and 13 of them mirrored
-  (Edward).
+- **L906: the bridge sides turned the right way** - 48 faces turned a quarter-turn clockwise (19 of them also
+  mirrored), and 28 more flipped top to bottom (Edward). The piece of bridge side under the railing at the
+  far end, missing from the start, is there now: it was always in the file but faced the wrong way (texture 217).
 - ALTViewer's patch button can be pressed again over a patched game: it takes the missing faces out, checks the
   byte patches, and puts them back. ALTEngine does the same when it is installed from a game ALTViewer patched.
 - **ALTViewer reads ALTEngine's files**: the trimmed levels (Level Viewer) and the face hugger's taller frames

@@ -298,7 +298,7 @@
     {
       "target": "SECT90/L906LEV.MAP",
       "stage": "texture",
-      "note": "L906LEV.MAP - the railings drawn see-through (ALTViewer's fixes 2-4), the bridge sections given their textures (fix 5) and textures flipped the right way",
+      "note": "L906LEV.MAP - the railings drawn see-through (ALTViewer's fixes 2-4), the bridge sections given their textures (fix 5) and textures flipped the right way; the face under the railing at 0x50BD8 (face 10899) now texture 217 (0xD9), Edward 2026 - see the next patch for why it never showed",
       "edits": [
         {
           "offset": "0x51342",
@@ -353,7 +353,7 @@
         {
           "offset": "0x50BE8",
           "bytes": [
-            "0x75",
+            "0xD9",
             "0x00"
           ]
         },
@@ -37861,22 +37861,56 @@
     {
       "target": "SECT11/L131LEV.MAP",
       "stage": "texture",
-      "note": "L131LEV.MAP - four missing floor triangles (Edward, 2026), one at each corner of the raised centre: faces 2476, 2494, 2989 and 3007 have draw routine 3, which nothing draws. Routine 3 -> 2 and texture 195 -> 191",
+      "note": "L131LEV.MAP - four missing floor triangles (Edward, 2026), one at each corner of the raised centre: faces 2476, 2494, 2989 and 3007 have draw routine 3, which nothing draws. Each now takes its texture, routine and corner order from the matching triangle round the other console (Edward, FaceLog): 2476 from 4544, 2989 from 4972, 2494 from 4562, 3007 from 4990 - texture 195 -> 191, routine 3 -> 1, corners turned so each sits on its tile as its counterpart does",
       "edits": [
+        {
+          "offset": "0x271AC",
+          "bytes": [
+            "0x13",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0x5E",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0x61",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
         {
           "offset": "0x271BC",
           "bytes": [
             "0xBF",
             "0x00",
-            "0x02"
+            "0x01"
           ]
         },
         {
-          "offset": "0x27324",
+          "offset": "0x299C0",
           "bytes": [
-            "0xBF",
+            "0x1E",
+            "0x2E",
             "0x00",
-            "0x02"
+            "0x00",
+            "0x65",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0x1D",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
           ]
         },
         {
@@ -37884,7 +37918,57 @@
           "bytes": [
             "0xBF",
             "0x00",
-            "0x02"
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x27314",
+          "bytes": [
+            "0x19",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0x17",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0x57",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
+          ]
+        },
+        {
+          "offset": "0x27324",
+          "bytes": [
+            "0xBF",
+            "0x00",
+            "0x01"
+          ]
+        },
+        {
+          "offset": "0x29B28",
+          "bytes": [
+            "0x21",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0x5D",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0x59",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0xFF",
+            "0xFF",
+            "0xFF",
+            "0xFF"
           ]
         },
         {
@@ -37892,7 +37976,7 @@
           "bytes": [
             "0xBF",
             "0x00",
-            "0x02"
+            "0x01"
           ]
         }
       ]
@@ -38804,6 +38888,1099 @@
           "offset": "0x45862",
           "bytes": [
             "0x02"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L906LEV.MAP",
+      "stage": "texture",
+      "note": "L906LEV.MAP - the bridge sides at x -10240 (texture 117, Edward with the Face Index Display, 2026): faces 6722, 6822, 6873, 6924, 6992, 7071 turned a quarter-turn clockwise, (d, a, b, c), and of them 6722, 6873, 6992 also mirrored, draw routine 0 -> 2. Faces as the display shows them with the Level Cleanup on",
+      "edits": [
+        {
+          "offset": "0x3C688",
+          "bytes": [
+            "0x84",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x89",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x8D",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x8C",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3C69A",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x3CE58",
+          "bytes": [
+            "0x89",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x6F",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x7D",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x8D",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3D254",
+          "bytes": [
+            "0x6F",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x6E",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x7C",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x7D",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3D266",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x3D650",
+          "bytes": [
+            "0x6E",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x6D",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x7B",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x7C",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3DBA0",
+          "bytes": [
+            "0x6D",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x71",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x7E",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x7B",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3DBB2",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x3E1CC",
+          "bytes": [
+            "0x71",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x75",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x7F",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x7E",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L906LEV.MAP",
+      "stage": "texture",
+      "note": "L906LEV.MAP - the bridge sides, vertical flips (Edward with the Face Index Display, 2026): 28 faces turned half way round, (c, d, a, b), with the draw routine toggled 0 <-> 2 - so each is flipped top to bottom, as L111LEV.MAP face 4150 is. Faces as the display shows them with the Level Cleanup on: 4508, 4524, 5343, 5359, 8627, 8630, 8631, 8815, 8954, 9121, 9255, 9377, 9499, 9607, 9723, 9845, 9981, 10073, 10185, 10187, 10189, 10191, 10192, 10319, 10440, 10553, 10845, 10924",
+      "edits": [
+        {
+          "offset": "0x31AD0",
+          "bytes": [
+            "0x53",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x55",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x58",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x59",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x31AE2",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x31990",
+          "bytes": [
+            "0x71",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0x53",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x59",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x2B",
+            "0x05",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x319A2",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x35C0C",
+          "bytes": [
+            "0x2A",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x11",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x5A",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x5B",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x35C1E",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x35ACC",
+          "bytes": [
+            "0x11",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x69",
+            "0x03",
+            "0x00",
+            "0x00",
+            "0xF3",
+            "0x0C",
+            "0x00",
+            "0x00",
+            "0x5A",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x35ADE",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x45BFC",
+          "bytes": [
+            "0xEB",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0xAF",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0xB2",
+            "0x2E",
+            "0x00",
+            "0x00",
+            "0xF2",
+            "0x1F",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x45C0E",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x45C38",
+          "bytes": [
+            "0xEC",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0xEB",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0xF2",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0xF3",
+            "0x1F",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x45C4A",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x45C4C",
+          "bytes": [
+            "0x88",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xEC",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0xF3",
+            "0x1F",
+            "0x00",
+            "0x00",
+            "0xC5",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x45C5E",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x46AC0",
+          "bytes": [
+            "0xC6",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x88",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xC5",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xB8",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x46AD2",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x475B0",
+          "bytes": [
+            "0xB7",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xC6",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xB8",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xC9",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x475C2",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x482BC",
+          "bytes": [
+            "0x9C",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xB7",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xC9",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xCA",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x482CE",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x48D84",
+          "bytes": [
+            "0xDF",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x9C",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xCA",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xE2",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x48D96",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4975C",
+          "bytes": [
+            "0x99",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xDF",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xE2",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xE3",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4976E",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x4A134",
+          "bytes": [
+            "0xEB",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x99",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xE3",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xED",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4A146",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4A9F4",
+          "bytes": [
+            "0x8F",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xEB",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xED",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xEE",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4AA06",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x4B354",
+          "bytes": [
+            "0x8B",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x8F",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xEE",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xD2",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4B366",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4BD2C",
+          "bytes": [
+            "0x8C",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x8B",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xD2",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xD3",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4BD3E",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x4C7CC",
+          "bytes": [
+            "0x91",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x8C",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xD3",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xD8",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4C7DE",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4CEFC",
+          "bytes": [
+            "0x92",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x91",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xD8",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x4C",
+            "0x21",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4CF0E",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x4D7BC",
+          "bytes": [
+            "0x4A",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x92",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x4C",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x4B",
+            "0x21",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4D7CE",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4D7E4",
+          "bytes": [
+            "0x50",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x4A",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x4B",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x4F",
+            "0x21",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4D7F6",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x4D80C",
+          "bytes": [
+            "0xBA",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x50",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x4F",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x4E",
+            "0x21",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4D81E",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4D848",
+          "bytes": [
+            "0xA6",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xBA",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x4E",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x4D",
+            "0x21",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4D85A",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4D834",
+          "bytes": [
+            "0xA2",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xA6",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x4D",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0xF5",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4D846",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x4E234",
+          "bytes": [
+            "0xA3",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xA2",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xF5",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xF6",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4E246",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4EBA8",
+          "bytes": [
+            "0xA7",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xA3",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xF6",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0xFA",
+            "0x20",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4EBBA",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x4F47C",
+          "bytes": [
+            "0xAF",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xA7",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0xFA",
+            "0x20",
+            "0x00",
+            "0x00",
+            "0x11",
+            "0x21",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x4F48E",
+          "bytes": [
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x50B4C",
+          "bytes": [
+            "0x21",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0xAF",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x11",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x22",
+            "0x21",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x50B5E",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x51178",
+          "bytes": [
+            "0xB3",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x21",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x22",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0x49",
+            "0x21",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x5118A",
+          "bytes": [
+            "0x00"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L906LEV.MAP",
+      "stage": "texture",
+      "note": "L906LEV.MAP - the bridge sides at x -12288 (texture 117, Edward with the Face Index Display, 2026): faces 6716, 6816, 6867, 6918, 6986, 7065 turned a quarter-turn clockwise, (d, a, b, c), and of them 6816, 6918, 7065 also mirrored, draw routine 0 -> 2. Faces as the display shows them with the Level Cleanup on",
+      "edits": [
+        {
+          "offset": "0x3C610",
+          "bytes": [
+            "0x85",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x80",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x8A",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x8B",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3CDE0",
+          "bytes": [
+            "0x63",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x85",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x8B",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x78",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3CDF2",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x3D1DC",
+          "bytes": [
+            "0x61",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x63",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x78",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x76",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3D5D8",
+          "bytes": [
+            "0x5E",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x61",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x76",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x77",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3D5EA",
+          "bytes": [
+            "0x02"
+          ]
+        },
+        {
+          "offset": "0x3DB28",
+          "bytes": [
+            "0x64",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x5E",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x77",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x79",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3E154",
+          "bytes": [
+            "0x72",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x64",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x79",
+            "0x35",
+            "0x00",
+            "0x00",
+            "0x7A",
+            "0x35",
+            "0x00",
+            "0x00"
+          ]
+        },
+        {
+          "offset": "0x3E166",
+          "bytes": [
+            "0x02"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SECT90/L906LEV.MAP",
+      "stage": "texture",
+      "note": "L906LEV.MAP - the bridge side under the railing between faces 10560 and 10945 (as the display shows them with the Level Cleanup on; face 10899 in the shipped file, 0x50BD8): its corners ran the other way round from its neighbours', so it faced away and was never drawn (\"This face still isn't visible\" in the old fix list). Turned to run as they do, (9439, 8884, 8484, 9440): top edge first, along the bridge, then down. Its texture is now 217 (Edward, 2026)",
+      "edits": [
+        {
+          "offset": "0x50BD8",
+          "bytes": [
+            "0xDF",
+            "0x24",
+            "0x00",
+            "0x00",
+            "0xB4",
+            "0x22",
+            "0x00",
+            "0x00",
+            "0x24",
+            "0x21",
+            "0x00",
+            "0x00",
+            "0xE0",
+            "0x24",
+            "0x00",
+            "0x00"
           ]
         }
       ]

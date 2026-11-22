@@ -806,7 +806,15 @@ Left from that review, to look at:
   361GFX now listed too - they had been left out).
 - Zip 184: L906's 36 bridge-side faces (texture 117, from Edward's FaceLog) turned a quarter-turn clockwise,
   (d, a, b, c); zip 185: 13 of them mirrored (routine 0 -> 2): 5361, 5365, 5369, 5572, 5934, 6641, 6825, 7809,
-  7813, 7817, 8558, 8576, 8580. More L906 adjustments to come in batches from Edward. ALTViewer's patch button carries every patch
+  7813, 7817, 8558, 8576, 8580. Zip 186: the side at x -10240, 6722, 6822, 6873, 6924, 6992, 7071 turned
+  clockwise, 6722, 6873, 6992 mirrored too; 28 faces flipped vertically ((c, d, a, b) with the routine toggled
+  0 <-> 2: 4508, 4524, 5343, 5359 and the far side 8627-10924); the side at x -12288, 6716, 6816, 6867, 6918,
+  6986, 7065 turned clockwise, 6816, 6918, 7065 mirrored too. The "missing" face between 10560 and 10945 is
+  the shipped face 10899 (0x50BD8), wound the wrong way so it faced away (the old fix list's "still isn't
+  visible"): turned to run as its neighbours, texture 217 (patch 10's 0x50BE8 changed from 117). Edward: L906
+  done for now; the other levels to follow.
+- Zip 186: L131's four floor triangles copy their counterparts round the other console (2476 <- 4544,
+  2989 <- 4972, 2494 <- 4562, 3007 <- 4990): texture 191, routine 1, corners rotated to sit as theirs do. ALTViewer's patch button carries every patch
   of zips 183-184, and its MissingFaces.cs the new CRCs.
 - Answered: (1) yes, add the object-record removal stage; (2) the lift is the bottom-left one of L381's group on
   the minimap; (4) the invisible wall is reported on several levels. (3) Edward is still looking.

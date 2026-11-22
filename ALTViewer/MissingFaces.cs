@@ -40,7 +40,7 @@ namespace ALTViewer
         {
             new Entry("SECT11/L112LEV.MAP", 0x768FC815u, 0xBF0A6DF9u, 4, true, -1, -1, null),
             new Entry("SECT11/L122LEV.MAP", 0x5B38C3A2u, 0x644EE359u, 0, true, -1, -1, null),
-            new Entry("SECT11/L131LEV.MAP", 0x23022535u, 0x91A6D510u, 26, true, -1, -1, null),
+            new Entry("SECT11/L131LEV.MAP", 0x02E77C5Fu, 0xB0438C7Au, 26, true, -1, -1, null),
             new Entry("SECT12/L141LEV.MAP", 0xF6DD16E1u, 0x906184D4u, 26, true, -1, -1, null),
             new Entry("SECT12/L154LEV.MAP", 0x9A0740B9u, 0xC5B690EAu, 0, true, -1, -1, null),
             new Entry("SECT12/L155LEV.MAP", 0xB1A7783Bu, 0xA9BA2FFDu, 48, true, -1, -1, null),
@@ -71,7 +71,7 @@ namespace ALTViewer
             new Entry("SECT90/L903LEV.MAP", 0x57C9541Cu, 0xA0D4D95Cu, 26, true, -1, -1, null),
             new Entry("SECT90/L904LEV.MAP", 0x05372921u, 0xF5C7E4FCu, 73, true, -1, -1, null),
             new Entry("SECT90/L905LEV.MAP", 0xE3E2946Fu, 0x92FE5E74u, 0, true, -1, -1, null),
-            new Entry("SECT90/L906LEV.MAP", 0x1DF9A60Cu, 0x71B30C6Du, 23, true, -1, -1, null),
+            new Entry("SECT90/L906LEV.MAP", 0xBA594856u, 0xD613E237u, 23, true, -1, -1, null),
             new Entry("SECT90/L907LEV.MAP", 0xC7B9A932u, 0x58D0B54Cu, 17, true, -1, -1, null),
             new Entry("SECT90/L909LEV.MAP", 0xECCF6249u, 0x74845401u, 26, true, -1, -1, null),
         };
