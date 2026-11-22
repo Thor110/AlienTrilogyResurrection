@@ -51,7 +51,7 @@ Cell		Offset		Was	Now
 Applied by ALTEngine (data/Patches.json) and by ALTViewer's patch button.
 
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
-Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Offsets are into the file after the duplicate model and object removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
 Patch 6: L909LEV.MAP - the start room stays sealed: the four cells past its doorway, (5,37)-(5,40), are attribute 1 again, a solid wall at load (0x282f5), as shipped. An earlier patch opened them for testing; the room is the multiplayer players' holding room (its lift carries developer graffiti, "RIPLEY WOZ ERE" and the like), and multiplayer starts and Level Select on a multiplayer map now put the player at a path node. This sets back an install the earlier patch changed; on a fresh one it is already in place - see Patch/L909LEV.txt (Claude, 2026)

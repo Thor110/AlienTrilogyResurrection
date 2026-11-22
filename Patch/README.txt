@@ -11,7 +11,7 @@ THE STAGES
 The fixes run as stages, always in this order. Each stage works on the files exactly as the stage before leaves
 them, so each one is written against a known file.
 
-  1. Duplicate door and lift models taken out                      global  (ALTEngine and ALTViewer)
+  1. Duplicate door and lift models, and duplicate objects, out    global  (ALTEngine and ALTViewer)
   2. Level fixes                                                   global
   3. Texture fixes                                                 global
   4. Missing faces                                                 global
@@ -28,6 +28,12 @@ and are never offered for the original game.
    21 levels carry door or lift models that are exact copies of another one, or that nothing uses. They are taken
    out, and the doors and lifts that named a copy name the original. Nothing in the game looks different; the
    level files are smaller. First, because every byte patch after it is written against the files without them.
+
+   Then the duplicate objects ("objectRemovals" in Patches.json): an object record (a crate, a barrel...) that is
+   an exact copy of another in the same cell is taken out. The level's object count goes down by one and every
+   later object moves up a place; only the logic groups name objects by number, and each removal is checked
+   against them first. The first: L906's crate 9, a copy of crate 8 in cell 57,79 (L906LEV.txt). In the same
+   stage for the same reason: the byte patches are written against the files without them.
 
 2. Level fixes ("stage": "level" in ALTEngine/data/Patches.json)
 

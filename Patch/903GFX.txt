@@ -1,7 +1,7 @@
 903GFX - patches made by ALTEngine and ALTViewer. Why each one was made is in its note below; the screenshots are in README.md (Before And After Screenshots).
 
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
-Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Offsets are into the file after the duplicate model and object removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
 Patch 63: 903GFX.B16 (as 141GFX.B16, whose page 3 it shares byte for byte) - the floor strip's missing slices, for the end room's floor: texture 223 (page 3 at 224,96) becomes the strip's second middle and 246 (page 3 at 192,192) its far end - slices 3 and 4 of the picture whose first two are 221 and 222, as L111's 301 and 302 are. Nothing in the level used either slot (faces, animated textures, door and lift models). Each texel is L141's own colour index, taken from 221/222 where L111's slices 299/300 match the surroundings of that texel of 301/302, so the slices keep L141's darker colours (Edward) and the weave runs on unbroken. Page 3's pixels are at TP03 + 8 = 0x30B0C. See Patch/L141LEV.txt (Claude, 2026) The far end slice's right edge carries the strip's grey outline: its last two columns are texture 221's first two, mirrored, as L111's 302 carries 299's (Edward, 2026).

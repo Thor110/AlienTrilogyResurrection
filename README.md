@@ -86,6 +86,7 @@ The road map for this project.
 	- [Patched an issue on L906LEV where one railing was lacking the double sided transparency flag.](#L906LEV-Multiplayer-Map-7-Fix-4)
 	- [Patched an issue on L906LEV where 8 different bridge sections had incorrect textures and UV coordinates.](#L906LEV-Multiplayer-Map-7-Fix-5)
 	- [Patched an issue on L906LEV where doors had incorrectly flipped textures.](#L906LEV-Multiplayer-Map-7-Fix-6)
+	- [Patched an issue on L906LEV where a crate was doubled up inside another.](#L906LEV-Multiplayer-Map-7-Fix-7)
 	- [Patched an issue on L905LEV where 2 textures were flipped when they shouldn't have been.](#L905LEV-Multiplayer-Map-6-Fix-1)
 	- [Patched an issue on L905LEV where lots of different textures were flipped when they shouldn't have been.](#L905LEV-Multiplayer-Map-6-Fix-2)
 	- [Patched an issue on L903LEV where some crates had incorrect textures.](#L903LEV-Multiplayer-Map-4-Fix-1)
@@ -408,6 +409,7 @@ Fixes marked "texture scan" were found by ALTLevelScan, which looks for faces wh
 - [Patched an issue on L906LEV where one railing was lacking the double sided transparency flag.](#L906LEV-Multiplayer-Map-7-Fix-4)
 - [Patched an issue on L906LEV where 8 different bridge sections had incorrect textures and UV coordinates.](#L906LEV-Multiplayer-Map-7-Fix-5)
 - [Patched an issue on L906LEV where doors had incorrectly flipped textures.](#L906LEV-Multiplayer-Map-7-Fix-6)
+- [Patched an issue on L906LEV where a crate was doubled up inside another.](#L906LEV-Multiplayer-Map-7-Fix-7)
 - [Patched an issue on L905LEV where 2 textures were flipped when they shouldn't have been.](#L905LEV-Multiplayer-Map-6-Fix-1)
 - [Patched an issue on L905LEV where lots of different textures were flipped when they shouldn't have been.](#L905LEV-Multiplayer-Map-6-Fix-2)
 - [Patched an issue on L905LEV where two faces had their textures flipped (texture scan 905-1).](#L905LEV-Multiplayer-Map-6-Fix-3)
@@ -663,6 +665,14 @@ Here it is with the fix I applied to the level.
 <div align="center">
   <img src="Images/L906-D000-FIX.png" alt="L906LEV Patched">
 </div>
+
+## L906LEV Multiplayer Map 7 Fix 7
+
+Duplicate crate removed.
+
+Two identical crates stood in the same cell (57,79), one inside the other, so shooting the first revealed a second. The empty one is taken out of the level file; the other keeps its pickup. This is the first fix that removes an object record, a new part of the first patch stage (see Patch/README.txt). It suits the original game as well and is part of ALTViewer's patch button.
+
+Patch listed at Patch/L906LEV.txt and Patch/DUPLICATE-MODELS.txt
 
 ## L905LEV Multiplayer Map 6 Fix 1
 

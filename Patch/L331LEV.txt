@@ -16,7 +16,7 @@ Face	Offset		Scan	Change	Was					Now
 5843	0x358C0	331-6	mirrored	3695, 3696, 3700, 3699	->	3695, 3696, 3700, 3699	flag 2 (0x02)		flag 0 (0x00)
 
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
-Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Offsets are into the file after the duplicate model and object removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
 Patch 35: L331LEV.MAP - texture orientation: 5 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L331LEV.txt) (Claude, 2026)

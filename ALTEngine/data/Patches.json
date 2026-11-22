@@ -1,6 +1,6 @@
 {
   "_source": "Ported from ALTViewer.cs button6_Click, auto-extracted (not hand-transcribed) to avoid offset transcription errors.",
-  "_stages": "Patches run in stages, in this order: the duplicate door/lift model removals ('modelRemovals', first, as every byte patch is written against the files without them), then every 'level' patch (geometry, objects, cells, lifts), then every 'texture' patch (texture indices, turns, flips, draw routines, the GFX sheets), each in file order. No level patch touches a byte a texture patch does. After these: the missing faces (data/MissingFaces.json), then ALTEngine's own (the Level Cleanup and the texture blanking). See Patch/README.txt.",
+  "_stages": "Patches run in stages, in this order: the duplicate door/lift model removals ('modelRemovals', first, as every byte patch is written against the files without them) and the duplicate object records ('objectRemovals', just after them, for the same reason), then every 'level' patch (geometry, objects, cells, lifts), then every 'texture' patch (texture indices, turns, flips, draw routines, the GFX sheets), each in file order. No level patch touches a byte a texture patch does. After these: the missing faces (data/MissingFaces.json), then ALTEngine's own (the Level Cleanup and the texture blanking). See Patch/README.txt.",
   "patches": [
     {
       "target": "SECT90/L906LEV.MAP",
@@ -958,19 +958,19 @@
           ]
         },
         {
-          "offset": "0x801C2",
+          "offset": "0x801B2",
           "bytes": [
             "0x0B"
           ]
         },
         {
-          "offset": "0x80172",
+          "offset": "0x80162",
           "bytes": [
             "0x0B"
           ]
         },
         {
-          "offset": "0x80262",
+          "offset": "0x80252",
           "bytes": [
             "0x0B"
           ]
@@ -42931,6 +42931,16 @@
           ]
         }
       ]
+    }
+  ],
+  "objectRemovals": [
+    {
+      "target": "SECT90/L906LEV.MAP",
+      "note": "L906LEV.MAP - a duplicate crate removed (Edward, 2026): crates 8 and 9 are the same crate (type 20, the same five hit points) in the same cell, 57,79, so one sat inside the other and a second appeared when the first was shot. Crate 9, the empty one, goes; crate 8 keeps its pickup. Crates 10-22 become 9-21; only logic 3 names an object (crate 2), so nothing else changes. 16 bytes (Claude, 2026)",
+      "index": 9,
+      "countBefore": 23,
+      "record": "394f1400050affff0101000000000000",
+      "next": "591a1400050a04ff0101000000000400"
     }
   ]
 }

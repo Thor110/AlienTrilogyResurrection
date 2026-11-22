@@ -14,6 +14,7 @@
 #include "../Formats/EngineModelFaceEdits.h"
 #include "../Formats/Installer.h"
 #include "../Formats/ModelRemoval.h"
+#include "../Formats/ObjectRemoval.h"
 #include "../Formats/PatchLoader.h"
 #include "../Formats/PatchRunner.h"
 
@@ -746,7 +747,8 @@ namespace ALTEngine::Bootstrap
     void RunPatches(const std::filesystem::path& cdDirectory)
     {
         // THE STAGES, in order (Patch/README.txt):
-        //   1. the duplicate door/lift model removals,
+        //   1. the duplicate door/lift model removals, then the duplicate
+        //      object records (ObjectRemoval.h),
         //   2. the level fixes and 3. the texture fixes (Patches.json's
         //      "level" then "texture" byte patches),
         //   4. the missing faces (MissingFaces.json),
@@ -804,6 +806,34 @@ namespace ALTEngine::Bootstrap
         catch (const std::exception& e)
         {
             std::cout << "Failed to load the model removals from " << patchesJson.string() << ": " << e.what() << "\n";
+        }
+
+        // Then the duplicate object records (ObjectRemoval.h): also stage 1,
+        // also before the byte patches, which are written against the files
+        // without them.
+        try
+        {
+            using namespace ALTEngine::Formats;
+            const std::vector<ObjectRemoval> removals = ObjectRemovalLoader::Load(patchesJson);
+            size_t removed = 0, already = 0, removalFailed = 0;
+            for (const auto& result : ObjectRemovalRunner::ApplyAll(cdDirectory, removals))
+            {
+                switch (result.outcome)
+                {
+                case ObjectRemovalOutcome::Applied: ++removed; break;
+                case ObjectRemovalOutcome::AlreadyApplied: ++already; break;
+                case ObjectRemovalOutcome::Failed:
+                    ++removalFailed;
+                    std::cout << "  [FAILED]   " << result.removal->targetFile << " - " << result.error << "\n";
+                    break;
+                }
+            }
+            std::cout << "Object removals: " << removed << " applied, " << already << " already applied, "
+                      << removalFailed << " failed.\n";
+        }
+        catch (const std::exception& e)
+        {
+            std::cout << "Failed to load the object removals from " << patchesJson.string() << ": " << e.what() << "\n";
         }
 
         std::cout << "Applying " << operations.size() << " patch operations...\n";

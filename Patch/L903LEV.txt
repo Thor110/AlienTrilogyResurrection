@@ -40,7 +40,7 @@ laid the same way, and 903GFX.B16 gets the same two slices - see Patch/L141LEV.t
 the faces, slots and bytes.
 
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
-Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Offsets are into the file after the duplicate model and object removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
 Patch 8: L903LEV.MAP - four cells lost their wall attribute when the level was made from L141LEV: two pillars at (11,43) and (11,48) could be walked into; restored to L141's values (Claude, 2026)

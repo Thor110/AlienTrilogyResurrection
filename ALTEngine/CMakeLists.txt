@@ -48,6 +48,7 @@ add_library(ALTFormats STATIC
     src/Formats/PatchRunner.cpp
     src/Formats/ModelRemoval.cpp
     src/Formats/EngineModelFaceEdits.cpp
+    src/Formats/ObjectRemoval.cpp
     src/Formats/BndParser.cpp
     src/Formats/PaletteFile.cpp
     src/Formats/RawImageRenderer.cpp
@@ -168,6 +169,7 @@ if (ALTENGINE_BUILD_TESTS)
         tests/PatchRunnerTests.cpp
         tests/ModelRemovalTests.cpp
         tests/EngineModelFaceEditTests.cpp
+        tests/ObjectRemovalTests.cpp
         tests/ResupplyTimerTests.cpp
         tests/MissionAssessmentTests.cpp
         tests/FacePickTests.cpp

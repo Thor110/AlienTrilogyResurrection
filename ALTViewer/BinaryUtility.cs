@@ -189,6 +189,52 @@ public static class BinaryUtility
         return true;
     }
     /// <summary>
+    /// The RemoveMapObject method removes one object record (16 bytes, after the pickups in MAP0) from an untrimmed level .MAP, lowers the
+    /// header's object count (+0x12) by one and rewrites the MAP0 and FORM sizes. It does so only if the count is countBefore and the record at
+    /// index is the expected one; if the count is one less and the record at index is the one that followed (next), it has been done already.
+    /// Anything else leaves the file untouched and returns false. The byte patches are written against the file without the record.
+    /// </summary>
+    public static bool RemoveMapObject(string filename, int index, int countBefore, byte[] record, byte[] next)
+    {
+        byte[] b = File.ReadAllBytes(filename);
+        if (b.Length < 20 || b[0] != 'F' || b[1] != 'O' || b[2] != 'R' || b[3] != 'M') { return false; }
+        long pos = 12, chunk = -1; uint size = 0;
+        while (pos + 8 <= b.Length)
+        {
+            uint n = (uint)((b[pos + 4] << 24) | (b[pos + 5] << 16) | (b[pos + 6] << 8) | b[pos + 7]);
+            if (pos + 8 + n > b.Length) { return false; }
+            if (b[pos] == 'M' && b[pos + 1] == 'A' && b[pos + 2] == 'P' && b[pos + 3] == '0') { chunk = pos; size = n; break; }
+            pos += 8 + n + (n & 1);
+        }
+        if (chunk < 0 || size < 36) { return false; }
+        long d = chunk + 8;
+        // The header's counts, then the sections before the objects: vertices (8 bytes), faces (20), cells (16), path nodes (8),
+        // monsters (20), pickups (8).
+        long at = d + 36 + ReadU16(b, d) * 8L + ReadU16(b, d + 2) * 20L + (long)ReadU16(b, d + 4) * ReadU16(b, d + 6) * 16 + b[d + 12] * 8L
+                  + ReadU16(b, d + 14) * 20L + ReadU16(b, d + 16) * 8L + index * 16L;
+        int count = ReadU16(b, d + 18);
+        if (at + 16 > d + size) { return false; }
+        if (count == countBefore - 1) { return next == null || BytesAt(b, at, next); } // already removed
+        if (count != countBefore || !BytesAt(b, at, record)) { return false; }
+        byte[] output = new byte[b.Length - 16];
+        Array.Copy(b, 0, output, 0, at);
+        Array.Copy(b, at + 16, output, at, b.Length - at - 16);
+        output[d + 18] = (byte)(count - 1); output[d + 19] = (byte)((count - 1) >> 8);
+        uint mapSize = size - 16;
+        output[chunk + 4] = (byte)(mapSize >> 24); output[chunk + 5] = (byte)(mapSize >> 16); output[chunk + 6] = (byte)(mapSize >> 8); output[chunk + 7] = (byte)mapSize;
+        uint formSize = (uint)(output.Length - 8);
+        output[4] = (byte)(formSize >> 24); output[5] = (byte)(formSize >> 16); output[6] = (byte)(formSize >> 8); output[7] = (byte)formSize;
+        File.WriteAllBytes(filename + ".tmp", output);
+        File.Move(filename + ".tmp", filename, true);
+        return true;
+    }
+    private static int ReadU16(byte[] b, long at) { return b[at] | (b[at + 1] << 8); }
+    private static bool BytesAt(byte[] b, long at, byte[] expected)
+    {
+        for (int i = 0; i < expected.Length; i++) { if (b[at + i] != expected[i]) { return false; } }
+        return true;
+    }
+    /// <summary>
     /// The Crc32 method returns the standard CRC-32 (polynomial 0xEDB88320) of part of a byte array.
     /// </summary>
     public static uint Crc32(byte[] data, long offset, long length)

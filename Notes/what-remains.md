@@ -818,7 +818,7 @@ Left from that review, to look at:
   of zips 183-184, and its MissingFaces.cs the new CRCs.
 - Answered: (1) yes, add the object-record removal stage; (2) the lift is the bottom-left one of L381's group on
   the minimap; (4) the invisible wall is reported on several levels. (3) Edward is still looking.
-- Open, waiting on Edward: (1) L906's duplicate box - crate 9 at cell 57,79 (empty) on crate 8 (drop 1);
+- Open, waiting on Edward: (1) done in zip 189: L906's duplicate box - crate 9 at cell 57,79 (empty) on crate 8 (drop 1);
   removing a record needs a new stage (the file shortens, crates 10-22 renumber, later offsets move; only logic
   3 names an object, crate 2, so it is safe); (2) L381's lift that starts up - lift 12 (54,32: floor 0, travel
   84, at the top, threshold 2) is the odd one among the lifts under the see-through floor (0-11, 15: floor 56,
@@ -844,6 +844,12 @@ Left from that review, to look at:
   97 faces. Open: floor 14's two left triangles (no corner order or nearby tile looked right to Edward); floor 22's
   two left triangles use texture 0 (page 0) in the shipped file. recrc.sh now takes ALTEngine's model face edits
   out before reading a CRC (they are made after the missing faces).
+- Zip 189: the object-record removal stage (Formats/ObjectRemoval, ALTViewer BinaryUtility.RemoveMapObject;
+  Patches.json "objectRemovals", stage 1 after the model removals). L906's crate 9 (cell 57,79, the copy of crate 8
+  without its pickup) removed: 16 bytes at 0x7ED40, count 23 -> 22, crates 10-22 renumbered (only logic 3 names an
+  object, crate 2). Patch 10's three edits past it moved down 16 (0x801C2/0x80172/0x80262 -> 0x801B2/0x80162/
+  0x80252); L906 MissingFaces CRCs remade; checked byte for byte against the old patched file less the record, and
+  the C# copy run under mono on the real file.
 - Open (Edward): global patches that may not suit the original should be separated like this one. The only
   known candidate: the "mirrored, other half" quads ((a, b, c, c) with routine 2, Notes/uv-review-log.md), which
   are unverified in DOS.

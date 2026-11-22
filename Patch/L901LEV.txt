@@ -8,7 +8,7 @@ Offset	Original	New
 5BB11 == 26 19 = 18 29
 
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
-Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Offsets are into the file after the duplicate model and object removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
 Patch 1: L901LEV.MAP - Incorrect player store positioning

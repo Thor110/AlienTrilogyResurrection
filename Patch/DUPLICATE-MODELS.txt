@@ -151,3 +151,13 @@ SECT90/L909LEV.MAP
 	0x5DA70 = 01
 
 Total: 38316 bytes from 21 levels.
+
+
+Duplicate objects (stage 1 too, after the models; "objectRemovals" in ALTEngine/data/Patches.json)
+
+SECT90/L906LEV.MAP
+	remove object 9 of 23 (16 bytes at 0x7ED40, after the model removal)
+	394F1400050AFFFF0101000000000000	crate type 20, five hit points, cell 57,79, no pickup
+	the same as object 8 but for object 8's pickup; objects 10-22 become 9-21
+	only logic 3 names an object (object 2), so nothing else is renumbered
+	the object count at 0x26 goes from 23 to 22; the MAP0 and FORM sizes go down by 16

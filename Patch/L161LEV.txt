@@ -26,7 +26,7 @@ Face	Offset		Old export remap		Change				Was						Now
 3505	0x28A58		face 3315's UVs as 2,3,0,1		texture of face 3315 and a half-turn		325, 324, 327, 331 tex 213 flag 0	->	327, 331, 325, 324 tex 214 flag 0
 
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
-Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Offsets are into the file after the duplicate model and object removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
 Patch 9: L161LEV.MAP - face 3758 as shipped: (8645, 8646, 8655, -1), texture 1, routine 1, light 0x08 - the triangle of face 3757 drawn a second time. An earlier patch gave it over to the missing quad between faces 0, 29, 36 and 40; that quad is record 0, the first face of the first cell's run, which the Level Cleanup now gives back with the cell, so this sets 3758 back (on a fresh install it is already so) and the Level Cleanup takes it out as a duplicate. Tracked in Notes/uv-review-log.md

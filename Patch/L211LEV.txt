@@ -14,7 +14,7 @@ Face	Offset		Scan	Change	Was					Now
 6942	0x3B394	211-1	mirrored and a half-turn	2657, 2653, 2661, 2659	->	2661, 2659, 2657, 2653	flag 28 (0x1C)		flag 26 (0x1A)
 
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
-Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Offsets are into the file after the duplicate model and object removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
 Patch 27: L211LEV.MAP - texture orientation: 3 face(s) from the texture scan review turned or mirrored to run on from their neighbours (see Patch/L211LEV.txt) (Claude, 2026)

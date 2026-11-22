@@ -106,7 +106,7 @@ Recess	Face	Offset		Was				Now				Flag
 14	9915	0x43C00	4923, 4915, 4916, -1	->	4916, 4915, 4923, -1	flag 1 (0x01)	->	flag 5 (0x05)
 
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
-Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Offsets are into the file after the duplicate model and object removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
 Patch 2: L371LEV.MAP - inaccessible secret: lift 3's threshold (record byte 10) set to 1, so stepping on it at the top takes it down into the secret pit (trigger 5, a final-count add); its other add, the switch (trigger 6), is at the bottom - discovered by @bambamalicious, traced by Claude (2026). Plus two texture index fixes by @thor110

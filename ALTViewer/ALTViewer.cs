@@ -64,7 +64,7 @@ namespace ALTViewer
         {
             // TODO : remove patchDirectory variable and pass direct values
             // The patches run as stages, in order, the same as ALTEngine's (see Patch/README.txt):
-            //   1. the duplicate door/lift model removals, 2. the level fixes, 3. the texture fixes,
+            //   1. the duplicate door/lift model removals and duplicate object records, 2. the level fixes, 3. the texture fixes,
             //   4. the missing faces (MissingFaces.cs).
             // Every byte patch is written against the files without the missing faces, so any level that has them
             // (the button pressed before) has them taken back out first, exactly; they go back in at the end.
@@ -147,6 +147,14 @@ namespace ALTViewer
             modelFile = gameDirectory + "SECT90\\L909LEV.MAP";
             modelsRemoved &= BinaryUtility.RemoveFormChunks(modelFile, new[] { new FormChunk("L000", 1020u, 0x4BA9753Bu), new FormChunk("L002", 1020u, 0x2451E44Au) }, new List<Tuple<long, byte[]>>() { Tuple.Create(0x5D9F0L, new byte[] { 0x00 }), Tuple.Create(0x5DA00L, new byte[] { 0x01 }), Tuple.Create(0x5DA10L, new byte[] { 0x05 }), Tuple.Create(0x5DA20L, new byte[] { 0x01 }), Tuple.Create(0x5DA30L, new byte[] { 0x01 }), Tuple.Create(0x5DA40L, new byte[] { 0x04 }), Tuple.Create(0x5DA50L, new byte[] { 0x02 }), Tuple.Create(0x5DA60L, new byte[] { 0x03 }), Tuple.Create(0x5DA70L, new byte[] { 0x01 }) });
             if (!modelsRemoved) { MessageBox.Show("Some duplicate door/lift models could not be removed: a level file is not the expected version. The other patches are still applied."); }
+            // Then the duplicate object records (stage 1 too; ALTEngine's ObjectRemoval.h): each checks the object count
+            // and the record, and does nothing if it has already been done.
+            // L906LEV.MAP - a duplicate crate removed (Edward, 2026): crates 8 and 9 are the same crate in the same cell, 57,79;
+            // crate 9, the empty one, goes. Crates 10-22 become 9-21; only logic 3 names an object (crate 2). 16 bytes.
+            bool objectsRemoved = BinaryUtility.RemoveMapObject(gameDirectory + "SECT90\\L906LEV.MAP", 9, 23,
+                new byte[] { 0x39, 0x4F, 0x14, 0x00, 0x05, 0x0A, 0xFF, 0xFF, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+                new byte[] { 0x59, 0x1A, 0x14, 0x00, 0x05, 0x0A, 0x04, 0xFF, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00 });
+            if (!objectsRemoved) { MessageBox.Show("A duplicate object could not be removed: a level file is not the expected version. The other patches are still applied."); }
             // L906LEV.MAP
             List<Tuple<long, byte[]>> replacements = new List<Tuple<long, byte[]>>()
             {
@@ -265,9 +273,9 @@ namespace ALTViewer
                 Tuple.Create(0x3D842L, new byte[] { 0x00 }),
                 Tuple.Create(0x3D306L, new byte[] { 0x00 }),
                 // L906LEV.MAP - D000 - flip texture
-                Tuple.Create(0x801C2L, new byte[] { 0x0B }),
-                Tuple.Create(0x80172L, new byte[] { 0x0B }),
-                Tuple.Create(0x80262L, new byte[] { 0x0B }),
+                Tuple.Create(0x801B2L, new byte[] { 0x0B }),
+                Tuple.Create(0x80162L, new byte[] { 0x0B }),
+                Tuple.Create(0x80252L, new byte[] { 0x0B }),
             };
             BinaryUtility.ReplaceBytes(replacements, patchDirectory);
             // L905LEV.MAP

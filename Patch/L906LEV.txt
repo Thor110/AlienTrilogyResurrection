@@ -153,8 +153,17 @@ The 53 bridge and fence faces once turned and mirrored here, converted from ALTV
 remaps (Claude, 2026), were taken out again in zip 183: Edward found most, if not all, of them wrong.
 Only the fixes listed above, made by hand, stay.
 
+==== The duplicate crate in cell 57,79 (stage 1, all versions) ====
+
+Crates 8 and 9 are the same crate (type 20, five hit points) in the same cell, 57,79, so one sat inside the other
+and a second crate appeared when the first was shot (Edward, 2026). Crate 9, the one without a pickup, is taken
+out of the file: 16 bytes at 0x7ED40 (in the file after the duplicate model removal), the object count at 0x26
+goes from 23 to 22, and crates 10-22 become 9-21. Only logic 3 names an object (crate 2), so nothing else changes.
+Every offset below is in the file without it; the three of patch 10 past it (0x801B2, 0x80162, 0x80252) moved
+down 16 bytes. See Patch/DUPLICATE-MODELS.txt.
+
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
-Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
+Offsets are into the file after the duplicate model and object removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.
 
 Patch 0: L906LEV.MAP - a misplaced triangle: its vertex list put right (ALTViewer's fix 1)
@@ -270,9 +279,9 @@ Patch 10: L906LEV.MAP - the railings drawn see-through (ALTViewer's fixes 2-4), 
   0x3E40E: 02 -> 00
   0x3D842: 02 -> 00
   0x3D306: 00 -> 00
-  0x801C2: 00 -> 0B
-  0x80172: 00 -> 0B
-  0x80262: 00 -> 0B
+  0x801B2: 00 -> 0B
+  0x80162: 00 -> 0B
+  0x80252: 00 -> 0B
 
 Patch 69: L906LEV.MAP - the bridge sides (texture 117, Edward with the Face Index Display, 2026): 36 faces turned a quarter-turn clockwise, (d, a, b, c). Faces as the display shows them with the Level Cleanup on: 4526, 4528, 4530, 4532, 4534, 4536, 5361, 5363, 5365, 5367, 5369, 5371, 5396, 5414, 5572, 5593, 5759, 5934, 6397, 6641, 6752, 6773, 6825, 6843, 7807, 7809, 7811, 7813, 7815, 7817, 8558, 8574, 8576, 8578, 8580, 8582 (in the shipped file 13 to 21 higher, 4539 ... 8603). Some will be flipped horizontally next
   0x31AF8: 1B 35 00 00 2E 35 00 00 58 35 00 00 55 35 00 00 -> 55 35 00 00 1B 35 00 00 2E 35 00 00 58 35 00 00

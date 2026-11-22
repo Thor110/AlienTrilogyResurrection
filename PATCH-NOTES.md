@@ -201,7 +201,7 @@ A review of every routine in the original against ALTEngine's, one block of the 
 Every fix to the game's files now runs in a fixed order, each stage working on the files as the stage before
 leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/README.txt` explains each one):
 
-1. the duplicate door and lift models taken out;
+1. the duplicate door and lift models taken out, and now duplicate objects too;
 2. the level fixes (geometry, objects, lifts, doors);
 3. the texture fixes (texture numbers, turns, flips, the texture sheets);
 4. **the missing faces** - new in the global fixes;
@@ -230,6 +230,9 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
   neighbours' texture, 18.
 - **L381: the see-through floor over the lifts**, the first of its kind put right (Edward): two faces turned
   half way round and two given each other's texture. The rest of them are still to follow.
+- **L906: the doubled-up crate is gone** (Edward). Two identical crates stood in the same cell, one inside the
+  other, so shooting one revealed the second. The empty one is taken out of the level file, in a new step of the
+  first stage: duplicate object records, after the duplicate models. For the original game too.
 - **L381: the 22 see-through floors over the lift shafts follow one pattern** (Edward). The oval in each floor's
   middle runs left, left, right, left, right, right across the room's columns; seven floors had it the wrong way
   round and are mirrored whole, and one floor's corner triangle is put right. For the original game too.
