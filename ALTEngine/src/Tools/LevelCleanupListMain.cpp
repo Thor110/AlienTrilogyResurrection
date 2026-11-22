@@ -37,6 +37,7 @@
 // back to the planning's numbering here.
 
 #include "Formats/BndTextureLoader.h"
+#include "../Bootstrap/FsUtil.h"
 #include "Formats/ModelRemoval.h"
 #include "Formats/RenderMesh.h"
 #include "Game/LevelCleanup.h"
@@ -137,16 +138,16 @@ int main(int argc, char** argv)
         if (in)
         {
             try { in >> extra; }
-            catch (const std::exception& e) { std::fprintf(stderr, "%s: %s\n", extraPath.string().c_str(), e.what()); return 2; }
-            std::printf("faces by hand from %s\n", extraPath.string().c_str());
+            catch (const std::exception& e) { std::fprintf(stderr, "%s: %s\n", ALTEngine::Bootstrap::PathText(extraPath).c_str(), e.what()); return 2; }
+            std::printf("faces by hand from %s\n", ALTEngine::Bootstrap::PathText(extraPath).c_str());
         }
     }
     nlohmann::json missing = nlohmann::json::object();
     {
         std::ifstream in(facesPath);
-        if (!in) { std::fprintf(stderr, "%s: missing - the missing faces are needed to number the plans\n", facesPath.string().c_str()); return 2; }
+        if (!in) { std::fprintf(stderr, "%s: missing - the missing faces are needed to number the plans\n", ALTEngine::Bootstrap::PathText(facesPath).c_str()); return 2; }
         try { in >> missing; }
-        catch (const std::exception& e) { std::fprintf(stderr, "%s: %s\n", facesPath.string().c_str(), e.what()); return 2; }
+        catch (const std::exception& e) { std::fprintf(stderr, "%s: %s\n", ALTEngine::Bootstrap::PathText(facesPath).c_str(), e.what()); return 2; }
     }
     std::string remainder = "# Level Cleanup: lift faces kept\n\n"
         "Written by ALTLevelCleanupList. The faces the lift crawl found behind a sealed lift's door that a sight line\n"
@@ -158,7 +159,7 @@ int main(int argc, char** argv)
     size_t removed = 0;
     for (const auto& relative : G::LevelCleanup::LevelFiles(cd))
     {
-        const std::string name = relative.filename().string();     // L321LEV.MAP
+        const std::string name = ALTEngine::Bootstrap::PathText(relative.filename());     // L321LEV.MAP
         const std::string digits = name.substr(1, 3);
         if (!only.empty() && digits != only) { continue; }
         // The level before the missing faces: the install's .unfaced copy if
@@ -373,6 +374,6 @@ int main(int argc, char** argv)
     }
     std::ofstream out(outPath, std::ios::trunc);
     out << root.dump(1) << "\n";
-    std::printf("%zu levels, %zu faces, %d failed -> %s\n", levels.size(), removed, failed, outPath.string().c_str());
+    std::printf("%zu levels, %zu faces, %d failed -> %s\n", levels.size(), removed, failed, ALTEngine::Bootstrap::PathText(outPath).c_str());
     return failed ? 1 : 0;
 }

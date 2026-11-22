@@ -1,4 +1,5 @@
 #include "LevelLoader.h"
+#include "../Bootstrap/FsUtil.h"
 #include "BinaryReadLE.h"
 #include "BndParser.h"
 #include "LevelTrim.h"
@@ -16,7 +17,7 @@ namespace ALTEngine::Formats
             std::ifstream in(path, std::ios::binary | std::ios::ate);
             if (!in.is_open())
             {
-                throw std::runtime_error("LevelLoader: could not open " + path.string());
+                throw std::runtime_error("LevelLoader: could not open " + ALTEngine::Bootstrap::PathText(path));
             }
             const std::streamoff rawSize = in.tellg();
             const size_t size = rawSize > 0 ? static_cast<size_t>(rawSize) : 0;
@@ -27,7 +28,7 @@ namespace ALTEngine::Formats
             // part-way) is named here, rather than failing later as a bad tag.
             if (!in || size < 12)
             {
-                throw std::runtime_error(path.string() + " is empty or cut short (" + std::to_string(size)
+                throw std::runtime_error(ALTEngine::Bootstrap::PathText(path) + " is empty or cut short (" + std::to_string(size)
                                          + " bytes); copy it from the disc again");
             }
             return data;
@@ -36,7 +37,7 @@ namespace ALTEngine::Formats
 
     LevelGeometry LevelLoader::Load(const std::filesystem::path& mapPath)
     {
-        return Parse(ReadFile(mapPath), mapPath.string());
+        return Parse(ReadFile(mapPath), ALTEngine::Bootstrap::PathText(mapPath));
     }
 
     LevelGeometry LevelLoader::Parse(const std::vector<uint8_t>& file, const std::string& sourceName)

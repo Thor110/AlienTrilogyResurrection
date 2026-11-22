@@ -1,4 +1,5 @@
 #include "BootSequence.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include <nlohmann/json.hpp>
 
@@ -25,7 +26,7 @@ namespace ALTEngine::Formats::BootSequence
             if (!step.is_object() || step.value("type", std::string()) != "video") { continue; }
             const std::string path = step.value("path", std::string());
             if (path.empty()) { continue; }
-            const std::string stem = std::filesystem::path(path).stem().string();
+            const std::string stem = ALTEngine::Bootstrap::PathText(std::filesystem::path(path).stem());
             if (!stem.empty()) { videos.emplace_back(step.value("order", 0), stem); }
         }
         std::stable_sort(videos.begin(), videos.end(),

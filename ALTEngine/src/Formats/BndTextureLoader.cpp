@@ -1,4 +1,5 @@
 #include "BndTextureLoader.h"
+#include "../Bootstrap/FsUtil.h"
 #include "BndParser.h"
 #include "OverrideImage.h"
 #include "RawImageRenderer.h"
@@ -32,8 +33,8 @@ namespace ALTEngine::Formats
         // CD/Override (confirmed against Edward's real install tree).
         std::optional<OverrideImage> TryOverride(const std::filesystem::path& bndPath, const std::string& suffix)
         {
-            std::string category = bndPath.parent_path().filename().string();
-            std::string baseName = bndPath.stem().string();
+            std::string category = ALTEngine::Bootstrap::PathText(bndPath.parent_path().filename());
+            std::string baseName = ALTEngine::Bootstrap::PathText(bndPath.stem());
             std::string key = category + "/" + baseName + "_TP" + suffix;
 
             std::filesystem::path overrideRoot = bndPath.parent_path().parent_path() / "Override";
@@ -91,17 +92,17 @@ namespace ALTEngine::Formats
 
                 if (clIt == clSections.end())
                 {
-                    throw std::runtime_error("BndTextureLoader: no matching CL section for " + tp.name + " in " + bndPath.string());
+                    throw std::runtime_error("BndTextureLoader: no matching CL section for " + tp.name + " in " + ALTEngine::Bootstrap::PathText(bndPath));
                 }
                 if (clIt->data.size() <= CL_SUBHEADER_SIZE)
                 {
-                    throw std::runtime_error("BndTextureLoader: " + clIt->name + " too small to contain a palette in " + bndPath.string());
+                    throw std::runtime_error("BndTextureLoader: " + clIt->name + " too small to contain a palette in " + ALTEngine::Bootstrap::PathText(bndPath));
                 }
                 if (tp.data.size() != static_cast<size_t>(TEXTURE_SIZE) * TEXTURE_SIZE)
                 {
                     throw std::runtime_error(
                         "BndTextureLoader: " + tp.name + " is " + std::to_string(tp.data.size()) +
-                        " bytes, expected " + std::to_string(TEXTURE_SIZE * TEXTURE_SIZE) + " in " + bndPath.string());
+                        " bytes, expected " + std::to_string(TEXTURE_SIZE * TEXTURE_SIZE) + " in " + ALTEngine::Bootstrap::PathText(bndPath));
                 }
 
                 std::vector<uint8_t> raw16BitPalette(clIt->data.begin() + CL_SUBHEADER_SIZE, clIt->data.end());
@@ -166,7 +167,7 @@ namespace ALTEngine::Formats
         {
             static std::unordered_map<std::string, BndTextureSet> cache;
 
-            std::string key = std::filesystem::absolute(bndPath).lexically_normal().string();
+            std::string key = ALTEngine::Bootstrap::PathText(std::filesystem::absolute(bndPath).lexically_normal());
             key += transparentRgb ? ("|" + std::to_string((*transparentRgb)[0]) + "," +
                                       std::to_string((*transparentRgb)[1]) + "," + std::to_string((*transparentRgb)[2]))
                                    : "|none";

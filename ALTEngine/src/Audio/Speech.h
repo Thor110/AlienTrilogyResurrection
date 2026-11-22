@@ -1,11 +1,12 @@
 #pragma once
 
 #include "SfxPlayer.h"
+#include "../Bootstrap/FsUtil.h"
+#include "../Game/OriginalRandom.h"
 
 #include <cctype>
 #include <filesystem>
 #include <fstream>
-#include <random>
 #include <string>
 #include <vector>
 
@@ -77,25 +78,47 @@ namespace ALTEngine::Audio
                 if (end == std::string::npos) { end = line.size(); }
                 if (end <= start) { continue; }
                 std::string stem = line.substr(start, end - start);
+                // The list ends with DOS's end-of-file mark (0x1a) on a line of
+                // its own: not a sample.
+                bool name = true;
+                for (char c : stem) { if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_') { name = false; } }
+                if (!name) { continue; }
                 for (char& c : stem) { c = static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }
                 stems.push_back(std::move(stem));
             }
             return stems;
         }
 
+        // SFX/SPCH.TXT as the disc has it, one sample a line, 35 lines.
+        inline constexpr const char* DISC_LINES[] = {
+            "vc01c", "vc02b", "vc03c", "vc04c", "vc05b", "vc06c", "vc07b",
+            "vc08b", "vc09a", "vc10b", "vc11b", "vc12a", "vc13b", "vc14a",
+            "vc15a", "vc16a", "vc17a", "vc18c", "vc19a", "vc20", "vc25c",
+            "vc30", "vc31a", "vc32", "vc33", "vc34", "vc35", "vc36",
+            "vc37", "vc38", "vc39a", "vc40b", "vc41", "vc42a", "vc43",
+        };
+
         class Voice
         {
         public:
-            // Reads SFX/SPCH.TXT (any case). No file, no speech.
+            // Reads SFX/SPCH.TXT (any case).
+            //
+            // OURS: an install without the file uses the disc's own list, kept
+            // here (DISC_LINES). The install's file list left SPCH.TXT out with
+            // the per-level sound lists up to 1.0.0, so no install had it and
+            // Ripley never spoke (Edward, November 2026); the samples themselves
+            // were always copied. The file, where present, wins.
             void Load(const std::filesystem::path& cdDirectory)
             {
                 cd = cdDirectory;
                 lines.clear();
-                std::error_code ec;
-                const std::filesystem::path dir = cdDirectory / "SFX";
-                for (const char* name : { "SPCH.TXT", "spch.txt", "Spch.txt" })
+                if (auto list = ALTEngine::Bootstrap::FindEntryCaseInsensitive(cdDirectory / "SFX", "SPCH.TXT"))
                 {
-                    if (std::filesystem::exists(dir / name, ec)) { lines = ReadBankList(dir / name); break; }
+                    lines = ReadBankList(*list);
+                }
+                if (lines.empty())
+                {
+                    for (const char* stem : DISC_LINES) { lines.emplace_back(stem); }
                 }
                 cooldown = 0;
                 chatterCooldown = 0;
@@ -147,10 +170,10 @@ namespace ALTEngine::Audio
             bool Loaded() const { return !lines.empty(); }
 
         private:
-            // The original's FUN_000100ec draws, masked to a power of two.
-            int Rand(int n) { return static_cast<int>(rng() % static_cast<unsigned>(n)); }
+            // The original's FUN_000100ec draws, masked to a power of two: from
+            // the game's one stream, as every other draw is.
+            int Rand(int n) { return static_cast<int>(ALTEngine::Game::OriginalRandom::Next() & static_cast<uint32_t>(n - 1)); }
 
-            std::minstd_rand rng{ std::random_device{}() };
             std::filesystem::path cd;
             std::vector<std::string> lines;
             int cooldown = 0;          // DAT_00402d9d

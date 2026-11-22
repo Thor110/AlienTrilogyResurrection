@@ -1,4 +1,5 @@
 #include "PatchRunner.h"
+#include "../Bootstrap/FsUtil.h"
 #include "BinaryUtility.h"
 
 #include <map>
@@ -60,7 +61,7 @@ namespace ALTEngine::Formats
             if (!std::filesystem::exists(targetPath, ec))
             {
                 result.outcome = PatchOutcome::Failed;
-                result.error = "target file not found: " + targetPath.string();
+                result.error = "target file not found: " + ALTEngine::Bootstrap::PathText(targetPath);
                 results.push_back(std::move(result));
                 continue;
             }

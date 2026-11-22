@@ -1,4 +1,5 @@
 #include "SpriteFrameLoader.h"
+#include "../Bootstrap/FsUtil.h"
 #include "BndParser.h"
 #include "OverrideImage.h"
 #include "RawImageRenderer.h"
@@ -18,7 +19,7 @@ namespace ALTEngine::Formats
             std::ifstream in(path, std::ios::binary | std::ios::ate);
             if (!in.is_open())
             {
-                throw std::runtime_error("SpriteFrameLoader: could not open " + path.string());
+                throw std::runtime_error("SpriteFrameLoader: could not open " + ALTEngine::Bootstrap::PathText(path));
             }
             auto size = static_cast<size_t>(in.tellg());
             in.seekg(0, std::ios::beg);
@@ -42,7 +43,7 @@ namespace ALTEngine::Formats
         const std::string& spriteName,
         int section, int frame)
     {
-        std::string category = b16Path.parent_path().filename().string();
+        std::string category = ALTEngine::Bootstrap::PathText(b16Path.parent_path().filename());
         std::filesystem::path overrideRoot = b16Path.parent_path().parent_path() / "Override";
         std::string key = OverrideKey(category, spriteName, section, frame);
 
@@ -71,7 +72,7 @@ namespace ALTEngine::Formats
         std::vector<BndSection> paletteSections = BndParser::ParseFormSections(fileData, "C0");
         if (paletteSections.empty())
         {
-            throw std::runtime_error("SpriteFrameLoader: no embedded C000 palette in " + b16Path.string());
+            throw std::runtime_error("SpriteFrameLoader: no embedded C000 palette in " + ALTEngine::Bootstrap::PathText(b16Path));
         }
         std::vector<uint8_t> palette = RawImageRenderer::Convert16BitPaletteToRGB(paletteSections[0].data);
 
@@ -80,7 +81,7 @@ namespace ALTEngine::Formats
         std::vector<BndSection> sections = BndParser::ParseFormSections(fileData, sectionName);
         if (sections.empty())
         {
-            throw std::runtime_error("SpriteFrameLoader: no section " + std::string(sectionName) + " in " + b16Path.string());
+            throw std::runtime_error("SpriteFrameLoader: no section " + std::string(sectionName) + " in " + ALTEngine::Bootstrap::PathText(b16Path));
         }
 
         std::vector<std::vector<uint8_t>> frames = SpriteFrameDecompressor::DecompressAllFramesInSection(sections[0].data);

@@ -1,4 +1,5 @@
 #include "GameplayScreen.h"
+#include "../Bootstrap/FsUtil.h"
 #include "PauseMenuScreen.h"
 #include "MenuBackground.h"
 #include "MenuStyle.h"
@@ -223,7 +224,7 @@ namespace ALTEngine::Screens
             for (const auto& entry : std::filesystem::directory_iterator(cdDirectory, ec))
             {
                 if (!entry.is_directory()) { continue; }
-                std::string name = entry.path().filename().string();
+                std::string name = ALTEngine::Bootstrap::PathText(entry.path().filename());
                 if (name.rfind("SECT", 0) != 0) { continue; }
 
                 std::filesystem::path candidate = entry.path() / filename;
@@ -676,7 +677,7 @@ namespace ALTEngine::Screens
                         : modern.Mode() == ALTEngine::Bootstrap::ModernMode::Custom ? "Custom" : "Off",
                     (int)freeLook, (int)unlimited,
                     (int)modern.FeatureSetting(ALTEngine::Bootstrap::ModernFeature::RenderDistance),
-                    (int)!unlimited, modernConfig.FilePath().string().c_str());
+                    (int)!unlimited, ALTEngine::Bootstrap::PathText(modernConfig.FilePath()).c_str());
         }
         int lastCellIndex = -1;
 
@@ -2918,6 +2919,9 @@ namespace ALTEngine::Screens
                 // Each pass's alternate-pass flag, in order, so the world's
                 // tick below runs the same passes (see the world tick).
                 std::vector<bool> passHalves;
+                // The cell the player stands on at the end of each pass, in
+                // order, for the cell triggers below.
+                std::vector<int> passCells;
                 while (playerTickAccumulator >= playerTickLength)
                 {
                     playerTickAccumulator -= playerTickLength;
@@ -4571,9 +4575,21 @@ namespace ALTEngine::Screens
                             bool anyPouncing = false;
                             for (const auto& enemy : enemies)
                             {
-                                if (enemy.pouncing && onUs(enemy)) { anyPouncing = true; break; }
+                                // One whose crawl has already slid off is only
+                                // waiting for a free cell to land in (Enemies.h,
+                                // the landing's retry): it does not start the
+                                // crawl again. It did - about one hug in four,
+                                // whenever the first cell drawn was the
+                                // player's own - and the crawl then climbed back
+                                // onto the face and stayed there, with no
+                                // creature left to let go of it.
+                                if (enemy.pouncing && onUs(enemy) && !enemy.overlayFinished) { anyPouncing = true; break; }
                             }
                             if (anyPouncing && !faceHug.Active()) { faceHug.Begin(); }
+                            // OURS: a crawl with no creature behind it (its
+                            // hugger gone some other way) slides off rather
+                            // than hold on for good.
+                            if (!anyPouncing && faceHug.Active()) { faceHug.LetGo(); }
 
                             // LAB_00030918, every pass while a hugger is on us:
                             // 1 straight off health (FUN_0003e3e4(1, cause 4) -
@@ -5467,6 +5483,13 @@ namespace ALTEngine::Screens
                         ALTEngine::Audio::SfxPlayer::PlaySlot(
                             PC::FootstepSound(floorHurting), digits.c_str(), cdDirectory);
                     }
+
+                    {
+                        const int passX = ToGridSpaceX(camera.x, originX) >> 9;
+                        const int passZ = ToGridSpaceZ(camera.z, originZ) >> 9;
+                        passCells.push_back(passX >= 0 && passZ >= 0 && passX < level.header.mapLength && passZ < level.header.mapWidth
+                                            ? passZ * level.header.mapLength + passX : -1);
+                    }
                 }
 
                 // Hand the integer pose back to the renderer's float camera.
@@ -5534,9 +5557,15 @@ namespace ALTEngine::Screens
                     // again at the frame rate, and the commands before the one
                     // that failed (a light, a texture, a spawn count) ran several
                     // times a tick at 144 fps.
-                    if (playerTicksThisFrame > 0)
+                    //
+                    // Once for each pass, on the cell that pass ended on: a
+                    // frame that runs two or three passes (a slow frame, or
+                    // speed compensation's doubled rate) tested only the last
+                    // cell, so a trigger cell crossed in between never fired.
+                    // The key's press belongs to the frame's first pass.
+                    for (size_t pass = 0; pass < passCells.size(); ++pass)
                     {
-                        triggers.OnPlayerTick(playerLastTrigger, cellIndex, useHeldForTrigger, triggerHandlers);
+                        triggers.OnPlayerTick(playerLastTrigger, passCells[pass], pass == 0 && useHeldForTrigger, triggerHandlers);
                     }
 
                     // Collection, as the pickup task does it (0x3c8d0): an item
@@ -5556,6 +5585,7 @@ namespace ALTEngine::Screens
                             if (std::fabs(item.x - camera.x) >= 768.0f || std::fabs(item.z - camera.z) >= 768.0f
                                 || std::fabs(item.y - playerFeetY) >= 1024.0f) { continue; }
                         }
+                        if (session && ALTEngine::Screens::Pickups::HeldWeaponInNetworkGame(live.type, inventory)) { continue; }
                         if (!ALTEngine::Screens::Pickups::Wanted(live.type, static_cast<int>(live.amount), inventory, hudState)) { continue; }
                         live.collected = true;
                         if (live.placedIndex < placedObjects.size()) { placedObjects[live.placedIndex].visible = false; }
@@ -6838,8 +6868,10 @@ namespace ALTEngine::Screens
         if (playerDead)
         {
             ModelRenderer::UnloadLevels();
-            ALTEngine::Screens::GameOverSequence::Play(cdDirectory, language, deathVideoIndex);
-            result.outcome = GameplayOutcome::PlayerDied;
+            // Closing the window during the video closes the game: the
+            // video has taken the close, so it is not seen again after it.
+            const bool windowOpen = ALTEngine::Screens::GameOverSequence::Play(cdDirectory, language, deathVideoIndex);
+            result.outcome = windowOpen ? GameplayOutcome::PlayerDied : GameplayOutcome::WindowClosed;
             return result;
         }
 

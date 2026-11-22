@@ -20,6 +20,7 @@
 // copied across as it is.
 
 #include "Formats/BndTextureLoader.h"
+#include "../Bootstrap/FsUtil.h"
 #include "Formats/FaceUvPatches.h"
 #include "Formats/LevelList.h"
 #include "Formats/LevelLoader.h"
@@ -68,7 +69,7 @@ int main(int argc, char** argv)
     const auto levels = F::LoadLevelList(manifest);
     if (levels.empty())
     {
-        std::fprintf(stderr, "no levels in %s\n", manifest.string().c_str());
+        std::fprintf(stderr, "no levels in %s\n", ALTEngine::Bootstrap::PathText(manifest).c_str());
         return 1;
     }
     const auto existing = F::FaceUvPatchLoader::Load(patches);
@@ -154,10 +155,10 @@ int main(int argc, char** argv)
     std::ofstream out(outPath);
     if (!out)
     {
-        std::fprintf(stderr, "could not write %s\n", outPath.string().c_str());
+        std::fprintf(stderr, "could not write %s\n", ALTEngine::Bootstrap::PathText(outPath).c_str());
         return 1;
     }
     out << report.dump(2) << "\n";
-    std::printf("%d levels scanned, %d missing, %d suspects -> %s\n", scanned, missing, total, outPath.string().c_str());
+    std::printf("%d levels scanned, %d missing, %d suspects -> %s\n", scanned, missing, total, ALTEngine::Bootstrap::PathText(outPath).c_str());
     return scanned > 0 ? 0 : 1;
 }

@@ -1,4 +1,5 @@
 #include "ModelLoader.h"
+#include "../Bootstrap/FsUtil.h"
 #include "BinaryReadLE.h"
 #include "BndParser.h"
 
@@ -31,13 +32,13 @@ namespace ALTEngine::Formats
 
                 if (data.size() < 12)
                 {
-                    throw std::runtime_error("ModelLoader: " + section.name + " too small for its 12-byte header in " + bndPath.string());
+                    throw std::runtime_error("ModelLoader: " + section.name + " too small for its 12-byte header in " + ALTEngine::Bootstrap::PathText(bndPath));
                 }
 
                 std::string tag(reinterpret_cast<const char*>(data.data()), 4);
                 if (tag != "OBJ1")
                 {
-                    throw std::runtime_error("ModelLoader: " + section.name + " missing OBJ1 tag (found '" + tag + "') in " + bndPath.string());
+                    throw std::runtime_error("ModelLoader: " + section.name + " missing OBJ1 tag (found '" + tag + "') in " + ALTEngine::Bootstrap::PathText(bndPath));
                 }
                 pos += 4;
 
@@ -50,7 +51,7 @@ namespace ALTEngine::Formats
 
                 if (pos + 8 > data.size())
                 {
-                    throw std::runtime_error("ModelLoader: " + section.name + " too small for quad/vertex counts in " + bndPath.string());
+                    throw std::runtime_error("ModelLoader: " + section.name + " too small for quad/vertex counts in " + ALTEngine::Bootstrap::PathText(bndPath));
                 }
                 int32_t quadCount = ReadInt32LE(data, pos);
                 pos += 4;
@@ -59,7 +60,7 @@ namespace ALTEngine::Formats
 
                 if (quadCount < 0 || vertexCount < 0)
                 {
-                    throw std::runtime_error("ModelLoader: " + section.name + " has a negative quad/vertex count in " + bndPath.string());
+                    throw std::runtime_error("ModelLoader: " + section.name + " has a negative quad/vertex count in " + ALTEngine::Bootstrap::PathText(bndPath));
                 }
 
                 size_t quadsSize = static_cast<size_t>(quadCount) * 20;
@@ -67,7 +68,7 @@ namespace ALTEngine::Formats
                 if (pos + quadsSize + verticesSize > data.size())
                 {
                     throw std::runtime_error(
-                        "ModelLoader: " + section.name + " declares more quad/vertex data than it contains in " + bndPath.string());
+                        "ModelLoader: " + section.name + " declares more quad/vertex data than it contains in " + ALTEngine::Bootstrap::PathText(bndPath));
                 }
 
                 mesh.quads.reserve(static_cast<size_t>(quadCount));
@@ -120,7 +121,7 @@ namespace ALTEngine::Formats
         // different section sets (a .MAP holds both "D" doors and "L"
         // lifts), and a path-only key would hand back whichever was
         // requested first.
-        std::string key = std::filesystem::absolute(bndPath).lexically_normal().string() + "|" + sectionPrefix;
+        std::string key = ALTEngine::Bootstrap::PathText(std::filesystem::absolute(bndPath).lexically_normal()) + "|" + sectionPrefix;
         auto it = cache.find(key);
         if (it != cache.end())
         {

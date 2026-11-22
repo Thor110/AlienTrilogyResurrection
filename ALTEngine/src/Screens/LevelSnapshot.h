@@ -171,9 +171,7 @@ namespace ALTEngine::Screens::LevelSnapshot
         e.bodyRemoved = j.value("bodyRemoved", false);
         // A ceiling creature that has let go is the warrior or dog it became.
         e.type = j.value("type", e.type);
-        e.ai.type = e.type;
         e.onCeiling = j.value("onCeiling", e.onCeiling);
-        e.ai.ceilingCrawler = e.onCeiling;
 
         const int state = j.value("state", e.state);
         if (!e.alive || state == EnemyBehaviour::STATE_DYING || state == EnemyBehaviour::STATE_DEAD)
@@ -186,7 +184,16 @@ namespace ALTEngine::Screens::LevelSnapshot
             e.state = EnemyBehaviour::STATE_ACTING;
         }
 
+        // The agent starts again, but for what only the level's record gives
+        // it at the start (Enemies::Build): its speed and wake range. Without
+        // them a loaded creature never woke and never moved.
+        const int recordSpeed = e.ai.speed;
+        const int recordWakeRange = e.ai.wakeRange;
         e.ai = CreatureAI::Agent{};
+        e.ai.speed = recordSpeed;
+        e.ai.wakeRange = recordWakeRange;
+        e.ai.type = e.type;
+        e.ai.ceilingCrawler = e.onCeiling;
         e.ai.facing = e.ai.target = e.facing;
         e.ai.alerted = j.value("alerted", false);
         e.ai.state = CreatureAI::IDLE;

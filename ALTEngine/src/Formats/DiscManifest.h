@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include "../Bootstrap/FsUtil.h"
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -22,7 +23,7 @@ namespace ALTEngine::Formats
         bool IsExcluded(const std::filesystem::path& file) const
         {
             if (excludeExtensions.empty()) { return false; }
-            std::string ext = file.extension().string();
+            std::string ext = ALTEngine::Bootstrap::PathText(file.extension());
             for (char& c : ext) { c = static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }
             for (const auto& skip : excludeExtensions)
             {

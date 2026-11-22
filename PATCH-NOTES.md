@@ -8,6 +8,69 @@ options (Options > Modern) are the deliberate departures, each one off until you
 
 ---
 
+## 1.0.1
+
+Everything since 1.0.0 (the build sent to testers on 22 November 2026).
+
+### Fixed
+
+- **Ripley speaks.** None of her remarks played, in any install: the list of speech samples (`SFX/SPCH.TXT`)
+  was left out when the game was installed, so the game had nothing to say. New installs copy it; an install
+  made before now uses the same list kept inside the game, so nothing needs installing again. Her remarks also
+  draw from the game's one run of random numbers now, as the original's do.
+- **Loading a save made in mid-level** (Save Anywhere) no longer leaves every creature standing still: they
+  lost their speed and the range they wake at, so they never woke and never moved.
+- **Replaying a failed mission** gives the flamethrower and the smart gun their own limits (500, and 100 with
+  9 spare). The two were the wrong way round, so the flamethrower came back with 100 at most and the smart
+  gun lost its spare magazines.
+- **The face hugger's crawl no longer comes back.** About one hug in four, once the creature had slid off, it
+  climbed back onto the face and stayed there, with nothing behind it (new in 1.0.0, with the creature landing
+  beside you). See also BUG-REPORTS.md, report 8.
+- Closing the window during a death film closes the game; it went back to the menu.
+
+### Closer to the original
+
+- **Trigger cells are tested once for each game pass**, on the cell that pass ended on. A slow frame, or the
+  doubled rate with speed compensation, ran two or three passes and tested only the last cell, so a trigger
+  crossed in between did not fire.
+- **A round keeps its mark over another trigger's cell.** A round that had set off a trigger, crossed a cell
+  of one that rounds do not set off, and came back onto the first set it off a second time.
+- **A battery pickup is one battery**, whatever amount its record carries.
+- **Network games:** a weapon you already hold is left lying, as in the original; it was taken for its
+  ammunition.
+
+### Installing
+
+- **Installing over an existing install** no longer leaves the disc's own files in place of the fixed ones.
+  The texture sheets (and, with the Padding Trim off, the levels) came out exactly as on the disc while the
+  readout said "already blanked" and "already clean". Each kept copy is now checked against what was made.
+- **A fix is never written into a file in the wrong layout.** If a level's untrimmed copy has gone, or a file
+  cannot be put back at the start, that file is left alone and named; it used to be patched by offset in the
+  wrong place and then read as "already applied" for good.
+- **An original game's folder is never changed.** A folder named in `altengine.cfg`, or the disc's files copied
+  beside the executable, is now installed from into `GameData`, as a folder picked on the MU/TH/UR screen
+  already was. Before, ALTEngine's own changes (the Level Cleanup, the blanking, the trim), which the original
+  cannot read, were made to it where it stood.
+- **A disc whose names show in lower case** (Linux, an ISO without long names) installs; its films and
+  language files are installed under the names the game looks for.
+- A folder name outside the Windows code page no longer stops the game at start.
+- A source that already has the music as `CD/MUSIC/trackNN.wav` has it copied. The message when no music
+  could be read says what to do, rather than "this can be retried later".
+- "ALTEngine model face edits" reports "already made" on an ordinary start, like every other stage.
+
+### Multiplayer
+
+- An empty network message no longer holds up the rest of that frame's messages.
+- A player who leaves a co-operative game and joins again is sent everything that was set off before,
+  including what they set off themselves.
+- A hit with negative damage is refused (it added health).
+
+### Overrides
+
+- A level replaced by an OBJ file draws every group of a texture page; only the last was drawn.
+
+---
+
 ## 1.0.0
 
 Everything since 0.9.9 (the build sent to testers on 17 November 2026).

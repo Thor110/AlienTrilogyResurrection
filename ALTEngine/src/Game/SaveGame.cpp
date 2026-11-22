@@ -1,4 +1,5 @@
 #include "SaveGame.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include <nlohmann/json.hpp>
 
@@ -67,7 +68,7 @@ namespace ALTEngine::Game::SaveGame
         // Write beside the slot and rename over it, so a failed write never
         // destroys the save that was already there.
         const std::filesystem::path target = SlotPath(directory, slot);
-        const std::filesystem::path temp = target.string() + ".tmp";
+        const std::filesystem::path temp = ALTEngine::Bootstrap::PathText(target) + ".tmp";
         {
             std::ofstream out(temp, std::ios::binary | std::ios::trunc);
             if (!out) { return false; }

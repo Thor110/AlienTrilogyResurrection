@@ -171,7 +171,14 @@ namespace ALTEngine::Game::Triggers
         if (id == 0) { roundLatch = 0; return false; }
         if (id == roundLatch) { return false; }
         if (Run(id, source, handlers)) { roundLatch = id; return true; }
-        roundLatch = 0;
+        // Only a trigger that answers to this kind of round, with uses left,
+        // touches the latch (FUN_000414f0's outer test; FUN_00041784 the
+        // same): crossing a cell of some other trigger leaves it, so the round
+        // does not run its own trigger again on the far side.
+        if (static_cast<size_t>(id) >= level_->actions.size()) { return false; }
+        const auto& trigger = level_->actions[static_cast<size_t>(id)];
+        const uint8_t needed = (source == Source::EnemyThrow) ? FLAG_ENEMY_THROW : FLAG_SHOT;
+        if ((trigger.activationMask & needed) != 0 && UsesRemaining(id) != 0) { roundLatch = 0; }
         return false;
     }
 
@@ -184,6 +191,7 @@ namespace ALTEngine::Game::Triggers
         if (Run(id, Source::Creature, handlers)) { latch = id; return true; }
         // Only a trigger that answers to creatures, with uses left, touches
         // the latch (FUN_0004129c's outer test).
+        if (static_cast<size_t>(id) >= level_->actions.size()) { return false; }
         const auto& trigger = level_->actions[static_cast<size_t>(id)];
         if ((trigger.activationMask & FLAG_CREATURE) != 0 && UsesRemaining(id) != 0) { latch = 0; }
         return false;

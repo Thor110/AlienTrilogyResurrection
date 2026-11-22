@@ -1,4 +1,5 @@
 #include "BinaryUtility.h"
+#include "../Bootstrap/FsUtil.h"
 #include "RetryOpen.h"
 
 #include <algorithm>
@@ -16,14 +17,14 @@ namespace ALTEngine::Formats
         std::ifstream stream(path, std::ios::binary);
         if (!stream.is_open())
         {
-            throw std::runtime_error("BinaryUtility::ReadByteAtOffset: could not open " + path.string());
+            throw std::runtime_error("BinaryUtility::ReadByteAtOffset: could not open " + ALTEngine::Bootstrap::PathText(path));
         }
         stream.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
         char byte = 0;
         stream.read(&byte, 1);
         if (!stream)
         {
-            throw std::runtime_error("BinaryUtility::ReadByteAtOffset: read past end of " + path.string());
+            throw std::runtime_error("BinaryUtility::ReadByteAtOffset: read past end of " + ALTEngine::Bootstrap::PathText(path));
         }
         return static_cast<uint8_t>(byte);
     }
@@ -33,14 +34,14 @@ namespace ALTEngine::Formats
         std::ifstream stream(path, std::ios::binary);
         if (!stream.is_open())
         {
-            throw std::runtime_error("BinaryUtility::ReadBytesAtOffset: could not open " + path.string());
+            throw std::runtime_error("BinaryUtility::ReadBytesAtOffset: could not open " + ALTEngine::Bootstrap::PathText(path));
         }
         stream.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
         std::vector<uint8_t> buffer(length);
         stream.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(length));
         if (!stream)
         {
-            throw std::runtime_error("BinaryUtility::ReadBytesAtOffset: read past end of " + path.string());
+            throw std::runtime_error("BinaryUtility::ReadBytesAtOffset: read past end of " + ALTEngine::Bootstrap::PathText(path));
         }
         return buffer;
     }
@@ -57,7 +58,7 @@ namespace ALTEngine::Formats
         if (!opened)
         {
             throw std::runtime_error(
-                "BinaryUtility::ReplaceByte: could not open " + path.string() +
+                "BinaryUtility::ReplaceByte: could not open " + ALTEngine::Bootstrap::PathText(path) +
                 " (" + std::strerror(errno) + ") - already tried clearing the read-only attribute and "
                 "retrying briefly. Check antivirus real-time scanning or Program Files permissions.");
         }
@@ -75,13 +76,13 @@ namespace ALTEngine::Formats
         if (!in.is_open())
         {
             throw std::runtime_error(
-                "BinaryUtility::ReplaceBytes: could not open " + path.string() +
+                "BinaryUtility::ReplaceBytes: could not open " + ALTEngine::Bootstrap::PathText(path) +
                 " (" + std::strerror(errno) + ")");
         }
         std::streamoff rawSize = in.tellg();
         if (rawSize < 0)
         {
-            throw std::runtime_error("BinaryUtility::ReplaceBytes: could not determine size of " + path.string());
+            throw std::runtime_error("BinaryUtility::ReplaceBytes: could not determine size of " + ALTEngine::Bootstrap::PathText(path));
         }
         auto size = static_cast<size_t>(rawSize);
         in.seekg(0, std::ios::beg);
@@ -90,7 +91,7 @@ namespace ALTEngine::Formats
         in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(size));
         if (!in)
         {
-            throw std::runtime_error("BinaryUtility::ReplaceBytes: failed reading " + path.string());
+            throw std::runtime_error("BinaryUtility::ReplaceBytes: failed reading " + ALTEngine::Bootstrap::PathText(path));
         }
         in.close();
 
@@ -101,7 +102,7 @@ namespace ALTEngine::Formats
                 throw std::runtime_error(
                     "BinaryUtility::ReplaceBytes: edit at offset " + std::to_string(edit.offset) +
                     " (" + std::to_string(edit.bytes.size()) + " bytes) exceeds file size " +
-                    std::to_string(data.size()) + " for " + path.string());
+                    std::to_string(data.size()) + " for " + ALTEngine::Bootstrap::PathText(path));
             }
             std::copy(edit.bytes.begin(), edit.bytes.end(), data.begin() + static_cast<ptrdiff_t>(edit.offset));
         }
@@ -123,7 +124,7 @@ namespace ALTEngine::Formats
             if (!opened)
             {
                 throw std::runtime_error(
-                    "BinaryUtility::ReplaceBytes: could not open " + temp.string() +
+                    "BinaryUtility::ReplaceBytes: could not open " + ALTEngine::Bootstrap::PathText(temp) +
                     " for writing (" + std::strerror(errno) + ") - check antivirus real-time scanning, or "
                     "Program Files permissions (run elevated).");
             }
@@ -133,8 +134,8 @@ namespace ALTEngine::Formats
             {
                 std::error_code ec;
                 std::filesystem::remove(temp, ec);
-                throw std::runtime_error("BinaryUtility::ReplaceBytes: could not write " + temp.string()
-                                         + "; " + path.string() + " is unchanged.");
+                throw std::runtime_error("BinaryUtility::ReplaceBytes: could not write " + ALTEngine::Bootstrap::PathText(temp)
+                                         + "; " + ALTEngine::Bootstrap::PathText(path) + " is unchanged.");
             }
         }
         std::error_code renameError;
@@ -147,7 +148,7 @@ namespace ALTEngine::Formats
         {
             std::error_code ec;
             std::filesystem::remove(temp, ec);
-            throw std::runtime_error("BinaryUtility::ReplaceBytes: could not replace " + path.string() + " ("
+            throw std::runtime_error("BinaryUtility::ReplaceBytes: could not replace " + ALTEngine::Bootstrap::PathText(path) + " ("
                                      + renameError.message() + "); it is unchanged. Check antivirus real-time "
                                      "scanning, or Program Files permissions (run elevated).");
         }

@@ -96,6 +96,24 @@ TEST_CASE("Save Anywhere: a creature comes back where it was, and decides afresh
     CHECK(!dead.alive);
 }
 
+TEST_CASE("Save Anywhere: a loaded creature keeps its record's speed and wake range")
+{
+    // Both are set once, from the level's record, when the level is built; the
+    // load must not lose them, or the creature never wakes and never moves.
+    EN::Enemy crawler;
+    crawler.type = 6; crawler.active = true; crawler.alive = true; crawler.onCeiling = true;
+    EN::Enemy back;
+    back.type = 6;
+    back.ai.speed = 0x60;
+    back.ai.wakeRange = 0x1800;
+    LS::LoadEnemy(back, LS::SaveEnemy(crawler));
+    CHECK_EQ(back.ai.speed, 0x60);
+    CHECK_EQ(back.ai.wakeRange, 0x1800);
+    CHECK_EQ(back.ai.type, 6);
+    CHECK(back.onCeiling);
+    CHECK(back.ai.ceilingCrawler);
+}
+
 TEST_CASE("Save Anywhere: an opened egg stays open")
 {
     EN::Enemy egg;

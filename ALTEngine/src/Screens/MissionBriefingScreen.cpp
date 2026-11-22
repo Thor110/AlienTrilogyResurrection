@@ -1,4 +1,5 @@
 #include "MissionBriefingScreen.h"
+#include "../Bootstrap/FsUtil.h"
 #include "../Bootstrap/AppWindow.h"
 #include "../Bootstrap/Font8x8.h"
 #include "../Formats/MissionText.h"
@@ -166,7 +167,7 @@ namespace ALTEngine::Screens
             auto textPath = ResolveMissionTextFile(cdDirectory / "LANGUAGE", language);
             if (!textPath.has_value())
             {
-                throw std::runtime_error("no MISSION*.TXT candidate found in " + (cdDirectory / "LANGUAGE").string());
+                throw std::runtime_error("no MISSION*.TXT candidate found in " + ALTEngine::Bootstrap::PathText((cdDirectory / "LANGUAGE")));
             }
             allBriefings = MissionTextLoader::Load(*textPath);
             for (const auto& b : allBriefings)

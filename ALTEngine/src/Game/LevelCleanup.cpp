@@ -1,4 +1,5 @@
 #include "LevelCleanup.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include "LevelFileLayout.h"
 
@@ -589,11 +590,11 @@ namespace ALTEngine::Game::LevelCleanup
         for (const auto& sect : std::filesystem::directory_iterator(cdDirectory, ec))
         {
             if (!sect.is_directory()) { continue; }
-            const std::string dir = sect.path().filename().string();
+            const std::string dir = ALTEngine::Bootstrap::PathText(sect.path().filename());
             if (dir.rfind("SECT", 0) != 0) { continue; }
             for (const auto& f : std::filesystem::directory_iterator(sect.path(), ec))
             {
-                const std::string name = f.path().filename().string();
+                const std::string name = ALTEngine::Bootstrap::PathText(f.path().filename());
                 if (name.size() == 11 && name[0] == 'L' && name.substr(4) == "LEV.MAP")
                 {
                     files.push_back(std::filesystem::path(dir) / name);

@@ -1,4 +1,5 @@
 #include "ObjLoader.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include <array>
 #include <cstdlib>
@@ -59,7 +60,7 @@ namespace ALTEngine::Formats
             std::ifstream file(mtlPath);
             if (!file)
             {
-                model.warnings.push_back("mtllib not found: " + mtlPath.string());
+                model.warnings.push_back("mtllib not found: " + ALTEngine::Bootstrap::PathText(mtlPath));
                 return;
             }
 

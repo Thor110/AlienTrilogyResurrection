@@ -44,7 +44,7 @@ namespace ALTEngine::Bootstrap
             std::string letter(1, static_cast<char>('A' + i));
             std::filesystem::path drive(letter + ":\\");
 
-            UINT type = GetDriveTypeA(drive.string().c_str());
+            UINT type = GetDriveTypeA(ALTEngine::Bootstrap::PathText(drive).c_str());
             if (type == DRIVE_NO_ROOT_DIR || type == DRIVE_UNKNOWN) { continue; }
 
             if (type == DRIVE_CDROM) { cdromDrives.push_back(drive); }

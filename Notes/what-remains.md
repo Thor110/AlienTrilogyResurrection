@@ -1288,3 +1288,41 @@ Closing the window during it ends the boot.
   away, 0 in sealed lifts, 4 hidden) and 87 vertices taken out, first cell's 8 faces restored". Give the MU/TH/UR
   screen its own short wording (one line per step, the counts that matter), and keep the long form for the log.
   Rows wrap after the last comma that fits (zip 130), so a count stays with its word.
+
+## Zip 193: a review of the whole engine, and what it found (1.0.1)
+
+A read of every part against the decompile, the tests under the address and undefined-behaviour checkers, an
+install from the USA disc and a play of L111 under them. The fixes are in PATCH-NOTES.md, 1.0.1. What a later
+session should know:
+
+- **Speech** needs `SFX/SPCH.TXT`, which no install had (BUG-REPORTS.md, 7). `Audio/Speech.h` now carries the
+  disc's list as a fallback and draws from `OriginalRandom`.
+- **The install's kept copies carry their own CRC** (`"made"` in `CD/LevelCleanup.json` and
+  `CD/TextureBlank.json`). A kept copy goes back only if it is the file that was made; an install copied over
+  an install used to put the disc's file back as "clean". An install from before has no `"made"`, so its first
+  start cleans and blanks again, once.
+- **Blocked files** (`BlockedFiles` in `InstallPipeline.cpp`): a file a stage could not put back at the start
+  of a run, a level still trimmed with no `.padded` copy, or one whose model or object removal failed, gets no
+  removal and no byte patch that run, and is named in the readout.
+- **`GameLocator::Locate`** installs into `GameData` from any folder that is not an ALTEngine install, by all
+  three routes. `RunPatches` is only ever given ALTEngine's own install.
+- **`path::string()` is gone from `src`**: everything goes through `PathText` (FsUtil.h). Keep it that way.
+- **The cell trigger runs once for each pass** (`passCells` in `GameplayScreen.cpp`). The pickups, doors and
+  lifts are still done once a frame after the frame's passes; moving them into the pass is the next step and
+  wants `GameplayScreen.cpp` split first.
+- **Face hug** (BUG-REPORTS.md, 8): the crawl's restart is fixed; the drain during the slide and the body's
+  acid are as they were, to be checked against the disassembly.
+
+Found and left, in rough order of worth:
+- A join takes a slot for 30 seconds on one message, and puts a bot out, before the joiner has shown it can
+  hear the reply. Wants a challenge in the join.
+- A guest's world events and thrown grenades are kept without limit for the level.
+- A frag's killer is taken on the sender's word.
+- Save files: a lift's phase and the current weapon are not range-checked on load.
+- The film player does not check several FFmpeg and SDL results, and does not drain the decoder at the end.
+- `surfaceChanges` grows for as long as the player stands on a cell whose chain fails part way.
+- A door's threshold of 0 is made 1 (`Doors.cpp`); the original's door task is not in the decompile.
+- The music cannot be read from a disc image's track files (bin/cue), only from a drive.
+- `Patches.json`, `ALTViewer.cs` and `Patch/*.txt` credit an assistant by name in 58 notes, which the install
+  readout shows; HANDOFF.md says no such names in anything committed. Edward to say whether they go.
+

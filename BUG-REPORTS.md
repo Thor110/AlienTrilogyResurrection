@@ -155,3 +155,50 @@ is fixed.
 - which also fixes sounds going missing at random everywhere. And each weapon state now maps its frames to
 images (`Renderer/WeaponData.h`), so the smart gun, shotgun, pulse rifle and flamethrower play their own
 animations with their own cues.
+
+---
+
+## 7. Ripley's voice clips do not play at all
+
+- **Reported by:** Edward, in play (1.0.0)
+- **Status:** fixed in 1.0.1
+- **Report:** "ripleys voice clips don't play at all"
+
+**What happened.** The speech bank's list, `SFX/SPCH.TXT`, was not in the install's file list
+(`data/DiscFileManifest.json`): the SFX folder's text files were all left out as "the original's per-level
+sound lists", and this one went with them. `Audio/Speech.h` reads that file for the sample names and says
+nothing without it, so no install ever had a line to play. The samples themselves (`VC*.RAW`) were always
+copied.
+
+**Fixed (1.0.1).** The file is installed. An install made before now, which has no disc to copy it from, uses
+the disc's 35 lines kept in `Audio/Speech.h` (`DISC_LINES`); the file wins where it is present. The list's
+last line is DOS's end-of-file mark, which is no longer read as a sample. Untested by ear: the test machine
+has no sound.
+
+---
+
+## 8. Face huggers seem to hurt after they fall off
+
+- **Reported by:** a player, through Edward (1.0.0)
+- **Status:** one fault fixed in 1.0.1; the damage itself open, more detail needed
+- **Report:** "facehuggers seem to cause damage after they fall off the player I believe"
+
+**What was found.**
+- **Fixed:** the crawl could start again after it had slid off. The creature then lands in a free cell beside
+  the player, drawing a place at random and trying again next pass if the cell is taken. The player's own cell
+  is always taken, which is one draw in four; on that pass the creature was still "pouncing", so the crawl
+  began again, climbed back onto the face and stayed there with no creature to let go of it. No damage came
+  with it, but it looks like a hugger that never left. (`GameplayScreen.cpp`, the crawl's start.)
+- **Not changed - the drain while it slides off.** 1.0.0 made the hug go on hurting until the crawl is fully
+  off (LAB_00030918, 0x30a6f-0x30a7e). With the damage cooldown that is at most one more hit, about 26 passes
+  after it lets go, as the creature leaves the bottom of the view.
+- **Not changed - the body's acid.** Above Easy an alien's body turns bare floor to acid once its death has
+  played (the common task's state 8), and the hugger lands and dies within a cell of the player. Walking onto
+  that cell burns, 1 at a time, for as long as the player stands on it. This is the likeliest thing the
+  player saw.
+
+**To settle.** Neither of the last two could be checked this time: LAB_00030918 and the common task are not
+in the decompile, only in the disassembly. Wanted: the difficulty the player was on, and whether the damage
+came while standing still (the drain) or on moving off (the acid); and from the disassembly, whether the
+creature goes back to the common task after the hug, so that its body leaves acid at all.
+

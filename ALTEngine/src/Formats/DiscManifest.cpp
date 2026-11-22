@@ -1,4 +1,5 @@
 #include "DiscManifest.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include <fstream>
 #include <stdexcept>
@@ -13,7 +14,7 @@ namespace ALTEngine::Formats
         std::ifstream file(jsonPath);
         if (!file.is_open())
         {
-            throw std::runtime_error("DiscManifestLoader::Load: could not open " + jsonPath.string());
+            throw std::runtime_error("DiscManifestLoader::Load: could not open " + ALTEngine::Bootstrap::PathText(jsonPath));
         }
 
         nlohmann::json root;

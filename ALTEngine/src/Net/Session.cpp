@@ -4,6 +4,12 @@
 
 namespace ALTEngine::Net
 {
+    namespace
+    {
+        // How many datagrams one Update takes from the socket.
+        constexpr int MAX_DATAGRAMS_PER_UPDATE = 512;
+    }
+
     bool Session::StartHost(const std::string& name, const std::string& levelDigits, const std::string& player, uint16_t port,
                             Skin chosen)
     {
@@ -189,6 +195,12 @@ namespace ALTEngine::Net
         peers[static_cast<size_t>(slot)] = {};
         roster.players[static_cast<size_t>(slot)] = {};
         remote[static_cast<size_t>(slot)].reset();
+        // What this player set off stays in the level's log, now as the host's
+        // word. A guest skips the events of its own slot when they come back
+        // ("already done here"), and whoever takes this slot next - the same
+        // player joining again, usually - starts from a freshly loaded level
+        // and must run them all.
+        for (auto& logged : worldLog) { if (logged.origin == slot) { logged.origin = 0; } }
         Broadcast(Leave{ static_cast<uint8_t>(slot) });
         Broadcast(roster);
         Event e; e.kind = Event::Kind::PlayerLeft; e.slot = static_cast<uint8_t>(slot);
@@ -217,8 +229,11 @@ namespace ALTEngine::Net
     {
         if (role == Role::None) { return; }
         Address from;
-        while (auto bytes = socket.Receive(from))
+        // At most this many a call: a flood cannot hold the frame.
+        for (int taken = 0; taken < MAX_DATAGRAMS_PER_UPDATE; ++taken)
         {
+            auto bytes = socket.Receive(from);
+            if (!bytes) { break; }
             const auto message = Decode(*bytes);
             if (!message) { continue; }
             if (role == Role::Host) { HandleAsHost(from, *message, now); }
@@ -747,8 +762,11 @@ namespace ALTEngine::Net
             socket.SendTo(Address::Loopback(hostPort), query);   // a game on this machine
         }
         Address from;
-        while (auto bytes = socket.Receive(from))
+        // At most this many a call: a flood cannot hold the frame.
+        for (int taken = 0; taken < MAX_DATAGRAMS_PER_UPDATE; ++taken)
         {
+            auto bytes = socket.Receive(from);
+            if (!bytes) { break; }
             const auto message = Decode(*bytes);
             const auto* reply = message ? std::get_if<DiscoverReply>(&*message) : nullptr;
             if (!reply) { continue; }

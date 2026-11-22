@@ -101,15 +101,51 @@ namespace ALTEngine::Bootstrap
 
     LocateResult GameLocator::Locate()
     {
+        // WHERE THE GAME IS PLAYED FROM. Only ever ALTEngine's own install: an
+        // existing installation of the original game (or a copy of the disc)
+        // is installed from, into ALTEngine's own GameData, as a disc is. The
+        // patches change the files, and stage 5 (the Level Cleanup, the
+        // blanking, the padding trim) makes files the original cannot read -
+        // which must never happen to the original game's own install - and it
+        // may sit somewhere unwritable, such as Program Files.
+        //
+        // That held for a folder picked on the MU/TH/UR screen only. A folder
+        // named in altengine.cfg, or the executable's own folder with the
+        // disc's files copied beside it, was patched where it stood, stage 5
+        // and all. All three routes now go through here.
+        auto adopt = [this](std::filesystem::path located) -> LocateResult
+        {
+            const std::filesystem::path destination = ExecutableDirectory() / "GameData";
+            std::error_code ec;
+            const bool ours = IsEngineInstall(located) || std::filesystem::equivalent(located, destination, ec);
+            if (!ours)
+            {
+                std::cout << "Installing from the existing installation at " << PathText(located) << "\n";
+                if (!InstallFromDisc(located, destination) || !Validate(destination))
+                {
+                    // Most likely a repackaged release (the Collection Chamber one,
+                    // for instance) that keeps the game in its own layout and has
+                    // left some of the disc's files out: not supported - ALTEngine
+                    // installs from the disc, or a full copy of its files.
+                    std::cout << "The install from " << PathText(located) << " did not complete: the files listed above are\n"
+                              << "missing there. ALTEngine installs from the original disc (or a mounted image of it), or from\n"
+                              << "a complete copy of the disc's files; repackaged releases such as Collection Chamber's keep the\n"
+                              << "game in their own layout and are not supported.\n";
+                    return { false, {} };
+                }
+                located = destination;
+            }
+            config.Set(CONFIG_KEY_GAME_DIR, PathText(located));
+            return { true, located };
+        };
+
         if (auto fromConfig = TryConfigPath())
         {
-            return { true, *fromConfig };
+            if (LocateResult result = adopt(*fromConfig); result.success) { return result; }
         }
-
-        if (auto fromExeDir = TryExecutableDirectory())
+        else if (auto fromExeDir = TryExecutableDirectory())
         {
-            config.Set(CONFIG_KEY_GAME_DIR, PathText(*fromExeDir));
-            return { true, *fromExeDir };
+            if (LocateResult result = adopt(*fromExeDir); result.success) { return result; }
         }
 
         DirectoryBrowser browser;
@@ -124,32 +160,6 @@ namespace ALTEngine::Bootstrap
         }
         located = SourceRoot(*located);
         if (!located.has_value()) { return { false, {} }; }
-
-        // An existing installation of the original game (or a copy of the
-        // disc) is installed from, into ALTEngine's own GameData, as a disc
-        // is: the patches change the files, which must never happen to the
-        // original game's own install - and it may sit somewhere unwritable,
-        // such as Program Files.
-        if (!IsEngineInstall(*located))
-        {
-            const std::filesystem::path destination = ExecutableDirectory() / "GameData";
-            std::cout << "Installing from the existing installation at " << PathText(*located) << "\n";
-            if (!InstallFromDisc(*located, destination) || !Validate(destination))
-            {
-                // Most likely a repackaged release (the Collection Chamber one,
-                // for instance) that keeps the game in its own layout and has
-                // left some of the disc's files out: not supported - ALTEngine
-                // installs from the disc, or a full copy of its files.
-                std::cout << "The install from " << PathText(*located) << " did not complete: the files listed above are\n"
-                          << "missing there. ALTEngine installs from the original disc (or a mounted image of it), or from\n"
-                          << "a complete copy of the disc's files; repackaged releases such as Collection Chamber's keep the\n"
-                          << "game in their own layout and are not supported.\n";
-                return { false, {} };
-            }
-            located = destination;
-        }
-
-        config.Set(CONFIG_KEY_GAME_DIR, PathText(*located));
-        return { true, *located };
+        return adopt(*located);
     }
 }

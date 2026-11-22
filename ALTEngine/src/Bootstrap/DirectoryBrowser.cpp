@@ -94,7 +94,7 @@ namespace ALTEngine::Bootstrap
                 std::string letter(1, static_cast<char>('A' + i));
                 std::filesystem::path drive(letter + ":\\");
 
-                UINT type = GetDriveTypeA(drive.string().c_str());
+                UINT type = GetDriveTypeA(ALTEngine::Bootstrap::PathText(drive).c_str());
                 if (type == DRIVE_NO_ROOT_DIR || type == DRIVE_UNKNOWN) { continue; }
 
                 entries.push_back({ letter + ":\\", drive, false });
@@ -111,7 +111,7 @@ namespace ALTEngine::Bootstrap
                 std::error_code rootEc;
                 if (std::filesystem::is_directory(root, rootEc))
                 {
-                    entries.push_back({ root.string(), root, false });
+                    entries.push_back({ ALTEngine::Bootstrap::PathText(root), root, false });
                 }
             }
 #endif

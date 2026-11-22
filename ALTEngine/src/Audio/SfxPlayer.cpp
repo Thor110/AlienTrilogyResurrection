@@ -79,7 +79,7 @@ namespace ALTEngine::Audio
             }
             else
             {
-                SDL_Log("SfxPlayer: %s not found", path.string().c_str());
+                SDL_Log("SfxPlayer: %s not found", ALTEngine::Bootstrap::PathText(path).c_str());
             }
 
             it = cache.emplace(stem, std::move(data)).first;

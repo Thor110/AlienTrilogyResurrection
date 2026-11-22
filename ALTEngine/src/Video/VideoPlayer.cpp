@@ -1,4 +1,5 @@
 #include "VideoPlayer.h"
+#include "../Bootstrap/FsUtil.h"
 #include "Bootstrap/AppWindow.h"
 
 #include <SDL3/SDL.h>
@@ -103,7 +104,7 @@ namespace ALTEngine::Video
     bool VideoPlayer::Play(const std::filesystem::path& path)
     {
         FFmpegContext ctx;
-        std::string pathStr = path.string();
+        std::string pathStr = ALTEngine::Bootstrap::PathText(path);
         if (!OpenStreams(ctx, pathStr))
         {
             return true; // couldn't play this one - skip it, don't abort the whole boot

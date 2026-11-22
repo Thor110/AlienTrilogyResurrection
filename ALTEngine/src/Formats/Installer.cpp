@@ -53,12 +53,18 @@ namespace ALTEngine::Formats
     {
         InstallResult result;
 
+        // The disc's CD folder, whatever its case: Linux shows an ISO 9660
+        // disc without Rock Ridge or Joliet names in lower case, and the
+        // locator (DiscLocator::Validate) already accepts one.
+        const std::filesystem::path discCd =
+            ALTEngine::Bootstrap::FindEntryCaseInsensitive(discRoot, "CD").value_or(discRoot / "CD");
+
         int totalFiles = static_cast<int>(manifest.rootFiles.size());
         for (const auto& [name, folder] : manifest.folders)
         {
             if (folder.copyAll)
             {
-                auto sourceFolder = ALTEngine::Bootstrap::FindEntryCaseInsensitive(discRoot / "CD", name);
+                auto sourceFolder = ALTEngine::Bootstrap::FindEntryCaseInsensitive(discCd, name);
                 if (sourceFolder.has_value())
                 {
                     std::error_code ec;
@@ -97,7 +103,7 @@ namespace ALTEngine::Formats
         for (const auto& [folderName, folder] : manifest.folders)
         {
             std::filesystem::path destFolder = destinationRoot / "CD" / folderName;
-            auto sourceFolder = ALTEngine::Bootstrap::FindEntryCaseInsensitive(discRoot / "CD", folderName);
+            auto sourceFolder = ALTEngine::Bootstrap::FindEntryCaseInsensitive(discCd, folderName);
 
             if (!sourceFolder.has_value())
             {
@@ -131,7 +137,16 @@ namespace ALTEngine::Formats
 
                     const std::string filename = ALTEngine::Bootstrap::PathText(entry.path().filename());
 
-                    bool copied = CopyFileWithRetry(entry.path(), destFolder / entry.path().filename());
+                    // Installed under the disc's own upper-case name, as the
+                    // listed folders' files are (by the manifest's spelling):
+                    // the game looks these up by that name, and from a
+                    // lower-case disc "intro.avi" was not found.
+                    std::string installedName = filename;
+                    for (char& c : installedName)
+                    {
+                        if (c >= 'a' && c <= 'z') { c = static_cast<char>(c - 'a' + 'A'); }
+                    }
+                    bool copied = CopyFileWithRetry(entry.path(), destFolder / ALTEngine::Bootstrap::PathFromText(installedName));
                     if (!copied) { result.failedFiles.push_back(folderName + "/" + filename); }
                     reportProgress(folderName + "/" + filename);
                 }

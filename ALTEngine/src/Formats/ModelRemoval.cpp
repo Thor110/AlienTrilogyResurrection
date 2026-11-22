@@ -1,4 +1,5 @@
 #include "ModelRemoval.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include <array>
 #include <fstream>
@@ -133,7 +134,7 @@ namespace ALTEngine::Formats
     std::vector<ModelRemoval> ModelRemovalLoader::Load(const std::filesystem::path& jsonPath)
     {
         std::ifstream file(jsonPath);
-        if (!file.is_open()) { throw std::runtime_error("ModelRemovalLoader::Load: could not open " + jsonPath.string()); }
+        if (!file.is_open()) { throw std::runtime_error("ModelRemovalLoader::Load: could not open " + ALTEngine::Bootstrap::PathText(jsonPath)); }
         nlohmann::json root;
         file >> root;
 
@@ -178,7 +179,7 @@ namespace ALTEngine::Formats
             std::vector<uint8_t> bytes;
             {
                 std::ifstream in(path, std::ios::binary);
-                if (!in) { result.error = "target file not found: " + path.string(); results.push_back(result); continue; }
+                if (!in) { result.error = "target file not found: " + ALTEngine::Bootstrap::PathText(path); results.push_back(result); continue; }
                 bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
             }
 
@@ -191,13 +192,13 @@ namespace ALTEngine::Formats
                 {
                     std::ofstream out(temp, std::ios::binary | std::ios::trunc);
                     out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-                    if (!out) { result.outcome = ModelRemovalOutcome::Failed; result.error = "could not write " + temp.string(); }
+                    if (!out) { result.outcome = ModelRemovalOutcome::Failed; result.error = "could not write " + ALTEngine::Bootstrap::PathText(temp); }
                 }
                 std::error_code ec;
                 if (result.outcome == ModelRemovalOutcome::Applied)
                 {
                     std::filesystem::rename(temp, path, ec);
-                    if (ec) { result.outcome = ModelRemovalOutcome::Failed; result.error = "could not replace " + path.string() + ": " + ec.message(); }
+                    if (ec) { result.outcome = ModelRemovalOutcome::Failed; result.error = "could not replace " + ALTEngine::Bootstrap::PathText(path) + ": " + ec.message(); }
                 }
                 if (result.outcome == ModelRemovalOutcome::Failed) { std::filesystem::remove(temp, ec); }
             }

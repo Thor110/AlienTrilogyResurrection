@@ -1,4 +1,5 @@
 #include "TextureBlank.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include "LevelCleanup.h"
 
@@ -109,7 +110,7 @@ namespace ALTEngine::Game::TextureBlank
         std::vector<std::filesystem::path> sheets;
         for (const auto& level : LevelCleanup::LevelFiles(cdDirectory))
         {
-            const std::string name = level.filename().string();   // L111LEV.MAP
+            const std::string name = ALTEngine::Bootstrap::PathText(level.filename());   // L111LEV.MAP
             sheets.push_back(level.parent_path() / (name.substr(1, 3) + "GFX.B16"));
         }
         return sheets;

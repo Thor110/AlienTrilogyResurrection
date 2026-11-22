@@ -1,4 +1,5 @@
 #include "WeaponView.h"
+#include "../Bootstrap/FsUtil.h"
 #include "WeaponData.h"
 
 #include "HudPanel.h"
@@ -81,7 +82,7 @@ namespace ALTEngine::Renderer
         std::error_code ec;
         if (!std::filesystem::is_regular_file(path, ec))
         {
-            SDL_Log("WeaponView: %s not found - weapon %d will not draw", path.string().c_str(), weaponIndex);
+            SDL_Log("WeaponView: %s not found - weapon %d will not draw", ALTEngine::Bootstrap::PathText(path).c_str(), weaponIndex);
             failedWeapon = weaponIndex; return false;
         }
 

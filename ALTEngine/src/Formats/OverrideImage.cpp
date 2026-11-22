@@ -1,4 +1,5 @@
 #include "OverrideImage.h"
+#include "../Bootstrap/FsUtil.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG   // .obj (models) get their own loader later - this file only ever needs PNG
@@ -27,11 +28,11 @@ namespace ALTEngine::Formats
         }
 
         int width = 0, height = 0, channels = 0;
-        stbi_uc* decoded = stbi_load(path.string().c_str(), &width, &height, &channels, 4); // force RGBA
+        stbi_uc* decoded = stbi_load(ALTEngine::Bootstrap::PathText(path).c_str(), &width, &height, &channels, 4); // force RGBA
         if (!decoded)
         {
             std::fprintf(stderr, "TryLoadOverrideImage: found %s but failed to decode: %s\n",
-                         path.string().c_str(), stbi_failure_reason());
+                         ALTEngine::Bootstrap::PathText(path).c_str(), stbi_failure_reason());
             return std::nullopt;
         }
 

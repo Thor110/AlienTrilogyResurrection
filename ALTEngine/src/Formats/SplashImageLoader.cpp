@@ -1,4 +1,5 @@
 #include "SplashImageLoader.h"
+#include "../Bootstrap/FsUtil.h"
 #include "BndParser.h"
 #include "BxParser.h"
 #include "OverrideImage.h"
@@ -34,8 +35,8 @@ namespace ALTEngine::Formats
         // needed at any call site.
         std::optional<OverrideImage> TryOverride(const std::filesystem::path& bndPath, int frameA, int frameB)
         {
-            std::string category = bndPath.parent_path().filename().string(); // e.g. "GFX"
-            std::string baseName = bndPath.stem().string();                    // e.g. "LEGAL"
+            std::string category = ALTEngine::Bootstrap::PathText(bndPath.parent_path().filename()); // e.g. "GFX"
+            std::string baseName = ALTEngine::Bootstrap::PathText(bndPath.stem());                    // e.g. "LEGAL"
             std::string key = category + "/" + baseName + "_TP" + ZeroPad2(frameA) + "_TP" + ZeroPad2(frameB);
 
             // .../CD/GFX/LEGAL.BND -> GFX -> CD, then CD/Override -
@@ -51,7 +52,7 @@ namespace ALTEngine::Formats
             std::ifstream in(path, std::ios::binary | std::ios::ate);
             if (!in.is_open())
             {
-                throw std::runtime_error("SplashImageLoader: could not open " + path.string());
+                throw std::runtime_error("SplashImageLoader: could not open " + ALTEngine::Bootstrap::PathText(path));
             }
             auto size = static_cast<size_t>(in.tellg());
             in.seekg(0, std::ios::beg);
@@ -94,14 +95,14 @@ namespace ALTEngine::Formats
         {
             throw std::runtime_error(
                 "SplashImageLoader: imageIndex " + std::to_string(imageIndex) + " needs TP frames " +
-                std::to_string(frameA) + "/" + std::to_string(frameB) + ", but " + bndPath.string() +
+                std::to_string(frameA) + "/" + std::to_string(frameB) + ", but " + ALTEngine::Bootstrap::PathText(bndPath) +
                 " only has " + std::to_string(tpSections.size()));
         }
         if (static_cast<int>(bxSections.size()) <= frameB)
         {
             throw std::runtime_error(
                 "SplashImageLoader: imageIndex " + std::to_string(imageIndex) + " needs BX sections " +
-                std::to_string(frameA) + "/" + std::to_string(frameB) + ", but " + bndPath.string() +
+                std::to_string(frameA) + "/" + std::to_string(frameB) + ", but " + ALTEngine::Bootstrap::PathText(bndPath) +
                 " only has " + std::to_string(bxSections.size()));
         }
 
@@ -114,7 +115,7 @@ namespace ALTEngine::Formats
             if (section->data.size() != expected)
             {
                 throw std::runtime_error(
-                    "SplashImageLoader: " + bndPath.string() + " section " + section->name +
+                    "SplashImageLoader: " + ALTEngine::Bootstrap::PathText(bndPath) + " section " + section->name +
                     " is " + std::to_string(section->data.size()) + " bytes, expected " + std::to_string(expected));
             }
         }
@@ -131,11 +132,11 @@ namespace ALTEngine::Formats
         {
             throw std::runtime_error(
                 "SplashImageLoader: could not find texIndex " + std::to_string(frameA) + "/" +
-                std::to_string(frameB) + " rects in " + bndPath.string());
+                std::to_string(frameB) + " rects in " + ALTEngine::Bootstrap::PathText(bndPath));
         }
         if (rectA->height != rectB->height)
         {
-            throw std::runtime_error("SplashImageLoader: frame A/B heights differ in " + bndPath.string());
+            throw std::runtime_error("SplashImageLoader: frame A/B heights differ in " + ALTEngine::Bootstrap::PathText(bndPath));
         }
 
         std::vector<uint8_t> palette = PaletteFile::Load(palPath, paletteTrimmed);

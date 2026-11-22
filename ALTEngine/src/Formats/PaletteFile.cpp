@@ -1,4 +1,5 @@
 #include "PaletteFile.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include <algorithm>
 #include <fstream>
@@ -12,21 +13,21 @@ namespace ALTEngine::Formats
         std::ifstream in(path, std::ios::binary | std::ios::ate);
         if (!in.is_open())
         {
-            throw std::runtime_error("PaletteFile::Load: could not open " + path.string());
+            throw std::runtime_error("PaletteFile::Load: could not open " + ALTEngine::Bootstrap::PathText(path));
         }
         auto length = static_cast<size_t>(in.tellg());
         in.seekg(0, std::ios::beg);
 
         if (length > 768)
         {
-            throw std::runtime_error("PaletteFile::Load: " + path.string() + " is larger than 768 bytes");
+            throw std::runtime_error("PaletteFile::Load: " + ALTEngine::Bootstrap::PathText(path) + " is larger than 768 bytes");
         }
 
         std::vector<uint8_t> loaded(length);
         in.read(reinterpret_cast<char*>(loaded.data()), static_cast<std::streamsize>(length));
         if (!in)
         {
-            throw std::runtime_error("PaletteFile::Load: failed reading " + path.string());
+            throw std::runtime_error("PaletteFile::Load: failed reading " + ALTEngine::Bootstrap::PathText(path));
         }
 
         std::vector<uint8_t> palette(768, 0);
@@ -37,7 +38,7 @@ namespace ALTEngine::Formats
             // place what we have starting at offset 96.
             if (length > 768 - 96)
             {
-                throw std::runtime_error("PaletteFile::Load: trimmed palette " + path.string() + " is too large");
+                throw std::runtime_error("PaletteFile::Load: trimmed palette " + ALTEngine::Bootstrap::PathText(path) + " is too large");
             }
             std::copy(loaded.begin(), loaded.end(), palette.begin() + 96);
         }

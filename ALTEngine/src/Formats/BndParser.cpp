@@ -1,4 +1,5 @@
 #include "BndParser.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include <fstream>
 #include <stdexcept>
@@ -101,7 +102,7 @@ namespace ALTEngine::Formats
             std::ifstream in(path, std::ios::binary | std::ios::ate);
             if (!in.is_open())
             {
-                throw std::runtime_error("BndParser: could not open " + path.string());
+                throw std::runtime_error("BndParser: could not open " + ALTEngine::Bootstrap::PathText(path));
             }
             const std::streamoff rawSize = in.tellg();
             const size_t size = rawSize > 0 ? static_cast<size_t>(rawSize) : 0;
@@ -112,7 +113,7 @@ namespace ALTEngine::Formats
             // part-way) is named here, rather than failing later as a bad tag.
             if (!in || size < 12)
             {
-                throw std::runtime_error(path.string() + " is empty or cut short (" + std::to_string(size)
+                throw std::runtime_error(ALTEngine::Bootstrap::PathText(path) + " is empty or cut short (" + std::to_string(size)
                                          + " bytes); copy it from the disc again");
             }
             return data;
@@ -128,7 +129,7 @@ namespace ALTEngine::Formats
         // eviction needed.
         static std::unordered_map<std::string, std::vector<BndSection>> cache;
 
-        std::string key = std::filesystem::absolute(path).lexically_normal().string();
+        std::string key = ALTEngine::Bootstrap::PathText(std::filesystem::absolute(path).lexically_normal());
         auto it = cache.find(key);
         if (it != cache.end())
         {

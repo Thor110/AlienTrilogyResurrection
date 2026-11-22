@@ -12,6 +12,7 @@
 // after ALTLevelCleanupList: the faces the cleanup adds ("add") count as used
 // too (the faces it removes still do, since the cleanup is optional).
 #include "../Formats/BndTextureLoader.h"
+#include "../Bootstrap/FsUtil.h"
 #include "../Formats/ModelRemoval.h"
 #include "../Formats/ModelLoader.h"
 #include "../Game/LevelCleanup.h"
@@ -117,7 +118,7 @@ int main(int argc, char** argv)
     size_t totalUnused = 0, totalUnusedArea = 0, totalUncovered = 0, totalTextures = 0, totalChanged = 0;
     for (const auto& relative : G::LevelCleanup::LevelFiles(cd))
     {
-        const std::string name = relative.filename().string();      // L111LEV.MAP
+        const std::string name = ALTEngine::Bootstrap::PathText(relative.filename());      // L111LEV.MAP
         const std::string digits = name.substr(1, 3);
         const fs::path gfxRelative = relative.parent_path() / (digits + "GFX.B16");
         std::ifstream in(cd / relative, std::ios::binary);

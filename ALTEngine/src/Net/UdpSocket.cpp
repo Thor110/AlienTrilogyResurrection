@@ -1,5 +1,6 @@
 #include "UdpSocket.h"
 
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 
@@ -152,7 +153,25 @@ namespace ALTEngine::Net
         SocketLength length = sizeof(source);
         const auto got = ::recvfrom(static_cast<RawSocket>(handle), reinterpret_cast<char*>(buffer), sizeof(buffer), 0,
                                     reinterpret_cast<sockaddr*>(&source), &length);
-        if (got <= 0) { return std::nullopt; }
+        if (got < 0)
+        {
+            // Nothing waiting ends the caller's loop. A datagram that was
+            // there but could not be taken whole (too long for the buffer on
+            // Windows), or the report of an earlier send refused (Windows
+            // hands a UDP socket the ICMP error this way), is one datagram
+            // gone, not the end of the queue: an empty one is given back so
+            // the caller carries on to those behind it.
+#ifdef _WIN32
+            const int error = WSAGetLastError();
+            if (error == WSAEMSGSIZE || error == WSAECONNRESET) { from = {}; return std::vector<uint8_t>{}; }
+#else
+            if (errno == EINTR || errno == ECONNREFUSED) { from = {}; return std::vector<uint8_t>{}; }
+#endif
+            return std::nullopt;
+        }
+        // An empty datagram (valid UDP) is not "nothing waiting" either: it
+        // was taken as that, so each one sent ended that frame's receiving
+        // with real messages still queued behind it.
         from.ip = ntohl(source.sin_addr.s_addr);
         from.port = ntohs(source.sin_port);
         return std::vector<uint8_t>(buffer, buffer + got);

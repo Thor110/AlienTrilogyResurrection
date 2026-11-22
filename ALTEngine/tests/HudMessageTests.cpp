@@ -86,6 +86,34 @@ TEST_CASE("Speech: a bank list's lines give the sample names")
     std::filesystem::remove_all(dir);
 }
 
+TEST_CASE("Speech: the list's DOS end-of-file line is not a sample")
+{
+    const auto dir = std::filesystem::temp_directory_path() / "alt_speech_eof_test";
+    std::filesystem::create_directories(dir);
+    const auto file = dir / "SPCH.TXT";
+    {
+        std::ofstream out(file, std::ios::binary);
+        out << "x:cd/sfx/VC01C.raw 0\r\n" << "\r\n" << "\x1a";
+    }
+    const auto stems = SP::ReadBankList(file);
+    REQUIRE(stems.size() == 1);
+    CHECK(stems[0] == "vc01c");
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Speech: an install without SPCH.TXT still has the disc's 35 lines (Edward: no voice clips)")
+{
+    const auto dir = std::filesystem::temp_directory_path() / "alt_speech_missing_test";
+    std::filesystem::create_directories(dir / "SFX");
+    SP::Voice voice;
+    voice.Load(dir);
+    CHECK(voice.Loaded());
+    CHECK(std::size(SP::DISC_LINES) == 35);
+    CHECK(std::string(SP::DISC_LINES[SP::LineForId(SP::HURT)]) == "vc13b");
+    CHECK(std::string(SP::DISC_LINES[SP::LineForId(SP::QUEEN_KILLED)]) == "vc43");
+    std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("Pickups: a weapon or its ammunition sounds that weapon; everything else 0x28 (FUN_0003c6f4)")
 {
     namespace PK = ALTEngine::Screens::Pickups;

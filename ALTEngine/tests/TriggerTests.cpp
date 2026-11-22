@@ -270,6 +270,22 @@ TEST_CASE("Triggers: walk-only triggers ignore rounds")
     CHECK(rec.log.empty());
 }
 
+TEST_CASE("Triggers: a round keeps its latch over a cell whose trigger does not answer to rounds (FUN_000414f0)")
+{
+    // The round has run trigger 12 and now crosses a cell of trigger 9, the
+    // level exit, which only the player sets off: the original leaves the
+    // latch as it is, so the round does not run 12 again past it. An empty
+    // cell does clear it.
+    LevelGeometry level = LevelLoader::Load(AltTest::RequireDemoFile("SECT11/L111LEV.MAP"));
+    Triggers::System system(level);
+    Recorder rec;
+    int latch = 12;
+    CHECK(!system.OnShotEnterCell(latch, FirstCellWithTrigger(level, 9), rec.Handlers()));
+    CHECK_EQ(latch, 12);
+    CHECK(!system.OnShotEnterCell(latch, FirstCellWithTrigger(level, 0), rec.Handlers()));
+    CHECK_EQ(latch, 0);
+}
+
 TEST_CASE("Triggers: a round passes over switches and doors' final openings, keeping the chain's result")
 {
     // The runner's result starts as a failure (ECX cleared, 0x415a2) and a

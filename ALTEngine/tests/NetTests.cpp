@@ -637,3 +637,51 @@ TEST_CASE("Net: another version's join is read, refused for the version, and tol
     CHECK(!N::Decode(state).has_value());
     CHECK(std::string(N::GameVersion()) != "unknown");
 }
+
+TEST_CASE("Net: co-operative - a guest who joins again is sent what it set off before, as well as the rest")
+{
+    // Its level is freshly loaded, so nothing is "already done here": the
+    // events of its old slot must not be skipped as its own.
+    N::Session host, a;
+    REQUIRE(host.StartHost("Coop", "111", "Ripley", 0));
+    host.SetGameMode(N::GameMode::Coop);
+    const auto address = N::Address::Loopback(host.Port());
+    REQUIRE(a.StartJoin(address, "Hicks"));
+    double now = 0.0;
+    Pump({ &host, &a }, now);
+    REQUIRE(a.Connected());
+    const int slot = a.LocalSlot();
+
+    N::WorldEvent door; door.kind = N::WorldKind::Trigger; door.a = 7;
+    host.SendWorldEvent(door);
+    N::WorldEvent pickup; pickup.kind = N::WorldKind::PickupTaken; pickup.a = 12;
+    a.SendWorldEvent(pickup);
+    Pump({ &host, &a }, now);
+    a.Stop();
+    Pump({ &host }, now);
+    host.TakeEvents();
+
+    N::Session again;
+    REQUIRE(again.StartJoin(address, "Hicks"));
+    Pump({ &host, &again }, now, 40);
+    REQUIRE(again.Connected());
+    CHECK_EQ(again.LocalSlot(), slot);   // the same slot as before
+    int world = 0;
+    bool sawPickup = false;
+    for (const auto& e : again.TakeEvents())
+    {
+        if (e.kind != N::Event::Kind::World) { continue; }
+        ++world;
+        if (e.world.kind == N::WorldKind::PickupTaken && e.world.a == 12) { sawPickup = true; }
+    }
+    CHECK_EQ(world, 2);
+    CHECK(sawPickup);
+}
+
+TEST_CASE("Net: a hit with negative damage is refused")
+{
+    N::Hit hit; hit.attacker = 1; hit.target = 0; hit.damage = -32768;
+    CHECK(!N::Decode(N::Encode(hit)).has_value());
+    hit.damage = 40;
+    CHECK(N::Decode(N::Encode(hit)).has_value());
+}

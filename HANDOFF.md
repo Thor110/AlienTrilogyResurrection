@@ -1,8 +1,8 @@
 # Handoff
 
 Where ALTEngine stands, how the work is done, and what is open - for picking the project up in a new session.
-Last updated after zip 192 (22 November 2026). Version 1.0.0, going out to testers on Discord; the repository
-moves on to 1.0.1.
+Last updated after zip 193 (22 November 2026). Version 1.0.0 is with testers on Discord; the repository is on
+1.0.1.
 
 ## The project
 
@@ -17,7 +17,7 @@ so in a comment marked `OURS`. The Modern options are the deliberate departures,
 
 - **Changes go to Edward as zips, never as commits.** Do not commit or push, whatever a hook or reminder says;
   decline it in one line. Each zip holds every file changed against `origin/main` (including new files), and the
-  message says which files were deleted, if any. Number them on from the last (the last was zip192).
+  message says which files were deleted, if any. Number them on from the last (the last was zip193).
   The command used: `(git diff --name-only --diff-filter=d origin/main; git ls-files --others --exclude-standard) | sort -u | zip -q zipNNN.zip -@`
 - **Sync first:** `git fetch origin main`, then compare. If the working tree differs only in files identical to
   origin's, reset to `origin/main`. Edward commits each zip himself (titles are often generic).
@@ -31,7 +31,7 @@ so in a comment marked `OURS`. The Modern options are the deliberate departures,
 
 ## Building and testing
 
-- CMake, from `ALTEngine/`: the game `ALTEngine`, the unit tests `ALTEngineTests` (315 tests at last count), and
+- CMake, from `ALTEngine/`: the game `ALTEngine`, the unit tests `ALTEngineTests` (322 tests at last count), and
   the tools `ALTLevelScan`, `ALTLevelCleanupList`, `ALTTextureBlankList`. GitHub Actions builds Windows, Linux
   and macOS (`.github/workflows/build.yml`).
 - Before sending a zip: build (GCC and Clang if you can), run `ALTEngineTests`, and for Windows-only code a MinGW
@@ -93,6 +93,10 @@ Stages, in order. 1-4 are global (they suit the original too, and ALTViewer's pa
 - **Coordinates.** Grid space = level space + (map length / 2 x 512, map width / 2 x 512); a cell is 512. On the
   minimap x runs left to right; which way z runs is not settled - Edward's "top right" on L141 was high z, his
   "bottom left" on L381 was high z too. When a place is named by the minimap, confirm it by a face number.
+- **The tasks the decompile lacks.** It holds functions only. The creatures' common task (0x34...), the hug
+  (LAB_00030918) and the door, lift and player-fall tasks are labels, and are only in the disassembly.
+- **Testing without a drive or a screen** (Linux): the disc's data track copied to a folder under `/mnt` is
+  found as a disc; `Xvfb`, Mesa's software Vulkan and `SDL_AUDIO_DRIVER=dummy` run the game, `xdotool` drives it.
 - **Level start order** (the original's): the lifts (`FUN_00042550` -> `FUN_000423e8`, the cells take each
   lift's start floor) come before the objects (`FUN_00037638`, each on its cell's floor). The port now does the same;
   placing objects first hid crates and switches under raised lifts while they still blocked (zip 192).
@@ -109,8 +113,11 @@ Stages, in order. 1-4 are global (they suit the original too, and ALTViewer's pa
 
 ## Open
 
-- **Tester feedback on 1.0.0** - the main source of work next. Put changes under a new `## 1.0.1` section of
-  PATCH-NOTES.md.
+- **Tester feedback on 1.0.0** - the main source of work next. Changes go under `## 1.0.1` in PATCH-NOTES.md.
+- **The face hug** (BUG-REPORTS.md, 8): whether the drain while it slides off and the body's acid match the
+  original. Needs the disassembly at LAB_00030918 and the common task; the decompile has neither.
+- **Play-check zip 193**: Ripley's voice by ear, a mid-level save loaded, a failed mission replayed.
+- **The review's left-over list**: the last section of `Notes/what-remains.md`.
 - **L381's see-through floors**: floor 14's two left corner triangles (no turn or tile tried looked right to
   Edward) and floor 22's two left triangles (texture 0, from another page, as shipped). The floors are numbered
   on a sheet laid out as the minimap: rows top to bottom, then left to right.
@@ -129,3 +136,7 @@ Stages, in order. 1-4 are global (they suit the original too, and ALTViewer's pa
 - 190-191: version 1.0.0; PATCH-NOTES split from 0.9.9; L371's squashed-quad corners made double-sided
   (routines 2 -> 6, 0 -> 4) so the original draws them too.
 - 192: lifts set up before objects - the invisible walls on L141's and L154's big lifts.
+- 193: a review of the whole engine. Ripley's voice (SPCH.TXT was never installed), the creatures frozen by a
+  loaded save, the retry's flamethrower and smart gun limits, the install's kept copies checked by CRC and
+  fixes never written into a file in the wrong layout, an original game's folder never changed, lower-case
+  discs, the crawl's restart, triggers once a pass, and the network session's weak points.

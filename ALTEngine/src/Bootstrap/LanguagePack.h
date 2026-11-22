@@ -1,6 +1,7 @@
 #pragma once
 
 #include "KeyValueFile.h"
+#include "FsUtil.h"
 #include "StringKeyName.h"
 
 #include <filesystem>
@@ -49,7 +50,7 @@ namespace ALTEngine::Bootstrap
     inline LanguagePack LoadLanguagePack(const std::filesystem::path& folder)
     {
         LanguagePack pack;
-        pack.folderName = folder.filename().string();
+        pack.folderName = ALTEngine::Bootstrap::PathText(folder.filename());
 
         auto manifest = ParseKeyValueFile(folder / "language.cfg");
         if (auto it = manifest.find("DisplayName"); it != manifest.end()) { pack.displayName = it->second; }

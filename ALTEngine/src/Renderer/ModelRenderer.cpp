@@ -323,7 +323,7 @@ namespace ALTEngine::Renderer
             std::vector<uint8_t> code = ReadFile(path);
             if (code.empty())
             {
-                SDL_Log("ModelRenderer: could not read shader %s", path.string().c_str());
+                SDL_Log("ModelRenderer: could not read shader %s", ALTEngine::Bootstrap::PathText(path).c_str());
                 return nullptr;
             }
 
@@ -1158,7 +1158,7 @@ namespace ALTEngine::Renderer
         const auto* mesh = ModelLoader::FindByNumber(meshes, meshNumber);
         if (!mesh)
         {
-            SDL_Log("ModelRenderer::LoadModel(%s): no section for mesh number %d in %s", DescribeCacheKey(cacheKey).c_str(), meshNumber, objBndPath.string().c_str());
+            SDL_Log("ModelRenderer::LoadModel(%s): no section for mesh number %d in %s", DescribeCacheKey(cacheKey).c_str(), meshNumber, ALTEngine::Bootstrap::PathText(objBndPath).c_str());
             return false;
         }
 
@@ -1207,7 +1207,7 @@ namespace ALTEngine::Renderer
         const std::vector<ALTEngine::Formats::BxRectangle>* uvRects = &filteredUvRects;
         if (!tex || filteredUvRects.empty())
         {
-            SDL_Log("ModelRenderer::LoadModel(%s): no matching texture for mesh number %d in %s", DescribeCacheKey(cacheKey).c_str(), meshNumber, gfxBndPath.string().c_str());
+            SDL_Log("ModelRenderer::LoadModel(%s): no matching texture for mesh number %d in %s", DescribeCacheKey(cacheKey).c_str(), meshNumber, ALTEngine::Bootstrap::PathText(gfxBndPath).c_str());
             return false;
         }
 
@@ -1597,7 +1597,7 @@ namespace ALTEngine::Renderer
         if (textureSet.textures.size() != 5)
         {
             SDL_Log("ModelRenderer::LoadLevel(%s): expected 5 texture groups in %s, got %zu",
-                    cacheKey.c_str(), gfxPath.string().c_str(), textureSet.textures.size());
+                    cacheKey.c_str(), ALTEngine::Bootstrap::PathText(gfxPath).c_str(), textureSet.textures.size());
             return false;
         }
 
@@ -1605,7 +1605,7 @@ namespace ALTEngine::Renderer
         // indices. Optional - a missing manifest just yields none.
         auto allRotations = ALTEngine::Formats::FaceUvPatchLoader::Load("data/Patches.json");
         auto rotations = ALTEngine::Formats::FaceUvPatchLoader::ForLevelFile(
-            allRotations, mapPath.filename().string());
+            allRotations, ALTEngine::Bootstrap::PathText(mapPath.filename()));
         if (!rotations.empty())
         {
             SDL_Log("ModelRenderer::LoadLevel(%s): applying %zu face UV override(s)", cacheKey.c_str(), rotations.size());
@@ -1693,14 +1693,14 @@ namespace ALTEngine::Renderer
                 for (const std::string& w : model.warnings)
                 {
                     SDL_Log("ModelRenderer::LoadLevel(%s): level override %s: %s",
-                            cacheKey.c_str(), levelObj.filename().string().c_str(), w.c_str());
+                            cacheKey.c_str(), ALTEngine::Bootstrap::PathText(levelObj.filename()).c_str(), w.c_str());
                 }
 
                 if (model.Empty())
                 {
                     SDL_Log("ModelRenderer::LoadLevel(%s): level override %s has no usable faces - "
                             "keeping the original geometry",
-                            cacheKey.c_str(), levelObj.string().c_str());
+                            cacheKey.c_str(), ALTEngine::Bootstrap::PathText(levelObj).c_str());
                 }
                 else
                 {
@@ -1710,6 +1710,7 @@ namespace ALTEngine::Renderer
                     std::array<LevelSubGroup, 5> replacement{};
                     bool ok = true;
                     int uploaded = 0;
+                    std::array<ALTEngine::Formats::RenderMesh, 5> pageMeshes;
 
                     for (const ALTEngine::Formats::ObjFaceGroup& group : model.groups)
                     {
@@ -1732,11 +1733,24 @@ namespace ALTEngine::Renderer
                         mesh.indices = group.indices;
                         ApplyLightToMesh(mesh, group.lightId, loadedLevel.lights);
 
-                        LevelSubGroup sub = UploadMeshBuffersOnly(mesh);
+                        // One page can come as several groups (the loader splits
+                        // by light and animator as well as material): they are
+                        // gathered into the page's one mesh. Each used to take
+                        // the page's slot in turn, so only the last was drawn
+                        // and the earlier ones' buffers were never released.
+                        ALTEngine::Formats::RenderMesh& into = pageMeshes[static_cast<size_t>(page)];
+                        const uint32_t base = static_cast<uint32_t>(into.vertices.size());
+                        into.vertices.insert(into.vertices.end(), mesh.vertices.begin(), mesh.vertices.end());
+                        for (const auto index : mesh.indices) { into.indices.push_back(static_cast<decltype(into.indices)::value_type>(index + base)); }
+                    }
+                    for (size_t page = 0; ok && page < pageMeshes.size(); ++page)
+                    {
+                        if (pageMeshes[page].indices.empty()) { continue; }
+                        LevelSubGroup sub = UploadMeshBuffersOnly(pageMeshes[page]);
                         if (!sub.vertexBuffer) { ok = false; break; }
-                        sub.texture = loadedLevel.groups[static_cast<size_t>(page)].texture;
-                        replacement[static_cast<size_t>(page)] = sub;
-                        uploaded += static_cast<int>(group.indices.size() / 3);
+                        sub.texture = loadedLevel.groups[page].texture;
+                        replacement[page] = sub;
+                        uploaded += static_cast<int>(pageMeshes[page].indices.size() / 3);
                     }
 
                     if (!ok || uploaded == 0)
@@ -1782,7 +1796,7 @@ namespace ALTEngine::Renderer
                         SDL_Log("ModelRenderer::LoadLevel(%s): level geometry replaced from %s, "
                                 "%d triangle(s). Lighting animation is disabled for this level - "
                                 "override geometry carries its own vertex colours.",
-                                cacheKey.c_str(), levelObj.string().c_str(), uploaded);
+                                cacheKey.c_str(), ALTEngine::Bootstrap::PathText(levelObj).c_str(), uploaded);
                     }
                 }
             }

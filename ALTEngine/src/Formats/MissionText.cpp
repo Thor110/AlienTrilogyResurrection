@@ -1,4 +1,5 @@
 #include "MissionText.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include <fstream>
 #include <regex>
@@ -77,7 +78,7 @@ namespace ALTEngine::Formats
         std::ifstream in(path, std::ios::binary);
         if (!in.is_open())
         {
-            throw std::runtime_error("MissionTextLoader: could not open " + path.string());
+            throw std::runtime_error("MissionTextLoader: could not open " + ALTEngine::Bootstrap::PathText(path));
         }
         std::stringstream buffer;
         buffer << in.rdbuf();

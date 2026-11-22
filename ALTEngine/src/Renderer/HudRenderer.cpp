@@ -1,4 +1,5 @@
 #include "HudRenderer.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include "HudPanel.h"
 #include "../Bootstrap/Font8x8.h"
@@ -109,14 +110,14 @@ namespace ALTEngine::Renderer
                     if (ec) { break; }
                     if (!it->is_regular_file(ec)) { continue; }
 
-                    std::string name = lower(it->path().filename().string());
+                    std::string name = lower(ALTEngine::Bootstrap::PathText(it->path().filename()));
                     if (name.rfind(wanted, 0) != 0) { continue; }
                     if (name.size() < wanted.size() + 3) { continue; }      // <letter>.16
                     if (name.substr(name.size() - 3) != ".16") { continue; }
 
                     matches.push_back(it->path());
 
-                    std::string parent = lower(it->path().parent_path().filename().string());
+                    std::string parent = lower(ALTEngine::Bootstrap::PathText(it->path().parent_path().filename()));
                     int rank = 0;
                     if (!wantedFolder.empty() && parent == wantedFolder) { rank += 4; }
                     else if (parent == "language") { rank += 2; }
@@ -135,8 +136,8 @@ namespace ALTEngine::Renderer
             if (matches.size() > 1)
             {
                 SDL_Log("HudRenderer: %zu candidate panel sheets for index %d, chose %s:",
-                        matches.size(), fileIndex, best.filename().string().c_str());
-                for (const auto& m : matches) { SDL_Log("    %s", m.string().c_str()); }
+                        matches.size(), fileIndex, ALTEngine::Bootstrap::PathText(best.filename()).c_str());
+                for (const auto& m : matches) { SDL_Log("    %s", ALTEngine::Bootstrap::PathText(m).c_str()); }
             }
             return best;
         }
@@ -310,7 +311,7 @@ namespace ALTEngine::Renderer
         if (path.empty())
         {
             SDL_Log("HudRenderer: no panel sheet found for index %d under %s - HUD disabled",
-                    fileIndex, cdDirectory.string().c_str());
+                    fileIndex, ALTEngine::Bootstrap::PathText(cdDirectory).c_str());
             return false;
         }
 
@@ -318,7 +319,7 @@ namespace ALTEngine::Renderer
         if (set.textures.empty() || set.uvRects.empty())
         {
             SDL_Log("HudRenderer: %s parsed to no pages or no descriptors - HUD disabled",
-                    path.string().c_str());
+                    ALTEngine::Bootstrap::PathText(path).c_str());
             return false;
         }
 
@@ -380,7 +381,7 @@ namespace ALTEngine::Renderer
                 ammoSlots.size());
 
         SDL_Log("HudRenderer: loaded %s - %dx%d page, %zu descriptors, %d px keyed transparent",
-                path.string().c_str(), page.width, page.height, rects.size(), keyedCount);
+                ALTEngine::Bootstrap::PathText(path).c_str(), page.width, page.height, rects.size(), keyedCount);
         return true;
     }
 

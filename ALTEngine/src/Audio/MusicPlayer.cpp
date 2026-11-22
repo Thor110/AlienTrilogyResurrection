@@ -1,4 +1,5 @@
 #include "MusicPlayer.h"
+#include "../Bootstrap/FsUtil.h"
 #include "../Bootstrap/AppWindow.h"
 
 #include <SDL3/SDL.h>
@@ -50,7 +51,10 @@ namespace ALTEngine::Audio
                 auto chunk = ComputeNextFeedChunk(bufferLen, feedPosition, SDL_GetAudioStreamQueued(stream),
                                                    targetQueueBytes, static_cast<size_t>(bytesPerSecond));
                 if (!chunk.has_value()) { break; }
-                SDL_PutAudioStreamData(stream, buffer + chunk->sourceOffset, static_cast<int>(chunk->length));
+                // A stream that takes nothing (the device lost) would never
+                // reach the target: stop rather than loop for ever.
+                if (!SDL_PutAudioStreamData(stream, buffer + chunk->sourceOffset, static_cast<int>(chunk->length))) { break; }
+                if (SDL_GetAudioStreamQueued(stream) < 0) { break; }
             }
         }
     }
@@ -62,9 +66,9 @@ namespace ALTEngine::Audio
         SDL_AudioSpec loadedSpec{};
         Uint8* loadedBuffer = nullptr;
         Uint32 loadedLen = 0;
-        if (!SDL_LoadWAV(path.string().c_str(), &loadedSpec, &loadedBuffer, &loadedLen))
+        if (!SDL_LoadWAV(ALTEngine::Bootstrap::PathText(path).c_str(), &loadedSpec, &loadedBuffer, &loadedLen))
         {
-            SDL_Log("MusicPlayer::PlayLooped: could not load %s: %s", path.string().c_str(), SDL_GetError());
+            SDL_Log("MusicPlayer::PlayLooped: could not load %s: %s", ALTEngine::Bootstrap::PathText(path).c_str(), SDL_GetError());
             return;
         }
 

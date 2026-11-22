@@ -1,4 +1,5 @@
 #include "MissionAssessmentScreen.h"
+#include "../Bootstrap/FsUtil.h"
 #include "ScreenFadeDraw.h"
 #include "MenuBackground.h"
 #include "MenuFont.h"
@@ -94,7 +95,7 @@ namespace ALTEngine::Screens
             if (!digits.empty())
             {
                 const auto path = cdDirectory / "PALS" / ("LEV" + digits + ".PAL");
-                SDL_IOStream* io = SDL_IOFromFile(path.string().c_str(), "rb");
+                SDL_IOStream* io = SDL_IOFromFile(ALTEngine::Bootstrap::PathText(path).c_str(), "rb");
                 if (io)
                 {
                     raw.resize(BYTES);

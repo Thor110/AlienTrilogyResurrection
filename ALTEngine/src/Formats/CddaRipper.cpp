@@ -1,4 +1,5 @@
 #include "CddaRipper.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include <algorithm>
 #include <cctype>
@@ -278,10 +279,10 @@ namespace ALTEngine::Formats
                 std::error_code inner;
                 for (std::filesystem::directory_iterator file(volume->path(), inner), fileEnd; !inner && file != fileEnd; file.increment(inner))
                 {
-                    std::string ext = file->path().extension().string();
+                    std::string ext = ALTEngine::Bootstrap::PathText(file->path().extension());
                     std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                     if (ext != ".aiff" && ext != ".aif") { continue; }
-                    if (auto number = CddaDetail::LeadingTrackNumber(file->path().filename().string()))
+                    if (auto number = CddaDetail::LeadingTrackNumber(ALTEngine::Bootstrap::PathText(file->path().filename())))
                     {
                         tracks[*number] = file->path();
                     }
@@ -302,7 +303,7 @@ namespace ALTEngine::Formats
             std::ofstream out(outputPath, std::ios::binary);
             if (!out.is_open())
             {
-                throw std::runtime_error("could not create " + outputPath.string());
+                throw std::runtime_error("could not create " + ALTEngine::Bootstrap::PathText(outputPath));
             }
             auto le32 = [&](uint32_t v) { const char b[4] = { char(v), char(v >> 8), char(v >> 16), char(v >> 24) }; out.write(b, 4); };
             auto le16 = [&](uint16_t v) { const char b[2] = { char(v), char(v >> 8) }; out.write(b, 2); };
@@ -318,7 +319,7 @@ namespace ALTEngine::Formats
             le16(16);                     // bits a sample
             out.write("data", 4); le32(dataSize);
             out.write(reinterpret_cast<const char*>(pcm.data()), static_cast<std::streamsize>(pcm.size()));
-            if (!out) { throw std::runtime_error("could not write " + outputPath.string()); }
+            if (!out) { throw std::runtime_error("could not write " + ALTEngine::Bootstrap::PathText(outputPath)); }
         }
 
         std::vector<uint8_t> AiffToPcm(const std::vector<uint8_t>& aiff)
@@ -492,17 +493,17 @@ namespace ALTEngine::Formats
     {
 #if defined(_WIN32)
         // The drive letter only ("D:"), not the trailing backslash.
-        return discRoot.string().substr(0, 2);
+        return ALTEngine::Bootstrap::PathText(discRoot).substr(0, 2);
 #elif defined(__linux__)
         std::error_code ec;
         const auto path = std::filesystem::weakly_canonical(discRoot, ec);
         std::ifstream in("/proc/self/mounts");
         std::stringstream table;
         table << in.rdbuf();
-        return CddaDetail::DeviceFromMountTable(table.str(), (ec ? discRoot : path).string());
+        return CddaDetail::DeviceFromMountTable(table.str(), ALTEngine::Bootstrap::PathText((ec ? discRoot : path)));
 #elif defined(__APPLE__)
         struct statfs info{};
-        if (statfs(discRoot.string().c_str(), &info) != 0) { return {}; }
+        if (statfs(ALTEngine::Bootstrap::PathText(discRoot).c_str(), &info) != 0) { return {}; }
         return CddaDetail::WholeRawDisk(info.f_mntfromname);
 #else
         (void)discRoot;
@@ -584,13 +585,13 @@ namespace ALTEngine::Formats
                 const std::vector<uint8_t> pcm = CddaDetail::AiffToPcm(ReadWholeFile(path));
                 if (pcm.empty())
                 {
-                    log("  Failed to convert " + path.filename().string() + ": not CD audio");
+                    log("  Failed to convert " + ALTEngine::Bootstrap::PathText(path.filename()) + ": not CD audio");
                     ++summary.failed;
                     continue;
                 }
                 try
                 {
-                    log("  Converting " + path.filename().string() + " to " + name(trackNumber) + "...");
+                    log("  Converting " + ALTEngine::Bootstrap::PathText(path.filename()) + " to " + name(trackNumber) + "...");
                     CddaDetail::WriteWav(musicDir / name(trackNumber), pcm);
                     ++summary.ripped;
                 }
@@ -609,7 +610,7 @@ namespace ALTEngine::Formats
         const std::string device = DeviceForDisc(discRoot);
         if (device.empty())
         {
-            summary.error = "couldn't tell which drive " + discRoot.string() + " is on";
+            summary.error = "couldn't tell which drive " + ALTEngine::Bootstrap::PathText(discRoot) + " is on";
             return summary;
         }
 

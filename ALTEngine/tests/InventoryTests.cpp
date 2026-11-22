@@ -304,3 +304,22 @@ TEST_CASE("Inventory: a level's start takes the batteries, lamps, goggles and Au
     CHECK_EQ(PlayerInventoryState{}.health, 100);
     CHECK_EQ(PlayerInventoryState{}.armour, 0);
 }
+
+TEST_CASE("Retry: the flamethrower and smart gun get their own caps back (FUN_00017a68 through FUN_000387c0)")
+{
+    // The caps are by weapon slot: smart gun 3 (100 loaded, 9 spare),
+    // flamethrower 4 (500, no spare).
+    PlayerInventoryState start;
+    start.flamethrower.available = true; start.flamethrower.rounds = 300;
+    start.smartGun.available = true; start.smartGun.rounds = 80; start.smartGun.units = 2;
+    PlayerInventoryState end = start;
+    end.flamethrower.rounds = 150;
+    end.smartGun.rounds = 60; end.smartGun.units = 1;
+
+    const PlayerInventoryState retry = Pickups::RetryInventory(start, end);
+    CHECK(retry.flamethrower.available);
+    CHECK_EQ(retry.flamethrower.rounds, 450);
+    CHECK(retry.smartGun.available);
+    CHECK_EQ(retry.smartGun.rounds, 100);
+    CHECK_EQ(retry.smartGun.units, 3);
+}

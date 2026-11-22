@@ -70,7 +70,9 @@ namespace ALTEngine::Net
                     return Slot(m.slot) && m.type <= MAX_SHOT_TYPE && Coordinate(m.x) && Coordinate(m.y) && Coordinate(m.z)
                         && Coordinate(m.vx) && Coordinate(m.vy) && Coordinate(m.vz);
                 },
-                [](const Hit& m) { return Slot(m.attacker) && Slot(m.target); },
+                // A hit never heals: a negative damage went through the armour
+                // sum as health added.
+                [](const Hit& m) { return Slot(m.attacker) && Slot(m.target) && m.damage >= 0; },
                 [](const Frag& m) { return Slot(m.killer) && Slot(m.victim); },
                 [](const Chat& m) { return Slot(m.slot); },
                 [](const Leave& m) { return Slot(m.slot); },

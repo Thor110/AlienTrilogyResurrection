@@ -1,4 +1,5 @@
 #include "PatchLoader.h"
+#include "../Bootstrap/FsUtil.h"
 
 #include <algorithm>
 #include <fstream>
@@ -73,7 +74,7 @@ namespace ALTEngine::Formats
         std::ifstream file(jsonPath);
         if (!file.is_open())
         {
-            throw std::runtime_error("PatchLoader::Load: could not open " + jsonPath.string());
+            throw std::runtime_error("PatchLoader::Load: could not open " + ALTEngine::Bootstrap::PathText(jsonPath));
         }
 
         nlohmann::json root;

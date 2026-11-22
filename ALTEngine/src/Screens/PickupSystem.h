@@ -250,7 +250,9 @@ namespace ALTEngine::Screens
                 inventory.hasShoulderLamp = true;
                 return true;
             case COUNTER_AD2:
-                inventory.batteries += (amount > 0 ? amount : 1);
+                // A battery, one more whatever the record's amount (0x38155:
+                // FUN_000387c0's case 7 adds exactly 1).
+                inventory.batteries += 1;
                 return true;
 
             // Counters whose meaning is not traced. Counted so nothing is lost.
@@ -266,6 +268,25 @@ namespace ALTEngine::Screens
                 return false;
             }
         }
+        // A NETWORK GAME leaves a weapon lying if the player already holds it
+        // (FUN_0003c5d0: with DAT_000ae0a4 set, pickup types 0-4 are out of
+        // reach while the matching bit of DAT_000b0ab4, 0x04 << type, is set).
+        // The pistol is always held, so its pickups are never taken there.
+        inline bool HeldWeaponInNetworkGame(int type, const PlayerInventoryState& inventory)
+        {
+            const WeaponState* weapon = nullptr;
+            switch (type)
+            {
+            case PISTOL_AND_AMMO:       weapon = inventory.ByIndex(0); break;
+            case SHOTGUN_AND_AMMO:      weapon = inventory.ByIndex(1); break;
+            case PULSE_AND_AMMO:        weapon = inventory.ByIndex(2); break;
+            case FLAMETHROWER_AND_AMMO: weapon = inventory.ByIndex(4); break;
+            case SMARTGUN_AND_AMMO:     weapon = inventory.ByIndex(3); break;
+            default: return false;
+            }
+            return weapon && weapon->available;
+        }
+
             // A failed mission played again (FUN_00017c58 -> FUN_00017a68). Not a
         // copy of the level-start loadout: from what the attempt ended with,
         // every weapon but the pistol is disowned and the pistol emptied
@@ -281,8 +302,11 @@ namespace ALTEngine::Screens
             for (int i = 1; i < 5; ++i) { out.ByIndex(i)->available = false; }
             out.pistol.rounds = 0;
             out.pistol.units = 0;
-            const int magCap[5] = { PISTOL_MAG_CAP, SHOTGUN_CAP, MAG_CAP, FLAMETHROWER_CAP, MAG_CAP };
-            const int unitCap[5] = { PISTOL_UNIT_CAP, 0, UNIT_CAP, 0, UNIT_CAP };
+            // By weapon slot (ByIndex): pistol, shotgun, pulse rifle, smart gun,
+            // flamethrower - not the pickup types' order, which has the last
+            // two the other way round.
+            const int magCap[5] = { PISTOL_MAG_CAP, SHOTGUN_CAP, MAG_CAP, MAG_CAP, FLAMETHROWER_CAP };
+            const int unitCap[5] = { PISTOL_UNIT_CAP, 0, UNIT_CAP, UNIT_CAP, 0 };
             for (int i = 0; i < 5; ++i)
             {
                 const WeaponState* from = start.ByIndex(i);

@@ -1,6 +1,7 @@
 #include "InstallPipeline.h"
 
 #include "Config.h"
+#include "FsUtil.h"
 #include "PlatformPaths.h"
 #include "TestingSettings.h"
 #include "MuthurConsole.h"
@@ -17,12 +18,14 @@
 #include "../Formats/ObjectRemoval.h"
 #include "../Formats/PatchLoader.h"
 #include "../Formats/PatchRunner.h"
+#include "../Formats/RetryOpen.h"
 
 #include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <map>
+#include <set>
 
 #include <nlohmann/json.hpp>
 
@@ -75,15 +78,65 @@ namespace ALTEngine::Bootstrap
             {
                 std::ofstream out(temp, std::ios::binary | std::ios::trunc);
                 out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-                if (!out) { return false; }
+                out.flush();
+                if (!out)
+                {
+                    out.close();
+                    std::error_code gone;
+                    std::filesystem::remove(temp, gone);
+                    return false;
+                }
             }
             std::error_code ec;
+            // A file copied from the disc can still be read-only (Windows
+            // refuses to rename over one).
+            if (std::filesystem::exists(p, ec)) { ALTEngine::Formats::ClearReadOnly(p); }
             std::filesystem::rename(temp, p, ec);
             if (ec) { std::filesystem::remove(temp, ec); return false; }
             return true;
         }
 
-        void SetCleanedAside(const std::filesystem::path& cdDirectory)
+        // THE FILES A STAGE COULD NOT PUT BACK, by their path under CD
+        // ("SECT11/L111LEV.MAP"). A stage's work is set aside at the start of
+        // every run so the stages before it meet the file they were written
+        // for. Where that fails (a file held open, a kept copy deleted by
+        // hand), the file is still as the later stage left it - its records
+        // moved or shortened - and a byte patch written into it by offset
+        // would land in the wrong place and then read as "already applied" for
+        // good. Such a file is left alone by the removals' successors and the
+        // byte patches this run (RunPatches), and said so.
+        using BlockedFiles = std::set<std::string>;
+
+        // Puts `kept` (the file before a stage's work) back as `file`, the
+        // stage's own result going to `aside`. False if `file` is not the
+        // earlier one afterwards; never leaves `file` missing.
+        bool PutBack(const std::filesystem::path& file, const std::filesystem::path& kept,
+                     const std::filesystem::path& aside, const char* stage)
+        {
+            std::error_code ec;
+            std::filesystem::remove(aside, ec);
+            const bool had = std::filesystem::exists(file, ec);
+            if (had)
+            {
+                std::filesystem::rename(file, aside, ec);
+                if (ec)
+                {
+                    std::cout << stage << ": could not set " << PathText(file) << " aside: " << ec.message() << "\n";
+                    return false;
+                }
+            }
+            std::filesystem::rename(kept, file, ec);
+            if (ec)
+            {
+                std::cout << stage << ": could not restore " << PathText(file) << ": " << ec.message() << "\n";
+                std::error_code back;
+                if (had) { std::filesystem::rename(aside, file, back); }
+                return false;
+            }
+            return true;
+        }
+
+        void SetCleanedAside(const std::filesystem::path& cdDirectory, BlockedFiles& blocked)
         {
             std::error_code ec;
             for (const auto& relative : ALTEngine::Game::LevelCleanup::LevelFiles(cdDirectory))
@@ -91,11 +144,7 @@ namespace ALTEngine::Bootstrap
                 const auto file = cdDirectory / relative;
                 const auto untrimmed = With(file, ".untrimmed");
                 if (!std::filesystem::exists(untrimmed, ec)) { continue; }
-                const auto cleaned = With(file, ".cleaned");
-                std::filesystem::remove(cleaned, ec);
-                if (std::filesystem::exists(file, ec)) { std::filesystem::rename(file, cleaned, ec); }
-                std::filesystem::rename(untrimmed, file, ec);
-                if (ec) { std::cout << "Level cleanup: could not restore " << file.string() << ": " << ec.message() << "\n"; }
+                if (!PutBack(file, untrimmed, With(file, ".cleaned"), "Level cleanup")) { blocked.insert(relative.generic_string()); }
             }
         }
 
@@ -125,7 +174,7 @@ namespace ALTEngine::Bootstrap
             return !entry.contains("add") || ALTEngine::Game::LevelCleanup::ReadAdditions(entry["add"].dump(), faces.add, error);
         }
 
-        void SetFacedAside(const std::filesystem::path& cdDirectory)
+        void SetFacedAside(const std::filesystem::path& cdDirectory, BlockedFiles& blocked)
         {
             std::error_code ec;
             const nlohmann::json list = LoadMissingFaces();
@@ -143,27 +192,26 @@ namespace ALTEngine::Bootstrap
                     if (list.is_null() || !list["levels"].contains(key)) { continue; }
                     const auto& entry = list["levels"][key];
                     std::vector<uint8_t> bytes;
-                    if (!entry.contains("facedCrc") || !ReadAll(file, bytes)
+                    if (!entry.is_object() || !entry.contains("facedCrc") || !entry["facedCrc"].is_number_unsigned() || !ReadAll(file, bytes)
                         || ALTEngine::Formats::Crc32(bytes.data(), bytes.size()) != entry["facedCrc"].get<uint32_t>()) { continue; }
                     ALTEngine::Game::LevelCleanup::MissingFaces faces;
                     std::string error;
                     const bool undone = ReadMissingFaces(entry, faces, error) && ALTEngine::Game::LevelCleanup::RemoveMissingFaces(bytes, faces, error);
-                    if (undone && entry.contains("crc") && ALTEngine::Formats::Crc32(bytes.data(), bytes.size()) != entry["crc"].get<uint32_t>())
+                    if (undone && entry.contains("crc") && entry["crc"].is_number_unsigned()
+                        && ALTEngine::Formats::Crc32(bytes.data(), bytes.size()) != entry["crc"].get<uint32_t>())
                     {
-                        std::cout << "Missing faces: taking them out of " << file.string() << " does not give the file they were listed for - left as it is.\n";
+                        std::cout << "Missing faces: taking them out of " << PathText(file) << " does not give the file they were listed for - left as it is.\n";
+                        blocked.insert(key);
                         continue;
                     }
                     if (!undone || !WriteAll(file, bytes))
                     {
-                        std::cout << "Missing faces: could not take them out of " << file.string() << ": " << error << "\n";
+                        std::cout << "Missing faces: could not take them out of " << PathText(file) << ": " << error << "\n";
+                        blocked.insert(key);
                     }
                     continue;
                 }
-                const auto faced = With(file, ".faced");
-                std::filesystem::remove(faced, ec);
-                if (std::filesystem::exists(file, ec)) { std::filesystem::rename(file, faced, ec); }
-                std::filesystem::rename(unfaced, file, ec);
-                if (ec) { std::cout << "Missing faces: could not restore " << file.string() << ": " << ec.message() << "\n"; }
+                if (!PutBack(file, unfaced, With(file, ".faced"), "Missing faces")) { blocked.insert(relative.generic_string()); }
             }
         }
 
@@ -210,7 +258,7 @@ namespace ALTEngine::Bootstrap
                         std::filesystem::rename(facedCopy, file, ec);
                         if (ec) { std::error_code back; std::filesystem::rename(With(file, ".unfaced"), file, back); }
                     }
-                    if (ec) { std::cout << "Missing faces: could not swap " << file.string() << ": " << ec.message() << "\n"; }
+                    if (ec) { std::cout << "Missing faces: could not swap " << ALTEngine::Bootstrap::PathText(file) << ": " << ec.message() << "\n"; }
                     ++kept;
                     continue;
                 }
@@ -260,7 +308,7 @@ namespace ALTEngine::Bootstrap
                 std::vector<uint8_t> raw;
                 if (!ReadAll(listPath, raw))
                 {
-                    std::cout << "Level cleanup: " << listPath.string() << " is missing - levels left as the fixes leave them.\n";
+                    std::cout << "Level cleanup: " << ALTEngine::Bootstrap::PathText(listPath) << " is missing - levels left as the fixes leave them.\n";
                     enabled = false;
                 }
                 else
@@ -270,7 +318,7 @@ namespace ALTEngine::Bootstrap
                     catch (...) { list = nlohmann::json(); }
                     if (!list.is_object() || !list.contains("levels") || !list["levels"].is_object())
                     {
-                        std::cout << "Level cleanup: " << listPath.string() << " cannot be read - levels left as the fixes leave them.\n";
+                        std::cout << "Level cleanup: " << ALTEngine::Bootstrap::PathText(listPath) << " cannot be read - levels left as the fixes leave them.\n";
                         enabled = false;
                     }
                 }
@@ -283,6 +331,10 @@ namespace ALTEngine::Bootstrap
             state.erase("version");
             if (enabled) { state["list"] = listCrc; state["apply"] = ALTEngine::Game::LevelCleanup::APPLY_VERSION; }
             else { state.erase("list"); state.erase("apply"); }
+
+            // Each cleaned file's own CRC, under "made".
+            nlohmann::json made = state.contains("made") && state["made"].is_object() ? state["made"] : nlohmann::json::object();
+            state.erase("made");
 
             int cleaned = 0, kept = 0, restored = 0, skipped = 0;
             size_t saved = 0;
@@ -301,8 +353,15 @@ namespace ALTEngine::Bootstrap
                 std::vector<uint8_t> bytes;
                 if (!ReadAll(file, bytes)) { continue; }
                 const uint32_t source = ALTEngine::Formats::Crc32(bytes.data(), bytes.size());
-                if (current && std::filesystem::exists(cleanedCopy, ec) && state.contains(key) && state[key].is_number_unsigned()
-                    && state[key].get<uint32_t>() == source)
+                // The kept copy goes back only if it was made from exactly this
+                // file AND is itself the file that was made ("made", its own
+                // CRC): an install copied over an existing one left the disc's
+                // file under the kept copy's name, which went back as "clean".
+                std::vector<uint8_t> keptBytes;
+                if (current && state.contains(key) && state[key].is_number_unsigned() && state[key].get<uint32_t>() == source
+                    && made.contains(key) && made[key].is_number_unsigned()
+                    && std::filesystem::exists(cleanedCopy, ec) && ReadAll(cleanedCopy, keptBytes)
+                    && ALTEngine::Formats::Crc32(keptBytes.data(), keptBytes.size()) == made[key].get<uint32_t>())
                 {
                     std::filesystem::rename(file, With(file, ".untrimmed"), ec);
                     if (!ec)
@@ -311,12 +370,13 @@ namespace ALTEngine::Bootstrap
                         // Never leave the level missing: put the untrimmed one back.
                         if (ec) { std::error_code back; std::filesystem::rename(With(file, ".untrimmed"), file, back); }
                     }
-                    if (ec) { std::cout << "Level cleanup: could not swap " << file.string() << ": " << ec.message() << "\n"; }
+                    if (ec) { std::cout << "Level cleanup: could not swap " << ALTEngine::Bootstrap::PathText(file) << ": " << ec.message() << "\n"; }
                     ++kept;
                     continue;
                 }
                 std::filesystem::remove(cleanedCopy, ec);
                 state.erase(key);
+                made.erase(key);
                 const auto& levels = list["levels"];
                 if (!levels.contains(key)) { continue; }
                 const auto& entry = levels[key];
@@ -360,6 +420,7 @@ namespace ALTEngine::Bootstrap
                     continue;
                 }
                 state[key] = source;
+                made[key] = ALTEngine::Formats::Crc32(bytes.data(), bytes.size());
                 ++cleaned;
                 if (report.bytesBefore > report.bytesAfter) { saved += report.bytesBefore - report.bytesAfter; }
                 std::cout << "  [cleaned]  " << key << ": " << report.facesRemoved << " faces (" << count("outOfView") << " out of view, "
@@ -369,6 +430,7 @@ namespace ALTEngine::Bootstrap
                           << (report.facesAdded ? ", " + std::to_string(report.facesAdded) + " missing faces added" : std::string())
                           << "\n";
             }
+            if (enabled) { state["made"] = made; }
             std::ofstream out(statePath, std::ios::trunc);
             out << state.dump(1);
             if (enabled)
@@ -393,7 +455,7 @@ namespace ALTEngine::Bootstrap
         // from data/TextureBlankList.json.
         constexpr int BLANK_APPLY_VERSION = 1;
 
-        void SetBlankedAside(const std::filesystem::path& cdDirectory)
+        void SetBlankedAside(const std::filesystem::path& cdDirectory, BlockedFiles& blocked)
         {
             std::error_code ec;
             for (const auto& relative : ALTEngine::Game::TextureBlank::SheetFiles(cdDirectory))
@@ -401,11 +463,7 @@ namespace ALTEngine::Bootstrap
                 const auto file = cdDirectory / relative;
                 const auto unblanked = With(file, ".unblanked");
                 if (!std::filesystem::exists(unblanked, ec)) { continue; }
-                const auto blanked = With(file, ".blanked");
-                std::filesystem::remove(blanked, ec);
-                if (std::filesystem::exists(file, ec)) { std::filesystem::rename(file, blanked, ec); }
-                std::filesystem::rename(unblanked, file, ec);
-                if (ec) { std::cout << "Texture blanking: could not restore " << file.string() << ": " << ec.message() << "\n"; }
+                if (!PutBack(file, unblanked, With(file, ".blanked"), "Texture blanking")) { blocked.insert(relative.generic_string()); }
             }
         }
 
@@ -438,7 +496,7 @@ namespace ALTEngine::Bootstrap
             }
             if (!list.is_object() || !list.contains("sheets") || !list["sheets"].is_object())
             {
-                std::cout << "Texture blanking: " << listPath.string() << " is missing or cannot be read - sheets left as the fixes leave them.\n";
+                std::cout << "Texture blanking: " << ALTEngine::Bootstrap::PathText(listPath) << " is missing or cannot be read - sheets left as the fixes leave them.\n";
                 dropCopies();
                 return;
             }
@@ -449,6 +507,9 @@ namespace ALTEngine::Bootstrap
             nlohmann::json next = nlohmann::json::object();
             next["list"] = listCrc;
             next["apply"] = BLANK_APPLY_VERSION;
+            // Each blanked sheet's own CRC, under "made" (see the Level Cleanup's).
+            const nlohmann::json was = state.contains("made") && state["made"].is_object() ? state["made"] : nlohmann::json::object();
+            nlohmann::json made = nlohmann::json::object();
 
             int blanked = 0, kept = 0, skipped = 0;
             size_t changed = 0;
@@ -460,8 +521,11 @@ namespace ALTEngine::Bootstrap
                 std::vector<uint8_t> bytes;
                 if (!list["sheets"].contains(key) || !ReadAll(file, bytes)) { std::filesystem::remove(blankedCopy, ec); continue; }
                 const uint32_t source = ALTEngine::Formats::Crc32(bytes.data(), bytes.size());
-                if (current && std::filesystem::exists(blankedCopy, ec) && state.contains(key) && state[key].is_number_unsigned()
-                    && state[key].get<uint32_t>() == source)
+                std::vector<uint8_t> keptBytes;
+                if (current && state.contains(key) && state[key].is_number_unsigned() && state[key].get<uint32_t>() == source
+                    && was.contains(key) && was[key].is_number_unsigned()
+                    && std::filesystem::exists(blankedCopy, ec) && ReadAll(blankedCopy, keptBytes)
+                    && ALTEngine::Formats::Crc32(keptBytes.data(), keptBytes.size()) == was[key].get<uint32_t>())
                 {
                     std::filesystem::rename(file, With(file, ".unblanked"), ec);
                     if (!ec)
@@ -470,8 +534,8 @@ namespace ALTEngine::Bootstrap
                         // Never leave the sheet missing: put the unblanked one back.
                         if (ec) { std::error_code back; std::filesystem::rename(With(file, ".unblanked"), file, back); }
                     }
-                    if (!ec) { next[key] = source; ++kept; continue; }
-                    std::cout << "Texture blanking: could not swap " << file.string() << ": " << ec.message() << "\n";
+                    if (!ec) { next[key] = source; made[key] = was[key]; ++kept; continue; }
+                    std::cout << "Texture blanking: could not swap " << ALTEngine::Bootstrap::PathText(file) << ": " << ec.message() << "\n";
                 }
                 std::filesystem::remove(blankedCopy, ec);
                 const auto& entry = list["sheets"][key];
@@ -515,9 +579,11 @@ namespace ALTEngine::Bootstrap
                     continue;
                 }
                 next[key] = source;
+                made[key] = ALTEngine::Formats::Crc32(bytes.data(), bytes.size());
                 ++blanked;
                 changed += report.texelsChanged;
             }
+            next["made"] = made;
             std::ofstream out(statePath, std::ios::trunc);
             out << next.dump(1);
             std::cout << "Texture blanking: " << blanked << " sheets blanked (" << changed << " texels set to their page's background), "
@@ -544,8 +610,11 @@ namespace ALTEngine::Bootstrap
             return edits;
         }
 
-        void RevertEngineModelFaceEdits(const std::filesystem::path& cdDirectory)
+        // Returns how many edits it took out, for the report: those are made
+        // again at the end of the run and are not news.
+        size_t RevertEngineModelFaceEdits(const std::filesystem::path& cdDirectory)
         {
+            size_t reverted = 0;
             const auto edits = LoadEngineModelFaceEdits();
             std::map<std::string, std::vector<const ALTEngine::Formats::EngineModelFaceEdit*>> byFile;
             for (const auto& e : edits) { byFile[e.target].push_back(&e); }
@@ -554,15 +623,19 @@ namespace ALTEngine::Bootstrap
                 std::vector<uint8_t> bytes;
                 if (!ReadAll(cdDirectory / target, bytes)) { continue; }
                 bool changed = false;
-                for (const auto* e : list) { changed = ALTEngine::Formats::EngineModelFaceEdits::Revert(bytes, *e) || changed; }
-                if (changed && !WriteAll(cdDirectory / target, bytes))
+                size_t here = 0;
+                for (const auto* e : list)
                 {
-                    std::cout << "ALTEngine model face edits: could not take them out of " << target << ".\n";
+                    if (ALTEngine::Formats::EngineModelFaceEdits::Revert(bytes, *e)) { changed = true; ++here; }
                 }
+                if (!changed) { continue; }
+                if (WriteAll(cdDirectory / target, bytes)) { reverted += here; }
+                else { std::cout << "ALTEngine model face edits: could not take them out of " << target << ".\n"; }
             }
+            return reverted;
         }
 
-        void ApplyEngineModelFaceEdits(const std::filesystem::path& cdDirectory)
+        void ApplyEngineModelFaceEdits(const std::filesystem::path& cdDirectory, size_t revertedThisRun)
         {
             using ALTEngine::Formats::EngineModelFaceOutcome;
             const auto edits = LoadEngineModelFaceEdits();
@@ -591,11 +664,14 @@ namespace ALTEngine::Bootstrap
                 }
                 if (changed)
                 {
-                    if (WriteAll(cdDirectory / target, bytes)) { std::cout << "  [applied]  " << target << " model faces (ALTEngine only)\n"; }
-                    else { std::cout << "ALTEngine model face edits: could not write " << target << ".\n"; }
+                    if (!WriteAll(cdDirectory / target, bytes)) { std::cout << "ALTEngine model face edits: could not write " << target << ".\n"; }
+                    else if (revertedThisRun == 0) { std::cout << "  [applied]  " << target << " model faces (ALTEngine only)\n"; }
                 }
             }
-            std::cout << "ALTEngine model face edits: " << made << " made, " << already << " already made.\n";
+            // The edits this run took out at its start and has now put back
+            // were already made: only the others are new.
+            const size_t again = made < revertedThisRun ? made : revertedThisRun;
+            std::cout << "ALTEngine model face edits: " << (made - again) << " made, " << (already + again) << " already made.\n";
         }
 
         // ALTENGINE-ONLY FILE FIXES (data/EngineFilePatches.json): stage 5,
@@ -609,12 +685,12 @@ namespace ALTEngine::Bootstrap
             nlohmann::json list;
             {
                 std::ifstream in(listPath);
-                if (!in) { std::cout << "ALTEngine file fixes: " << listPath.string() << " is missing - none made.\n"; return; }
+                if (!in) { std::cout << "ALTEngine file fixes: " << ALTEngine::Bootstrap::PathText(listPath) << " is missing - none made.\n"; return; }
                 try { in >> list; } catch (...) { list = nlohmann::json(); }
             }
             if (!list.is_object() || !list.contains("files") || !list["files"].is_array())
             {
-                std::cout << "ALTEngine file fixes: " << listPath.string() << " cannot be read - none made.\n";
+                std::cout << "ALTEngine file fixes: " << ALTEngine::Bootstrap::PathText(listPath) << " cannot be read - none made.\n";
                 return;
             }
             auto hexValue = [](char c) -> int {
@@ -626,7 +702,9 @@ namespace ALTEngine::Bootstrap
             size_t made = 0, already = 0;
             for (const auto& entry : list["files"])
             {
-                if (!entry.is_object() || !entry.contains("target") || !entry.contains("crc") || !entry.contains("patchedCrc")
+                if (!entry.is_object() || !entry.contains("target") || !entry["target"].is_string()
+                    || !entry.contains("crc") || !entry["crc"].is_number_unsigned()
+                    || !entry.contains("patchedCrc") || !entry["patchedCrc"].is_number_unsigned()
                     || !entry.contains("edits") || !entry["edits"].is_array()) { continue; }
                 const std::string target = entry["target"].get<std::string>();
                 const auto file = cdDirectory / target;
@@ -642,8 +720,10 @@ namespace ALTEngine::Bootstrap
                 bool ok = true;
                 for (const auto& edit : entry["edits"])
                 {
-                    const std::string offsetText = edit.value("offset", "");
-                    const std::string hex = edit.value("hex", "");
+                    if (!edit.is_object() || !edit.contains("offset") || !edit["offset"].is_string()
+                        || !edit.contains("hex") || !edit["hex"].is_string()) { ok = false; break; }
+                    const std::string offsetText = edit["offset"].get<std::string>();
+                    const std::string hex = edit["hex"].get<std::string>();
                     size_t offset = 0;
                     try { offset = static_cast<size_t>(std::stoull(offsetText, nullptr, 16)); } catch (...) { ok = false; break; }
                     if (hex.size() % 2 != 0 || offset + hex.size() / 2 > bytes.size()) { ok = false; break; }
@@ -664,7 +744,6 @@ namespace ALTEngine::Bootstrap
                 std::cout << "  [applied]  " << target << " (ALTEngine only)\n";
             }
             std::cout << "ALTEngine file fixes: " << made << " made, " << already << " already made.\n";
-            ApplyEngineModelFaceEdits(cdDirectory);
         }
     }
 
@@ -678,7 +757,7 @@ namespace ALTEngine::Bootstrap
         // meets untrimmed files; afterwards the kept copy goes back if it is
         // still the trim of what the stages made, or the level is trimmed again.
         // Testing > Padding Trim off: the untrimmed files stay.
-        void SetPaddedAside(const std::filesystem::path& cdDirectory)
+        void SetPaddedAside(const std::filesystem::path& cdDirectory, BlockedFiles& blocked)
         {
             std::error_code ec;
             for (const auto& relative : ALTEngine::Game::LevelCleanup::LevelFiles(cdDirectory))
@@ -686,11 +765,25 @@ namespace ALTEngine::Bootstrap
                 const auto file = cdDirectory / relative;
                 const auto padded = With(file, ".padded");
                 if (!std::filesystem::exists(padded, ec)) { continue; }
-                const auto trimmed = With(file, ".trimmed");
-                std::filesystem::remove(trimmed, ec);
-                if (std::filesystem::exists(file, ec)) { std::filesystem::rename(file, trimmed, ec); }
-                std::filesystem::rename(padded, file, ec);
-                if (ec) { std::cout << "Padding trim: could not restore " << file.string() << ": " << ec.message() << "\n"; }
+                if (!PutBack(file, padded, With(file, ".trimmed"), "Padding trim")) { blocked.insert(relative.generic_string()); }
+            }
+        }
+
+        // A level still trimmed once every stage's work has been set aside has
+        // no untrimmed copy to go back to (the copy deleted, or the level
+        // brought from another install). Every offset the stages name is in
+        // the untrimmed layout, so it is left alone, and said so.
+        void BlockTrimmedLevels(const std::filesystem::path& cdDirectory, BlockedFiles& blocked)
+        {
+            for (const auto& relative : ALTEngine::Game::LevelCleanup::LevelFiles(cdDirectory))
+            {
+                std::vector<uint8_t> bytes;
+                if (ReadAll(cdDirectory / relative, bytes) && ALTEngine::Formats::LevelTrim::IsTrimmed(bytes))
+                {
+                    std::cout << "Padding trim: " << relative.generic_string() << " is trimmed and its untrimmed copy (.padded) is gone - "
+                              << "left as it is, no fix made to it. Install again to put it right.\n";
+                    blocked.insert(relative.generic_string());
+                }
             }
         }
 
@@ -720,7 +813,7 @@ namespace ALTEngine::Bootstrap
                 std::vector<uint8_t> cached;
                 const bool same = std::filesystem::exists(trimmedCopy, ec) && ReadAll(trimmedCopy, cached) && cached == trimmed;
                 std::filesystem::rename(file, With(file, ".padded"), ec);
-                if (ec) { std::cout << "Padding trim: could not set " << file.string() << " aside: " << ec.message() << "\n"; continue; }
+                if (ec) { std::cout << "Padding trim: could not set " << ALTEngine::Bootstrap::PathText(file) << " aside: " << ec.message() << "\n"; continue; }
                 if (same) { std::filesystem::rename(trimmedCopy, file, ec); }
                 if (!same || ec)
                 {
@@ -729,7 +822,7 @@ namespace ALTEngine::Bootstrap
                     {
                         // Never leave the level missing: the untrimmed one goes back.
                         std::filesystem::rename(With(file, ".padded"), file, ec);
-                        std::cout << "Padding trim: could not write " << file.string() << "\n";
+                        std::cout << "Padding trim: could not write " << ALTEngine::Bootstrap::PathText(file) << "\n";
                         continue;
                     }
                     ++made;
@@ -760,13 +853,15 @@ namespace ALTEngine::Bootstrap
         // ALTEngine's alone. The byte patches always meet the files as shipped
         // (less the removed models), so every later stage's work is put aside
         // first, last stage first.
-        SetPaddedAside(cdDirectory);
+        BlockedFiles blocked;
+        SetPaddedAside(cdDirectory, blocked);
         // ALTEngine's model face edits come out before anything else is set
         // aside: the cleaned copy kept for reuse must not carry them.
-        RevertEngineModelFaceEdits(cdDirectory);
-        SetCleanedAside(cdDirectory);
-        SetFacedAside(cdDirectory);
-        SetBlankedAside(cdDirectory);
+        const size_t modelFacesReverted = RevertEngineModelFaceEdits(cdDirectory);
+        SetCleanedAside(cdDirectory, blocked);
+        SetFacedAside(cdDirectory, blocked);
+        SetBlankedAside(cdDirectory, blocked);
+        BlockTrimmedLevels(cdDirectory, blocked);
 
         std::filesystem::path patchesJson = ExecutableDirectory() / "data" / "Patches.json";
 
@@ -777,8 +872,11 @@ namespace ALTEngine::Bootstrap
         }
         catch (const std::exception& e)
         {
-            std::cout << "Failed to load " << patchesJson.string() << ": " << e.what() << "\n";
-            return;
+            // Carry on: the later stages check each file by its CRC, and
+            // returning here left every set-aside copy where it was, the
+            // install without its faces, cleanup, blanking and trim.
+            std::cout << "Failed to load " << PathText(patchesJson) << ": " << e.what() << " - no byte patch made.\n";
+            operations.clear();
         }
 
         // Duplicate and unused door/lift models go first: the byte patches
@@ -788,7 +886,9 @@ namespace ALTEngine::Bootstrap
             using namespace ALTEngine::Formats;
             const std::vector<ModelRemoval> removals = ModelRemovalLoader::Load(patchesJson);
             size_t removed = 0, already = 0, removalFailed = 0;
-            for (const auto& result : ModelRemovalRunner::ApplyAll(cdDirectory, removals))
+            std::vector<ModelRemoval> allowed;
+            for (const auto& removal : removals) { if (!blocked.count(removal.targetFile)) { allowed.push_back(removal); } }
+            for (const auto& result : ModelRemovalRunner::ApplyAll(cdDirectory, allowed))
             {
                 switch (result.outcome)
                 {
@@ -796,6 +896,9 @@ namespace ALTEngine::Bootstrap
                 case ModelRemovalOutcome::AlreadyApplied: ++already; break;
                 case ModelRemovalOutcome::Failed:
                     ++removalFailed;
+                    // The byte patches are written against the file without
+                    // the model: with it still there they would miss.
+                    blocked.insert(result.removal->targetFile);
                     std::cout << "  [FAILED]   " << result.removal->targetFile << " - " << result.error << "\n";
                     break;
                 }
@@ -805,7 +908,7 @@ namespace ALTEngine::Bootstrap
         }
         catch (const std::exception& e)
         {
-            std::cout << "Failed to load the model removals from " << patchesJson.string() << ": " << e.what() << "\n";
+            std::cout << "Failed to load the model removals from " << ALTEngine::Bootstrap::PathText(patchesJson) << ": " << e.what() << "\n";
         }
 
         // Then the duplicate object records (ObjectRemoval.h): also stage 1,
@@ -816,7 +919,9 @@ namespace ALTEngine::Bootstrap
             using namespace ALTEngine::Formats;
             const std::vector<ObjectRemoval> removals = ObjectRemovalLoader::Load(patchesJson);
             size_t removed = 0, already = 0, removalFailed = 0;
-            for (const auto& result : ObjectRemovalRunner::ApplyAll(cdDirectory, removals))
+            std::vector<ObjectRemoval> allowed;
+            for (const auto& removal : removals) { if (!blocked.count(removal.targetFile)) { allowed.push_back(removal); } }
+            for (const auto& result : ObjectRemovalRunner::ApplyAll(cdDirectory, allowed))
             {
                 switch (result.outcome)
                 {
@@ -824,6 +929,7 @@ namespace ALTEngine::Bootstrap
                 case ObjectRemovalOutcome::AlreadyApplied: ++already; break;
                 case ObjectRemovalOutcome::Failed:
                     ++removalFailed;
+                    blocked.insert(result.removal->targetFile);
                     std::cout << "  [FAILED]   " << result.removal->targetFile << " - " << result.error << "\n";
                     break;
                 }
@@ -833,9 +939,19 @@ namespace ALTEngine::Bootstrap
         }
         catch (const std::exception& e)
         {
-            std::cout << "Failed to load the object removals from " << patchesJson.string() << ": " << e.what() << "\n";
+            std::cout << "Failed to load the object removals from " << ALTEngine::Bootstrap::PathText(patchesJson) << ": " << e.what() << "\n";
         }
 
+        if (!blocked.empty())
+        {
+            std::vector<PatchOperation> allowed;
+            for (auto& op : operations)
+            {
+                if (blocked.count(op.targetFile)) { std::cout << "  [skipped]  " << op.targetFile << " - not the file its fixes were written for (see above)\n"; }
+                else { allowed.push_back(std::move(op)); }
+            }
+            operations = std::move(allowed);
+        }
         std::cout << "Applying " << operations.size() << " patch operations...\n";
         std::vector<PatchResult> results = PatchRunner::ApplyAll(cdDirectory, operations);
 
@@ -869,6 +985,7 @@ namespace ALTEngine::Bootstrap
         // Last: the texture blanking, against the sheets as the fixes leave them.
         ApplyTextureBlanking(cdDirectory, TestingSettings(config).IsOn(TestingOption::LevelCleanup));
         ApplyEngineFilePatches(cdDirectory);
+        ApplyEngineModelFaceEdits(cdDirectory, modelFacesReverted);
         // Truly last: every offset named before this is in the untrimmed layout.
         ApplyPaddingTrim(cdDirectory, TestingSettings(config).IsOn(TestingOption::PaddingTrim));
     }
@@ -877,7 +994,7 @@ namespace ALTEngine::Bootstrap
     {
         // An install is read on the MU/TH/UR readout to the end, so it waits for a key.
         MuthurConsole::WaitForKeyAtEnd();
-        std::cout << "Installing from disc (" << discRoot.string() << ") to " << destination.string() << "...\n";
+        std::cout << "Installing from disc (" << ALTEngine::Bootstrap::PathText(discRoot) << ") to " << ALTEngine::Bootstrap::PathText(destination) << "...\n";
 
         std::filesystem::path manifestPath = ExecutableDirectory() / "data" / "DiscFileManifest.json";
         DiscManifest manifest;
@@ -887,7 +1004,7 @@ namespace ALTEngine::Bootstrap
         }
         catch (const std::exception& e)
         {
-            std::cout << "Failed to load " << manifestPath.string() << ": " << e.what() << "\n";
+            std::cout << "Failed to load " << ALTEngine::Bootstrap::PathText(manifestPath) << ": " << e.what() << "\n";
             return false;
         }
 
@@ -918,12 +1035,40 @@ namespace ALTEngine::Bootstrap
         std::error_code ec;
         std::filesystem::create_directories(musicDir, ec);
 
+        // A source that already has the music as files (an ALTEngine install,
+        // or a copy of the disc with CD/MUSIC/trackNN.wav put beside it): they
+        // are copied, and no drive is asked for. Only a disc's audio tracks can
+        // be ripped, and a folder on a hard disk has none.
+        int musicCopied = 0;
+        if (auto sourceCd = FindEntryCaseInsensitive(discRoot, "CD"))
+        {
+            if (auto sourceMusic = FindEntryCaseInsensitive(*sourceCd, "MUSIC"))
+            {
+                for (int track = 2; track <= 17; ++track)
+                {
+                    char name[32];
+                    std::snprintf(name, sizeof(name), "track%02d.wav", track);
+                    const auto from = FindEntryCaseInsensitive(*sourceMusic, name);
+                    if (!from) { continue; }
+                    std::error_code copyError;
+                    std::filesystem::copy_file(*from, musicDir / name, std::filesystem::copy_options::overwrite_existing, copyError);
+                    if (!copyError) { ++musicCopied; }
+                }
+            }
+        }
+        if (musicCopied > 0)
+        {
+            std::cout << "Music: " << musicCopied << " tracks copied from " << PathText(discRoot) << ".\n";
+            return true;
+        }
+
         const CddaRipSummary rip = CddaRipper::RipDisc(discRoot, musicDir,
             [](const std::string& line) { std::cout << line << "\n"; });
         if (!rip.error.empty())
         {
             std::cout << "CDDA rip failed entirely: " << rip.error << "\n";
-            std::cout << "Continuing without music - this can be retried later.\n";
+            std::cout << "Continuing without music. The game plays CD/MUSIC/track02.wav to track17.wav (the disc's audio\n"
+                      << "tracks, 16-bit 44100 Hz stereo) if they are put there by hand.\n";
         }
         else
         {
