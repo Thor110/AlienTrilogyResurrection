@@ -181,7 +181,8 @@ has no sound.
 
 - **Reported by:** a player, through Edward (1.0.0)
 - **Status:** one fault fixed in 1.0.1; the damage itself open, more detail needed
-- **Report:** "facehuggers seem to cause damage after they fall off the player I believe"
+- **Report:** "facehuggers seem to cause damage after they fall off the player I believe"; later, "I'm getting
+  chipped even after the facehugger drops down the screen"
 
 **What was found.**
 - **Fixed:** the crawl could start again after it had slid off. The creature then lands in a free cell beside
@@ -201,4 +202,52 @@ has no sound.
 in the decompile, only in the disassembly. Wanted: the difficulty the player was on, and whether the damage
 came while standing still (the drain) or on moving off (the acid); and from the disassembly, whether the
 creature goes back to the common task after the hug, so that its body leaves acid at all.
+
+**Looked at again (zip 197), with the player's second wording.** Still not settled; what the numbers say:
+- Everything in the hug runs on the alternate pass (the creature's task, the crawl, the damage cooldown). In
+  those ticks the creature holds on for 0x40, the cooldown lets a hit through every 0x1e, and the slide off
+  takes 14 or 15. A hug that starts with the cooldown clear hurts at 0, 30 and 60 and not again. One that
+  starts part way through a cooldown (another hugger's bite just before) can land one hit during the slide,
+  when the crawl is almost off the bottom of the view. So the drain during the slide is 1 at most, and only
+  sometimes.
+- "Chipped" reads as more than that, which points at the acid: the creature lands within a square of the
+  player and dies there, and above Easy its body turns bare floor to acid. Standing on that square burns 1 every
+  30 ticks for as long as the player stays. Nothing shows the square is acid.
+- **The crawl's speed depends on the original's frame rate.** FUN_000307c0 moves the crawl only when the
+  pass counter (0xa6164) is 1, which is the last pass of a drawn frame (FUN_00012590 counts the passes of a
+  frame down to 1). The port runs it every other pass, which is the original at about 17 frames a second. On a
+  faster machine or DOSBox setting the original runs one pass a frame, the crawl moves every pass, and it is
+  off the view in half the time, well before the next hit is due. A player comparing with DOSBox would see the
+  hugger leave sooner and never hurt on the way down.
+
+**Still needed.** The decompile holds functions only. The hug's task (LAB_00030918) and the creatures' common
+task (LAB_000342b4) are labels in it, with no code. In Ghidra: go to each address, press F to make a function
+there, and export again; or send the disassembly for 0x30918-0x30ac0 and 0x34e80-0x34f10. With those: whether
+the hug hurts during the slide at all, and whether a hugger that dies after a hug leaves acid.
+
+---
+
+## 9. Eggs have no sound when they open
+
+- **Reported by:** Edward, in play (1.0.0)
+- **Status:** fixed in 1.0.1
+- **Report:** "Eggs dont seem to have a sound for when they open"
+
+**What happened.** Two faults, the first much the larger.
+- **No egg opened by itself.** The level's build gave an egg its closed animation by number only
+  (`Enemies::Build`), without starting its script. The egg's task waits for that script to end before it
+  measures the distance to the player (`CreatureTasks::Egg`, CLOSED to CHECK), and a script never started never
+  ends. So an egg stayed closed however near the player came. The original starts it at the spawn
+  (FUN_0002f4b0(egg, 0), the spawn's case 1). Seen on L141 with the player placed two squares from three eggs:
+  closed for as long as the game ran.
+- **An egg opened by a shot made no sound.** A hit does open an egg, and its opening script's first step cues
+  sound 0x2d (1501eggo). But creature cues are held back until a creature's second tick, to keep the level
+  start quiet, and the tick count starts again after a flinch: the cue fell on tick 1 and was dropped.
+
+**Fixed (1.0.1).** The build starts the egg's closed script. An egg's cue is no longer held back by the tick
+count (its closed script has no cue, so the level start stays quiet). On L141 the three eggs now open 33 ticks
+in, 1501eggo plays, and at 67 they let their huggers out with 1503egge. A test builds an egg from a level
+record and checks it opens and cues.
+
+**To check in play.** The levels with eggs will have many more huggers than testers have met so far.
 

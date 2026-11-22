@@ -4263,10 +4263,16 @@ namespace ALTEngine::Screens
                             // moment I spawn").
                             // Co-operative: the guests hear it too, by their
                             // own distance (sent with the creature's state).
-                            if (coopHost && enemy.animSound >= 0 && enemy.ticks > 1) { enemy.netSound = enemy.animSound; }
+                            // The tick count keeps the level start's walk cues
+                            // quiet. An egg has none then, and one opened by a
+                            // hit starts its opening on the first tick after
+                            // its flinch (the count starts again there), so its
+                            // cue is let through: it opened in silence.
+                            const bool cueDue = enemy.ticks > 1 || enemy.type == 1;
+                            if (coopHost && enemy.animSound >= 0 && cueDue) { enemy.netSound = enemy.animSound; }
                             if (enemy.animSound >= 0
                                 && (enemy.zoneVisible || enemy.distance < 0x1400)
-                                && enemy.ticks > 1)
+                                && cueDue)
                             {
                                 ALTEngine::Audio::SfxPlayer::PlaySlotAtVolume(
                                     enemy.animSound,

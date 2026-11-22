@@ -414,6 +414,8 @@ namespace ALTEngine::Screens
             return &copy;
         }
 
+        inline void PlayAnimation(Enemy& enemy, int animation);
+
         // Builds the roster for a level. Monsters parked off-map start inactive
         // - they are crate contents, and something has to let them out.
         inline std::vector<Enemy> Build(const ALTEngine::Formats::LevelGeometry& level,
@@ -567,7 +569,14 @@ namespace ALTEngine::Screens
                     enemy.nearThreshold = CreatureTasks::Egg::NEAR_THRESHOLD;
                     enemy.middleThreshold = CreatureTasks::Egg::MIDDLE_THRESHOLD;
                     enemy.holdAnimation = true;
-                    enemy.animation = CreatureTasks::Egg::ANIM_CLOSED;
+                    // Its closed animation, started with its script as the
+                    // original's spawn does (FUN_0002f4b0(egg, 0) in the
+                    // spawn's case 1). Only the number was set here, so the
+                    // script never ran and never ended, and the egg's task
+                    // waits on that end before it looks for the player: an egg
+                    // never opened as the player came near, only when shot.
+                    PlayAnimation(enemy, CreatureTasks::Egg::ANIM_CLOSED);
+                    enemy.animationChanged = false;
                 }
 
                 enemies.push_back(enemy);

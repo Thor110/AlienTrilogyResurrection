@@ -1351,3 +1351,21 @@ Found and left, in rough order of worth:
   both rooms first; Edward approved.
 - Remade: L351's MissingFaces crc/facedCrc (JSON and MissingFaces.cs), LevelCleanupList.json,
   TextureBlankList.json, ALTViewer's patch block, Patch/L351LEV.txt, README (Fix 11), PATCH-NOTES 1.0.1.
+
+## Zip 197: the eggs, and the face hug looked at again (1.0.1)
+
+- **Eggs** (BUG-REPORTS.md, 9): `Enemies::Build` now starts the egg's closed script, as the original's spawn
+  does, so eggs open on approach; an egg's cue is let through on any tick. This changes play on every level
+  with eggs: to be play-checked.
+- **The same pattern, not changed:** the build also gives the colonist (animation 0x0c) and the queen (8) their
+  first animation by number only, where the original's spawn starts the script (FUN_0002f4b0 with 0xc and 8).
+  Neither task was seen to wait on that script's end, and both have been play-tested as they are, so they are
+  left. Worth a look if either is ever seen stuck in its first pose.
+- **The face hug** (BUG-REPORTS.md, 8): no change. The pass counter at 0xa6164 is the number of passes left in
+  the drawn frame, not an odd/even flag: routines that test it for 1 (the crawl, FUN_000307c0, among some
+  twenty) run once a drawn frame. The port's alternate pass is that at two passes a frame. Whether to run them
+  every pass (one pass a frame, the original on a fast machine) is a choice for Edward; it would change every
+  one of them, not only the crawl.
+- **How to see a creature's state in a run:** a save file with only `version`, `level` and `inventory` loads
+  any level from Load Game; the review used that to reach L141.
+

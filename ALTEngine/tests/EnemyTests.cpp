@@ -538,3 +538,32 @@ TEST_CASE("Enemies: a hugger out of an egg has no spawn grace (the port's choice
     Enemies::ApplyHit(e, 1, false);
     CHECK(e.health == before - 1);
 }
+
+TEST_CASE("Egg: one built from its record opens as the player comes near, and sounds its cue 0x2d")
+{
+    // An egg as the level's build makes it: its closed script must be
+    // running, since the task waits on that script's end before it looks for
+    // the player (it was not, and no egg opened on approach).
+    ALTEngine::Formats::LevelGeometry level;
+    level.header.mapLength = 8; level.header.mapWidth = 8;
+    level.collisionGrid.resize(64);
+    ALTEngine::Formats::Monster record;
+    record.type = 1; record.x = 4; record.y = 4; record.health = 10;
+    level.monsters.push_back(record);
+    auto built = Enemies::Build(level, 1, 0.0f, 0.0f);
+    REQUIRE(built.size() == 1);
+    Enemies::Enemy egg = built[0];
+    REQUIRE(!egg.sequence.empty());
+    egg.active = true; egg.alive = true;
+    egg.x = 0x600; egg.z = 0;
+    bool heard = false;
+    int ticksAtCue = 0;
+    for (int t = 0; t < 400 && !heard; ++t)
+    {
+        Enemies::Tick(egg, 0, 0, 0, OpenWorld());
+        if (egg.animSound == 0x2d) { heard = true; ticksAtCue = egg.ticks; }
+    }
+    CHECK(heard);
+    CHECK(ticksAtCue > 1);
+    CHECK_EQ(egg.egg.phase, static_cast<int>(ALTEngine::Screens::CreatureTasks::Egg::PHASE_OPENING));
+}

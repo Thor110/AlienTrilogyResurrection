@@ -14,6 +14,12 @@ Everything since 1.0.0 (the build sent to testers on 22 November 2026).
 
 ### Fixed
 
+- **Eggs open as you come near, and are heard.** An egg never opened by itself: it sat closed until it was
+  shot, and then opened in silence. Its closed animation was never started when the level began, and the egg
+  waits for that animation to finish before it looks for the player. Now an egg opens when you come within
+  six squares, with its sound, and lets its hugger out when you are within four and in its line of sight, as
+  in the original. Expect far more face huggers than before on the levels with eggs (L141, L154, L161, L162,
+  L222, L232, L262, L263, L381, L391).
 - **Ripley speaks.** None of her remarks played, in any install: the list of speech samples (`SFX/SPCH.TXT`)
   was left out when the game was installed, so the game had nothing to say. New installs copy it; an install
   made before now uses the same list kept inside the game, so nothing needs installing again. Her remarks also
