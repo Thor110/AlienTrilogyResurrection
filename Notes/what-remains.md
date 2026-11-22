@@ -804,6 +804,12 @@ Left from that review, to look at:
   export remaps taken out. Modern: Speed Compensation removed (value 9 retired). Pickups ride lifts.
   MissingFaces CRCs for L131, L381 and L906 remade; LevelCleanupList and TextureBlankList regenerated (L361 and
   361GFX now listed too - they had been left out).
+- Zip 184: L906's 36 bridge-side faces (texture 117, from Edward's FaceLog) turned a quarter-turn clockwise,
+  (d, a, b, c); zip 185: 13 of them mirrored (routine 0 -> 2): 5361, 5365, 5369, 5572, 5934, 6641, 6825, 7809,
+  7813, 7817, 8558, 8576, 8580. More L906 adjustments to come in batches from Edward. ALTViewer's patch button carries every patch
+  of zips 183-184, and its MissingFaces.cs the new CRCs.
+- Answered: (1) yes, add the object-record removal stage; (2) the lift is the bottom-left one of L381's group on
+  the minimap; (4) the invisible wall is reported on several levels. (3) Edward is still looking.
 - Open, waiting on Edward: (1) L906's duplicate box - crate 9 at cell 57,79 (empty) on crate 8 (drop 1);
   removing a record needs a new stage (the file shortens, crates 10-22 renumber, later offsets move; only logic
   3 names an object, crate 2, so it is safe); (2) L381's lift that starts up - lift 12 (54,32: floor 0, travel

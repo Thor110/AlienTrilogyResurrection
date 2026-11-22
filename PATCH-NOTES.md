@@ -230,7 +230,9 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
   half way round and two given each other's texture. The rest of them are still to follow.
 - **L906: the 53 bridge and fence faces turned and mirrored in the file are back as they were.** They were
   converted from ALTViewer's old model-export remaps, and most, if not all, were wrong; only the fixes made by
-  hand stay.
+  hand stay. (A game patched by an older ALTViewer keeps them until L906LEV.MAP is copied from the disc again.)
+- **L906: the bridge sides turned the right way** - 36 faces, a quarter-turn clockwise, and 13 of them mirrored
+  (Edward).
 - ALTViewer's patch button can be pressed again over a patched game: it takes the missing faces out, checks the
   byte patches, and puts them back. ALTEngine does the same when it is installed from a game ALTViewer patched.
 - **ALTViewer reads ALTEngine's files**: the trimmed levels (Level Viewer) and the face hugger's taller frames
