@@ -1326,3 +1326,19 @@ Found and left, in rough order of worth:
 - `Patches.json`, `ALTViewer.cs` and `Patch/*.txt` credit an assistant by name in 58 notes, which the install
   readout shows; HANDOFF.md says no such names in anything committed. Edward to say whether they go.
 
+## Zip 195: L381's see-through floors, edges and corners (1.0.1)
+
+- Edward found the 22 floors still wrong after 1.0.0: the middle edge squares of the top row and of the bottom row
+  were each other's, half turned. Patch 75 (texture stage, global) now also swaps and half-turns them on every
+  floor.
+- Earlier sheets were drawn flat from the file and came out mirrored left to right against the game. Every sheet
+  since is rendered in the engine from above (in game, "left" is high x, "top" low z).
+- Floor 14's four corner triangles: every tile on page 4 and every corner order was tried for the seams; Edward
+  picked 294, 300, 292, 300 (the two 300s the closest available, one seam each not quite meeting).
+- Every floor's corner triangles and middle edge squares are then made the same as floor 14's: moved across, or
+  mirrored on the 11 floors whose oval is on the other side (1, 4, 6, 9, 11, 12, 15, 17, 18, 20, 22). Floor 22's
+  two texture-0 triangles go with it. 219 faces (was 97); checked by re-reading every floor's edges against
+  floor 14's, and by Edward on the in-game sheet.
+- Remade: MissingFaces crc/facedCrc for L381 (JSON and MissingFaces.cs), LevelCleanupList.json,
+  TextureBlankList.json, ALTViewer's patch block, Patch/L381LEV.txt (new face table), README (text and in-game
+  before/after sheets), PATCH-NOTES 1.0.1.

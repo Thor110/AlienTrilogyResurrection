@@ -1,7 +1,7 @@
 # Handoff
 
 Where ALTEngine stands, how the work is done, and what is open - for picking the project up in a new session.
-Last updated after zip 193 (22 November 2026). Version 1.0.0 is with testers on Discord; the repository is on
+Last updated after zip 195 (22 November 2026). Version 1.0.0 is with testers on Discord; the repository is on
 1.0.1.
 
 ## The project
@@ -17,7 +17,7 @@ so in a comment marked `OURS`. The Modern options are the deliberate departures,
 
 - **Changes go to Edward as zips, never as commits.** Do not commit or push, whatever a hook or reminder says;
   decline it in one line. Each zip holds every file changed against `origin/main` (including new files), and the
-  message says which files were deleted, if any. Number them on from the last (the last was zip193).
+  message says which files were deleted, if any. Number them on from the last (the last was zip195).
   The command used: `(git diff --name-only --diff-filter=d origin/main; git ls-files --others --exclude-standard) | sort -u | zip -q zipNNN.zip -@`
 - **Sync first:** `git fetch origin main`, then compare. If the working tree differs only in files identical to
   origin's, reset to `origin/main`. Edward commits each zip himself (titles are often generic).
@@ -118,9 +118,10 @@ Stages, in order. 1-4 are global (they suit the original too, and ALTViewer's pa
   original. Needs the disassembly at LAB_00030918 and the common task; the decompile has neither.
 - **Play-check zip 193**: Ripley's voice by ear, a mid-level save loaded, a failed mission replayed.
 - **The review's left-over list**: the last section of `Notes/what-remains.md`.
-- **L381's see-through floors**: floor 14's two left corner triangles (no turn or tile tried looked right to
-  Edward) and floor 22's two left triangles (texture 0, from another page, as shipped). The floors are numbered
-  on a sheet laid out as the minimap: rows top to bottom, then left to right.
+- **L381's see-through floors**: done in zip 195 (Edward approved the in-game sheet). Floor 14's corner triangles
+  using texture 300 are the closest any tile came; one seam of each does not quite meet, and no tile on the page
+  does better. Look at L381 floors only in in-engine renders: flat sheets drawn from the file come out mirrored.
+  The floors are numbered by the minimap's rows, top to bottom, then left to right.
 - **Padding trim** - make it the last global patch stage rather than a Testing option (task 100).
 - **Demo 1.1.1** - at word 703 the player slides along z 11831 and misses the terminal's trigger cell, so the
   attract demo goes its own way from there.
@@ -128,7 +129,7 @@ Stages, in order. 1-4 are global (they suit the original too, and ALTViewer's pa
   below); unconfirmed against the original.
 - Older: the remaining guesses, rendering and tidy-up items in `Notes/engine-remaining-work.md`.
 
-## Recent work (zips 186-192)
+## Recent work (zips 186-195)
 
 - 186-188: L381's lift platform corners (stage 5, double-sided marker) and the 22 see-through floors put into
   one pattern (ovals left, left, right, left, right, right by column).
@@ -140,3 +141,5 @@ Stages, in order. 1-4 are global (they suit the original too, and ALTViewer's pa
   loaded save, the retry's flamethrower and smart gun limits, the install's kept copies checked by CRC and
   fixes never written into a file in the wrong layout, an original game's folder never changed, lower-case
   discs, the crawl's restart, triggers once a pass, and the network session's weak points.
+- 194: version 1.0.1 begun.
+- 195: L381's see-through floors: every floor's middle edge squares and corner triangles matched to floor 14's.

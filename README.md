@@ -499,7 +499,7 @@ Fixes marked "texture scan" were found by ALTLevelScan, which looks for faces wh
 - [Patched an issue on L371LEV where the corner triangles of 14 wall recesses had their textures turned (28 faces).](#L371LEV-Fix-8)
 - [Patched an issue on L381LEV where one face had its texture rotated (texture scan 381-1).](#L381LEV-Fix-1)
 - [ALTEngine only: patched an issue on L381LEV where two corners of the lift platform had their texture cut the wrong way.](#L381LEV-Fix-2-ALTEngine-only)
-- [Patched an issue on L381LEV where the see-through floors over the lift shafts did not follow one pattern (97 faces on 8 floors).](#L381LEV-Fix-3)
+- [Patched an issue on L381LEV where the see-through floors over the lift shafts did not follow one pattern, and their edges and corners did not meet (219 faces on all 22 floors).](#L381LEV-Fix-3)
 - [Patched an issue on L391LEV where 246 faces of the queen's egg sack had their texture turned.](#L391LEV-Fix-1)
 - [Patched an issue on L391LEV where one face had its texture rotated (texture scan 391-1).](#L391LEV-Fix-2)
 - [Patched an issue on L391LEV where one face had its texture rotated (texture scan 391-2).](#L391LEV-Fix-3)
@@ -1481,11 +1481,11 @@ Patch listed at Patch/L381LEV.txt (its ALTENGINE ONLY section) and ALTEngine/dat
 
 UV mapping corrected.
 
-The big room over the lift shafts has 22 see-through floors. In each, the middle faces form an oval on one side, and across the room the ovals were meant to run in a pattern by column: left, left, right, left, right, right (Edward). Seven floors had theirs the wrong way round; each is now mirrored left to right as a whole, edges and corners included. One more floor, at cells 59/32, gets its top-right corner triangle mirrored from its bottom-right one.
+The big room over the lift shafts has 22 see-through floors. In each, the middle faces form an oval on one side, and across the room the ovals were meant to run in a pattern by column: left, left, right, left, right, right (Edward). Seven floors had theirs the wrong way round; each is now mirrored left to right as a whole, edges and corners included.
+
+Version 1.0.1 puts the edges and corners right, judged by Edward from in-game renders. On every floor the two middle edge squares at the top swap places and turn half way round, and so do the two at the bottom. One floor, at cells 59/32, was then given the corner triangles that meet their neighbours best (the tile and the order of corners for each, picked by Edward; two of the four are as close as any tile came, not perfect). Every other floor's corner triangles and middle edge squares copy that floor's, mirrored on the floors whose oval runs the other way. The floor at cells 77/37 no longer uses a texture from another page for two of its corners.
 
 Every change uses draw routines the original already has (the mirrored partners of the see-through routines, and the corner triangles' routine 13, which the original draws from both sides), so it suits the original game as well and is part of ALTViewer's patch button.
-
-Still to do: the two left corner triangles of that floor at cells 59/32, and the floor at cells 77/37, whose two corner triangles use a texture from another page.
 
 <table>
 <tr><th>Before</th><th>After</th></tr>

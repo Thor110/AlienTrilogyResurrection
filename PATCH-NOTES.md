@@ -28,6 +28,14 @@ Everything since 1.0.0 (the build sent to testers on 22 November 2026).
   beside you). See also BUG-REPORTS.md, report 8.
 - Closing the window during a death film closes the game; it went back to the menu.
 
+### Level fixes (these suit the original game too, and are in ALTViewer's patch button)
+
+- **L381's see-through floors over the lift shafts**: the edges and corners now meet. On all 22 floors the two
+  middle edge squares at the top swap places and turn half way round, as do the two at the bottom; the corner
+  triangles take the tiles and corner orders Edward picked, and every floor's edges and corners now match one
+  model floor's (mirrored where its oval runs the other way). 219 faces in one patch, replacing 1.0.0's 97; the
+  floor at cells 77/37 no longer borrows a texture from another page. See Patch/L381LEV.txt.
+
 ### Closer to the original
 
 - **Trigger cells are tested once for each game pass**, on the cell that pass ended on. A slow frame, or the
