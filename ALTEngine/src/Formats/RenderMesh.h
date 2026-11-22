@@ -211,7 +211,14 @@ namespace ALTEngine::Formats
     // A door mesh can span more than one page (both L111 doors span
     // pages 2 and 4), which is why this splits rather than returning a
     // single mesh.
-    std::array<RenderMesh, 5> BuildRenderMeshPerGroup(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects);
+    //
+    // honourEngineMarker: ALTENGINE ONLY. Door and lift meshes pass true, and
+    // a face whose +0x13 byte is ENGINE_DOUBLE_SIDED (EngineModelFaceEdits.h)
+    // is drawn from both sides. The original never reads that byte from the
+    // file, so only ALTEngine's stage-5 edits set it; OBJ3D models and the
+    // rest pass false and are drawn as before.
+    std::array<RenderMesh, 5> BuildRenderMeshPerGroup(const ModelMesh& mesh, const std::vector<BxRectangle>& uvRects,
+                                                     bool honourEngineMarker = false);
 
     // ---- THE DRAW ROUTINES ----------------------------------------------
     //

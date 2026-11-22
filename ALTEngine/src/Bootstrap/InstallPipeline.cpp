@@ -1,4 +1,5 @@
 #include "InstallPipeline.h"
+
 #include "Config.h"
 #include "PlatformPaths.h"
 #include "TestingSettings.h"
@@ -10,6 +11,7 @@
 
 #include "../Formats/CddaRipper.h"
 #include "../Formats/DiscManifest.h"
+#include "../Formats/EngineModelFaceEdits.h"
 #include "../Formats/Installer.h"
 #include "../Formats/ModelRemoval.h"
 #include "../Formats/PatchLoader.h"
@@ -19,6 +21,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <map>
 
 #include <nlohmann/json.hpp>
 
@@ -523,6 +526,77 @@ namespace ALTEngine::Bootstrap
 
     namespace
     {
+        // ALTENGINE-ONLY MODEL FACE EDITS (EngineFilePatches.json "modelFaces";
+        // Formats/EngineModelFaceEdits.h). Door and lift faces turned over and
+        // marked to draw from both sides, which the original cannot draw: never
+        // for the original game, never part of ALTViewer's patch button. Made
+        // after the Level Cleanup and the texture blanking; taken back out at
+        // the start of every run (RevertEngineModelFaceEdits) so the global
+        // stages always meet the files without them.
+        std::vector<ALTEngine::Formats::EngineModelFaceEdit> LoadEngineModelFaceEdits()
+        {
+            std::vector<uint8_t> raw;
+            if (!ReadAll(ExecutableDirectory() / "data" / "EngineFilePatches.json", raw)) { return {}; }
+            std::vector<std::string> errors;
+            auto edits = ALTEngine::Formats::EngineModelFaceEdits::Parse(std::string(raw.begin(), raw.end()), errors);
+            for (const auto& e : errors) { std::cout << "ALTEngine model face edits: " << e << "\n"; }
+            return edits;
+        }
+
+        void RevertEngineModelFaceEdits(const std::filesystem::path& cdDirectory)
+        {
+            const auto edits = LoadEngineModelFaceEdits();
+            std::map<std::string, std::vector<const ALTEngine::Formats::EngineModelFaceEdit*>> byFile;
+            for (const auto& e : edits) { byFile[e.target].push_back(&e); }
+            for (const auto& [target, list] : byFile)
+            {
+                std::vector<uint8_t> bytes;
+                if (!ReadAll(cdDirectory / target, bytes)) { continue; }
+                bool changed = false;
+                for (const auto* e : list) { changed = ALTEngine::Formats::EngineModelFaceEdits::Revert(bytes, *e) || changed; }
+                if (changed && !WriteAll(cdDirectory / target, bytes))
+                {
+                    std::cout << "ALTEngine model face edits: could not take them out of " << target << ".\n";
+                }
+            }
+        }
+
+        void ApplyEngineModelFaceEdits(const std::filesystem::path& cdDirectory)
+        {
+            using ALTEngine::Formats::EngineModelFaceOutcome;
+            const auto edits = LoadEngineModelFaceEdits();
+            std::map<std::string, std::vector<const ALTEngine::Formats::EngineModelFaceEdit*>> byFile;
+            for (const auto& e : edits) { byFile[e.target].push_back(&e); }
+            size_t made = 0, already = 0;
+            for (const auto& [target, list] : byFile)
+            {
+                std::vector<uint8_t> bytes;
+                if (!ReadAll(cdDirectory / target, bytes)) { std::cout << "ALTEngine model face edits: " << target << " not found.\n"; continue; }
+                bool changed = false;
+                for (const auto* e : list)
+                {
+                    switch (ALTEngine::Formats::EngineModelFaceEdits::Apply(bytes, *e))
+                    {
+                    case EngineModelFaceOutcome::Applied: ++made; changed = true; break;
+                    case EngineModelFaceOutcome::AlreadyApplied: ++already; break;
+                    case EngineModelFaceOutcome::NotFound:
+                        std::cout << "ALTEngine model face edits: " << target << " has no face " << e->face << " in " << e->section << ".\n";
+                        break;
+                    case EngineModelFaceOutcome::Mismatch:
+                        std::cout << "ALTEngine model face edits: " << target << " " << e->section << " face " << e->face
+                                  << " is not the face the edit was made for - left as it is.\n";
+                        break;
+                    }
+                }
+                if (changed)
+                {
+                    if (WriteAll(cdDirectory / target, bytes)) { std::cout << "  [applied]  " << target << " model faces (ALTEngine only)\n"; }
+                    else { std::cout << "ALTEngine model face edits: could not write " << target << ".\n"; }
+                }
+            }
+            std::cout << "ALTEngine model face edits: " << made << " made, " << already << " already made.\n";
+        }
+
         // ALTENGINE-ONLY FILE FIXES (data/EngineFilePatches.json): stage 5,
         // never part of ALTViewer's patch button. Each file is checked by its
         // CRC-32 before (as shipped) and after (as fixed); one already fixed is
@@ -589,6 +663,7 @@ namespace ALTEngine::Bootstrap
                 std::cout << "  [applied]  " << target << " (ALTEngine only)\n";
             }
             std::cout << "ALTEngine file fixes: " << made << " made, " << already << " already made.\n";
+            ApplyEngineModelFaceEdits(cdDirectory);
         }
     }
 
@@ -676,13 +751,17 @@ namespace ALTEngine::Bootstrap
         //      "level" then "texture" byte patches),
         //   4. the missing faces (MissingFaces.json),
         //   5. ALTEngine's own: the Level Cleanup, then the texture blanking,
-        //      then its file fixes (EngineFilePatches.json: FINGERS.B16),
+        //      then its file fixes (EngineFilePatches.json: FINGERS.B16, and
+        //      the door/lift model face edits, which the original cannot draw),
         //      then, truly last, the padding trim (Formats::LevelTrim).
         // 1-4 are global (ALTViewer's patch button makes the same files); 5 is
         // ALTEngine's alone. The byte patches always meet the files as shipped
         // (less the removed models), so every later stage's work is put aside
         // first, last stage first.
         SetPaddedAside(cdDirectory);
+        // ALTEngine's model face edits come out before anything else is set
+        // aside: the cleaned copy kept for reuse must not carry them.
+        RevertEngineModelFaceEdits(cdDirectory);
         SetCleanedAside(cdDirectory);
         SetFacedAside(cdDirectory);
         SetBlankedAside(cdDirectory);

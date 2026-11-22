@@ -205,7 +205,8 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
 2. the level fixes (geometry, objects, lifts, doors);
 3. the texture fixes (texture numbers, turns, flips, the texture sheets);
 4. **the missing faces** - new in the global fixes;
-5. ALTEngine only: the Level Cleanup, the texture blanking, ALTEngine's own file fixes, and last the padding trim.
+5. ALTEngine only: the Level Cleanup, the texture blanking, ALTEngine's own file fixes (now also door and lift
+   faces the original cannot draw), and last the padding trim.
 
 - **The missing faces are now fixed for the original game too.** On 36 levels the first cell of the map never
   had its faces drawn (an off-by-one in the original's level files); some of those faces fill real holes, like
@@ -229,6 +230,12 @@ leaves them, the same in ALTEngine and in ALTViewer's patch button (`Patch/READM
   neighbours' texture, 18.
 - **L381: the see-through floor over the lifts**, the first of its kind put right (Edward): two faces turned
   half way round and two given each other's texture. The rest of them are still to follow.
+- **L381: the lift platforms' corners** (ALTEngine only, Edward). Two of the four corner triangles of the
+  platform all 13 of the level's big lifts use had their texture cut the wrong way; each is now the mirror image
+  of the corner across from it. The original game cannot draw that (it hides the back of every lift face, and a
+  mirrored triangle is a turned-over one), so this is one of ALTEngine's own file fixes, never offered for the
+  original: ALTEngine marks the two faces and draws them from both sides (`Patch/L381LEV.txt`, its ALTENGINE
+  ONLY section).
 - **L906: the 53 bridge and fence faces turned and mirrored in the file are back as they were.** They were
   converted from ALTViewer's old model-export remaps, and most, if not all, were wrong; only the fixes made by
   hand stay. (A game patched by an older ALTViewer keeps them until L906LEV.MAP is copied from the disc again.)

@@ -826,6 +826,20 @@ Left from that review, to look at:
   floor's fix onto the rest; (4) the "invisible wall" when a lift is activated - nothing marks a moving lift's
   cells; which lift?
 - Demo 1.1.1, word 703: the player slides along z 11831 and misses the terminal's trigger cell.
+- Zip 187: L381's lift platform (L000, all 13 of the 4 x 4 lifts): corner faces 1 and 14 mirrored from 7 and 8
+  (Edward picked it from rendered options). The original cannot draw it: FUN_00041a20 rewrites every lift face's
+  +0x13 byte to routine 0, 1 or 2 (from +0x12: < 2 -> 0, 0x0b -> 2, else 1), all culled, and a mirrored triangle
+  must be turned over (every rotation and flag was tried: a triangle facing the right way only shows the x0y1-x1y0
+  halves with one handedness, the x0y0-x1y1 halves with the other). So it is ALTEngine's alone: a new kind of
+  stage-5 file fix, EngineFilePatches.json "modelFaces" (Formats/EngineModelFaceEdits), which turns the face over
+  and sets +0x13 to 5 (ENGINE_DOUBLE_SIDED; 0 on all 4,430 shipped door/lift faces, never read by the original);
+  door and lift meshes draw a marked face from both sides (BuildRenderMeshPerGroup, honourEngineMarker). Found by
+  section and face, made after the cleanup and blanking, taken out at the start of every run before the cleaned
+  copies are set aside; checked with the cleanup on and off and run twice each. No global file changes, so no
+  CRC or list to remake.
+- Open (Edward): global patches that may not suit the original should be separated like this one. The only
+  known candidate: the "mirrored, other half" quads ((a, b, c, c) with routine 2, Notes/uv-review-log.md), which
+  are unverified in DOS.
 
 ## 3. Code health
 

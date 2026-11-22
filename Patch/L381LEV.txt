@@ -11,6 +11,31 @@ unchanged.
 Face	Offset		Scan	Change	Was					Now
 100	0x15E2C	381-1	three quarter-turns	7351, 8834, 7453, 7449	->	7449, 7351, 8834, 7453
 
+
+==== ALTENGINE ONLY - NOT FOR THE ORIGINAL GAME (stage 5, ALTEngine/data/EngineFilePatches.json, "modelFaces") ====
+
+The lift platform (model L000, used by all 13 of the level's 4 x 4 lifts). Its two corner triangles at the
+high-X/high-Z and low-X/low-Z corners, faces 1 and 14, show tile 297 cut the wrong way, so the vein from each of the
+four eyes stops at them. Each becomes the mirror image of its neighbour across the lift: face 7 onto face 1 and
+face 8 onto face 14 (Edward, 2026).
+
+Why ALTEngine only: a mirrored triangle needs its corners reversed, which turns it to face down. The original's
+lift loader (FUN_00041a20) only ever gives a lift face draw routine 0, 1 or 2, and all three hide a face seen from
+behind, so in the original these two corners would be gaps. ALTEngine marks the faces (their +0x13 byte, which the
+original never reads from the file: its loader writes the routine number there) and draws a marked door or lift face
+from both sides. ALTViewer's patch button does not make this edit, and the original game should never be given it.
+
+The edit names the face by section and number, not by offset, so it holds with the Level Cleanup on or off. It is
+made after the Level Cleanup and the texture blanking, and taken out again at the start of every install run.
+
+Face	Section	Was (20-byte record)				Now
+1	L000	07000000 04000000 03000000 03000000 2901 02 00	->	04000000 07000000 03000000 03000000 2901 02 05
+14	L000	13000000 02000000 14000000 14000000 2901 02 00	->	02000000 13000000 14000000 14000000 2901 02 05
+
+Corners (7, 4, 3, 3) -> (4, 7, 3, 3) and (19, 2, 20, 20) -> (2, 19, 20, 20); texture 297 and flag 2 unchanged.
+In the shipped file (after the duplicate model removals) the records are at 0x7D10C and 0x7D210; the install finds
+them by section, since the Level Cleanup moves them.
+
 ==== Every patch to this file, in bytes (made from ALTEngine/data/Patches.json) ====
 Offsets are into the file after the duplicate model removals (Patch/DUPLICATE-MODELS.txt), as the install applies them.
 Each line: offset: shipped bytes -> patched bytes. To undo a patch, write the shipped bytes back.

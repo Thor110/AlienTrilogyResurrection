@@ -1350,7 +1350,7 @@ namespace ALTEngine::Screens
 
                         for (size_t m = 0; m < doorMeshes.size(); ++m)
                         {
-                            auto groups = ALTEngine::Formats::BuildRenderMeshPerGroup(doorMeshes[m], levelTextures.uvRects);
+                            auto groups = ALTEngine::Formats::BuildRenderMeshPerGroup(doorMeshes[m], levelTextures.uvRects, true);
                             for (size_t page = 0; page < groups.size(); ++page)
                             {
                                 if (groups[page].indices.empty()) { continue; }
@@ -1411,7 +1411,7 @@ namespace ALTEngine::Screens
                             auto levelTextures = ALTEngine::Formats::BndTextureLoader::Load(*gfxPath);
                             for (size_t m = 0; m < liftMeshes.size(); ++m)
                             {
-                                auto groups = ALTEngine::Formats::BuildRenderMeshPerGroup(liftMeshes[m], levelTextures.uvRects);
+                                auto groups = ALTEngine::Formats::BuildRenderMeshPerGroup(liftMeshes[m], levelTextures.uvRects, true);
                                 for (size_t page = 0; page < groups.size(); ++page)
                                 {
                                     if (groups[page].indices.empty() || page >= levelTextures.textures.size()) { continue; }

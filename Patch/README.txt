@@ -85,6 +85,15 @@ and are never offered for the original game.
    CRC before and after. The first is the face hugger's art, FINGERS.B16, filled to the bottom of the screen
    (FINGERS.txt).
 
+   ALTEngine's model face edits (the same file, "modelFaces") are fixes the original game cannot draw, so they
+   are never for it. A door or lift face can only be mirrored by reversing its corners, which turns it over, and
+   the original hides a door or lift face from behind (its loader, FUN_00041a20, gives them only draw routines
+   0, 1 and 2). Each edit turns the face over and sets its +0x13 byte to 5, a mark only ALTEngine reads: it draws
+   a marked door or lift face from both sides. In the original the face would be a gap. Each edit names its face
+   by section and number, so it holds with the Level Cleanup on or off; it is made after the Level Cleanup and the
+   texture blanking, and taken out at the start of every run. Each level file it touches has an
+   "ALTENGINE ONLY - NOT FOR THE ORIGINAL GAME" section. The first: L381's lift corners (L381LEV.txt).
+
    The padding trim, truly last (Options > Testing > Padding Trim, on by default): each level file loses the
    bytes the game never reads, or reads as one fixed value, or clears when the level starts - 1,930,078 bytes
    across the 45 levels, about 10% of them (Notes/unread-bytes-notes.txt says what every byte is). The level's
@@ -113,6 +122,7 @@ and are never offered for the original game.
 THE OTHER FILES HERE
 
   FINGERS.txt                                    the face hugger's art (ALTEngine only, stage 5)
+  L381LEV.txt (its ALTENGINE ONLY section)       the lift platform's corners (ALTEngine only, stage 5)
   UNPATCHED-NOTES.txt, UNPATCHED-FIX-LIFTS.txt   problems found and not patched (yet), with why
   another-fix.txt, new-fix.txt                   ALTViewer's earliest fixes, as first written up
   LxxxLEV-Dnnn.txt, L906LEV-D000.txt             a level's door model looked at on its own

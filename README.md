@@ -495,6 +495,7 @@ Fixes marked "texture scan" were found by ALTLevelScan, which looks for faces wh
 - [Patched an issue on L371LEV where one face had its texture rotated (texture scan 371-5).](#L371LEV-Fix-7)
 - [Patched an issue on L371LEV where the corner triangles of 14 wall recesses had their textures turned (28 faces).](#L371LEV-Fix-8)
 - [Patched an issue on L381LEV where one face had its texture rotated (texture scan 381-1).](#L381LEV-Fix-1)
+- [ALTEngine only: patched an issue on L381LEV where two corners of the lift platform had their texture cut the wrong way.](#L381LEV-Fix-2-ALTEngine-only)
 - [Patched an issue on L391LEV where 246 faces of the queen's egg sack had their texture turned.](#L391LEV-Fix-1)
 - [Patched an issue on L391LEV where one face had its texture rotated (texture scan 391-1).](#L391LEV-Fix-2)
 - [Patched an issue on L391LEV where one face had its texture rotated (texture scan 391-2).](#L391LEV-Fix-3)
@@ -1448,6 +1449,21 @@ UV rotation corrected.
 Found by texture scan 381-1. Face 100 is corrected so the texture runs on from the faces around it.
 
 Patch listed at Patch/L381LEV.txt
+
+## L381LEV Fix 2 (ALTEngine only)
+
+**ALTEngine only - not for the original game, and not part of ALTViewer's patch button.**
+
+The lift platform used by the level's 13 four-by-four lifts is textured as one picture, mirrored about its middle, with a dark eye near each corner. Two of its four corner triangles (faces 1 and 14) had the texture cut the wrong way, so the veins from the eyes stopped at them. Each is now the mirror image of the corner across from it (face 7 onto face 1, face 8 onto face 14), as Edward picked.
+
+Mirroring a triangle means reversing its corners, which turns it over. The original game hides the back of every lift face (its lift loader only gives them draw routines 0, 1 and 2), so in the original these two corners would be gaps. ALTEngine marks the two faces and draws them from both sides. The mark is a byte the original never reads from the file.
+
+<table>
+<tr><th>Before</th><th>After (ALTEngine)</th></tr>
+<tr><td><img src="Images/L381LEV/L381LEV-lift-corners-before.png" width="320" alt="L381LEV lift corners before"></td><td><img src="Images/L381LEV/L381LEV-lift-corners-after.png" width="320" alt="L381LEV lift corners after"></td></tr>
+</table>
+
+Patch listed at Patch/L381LEV.txt (its ALTENGINE ONLY section) and ALTEngine/data/EngineFilePatches.json.
 
 ## L391LEV Fix 1
 
