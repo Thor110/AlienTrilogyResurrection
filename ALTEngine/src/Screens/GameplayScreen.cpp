@@ -1048,6 +1048,18 @@ namespace ALTEngine::Screens
                     }
                     spawnX = camera.x; spawnZ = camera.z; spawnFeetY = playerFeetY; spawnYaw = camera.yaw;
 
+                    // The lifts first: each one's cells take its starting
+                    // floor (FUN_000423e8, via FUN_00042550) before any
+                    // object is placed (FUN_00037638 comes later in the same
+                    // level start), so a crate on a lift that starts at the top
+                    // stands on the raised platform. Placed the other way
+                    // round, L154's three crates on lift 0 sat under the
+                    // platform at the shaft's floor while still marking their
+                    // cells: an invisible wall on the lift (Edward, 2026).
+                    // Run once only - each lift takes its low height from its
+                    // first cell's floor, which it then rewrites.
+                    lifts = ALTEngine::Game::Lifts::Build(level);
+
                     // Object spawning (Edward, 2026: "all of the level
                     // objects spawning") - crates/barrels/switches first,
                     // since they map cleanly onto OBJ3D via
@@ -1401,7 +1413,8 @@ namespace ALTEngine::Screens
                     // model table (0x1a8354) the original fills from these
                     // sections, taken here to be their order. Not testable on
                     // the demo levels, which have no lifts.
-                    lifts = ALTEngine::Game::Lifts::Build(level);
+                    // (The lifts themselves were set up before the objects,
+                    // above; only their meshes are placed here.)
                     liftPlaced.clear();
                     if (!lifts.empty())
                     {

@@ -31,6 +31,10 @@ Everything since 0.9.9 (the build sent to testers on 17 November 2026).
   climbs and falls at the original's pace, bobs as it holds on, keeps hurting until it has slid fully off,
   and drops to the floor beside you rather than exactly where you stand.
 - **The queen's death** sets off what it opens only once her death has played out, not on the killing shot.
+- **No more invisible walls on lifts.** The lifts are set up before the level's objects, as in the original, so a
+  crate or switch on a lift that starts at the top stands on the platform. They were placed first, at the floor of
+  the shaft, hidden under the platform while still blocking their cells: an invisible wall on the big lifts of L141
+  (Garage, the lift's switch) and L154 (three crates), and on lifts on L351, L371 and L908.
 - A creature shot dead in mid-leap falls at once instead of carrying on upward.
 - Ceiling creatures carry on under a lower stretch of ceiling (the original's test against it never fires).
 - Creatures settle onto stairs and steps on the same tick as the original, not one ahead.

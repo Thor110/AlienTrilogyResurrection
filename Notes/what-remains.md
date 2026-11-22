@@ -853,12 +853,14 @@ Left from that review, to look at:
 - Zip 191: version 1.0.0 (PATCH-NOTES: 0.9.9 is the testers' build, commit bdf3b81 of 17 November 01:57; 1.0.0
   holds everything since). L371's squashed-quad corners double-sided (Notes/uv-review-log.md): patches 51-53 routine
   2 -> 6 on 28 faces, patch 54 face 6064 0 -> 4; L371 CRCs remade.
-- Open: the invisible wall on L141's big lift (lift 11, cells 66-70 x 40-44, low 64 high 112, starts at the top as
-  the original does - flag 1 first, 0x4245c). A simulation with the port's own lift, height and move code (player
-  riding it down and up from the middle, each edge and each side, trying all four ways every tick) finds no move
-  refused while the floor ahead is within a step and there is headroom. Column 70 has its ceiling at 112: with the
-  lift at the top it is solid (no headroom) and under 0x300 of headroom from floor 88 up - the same in the
-  original. Needs what the video shows (on the lift or beside it, going up or down, where).
+- Zip 192: the invisible walls on lifts (L141 Garage's big lift, Edward's video; L154 near face 4941) were objects
+  placed before the lifts. The original's level start runs FUN_00042550 (the lifts, FUN_000423e8: cells take the
+  start floor) before FUN_00037638 (the objects, FUN_00037184: each placed on its cell's floor); the port placed
+  the objects first, so on a lift that starts at the top they sat at the shaft's floor, under the platform, still
+  marking their cells. L141: lift 7's switch (object 47, type 0x16) in cell 56,93 (its attribute 1 goes with the
+  switch - L903, which has no switch there, has 0; a patch clearing it was made and taken back out). L154: lift 0's
+  crates 0-2. Also L351 lifts 2 and 4, L371 lift 3, L908 lift 4 (objects on lifts that start at the top; on the
+  lifts that start at the bottom nothing changes). GameplayScreen now runs Lifts::Build before the object loop.
 - Open (Edward): global patches that may not suit the original should be separated like this one. The only
   known candidate: the "mirrored, other half" quads ((a, b, c, c) with routine 2, Notes/uv-review-log.md), which
   are unverified in DOS.
