@@ -73,6 +73,12 @@
 #include <optional>
 #include <vector>
 
+namespace
+{
+    // Run Mode's latch, kept from one level to the next (GameplayScreen::Run).
+    bool runModeLatch = false;
+}
+
 namespace ALTEngine::Screens
 {
     using ALTEngine::Bootstrap::AppWindow;
@@ -574,8 +580,12 @@ namespace ALTEngine::Screens
         bool cheatMaximumHealth = false;
         // Cells the player has seen, for the map's fog of war. One byte per
         // cell, sized on first use. Owning an Auto Mapper bypasses it entirely.
-        // Run Mode's latch (DAT_000ad584 bit 1) and its key's last state.
-        bool runModeToggled = false;
+        // Run Mode's latch (DAT_000ad584 bit 1) and its key's last state. The
+        // original only ever flips the bit (0x42946, on Caps Lock) and never
+        // clears it, so it is still set in the next level, and the next game:
+        // it is kept between levels here (runModeLatch). It used to start off
+        // at every level.
+        bool runModeToggled = runModeLatch;
         // The Pause/Break key's freeze (FUN_0004f7b0, FUN_0004f81c): a press
         // stops the game where it stands, with "P A U S E D" over the last
         // frame and the music held, until the next press. Not in a network
@@ -2218,9 +2228,42 @@ namespace ALTEngine::Screens
 
         while (keepGoing())
         {
+            // The mouse wheel has no held state: a notch counts as its action's
+            // key down for the frame it arrives in.
+            bool wheelUpTick = false, wheelDownTick = false;
+            // Buttons pressed since the last frame, so a click shorter than a
+            // frame is still seen (the state read below is the moment's).
+            SDL_MouseButtonFlags clickedButtons = 0;
             SDL_Event event;
             while (SDL_PollEvent(&event))
             {
+                if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !demoMode && event.button.button >= 1 && event.button.button <= 32)
+                {
+                    clickedButtons |= SDL_BUTTON_MASK(event.button.button);
+                }
+                if (event.type == SDL_EVENT_MOUSE_WHEEL && !demoMode)
+                {
+                    if (event.wheel.y > 0) { wheelUpTick = true; }
+                    else if (event.wheel.y < 0) { wheelDownTick = true; }
+                }
+                // The menu's key: Pause's, or Weapon Select's (the original's
+                // Tab and Esc both open it), or either one's mouse button or
+                // wheel notch (Controls > Mouse).
+                bool menuPress = false;
+                {
+                    using ALTEngine::Bootstrap::InputAction;
+                    for (const InputAction action : { InputAction::Pause, InputAction::WeaponSelectMenu })
+                    {
+                        const Uint8 bound = demoMode ? ALTEngine::Bootstrap::MOUSE_UNBOUND : keyBindings.GetMouseBinding(action);
+                        if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode != SDL_SCANCODE_UNKNOWN
+                            && event.key.scancode == keyBindings.GetKey(action)) { menuPress = true; }
+                        else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && bound != ALTEngine::Bootstrap::MOUSE_UNBOUND
+                                 && event.button.button == bound) { menuPress = true; }
+                        else if (event.type == SDL_EVENT_MOUSE_WHEEL
+                                 && ((bound == ALTEngine::Bootstrap::MOUSE_WHEEL_UP && event.wheel.y > 0)
+                                     || (bound == ALTEngine::Bootstrap::MOUSE_WHEEL_DOWN && event.wheel.y < 0))) { menuPress = true; }
+                    }
+                }
                 // Fading out: nothing but closing the window is heard.
                 if (endFading)
                 {
@@ -2261,10 +2304,10 @@ namespace ALTEngine::Screens
                 // not in mid-shot, mid-reload or while a weapon is lowered or
                 // raised. Once the player is dead it opens whatever the weapon
                 // is doing, so the game can always be left.
-                else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == keyBindings.GetKey(ALTEngine::Bootstrap::InputAction::Pause)
+                else if (menuPress
                          && levelReady && !playerDead && !demoMode
                          && (weaponSwitch.Busy() || weaponRuntime.state != ALTEngine::Screens::WeaponSystem::STATE_IDLE)) {}
-                else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == keyBindings.GetKey(ALTEngine::Bootstrap::InputAction::Pause))
+                else if (menuPress)
                 {
                     SDL_SetWindowRelativeMouseMode(app.Window(), false);
                     // Modern: Save Anywhere - the pause menu's Save Game keeps
@@ -2867,12 +2910,42 @@ namespace ALTEngine::Screens
 
             if (levelReady)
             {
-                const bool* keys = demoMode ? demoKeys : SDL_GetKeyboardState(nullptr);
-
                 float mouseDx = 0.0f, mouseDy = 0.0f;
                 SDL_MouseButtonFlags mouseButtons = SDL_GetRelativeMouseState(&mouseDx, &mouseDy);
                 // A demo has no mouse (0x3f072 clears its counts).
                 if (demoMode) { mouseDx = mouseDy = 0.0f; mouseButtons = 0; }
+                else { mouseButtons |= clickedButtons; }
+
+                // THE MOUSE'S BINDINGS (Controls > Mouse). The original reads
+                // the mouse into the same input word as the keyboard, so a
+                // mouse button bound to an action is that action's key held
+                // down: it is folded into the key state here, and everything
+                // below reads one array. Any button SDL reports can be bound
+                // (4 and 5 are the side buttons); a wheel notch holds its
+                // action for one frame.
+                //
+                // Nothing read these bindings before: the left and right
+                // buttons fired whatever they were bound to, and no other
+                // button, nor the wheel, did anything in play.
+                static bool mergedKeys[SDL_SCANCODE_COUNT];
+                const bool* keys = demoKeys;
+                if (!demoMode)
+                {
+                    const bool* keyboard = SDL_GetKeyboardState(nullptr);
+                    std::copy(keyboard, keyboard + SDL_SCANCODE_COUNT, mergedKeys);
+                    for (const ALTEngine::Bootstrap::InputAction action : ALTEngine::Bootstrap::AllActions())
+                    {
+                        const Uint8 bound = keyBindings.GetMouseBinding(action);
+                        if (bound == ALTEngine::Bootstrap::MOUSE_UNBOUND) { continue; }
+                        bool down = false;
+                        if (bound == ALTEngine::Bootstrap::MOUSE_WHEEL_UP) { down = wheelUpTick; }
+                        else if (bound == ALTEngine::Bootstrap::MOUSE_WHEEL_DOWN) { down = wheelDownTick; }
+                        else if (bound >= 1 && bound <= 32) { down = (mouseButtons & SDL_BUTTON_MASK(bound)) != 0; }
+                        const SDL_Scancode key = keyBindings.GetKey(action);
+                        if (down && key > SDL_SCANCODE_UNKNOWN && key < SDL_SCANCODE_COUNT) { mergedKeys[key] = true; }
+                    }
+                    keys = mergedKeys;
+                }
 
                 // The mouse fires. The original reads its buttons into the same
                 // input word as the keyboard (DAT_000b0cc8 / DAT_000b0cc4), so
@@ -2880,8 +2953,10 @@ namespace ALTEngine::Screens
                 // separate binding, and holding either behaves exactly like
                 // holding the bound key, including the per-weapon difference
                 // between edge and held.
-                const bool mouseFire1 = (mouseButtons & SDL_BUTTON_LMASK) != 0;
-                const bool mouseFire2 = (mouseButtons & SDL_BUTTON_RMASK) != 0;
+                // (Their buttons are the ones bound, left and right unless
+                // changed, and are in `keys` already.)
+                const bool mouseFire1 = false;
+                const bool mouseFire2 = false;
                 // Read live rather than cached once - lets the Controls
                 // > Mouse > Mouse Sensitivity slider take effect
                 // immediately without needing a restart (Edward, 2026).
@@ -3104,7 +3179,7 @@ namespace ALTEngine::Screens
                     // held into the run bit (FUN_0004d438).
                     {
                         const bool runModeDown = keys[keyBindings.GetKey(InputAction::RunMode)];
-                        if (runModeDown && !runModeWasDown) { runModeToggled = !runModeToggled; }
+                        if (runModeDown && !runModeWasDown) { runModeToggled = !runModeToggled; runModeLatch = runModeToggled; }
                         runModeWasDown = runModeDown;
                     }
                     pcInput.run = keys[keyBindings.GetKey(InputAction::RunModifier)] || runModeToggled;

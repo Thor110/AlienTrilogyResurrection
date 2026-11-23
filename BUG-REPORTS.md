@@ -251,3 +251,39 @@ record and checks it opens and cues.
 
 **To check in play.** The levels with eggs will have many more huggers than testers have met so far.
 
+---
+
+## 10. Extra mouse buttons do not bind (buttons 4 and 5)
+
+- **Reported by:** testers, through Edward (1.0.0)
+- **Status:** fixed in 1.0.1
+- **Report:** "extra mouse buttons not binding, ie mouse button 4 & 5"
+
+**What happened.** The buttons did bind: Controls > Mouse stored whatever button was pressed, and showed
+"MOUSE 4". But nothing in play read the mouse's bindings. `GameplayScreen.cpp` took the left button as Fire 1
+and the right as Fire 2 whatever they were bound to, and no other button, nor the wheel, was looked at; the
+defaults listed for Use (middle), next weapon (wheel up) and the weapon menu (wheel down) had never worked.
+
+**Fixed (1.0.1).** A mouse button bound to an action counts as that action's key held down (the original reads
+its mouse into the same input word as its keys), for every action and any button; a wheel notch holds its
+action for one frame. Buttons pressed and let go inside one frame are caught from their events. The weapon
+menu opens from the Weapon Select action's key (Tab) and from either menu action's mouse binding as well as
+from Esc. Checked in play with Fire 1 on buttons 4 and 5: they fire, and the left button no longer does.
+
+**For Edward:** the wheel-down default now really opens the weapon menu. If that is not wanted as a default,
+it is `DefaultMouseBinding` in `Bootstrap/InputActions.h`.
+
+---
+
+## 11. Run mode turns itself off when a new level starts
+
+- **Reported by:** testers, through Edward (1.0.0)
+- **Status:** fixed in 1.0.1
+- **Report:** "runmode turns itself off after starting a new level"
+
+**What happened.** The latch was a variable of the level's own loop, so each level began with it off. The
+original keeps it in one bit (0xad584, bit 1) that Caps Lock flips (0x42946) and nothing ever clears.
+
+**Fixed (1.0.1).** The latch is kept between levels (`runModeLatch`, `GameplayScreen.cpp`), for as long as the
+game runs. It is not kept in the settings file: the original starts with it off.
+

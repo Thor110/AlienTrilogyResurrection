@@ -1414,3 +1414,11 @@ the common task (LAB_000342b4), the egg's (LAB_000356a0), the queen's (LAB_00035
 (LAB_000364d4), the door, lift, pickup and object tasks. In Ghidra: make a function at each (F) and export
 again.
 
+## Zip 199: the mouse's bindings and run mode (1.0.1)
+
+- **Mouse bindings** (BUG-REPORTS.md, 10) are folded into the key state at the top of the frame's input
+  (`mergedKeys`, GameplayScreen.cpp): everything below reads one array. An action whose keyboard key is
+  unbound cannot take a mouse button this way (there is no key to hold down); none is unbound by default.
+- **The weapon menu** opens from Pause's or Weapon Select's key or mouse binding (`menuPress`).
+- **Run mode's latch** (BUG-REPORTS.md, 11) lasts the program's run, as the original's does.
+

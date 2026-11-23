@@ -14,6 +14,16 @@ Everything since 1.0.0 (the build sent to testers on 22 November 2026).
 
 ### Fixed
 
+- **Mouse buttons can be bound, the side buttons included.** Controls > Mouse let you choose a button or the
+  wheel for any action, but the game never looked at the choices: the left and right buttons fired and
+  nothing else on the mouse did anything. Every binding there now works, with any button the mouse has
+  (4 and 5 are the side buttons), and a click shorter than a frame is no longer missed. The bindings that
+  were always listed now do what they say: the middle button is Use, the wheel up is next weapon and the
+  wheel down opens the weapon menu.
+- **Tab opens the weapon menu** as well as Esc, as in the original; its key under Controls did nothing.
+- **Run mode stays on from one level to the next.** It was switched off at every level's start; the original
+  never switches it off by itself.
+
 - **Eggs open as you come near, and are heard.** An egg never opened by itself: it sat closed until it was
   shot, and then opened in silence. Its closed animation was never started when the level began, and the egg
   waits for that animation to finish before it looks for the player. Now an egg opens when you come within
