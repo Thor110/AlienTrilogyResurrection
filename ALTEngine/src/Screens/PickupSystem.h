@@ -317,6 +317,10 @@ namespace ALTEngine::Screens
                 if (unitCap[i] > 0) { to->units = Clamp(to->units + from->units, unitCap[i]); }
                 if (i == 2 && from->rounds == 0 && from->units == 0) { to->rounds = 0; }
             }
+            // The weapon in hand is the one the level was started with
+            // (FUN_00017a68 ends with FUN_000401d0 on the start's, snapshot
+            // byte 0x11 >> 5), not the one the attempt ended holding.
+            for (int i = 0; i < 5; ++i) { out.ByIndex(i)->equipped = start.ByIndex(i)->equipped; }
             out.pulseRifle.grenades = start.pulseRifle.grenades;
             out.seismicCharges = start.seismicCharges;
             out.health = start.health;

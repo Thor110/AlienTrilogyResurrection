@@ -46,13 +46,6 @@ TEST_CASE("Inventory: weapon indices are the original's slots")
     CHECK(inv.ByIndex(4) == &inv.flamethrower);
 }
 
-TEST_CASE("Inventory: select keys 4 and 5 are the flamethrower and the smartgun")
-{
-    CHECK_EQ(PlayerInventoryState::SlotForSelectKey(0), 0);
-    CHECK_EQ(PlayerInventoryState::SlotForSelectKey(2), 2);
-    CHECK_EQ(PlayerInventoryState::SlotForSelectKey(3), 4);   // key 4: flamethrower
-    CHECK_EQ(PlayerInventoryState::SlotForSelectKey(4), 3);   // key 5: smartgun
-}
 
 TEST_CASE("Inventory: firing spends the inventory's own rounds and reloads from spares")
 {
@@ -316,7 +309,13 @@ TEST_CASE("Retry: the flamethrower and smart gun get their own caps back (FUN_00
     end.flamethrower.rounds = 150;
     end.smartGun.rounds = 60; end.smartGun.units = 1;
 
+    // Started holding the flamethrower, failed holding the pistol.
+    start.pistol.available = true; start.pistol.equipped = false; start.flamethrower.equipped = true;
+    end.pistol.equipped = true; end.flamethrower.equipped = false;
+
     const PlayerInventoryState retry = Pickups::RetryInventory(start, end);
+    CHECK(retry.flamethrower.equipped);       // the weapon the level was started with
+    CHECK(!retry.pistol.equipped);
     CHECK(retry.flamethrower.available);
     CHECK_EQ(retry.flamethrower.rounds, 450);
     CHECK(retry.smartGun.available);

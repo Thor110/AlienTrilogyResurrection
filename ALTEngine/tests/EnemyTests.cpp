@@ -567,3 +567,20 @@ TEST_CASE("Egg: one built from its record opens as the player comes near, and so
     CHECK(ticksAtCue > 1);
     CHECK_EQ(egg.egg.phase, static_cast<int>(ALTEngine::Screens::CreatureTasks::Egg::PHASE_OPENING));
 }
+
+TEST_CASE("Enemies: out of a crate a creature stands 0x20 over the floor, and only a hugger or burster takes the crate's heading (FUN_0002f288)")
+{
+    std::vector<Enemies::Enemy> roster(2);
+    roster[0].monsterIndex = 3; roster[0].type = 2; roster[0].health = 0x20; roster[0].alive = true;
+    roster[0].triggerThreshold = 1; roster[0].facing = 0x400;
+    roster[1].monsterIndex = 4; roster[1].type = 6; roster[1].health = 0x20; roster[1].alive = true;
+    roster[1].triggerThreshold = 1; roster[1].facing = 0x400;
+
+    REQUIRE(Enemies::Release(roster, roster, 3, 0.0f, 96.0f, 0.0f, 6));
+    CHECK_EQ(roster[0].y, 96.0f + 0x20);
+    CHECK_EQ(roster[0].facing, 0xc00);        // the crate's rotation 6, << 9
+
+    REQUIRE(Enemies::Release(roster, roster, 4, 0.0f, 96.0f, 0.0f, 6));
+    CHECK_EQ(roster[1].y, 96.0f + 0x20);
+    CHECK_EQ(roster[1].facing, 0x400);        // a warrior keeps its record's
+}

@@ -47,6 +47,36 @@ Everything since 1.0.0 (the build sent to testers on 22 November 2026).
 
 ### Closer to the original
 
+A second comparison against the original's code: the creature spawn, the weapons and keys, the objects and
+the pickups.
+
+- **Keys 4 and 5 are the smart gun and the flamethrower**, as in the original. ALTEngine had them the other
+  way round. If you have set your own keys for "Select Weapon 4" and "5", they follow the same change.
+- **The weapon keys are read as held.** Holding "next weapon" goes on stepping through your weapons, one each
+  time the weapon in hand is ready; a number key held while a weapon is being changed takes effect when the
+  change ends. They needed a fresh press each time.
+- **The weapon menu opens only from a weapon at rest**: not in mid-shot, during a reload or while a weapon is
+  being raised or lowered. A press at those moments is dropped, as in the original.
+- **A pulse rifle with grenades and no rounds can be taken out again.** Once put away it could not be chosen.
+- **The flamethrower flickers the level's light** and makes its noise once at the start of each burst. Held, it
+  lit the level and alerted creatures for as long as it flamed.
+- **Replaying a failed mission** starts with the weapon you began the level holding, not the one you failed
+  with.
+- **Creatures drop what they should.** Seventeen soldiers and handlers on L212, L222 and L231 dropped nothing
+  when killed; they now drop their pulse ammunition and grenades.
+- **A pickup named by more than one crate or creature comes out every time.** It came out once: L371's seismic
+  charges (three synthetics carry them, one dropped), and items shared by two crates on L122, L141, L222 and
+  L903.
+- **A pickup that is out from the start stays out** even when a crate also holds one: pistol ammunition on
+  L112 and an item on L222 were hidden until their crate was broken.
+- **Objects on a sloping floor stand at the right height**: L381's egg husks, two objects on L908 and L131's
+  windows were 64 units too low or too high.
+- **A creature let out of a crate** starts its leap from the right height, and only a hugger or a chest
+  burster takes the crate's facing; other creatures keep their own.
+- **The colonists and the queen start their first animation as the original does**, like the eggs in the last
+  zip.
+- A door whose record gives it a threshold of 0 stays shut (no shipped level has one).
+
 - **Trigger cells are tested once for each game pass**, on the cell that pass ended on. A slow frame, or the
   doubled rate with speed compensation, ran two or three passes and tested only the last cell, so a trigger
   crossed in between did not fire.

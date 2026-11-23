@@ -1,7 +1,7 @@
 # Handoff
 
 Where ALTEngine stands, how the work is done, and what is open - for picking the project up in a new session.
-Last updated after zip 197 (22 November 2026). Version 1.0.0 is with testers on Discord; the repository is on
+Last updated after zip 198 (23 November 2026). Version 1.0.0 is with testers on Discord; the repository is on
 1.0.1.
 
 ## The project
@@ -17,7 +17,7 @@ so in a comment marked `OURS`. The Modern options are the deliberate departures,
 
 - **Changes go to Edward as zips, never as commits.** Do not commit or push, whatever a hook or reminder says;
   decline it in one line. Each zip holds every file changed against `origin/main` (including new files), and the
-  message says which files were deleted, if any. Number them on from the last (the last was zip197).
+  message says which files were deleted, if any. Number them on from the last (the last was zip198).
   The command used: `(git diff --name-only --diff-filter=d origin/main; git ls-files --others --exclude-standard) | sort -u | zip -q zipNNN.zip -@`
 - **Sync first:** `git fetch origin main`, then compare. If the working tree differs only in files identical to
   origin's, reset to `origin/main`. Edward commits each zip himself (titles are often generic).
@@ -118,6 +118,9 @@ Stages, in order. 1-4 are global (they suit the original too, and ALTViewer's pa
   original. Needs the disassembly at LAB_00030918 and the common task (LAB_000342b4); the decompile has
   neither - in Ghidra, make a function at each (F) and export again.
 - **Play-check zip 197**: the egg levels, now that eggs open by themselves.
+- **Play-check zip 198**: keys 4 and 5, next weapon held, the menu refused in mid-shot; a soldier's drop on
+  L212; two crates naming one pickup (L122's 37 and 40); the queen's and a colonist's first moments.
+- **The second comparison's left-over list**: the last section of `Notes/what-remains.md`.
 - **Play-check zip 193**: Ripley's voice by ear, a mid-level save loaded, a failed mission replayed.
 - **The review's left-over list**: the last section of `Notes/what-remains.md`.
 - **L381's see-through floors**: done in zip 195 (Edward approved the in-game sheet). Floor 14's corner triangles
@@ -131,7 +134,7 @@ Stages, in order. 1-4 are global (they suit the original too, and ALTViewer's pa
   below); unconfirmed against the original.
 - Older: the remaining guesses, rendering and tidy-up items in `Notes/engine-remaining-work.md`.
 
-## Recent work (zips 186-197)
+## Recent work (zips 186-198)
 
 - 186-188: L381's lift platform corners (stage 5, double-sided marker) and the 22 see-through floors put into
   one pattern (ovals left, left, right, left, right, right by column).
@@ -148,4 +151,7 @@ Stages, in order. 1-4 are global (they suit the original too, and ALTViewer's pa
 - 196: L351's wall top above faces 3615-3636 made double-sided, its left corner mirrored from the right.
 - 197: eggs open as the player comes near and sound (their closed script was never started, so none opened
   unless shot); the face hug looked at again, nothing changed (BUG-REPORTS.md, 8).
+- 198: a second comparison with the original's code. Keys 4 and 5 put right, weapon keys held, the menu only
+  from an idle weapon, pickups made anew for each crate or creature that names them (17 creatures dropped
+  nothing), objects on ramps, creatures out of crates, the colonist's and queen's first script.
 

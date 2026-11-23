@@ -140,9 +140,10 @@ namespace ALTEngine::Screens
         // THE WEAPON INDEX IS THE ORIGINAL'S INTERNAL SLOT (DAT_000b0aae):
         //     0 pistol   1 shotgun   2 pulse rifle   3 smartgun   4 flamethrower
         //
-        // Not the order the select keys run in (1-5: pistol, shotgun, pulse
-        // rifle, flamethrower, smartgun - see SlotForSelectKey). Every table in
-        // the original is per slot, and slot 3 is the smartgun three times over:
+        // The select keys run in the same order: key n is slot n - 1
+        // (FUN_0004d438 calls FUN_0004d3c8(0..4) for scancodes 2..6), so 4 is
+        // the smart gun and 5 the flamethrower. Every table in the original is
+        // per slot, and slot 3 is the smartgun three times over:
         //   - FUN_000401d0's jump table (0x401bc) gives slot 3 the table at
         //     0x0ace88, whose sound events are 0901/0902smar, and slot 4 the one
         //     at 0x0ace70 (0501/0503flam);
@@ -173,13 +174,6 @@ namespace ALTEngine::Screens
             default: return nullptr;
             }
         }
-        // The select keys, 1-5, in slot terms.
-        static constexpr int SlotForSelectKey(int key)
-        {
-            constexpr int SLOTS[5] = { 0, 1, 2, 4, 3 };
-            return (key >= 0 && key < 5) ? SLOTS[key] : 0;
-        }
-
         const WeaponState* ByIndex(int i) const
         {
             return const_cast<PlayerInventoryState*>(this)->ByIndex(i);
@@ -210,7 +204,18 @@ namespace ALTEngine::Screens
         // flag that pickups set and that is cleared when the weapon runs dry.
         // Selecting (FUN_00039004) and next-weapon (FUN_00038d26) both skip an
         // entry whose flag is clear - a weapon held but empty.
-        bool Selectable(int i) const { return Available(i) && AmmoTotal(i) > 0; }
+        //
+        // The pulse rifle's flag stays set while it has grenades: with no
+        // rounds it is not put away (FUN_0003efcc case 2 tests 0x10ac6+2
+        // before its empty state), a grenade pickup sets the flag again
+        // (FUN_000387c0 case 0xc), and its own pickup leaves it clear only
+        // with neither. It counted rounds alone, so a rifle with grenades and
+        // no rounds could not be taken out again once put away.
+        bool Selectable(int i) const
+        {
+            if (!Available(i)) { return false; }
+            return AmmoTotal(i) > 0 || (i == 2 && pulseRifle.grenades > 0);
+        }
 
         // Next-weapon: forward from the current slot, wrapping (FUN_00038d26).
         int NextSelectable(int current) const

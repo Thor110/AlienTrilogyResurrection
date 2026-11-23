@@ -383,8 +383,70 @@ namespace ALTEngine::Screens
             bool waitingOnTrigger = false;
             uint8_t triggerCount = 0;
             uint8_t triggerThreshold = 0;
+
+            // Another instance of a record whose own has already come out
+            // (see takePickupInstance).
+            bool copy = false;
         };
         std::vector<LivePickup> livePickups;
+
+        // Another instance of live pickup `base`, with a model of its own.
+        // Returns its place in livePickups. (It grows livePickups and
+        // placedObjects: no reference into either is kept across a call.)
+        auto addPickupCopy = [&](size_t base) -> int {
+            if (base >= livePickups.size()) { return -1; }
+            LivePickup made = livePickups[base];
+            made.copy = true;
+            made.collected = false;
+            made.contained = false;
+            made.waitingOnTrigger = false;
+            made.falling = false;
+            made.vx = made.vy = made.vz = 0.0f;
+            if (made.placedIndex < placedObjects.size())
+            {
+                ALTEngine::Renderer::PlacedObject model = placedObjects[made.placedIndex];
+                model.visible = true;
+                made.placedIndex = placedObjects.size();
+                pickupPlaced.push_back(placedObjects.size());
+                placedObjects.push_back(model);
+            }
+            livePickups.push_back(made);
+            return static_cast<int>(livePickups.size() - 1);
+        };
+
+        // A PICKUP LET OUT BY A CRATE OR A CREATURE (FUN_0003bf64, FUN_0003bc9c).
+        // The record's count (byte 5) goes up by one, held at its threshold
+        // (byte 6), and whenever the two are equal a NEW pickup is made from
+        // the record - the original takes a fresh entry off its free list each
+        // time, and the count stays at the threshold, so every later crate or
+        // death that names the record makes another. A threshold of 0 is
+        // always met.
+        //
+        // The port kept one pickup a record, so a record named twice came out
+        // once (L371's seismic charges from three creatures, the battery in
+        // two of L222's crates), and a creature whose drop has a threshold of
+        // 0 dropped nothing (17 of them, on L212, L222 and L231).
+        //
+        // Returns the place in livePickups of the pickup to throw, or -1 when
+        // the count has not reached the threshold.
+        auto takePickupInstance = [&](int pickupIndex) -> int {
+            for (size_t k = 0; k < livePickups.size(); ++k)
+            {
+                LivePickup& record = livePickups[k];
+                if (record.copy || record.pickupIndex != pickupIndex) { continue; }
+                if (record.triggerCount < record.triggerThreshold) { record.triggerCount++; }
+                if (record.triggerCount != record.triggerThreshold) { return -1; }
+                // The record's own, if it has not come out yet.
+                if (record.contained || record.waitingOnTrigger)
+                {
+                    record.contained = false;
+                    record.waitingOnTrigger = false;
+                    return static_cast<int>(k);
+                }
+                return addPickupCopy(k);
+            }
+            return -1;
+        };
         // A handler's grenades in flight (FUN_0002b240, particle type 0xd),
         // stepped on the particle pass by the arm at 0x2dd0c.
         struct EnemyGrenade
@@ -617,7 +679,6 @@ namespace ALTEngine::Screens
         // the renderer's and start afresh with the level.
         std::vector<std::array<int, 3>> surfaceChanges;
         ALTEngine::Screens::WeaponSystem::SwitchAnimation weaponSwitch;
-        std::array<bool, 6> weaponKeyWasDown{ false, false, false, false, false, false };
 
         ALTEngine::Screens::PlayerHudState hudState;
         hudState.networkGame = session != nullptr;
@@ -810,6 +871,7 @@ namespace ALTEngine::Screens
             {
                 const bool placed = live.placedIndex < placedObjects.size();
                 j["pickups"].push_back({ { "collected", live.collected }, { "contained", live.contained },
+                                         { "copy", live.copy }, { "record", live.pickupIndex },
                                          { "waiting", live.waitingOnTrigger }, { "count", live.triggerCount },
                                          { "cell", live.cellIndex },
                                          { "x", placed ? placedObjects[live.placedIndex].x : 0.0f },
@@ -858,9 +920,21 @@ namespace ALTEngine::Screens
                 triggers.RestoreUses(bytesFromHex(j.value("triggers", std::string{})));
 
                 const auto& p = j["pickups"];
-                if (p.is_array() && p.size() == livePickups.size())
+                if (p.is_array() && p.size() >= livePickups.size())
                 {
-                    for (size_t i = 0; i < p.size(); ++i)
+                    // The extra instances made in play (takePickupInstance) come
+                    // after the records' own, in the order they were made.
+                    for (size_t i = livePickups.size(); i < p.size(); ++i)
+                    {
+                        const int record = p[i].value("record", -1);
+                        int made = -1;
+                        for (size_t k = 0; k < livePickups.size() && made < 0; ++k)
+                        {
+                            if (!livePickups[k].copy && livePickups[k].pickupIndex == record) { made = addPickupCopy(k); }
+                        }
+                        if (made < 0) { break; }
+                    }
+                    for (size_t i = 0; i < p.size() && i < livePickups.size(); ++i)
                     {
                         auto& live = livePickups[i];
                         live.collected = p[i].value("collected", live.collected);
@@ -1208,7 +1282,13 @@ namespace ALTEngine::Screens
                         // mesh sits on the floor when placed at the floor
                         // height itself. The +32 used for entities belongs to
                         // the monster spawn path, not to objects.
-                        float floorY = ALTEngine::Formats::FindFloorHeight(level, crate.x, crate.y);
+                        // The floor at the cell's CENTRE, where the object stands
+                        // (FUN_00037184 asks FUN_00027e28 at (2x+1) * 0x100), as
+                        // the pickups' is. It was taken at the cell's corner,
+                        // which on a ramp is 64 lower or higher: L381's egg
+                        // husks, two objects on L908, L131's windows.
+                        float floorY = ALTEngine::Formats::FindFloorHeightGridSpace(
+                            level, static_cast<int>(crate.x) * 512 + 256, static_cast<int>(crate.y) * 512 + 256);
 
                         ALTEngine::Renderer::PlacedObject placed;
                         placed.cacheKey = { ALTEngine::Renderer::ModelCatalog::Obj3d, Obj3DIndexForCrateType(crate.type, episodeThree) };
@@ -1570,6 +1650,11 @@ namespace ALTEngine::Screens
                                 for (size_t k = 0; k < livePickups.size(); ++k)
                                 {
                                     if (livePickups[k].pickupIndex != index) { continue; }
+                                    // One with a threshold of 0 is out from
+                                    // the start, at its own cell, crate or no
+                                    // crate (FUN_0003b93c places every such
+                                    // record); the crate throws another.
+                                    if (livePickups[k].triggerThreshold == 0) { continue; }
                                     livePickups[k].contained = true;
                                     if (livePickups[k].placedIndex < placedObjects.size())
                                     {
@@ -2171,6 +2256,14 @@ namespace ALTEngine::Screens
                     ALTEngine::Audio::MusicPlayer::SetPaused(pauseFrozen);
                 }
                 else if (pauseFrozen && event.type == SDL_EVENT_KEY_DOWN) {}
+                // The menu opens only from an idle weapon (FUN_0003efcc, 0x3f03a:
+                // the press is taken when 0x10aac is 0, and dropped otherwise) -
+                // not in mid-shot, mid-reload or while a weapon is lowered or
+                // raised. Once the player is dead it opens whatever the weapon
+                // is doing, so the game can always be left.
+                else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == keyBindings.GetKey(ALTEngine::Bootstrap::InputAction::Pause)
+                         && levelReady && !playerDead && !demoMode
+                         && (weaponSwitch.Busy() || weaponRuntime.state != ALTEngine::Screens::WeaponSystem::STATE_IDLE)) {}
                 else if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == keyBindings.GetKey(ALTEngine::Bootstrap::InputAction::Pause))
                 {
                     SDL_SetWindowRelativeMouseMode(app.Window(), false);
@@ -2833,48 +2926,49 @@ namespace ALTEngine::Screens
                         InputAction::SelectWeapon5,
                     };
 
-                    // FUN_0004d438 (0x4d6e2-0x4d897): a key is heard only while
-                    // no switch is under way (state 4 lowering, 5 raising), for
-                    // a weapon held and not already in hand, and the first such
-                    // key in the row is the one taken. The remark for keys 3 and
-                    // 4 is inside that test - a key ignored mid-switch says
-                    // nothing.
-                    bool keyTaken = false;
-                    for (int i = 0; i < 5; ++i)
-                    {
-                        const bool down = keys[keyBindings.GetKey(selectKeys[i])];
-                        if (down && !weaponKeyWasDown[static_cast<size_t>(i)] && !keyTaken && !weaponSwitch.Busy())
-                        {
-                            // Only start a swap for a weapon that is actually
-                            // held and is not the one already in hand.
-                            const int slot = ALTEngine::Screens::PlayerInventoryState::SlotForSelectKey(i);
-                            if (slot != selectedWeapon && inventory.Selectable(slot))
-                            {
-                                keyTaken = true;
-                                weaponSwitch.Begin(slot);
-                                // FUN_0004d438: keys 3 and 4 draw a remark
-                                // half the time.
-                                namespace SP = ALTEngine::Audio::Speech;
-                                if (i == 2 && (ALTEngine::Game::OriginalRandom::Next() & 0x1) != 0) { voice.Say(SP::WEAPON_THREE, session != nullptr); }
-                                if (i == 3 && (ALTEngine::Game::OriginalRandom::Next() & 0x1) != 0)
-                                {
-                                    voice.Say((ALTEngine::Game::OriginalRandom::Next() & 0x1) == 0 ? SP::WEAPON_FOUR_A : SP::WEAPON_FOUR_B, session != nullptr);
-                                }
-                            }
-                        }
-                        weaponKeyWasDown[static_cast<size_t>(i)] = down;
-                    }
-
+                    // FUN_0004d438. The keys are read as HELD, from the same
+                    // key-down array the movement keys use, not as presses: a
+                    // number key held through a switch takes effect when the
+                    // switch ends, and next-weapon held goes on stepping, once
+                    // each time the weapon comes back to idle.
+                    //
+                    // Next weapon first (0x4d66e), and only from an idle weapon
+                    // - not mid-shot, mid-reload or mid-switch (0x10aac == 0,
+                    // FUN_00038c78). It starts the lowering, so the number keys
+                    // below, which are deaf during a switch, lose to it.
                     const bool nextDown = keys[keyBindings.GetKey(InputAction::NextWeapon)];
-                    // Next weapon only from an idle weapon - not mid-shot,
-                    // mid-reload or mid-switch (0x10aac == 0, FUN_00038c78).
-                    if (nextDown && !weaponKeyWasDown[5] && !keyTaken && !weaponSwitch.Busy()
+                    if (nextDown && !weaponSwitch.Busy()
                         && weaponRuntime.state == ALTEngine::Screens::WeaponSystem::STATE_IDLE)
                     {
                         const int next = inventory.NextSelectable(selectedWeapon);
                         if (next != selectedWeapon) { weaponSwitch.Begin(next); }
                     }
-                    weaponKeyWasDown[5] = nextDown;
+
+                    // The number keys (0x4d6e2-0x4d897): heard only while no
+                    // switch is under way (state 4 lowering, 5 raising), for a
+                    // weapon held and not already in hand, and the first such
+                    // key in the row is the one taken. Key n asks for slot
+                    // n - 1 (FUN_0004d3c8(0..4) from scancodes 2..6): 4 is the
+                    // smart gun and 5 the flamethrower. The port had those two
+                    // the other way round. The remark for keys 3 and 4 is
+                    // inside the test - a key ignored mid-switch says nothing.
+                    for (int i = 0; i < 5; ++i)
+                    {
+                        if (!keys[keyBindings.GetKey(selectKeys[i])] || weaponSwitch.Busy()) { continue; }
+                        const int slot = i;
+                        if (slot == selectedWeapon || !inventory.Selectable(slot)) { continue; }
+                        // FUN_0004d438: keys 3 and 4 draw a remark half the
+                        // time. Key 4 draws before it sets off (0x4d7d0), key
+                        // 3 after; nothing else draws between them.
+                        namespace SP = ALTEngine::Audio::Speech;
+                        if (i == 2 && (ALTEngine::Game::OriginalRandom::Next() & 0x1) != 0) { voice.Say(SP::WEAPON_THREE, session != nullptr); }
+                        if (i == 3 && (ALTEngine::Game::OriginalRandom::Next() & 0x1) != 0)
+                        {
+                            voice.Say((ALTEngine::Game::OriginalRandom::Next() & 0x1) == 0 ? SP::WEAPON_FOUR_A : SP::WEAPON_FOUR_B, session != nullptr);
+                        }
+                        weaponSwitch.Begin(slot);
+                        break;
+                    }
 
                     // If the held weapon somehow is not available - a fresh
                     // level, or a loadout reset - fall back to the pistol.
@@ -3350,13 +3444,22 @@ namespace ALTEngine::Screens
                     const bool triggerActive = weaponPass && !weaponSwitch.Busy() && (onPress ? firePressPending : fireHeld);
                     if (weaponPass) { firePressPending = false; }
 
+                    // Whether this pull starts the firing animation: the
+                    // flamethrower, held, goes on flaming without it.
+                    const bool firedFromIdle = weaponRuntime.state == WS::STATE_IDLE;
                     if (triggerActive && WS::TryPrimaryFire(weaponRuntime, inventory))
                     {
                         // Every weapon's fire routine raises the one-tick light
                         // flash (DAT_000b0cc1 bit 4: 0x3d61a and its siblings),
                         // which lights the level at 0x2000 instead of 0xf00.
-                        ModelRenderer::FlashLevelLights(cacheKey);
-                        lightFlashRaised = true;
+                        // The flamethrower raises it with its noise, only as it
+                        // goes from idle to firing (FUN_0003d5b0 case 4), so a
+                        // held flame flickers the level; it lit it throughout.
+                        if (weaponRuntime.weapon != 4 || firedFromIdle)
+                        {
+                            ModelRenderer::FlashLevelLights(cacheKey);
+                            lightFlashRaised = true;
+                        }
                         // A shot spawns the round AND the casing - FUN_0003d5b0
                         // calls the weapon's projectile spawn, which then calls
                         // FUN_0002b37c for the ejection once the round is away.
@@ -4158,13 +4261,10 @@ namespace ALTEngine::Screens
                             // trigger and, once due, is thrown out where it stands.
                             if (enemy.dropPickup >= 0)
                             {
-                                for (auto& live : livePickups)
+                                const int instance = takePickupInstance(enemy.dropPickup);
+                                if (instance >= 0)
                                 {
-                                    if (live.pickupIndex != enemy.dropPickup || !live.waitingOnTrigger) { continue; }
-                                    if (live.triggerCount < live.triggerThreshold) { live.triggerCount++; }
-                                    if (live.triggerCount != live.triggerThreshold) { break; }
-                                    live.waitingOnTrigger = false;
-                                    live.contained = false;
+                                    LivePickup& live = livePickups[static_cast<size_t>(instance)];
                                     const int gx = ToGridSpaceX(enemy.x, originX) >> 9;
                                     const int gz = ToGridSpaceZ(enemy.z, originZ) >> 9;
                                     const int cell = ALTEngine::Formats::CellIndex(level, gx, gz);
@@ -4199,7 +4299,6 @@ namespace ALTEngine::Screens
                                             session->SendWorldEvent(drop);
                                         }
                                     }
-                                    break;
                                 }
                                 enemy.dropPickup = -1;
                             }
@@ -4685,9 +4784,10 @@ namespace ALTEngine::Screens
                             for (uint8_t index : { crate.drop1, crate.drop2 })
                             {
                                 if (index == 0xFF) { continue; }
-                                for (auto& live : livePickups)
+                                const int instance = takePickupInstance(index);
+                                if (instance >= 0)
                                 {
-                                    if (live.pickupIndex != index || !live.contained) { continue; }
+                                    LivePickup& live = livePickups[static_cast<size_t>(instance)];
 
                                     // MOVE IT TO THE CRATE. A held pickup is
                                     // parked somewhere else entirely - crate 1

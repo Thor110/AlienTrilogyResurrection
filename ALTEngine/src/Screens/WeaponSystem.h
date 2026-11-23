@@ -263,7 +263,12 @@ namespace ALTEngine::Screens
             WeaponState* held = inventory.ByIndex(runtime.weapon);
             if (!held || held->rounds <= 0) { return false; }
 
-            runtime.noise = Def(runtime.weapon).noise;
+            // The noise is made as the weapon goes from idle to firing. The
+            // flamethrower, held, keeps flaming without going back to idle,
+            // and makes its noise only at the start of each burst (FUN_0003d5b0
+            // case 4 sets 0x10adc inside its idle test); it was made again on
+            // every flame.
+            if (!continuous || runtime.state == STATE_IDLE) { runtime.noise = Def(runtime.weapon).noise; }
             if (runtime.state == STATE_IDLE) { runtime.SetState(STATE_FIRING); }
 
             held->rounds--;

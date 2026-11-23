@@ -42,7 +42,12 @@ namespace ALTEngine::Game::Doors
             ds.travel = travel;
             ds.counter = startsOpen ? travel : 0;
             ds.progress = startsOpen ? travel : 0;
-            ds.threshold = door.lockState == 0 ? 1 : door.lockState;
+            // The record's byte as it is (FUN_00029704 copies it to +0x1a). A
+            // threshold of 0 is never met - both commands refuse while the
+            // count is not below it (FUN_00029594, FUN_00029610) - so such a
+            // door would stay shut; it used to be made 1. No shipped level
+            // has one.
+            ds.threshold = door.lockState;
             ds.startsOpen = startsOpen;
             ds.holdTicks = static_cast<int>(door.time) * 4;
             ds.phase = startsOpen ? DoorState::Phase::Open : DoorState::Phase::Idle;
@@ -152,8 +157,9 @@ namespace ALTEngine::Game::Doors
         switch (door.phase)
         {
         case DoorState::Phase::Idle:
-            // Re-checked every tick against the count alone.
-            if (door.unlockProgress >= door.threshold)
+            // Re-checked every tick against the count alone. A threshold of 0
+            // is never reached by a command (see Build), so it never starts.
+            if (door.threshold != 0 && door.unlockProgress >= door.threshold)
             {
                 door.phase = DoorState::Phase::Opening;
                 sound(OPEN_SOUND, 1);       // 0x2926b

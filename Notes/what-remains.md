@@ -1369,3 +1369,48 @@ Found and left, in rough order of worth:
 - **How to see a creature's state in a run:** a save file with only `version`, `level` and `inventory` loads
   any level from Load Game; the review used that to reach L141.
 
+## Zip 198: a second comparison with the original's code (1.0.1)
+
+Three passes over routines the decompile holds whole: the creature spawn (FUN_0002e638 and the release
+routines), the weapons and the player's keys (FUN_0003efcc, FUN_0004d438, FUN_0003d5b0, FUN_0003d794 and the
+weapons' own), and the objects, pickups, lights, tracker and level start. The fixes are in PATCH-NOTES.md.
+What was found faithful is long and is not repeated here. What a later session should know:
+
+- **Pickups are instances now.** `takePickupInstance` (GameplayScreen.cpp) gives the record's own pickup the
+  first time and a copy after (`LivePickup::copy`, `addPickupCopy`), as FUN_0003bf64 and FUN_0003bc9c take a
+  fresh entry each time. Copies are saved (`"copy"`, `"record"`) and made again on load. **Not done for a
+  trigger's Spawn Pickup** (FUN_0003bb14 does the same): no trigger was checked for running one again after
+  its pickup is out, and a wrong guess there would hand out an item on every visit.
+- **Co-operative:** a copy made on the host has no counterpart on a guest, so its drop is not seen there. To
+  do with the rest of the shared world.
+- **Weapon keys** are slot order (key n is slot n - 1); `SlotForSelectKey` is gone.
+
+Found and left, with the original's rule:
+- **Fire 2** (FUN_0003efcc's first weapon switch, FUN_0003d794). Both throws happen on a frame's last pass
+  only. Pulse rifle: the idle test is taken once, before the shot, so a held trigger and a grenade on the same
+  idle pass fire both; the port's shot blocks the grenade. Flamethrower: a charge can be thrown in any state
+  but lowering and raising, the port wants idle. Smart gun and flamethrower: holding Fire 1 blocks the charge
+  altogether. Small in play; wants doing in one piece with the weapon pass.
+- **A round is spent only if its projectile was made** (FUN_0002bb74 and the others take one when the spawn
+  returns non-zero); the port always spends one. Differs only with the particle pool full.
+- **Pickups turn each on its own angle**, from 0 when made, and only while their cell is in a drawn zone
+  (FUN_0003c6f4); the port turns them all together, always. It also draws one only between 0x180 and 0x2000
+  deep in the view.
+- **A creature spawned again from a record that a crate or an egg has moved** comes out at the crate or egg in
+  the original (the record's cell is rewritten for good); the port's copy comes out where the level put it.
+  No level was checked for the case.
+- **The 128-creature pool** (FUN_0002e438): the original has room for 0x80 creatures and vents and makes no
+  more; the port has no limit.
+- **The record's clamps are signed** in the original (cone, near threshold, wake range); the port's fields are
+  unsigned. Differs only for a record with 0x8000 or more.
+- **Battery switches in a network game** (FUN_00036f4c with 0xae0a4 set) do not touch the battery count and
+  are gated on two flags the port has no counterpart for.
+- **Activate Object** tests the object's health word, not a latch of its own; every such command on the disc
+  aims at a type whose health is 0, so nothing differs.
+- **Spawn Pickup with a negative amount** wraps and spawns in the original; every one on the disc is +1.
+
+**Still out of reach:** everything inside a task label. The decompile has no code for the hug (LAB_00030918),
+the common task (LAB_000342b4), the egg's (LAB_000356a0), the queen's (LAB_00035bec), the colonist's
+(LAB_000364d4), the door, lift, pickup and object tasks. In Ghidra: make a function at each (F) and export
+again.
+

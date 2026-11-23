@@ -528,7 +528,11 @@ namespace ALTEngine::Screens
                     enemy.lastZ = enemy.z;
                     enemy.y += CO::SPAWN_LIFT;
                     enemy.heldMonster = record.speedHigh << 8 | record.speed;
-                    enemy.animation = CO::SPAWN_ANIMATION;
+                    // Started with its script, as the spawn does
+                    // (FUN_0002f4b0(colonist, 0xc) in the spawn's case 10).
+                    PlayAnimation(enemy, CO::SPAWN_ANIMATION);
+                    enemy.animationChanged = false;
+                    enemy.animSound = -1;
                 }
 
                 // Vents face away from their record's heading and sit at the
@@ -558,7 +562,11 @@ namespace ALTEngine::Screens
                 // The queen starts in her waiting animation (FUN_0002e638).
                 if (record.type == 7)
                 {
-                    enemy.animation = CreatureAI::QUEEN_ANIM_WAIT;
+                    // Started with its script (FUN_0002f4b0(queen, 8) in the
+                    // spawn's case 7).
+                    PlayAnimation(enemy, CreatureAI::QUEEN_ANIM_WAIT);
+                    enemy.animationChanged = false;
+                    enemy.animSound = -1;
                     enemy.ai.queen = true;
                 }
 
@@ -611,8 +619,9 @@ namespace ALTEngine::Screens
         // moves the monster to the releasing object, since it has been parked
         // off the map until now.
         //
-        // `facing` is the crate's rotation, which the original copies into the
-        // monster's own two heading fields (<< 9) before starting the jump-out.
+        // `y` is the floor at the releasing object. `facing` is the crate's
+        // rotation, which the original copies into a hugger's or burster's own
+        // two heading fields (<< 9) before starting the jump-out.
         inline bool Release(std::vector<Enemy>& enemies, const std::vector<Enemy>& templates, int monsterIndex,
                             float x, float y, float z, int facing)
         {
@@ -632,10 +641,20 @@ namespace ALTEngine::Screens
                 enemy.active = true;
                 BringIntoPlay(enemy);
                 enemy.x = enemy.lastX = x;
-                enemy.y = y;
+                // Stood as any spawn is, 0x20 over the floor (FUN_0002f288 puts
+                // the crate's cell in the record and calls FUN_0002e638, whose
+                // height is the cell's floor + 0x20): `y` is that floor. It was
+                // left on the floor, so the jump-out began 0x20 low.
+                enemy.y = y + static_cast<float>(EnemyBehaviour::STAND_CLEARANCE);
                 enemy.z = enemy.lastZ = z;
-                enemy.facing = (facing * (PlayerCamera::ANGLE_UNITS / 8)) & PlayerCamera::ANGLE_MASK;
-                enemy.ai.facing = enemy.ai.target = enemy.facing;
+                // The crate's heading is given to subtypes 2 and 3 only
+                // (FUN_0002f288 writes +0x42/+0x44 inside those two arms):
+                // anything else keeps its record's own.
+                if (enemy.type == SPRING_SUBTYPE_A || enemy.type == SPRING_SUBTYPE_B)
+                {
+                    enemy.facing = (facing * (PlayerCamera::ANGLE_UNITS / 8)) & PlayerCamera::ANGLE_MASK;
+                    enemy.ai.facing = enemy.ai.target = enemy.facing;
+                }
                 enemy.springing = false;
                 enemy.state = Damage::STATE_NORMAL;
 
